@@ -34,7 +34,7 @@
 .search-window .search-input-row input{font-size:19px;height:38px;-webkit-app-region:no-drag}
 .search-window .search-input-row .icon-button{-webkit-app-region:no-drag;width:30px;height:30px;min-height:30px;padding:6px;border-radius:7px}
 .search-window .search-filter-row{padding:0 14px 9px;gap:2px;flex-shrink:0}
-.search-window .search-filter-row button{min-height:28px;border-radius:7px;padding:3px 11px;font-size:11px}
+.search-window .search-filter-row .tabs>button{font-size:11px}
 .search-window .search-results{padding:0 8px 5px;scrollbar-gutter:stable}
 .search-window .search-result{height:58px;min-height:58px;padding:8px 10px;gap:11px;border-radius:8px}
 .search-window .result-icon{background:transparent;width:30px;height:30px}
@@ -89,6 +89,16 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .sidebar-collapsed .nav-label{max-width:0;flex:0 0 0;overflow:hidden}
 .sidebar-collapsed .brand{padding:0;justify-content:center;gap:0}
 .sidebar-collapsed .brand-name{width:0;flex:0 0 0}
+
+/* Quiet navigation groups; only the content scrolls when vertical space is tight. */
+.sidebar-navigation{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;scrollbar-width:thin;padding-bottom:12px}
+.sidebar-navigation>.nav,.sidebar-group>.nav{width:100%}
+.sidebar-group{display:flex;flex-direction:column;flex-shrink:0;gap:3px;margin-top:14px}
+.sidebar-group-caption{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);margin:0 10px 3px;max-height:16px;opacity:.85;overflow:hidden;white-space:nowrap;transition:opacity .15s var(--ease),max-height .24s var(--ease),margin .24s var(--ease)}
+.sidebar-collapsed .sidebar-group-caption{max-height:0;margin-bottom:0;opacity:0}
+.sidebar-collapsed .sidebar-group{margin-top:12px}
+.sidebar>[data-page=settings]{margin-top:0}
+@media(prefers-reduced-motion:reduce){.sidebar-group-caption{transition:none}}
 #page-preview #dropzone{margin-bottom:20px}
 .search-page-toolbar{height:calc(var(--control-small) + 6px);min-height:calc(var(--control-small) + 6px);align-items:center;flex-wrap:nowrap}
 .search-page-toolbar>.tabs{flex-shrink:0}

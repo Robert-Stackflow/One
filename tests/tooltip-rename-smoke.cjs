@@ -11,7 +11,13 @@ async function run() {
  app.on('window', page => page.on('pageerror', error => errors.push(String(error))));
  try {
   const page = await app.firstWindow(); await page.waitForSelector('#overview-index'); const win = await app.browserWindow(page);
-  await win.evaluate(w => {w.setSize(1250, 900); w.show(); w.focus();});
+  await app.evaluate(({BrowserWindow})=>{BrowserWindow.prototype.focus=function(){};BrowserWindow.prototype.show=BrowserWindow.prototype.showInactive;});
+  await win.evaluate(w => {w.setBounds({x:-10000,y:-10000,width:1250,height:900}); w.showInactive();});
+  assert.deepEqual(await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>({caption:group.querySelector('h2').textContent,pages:[...group.querySelectorAll('[data-page]')].map(b=>b.dataset.page)}))),[
+   {caption:'文件',pages:['tools','text','search']},{caption:'工具',pages:['input','disk','preview','color']},{caption:'系统',pages:['system','hardware']}
+  ]);
+  assert.equal(await page.locator('.sidebar-navigation>[data-page]').getAttribute('data-page'),'home');
+  assert.equal(await page.locator('.sidebar>[data-page]').getAttribute('data-page'),'settings');
   await page.evaluate(() => {window.tooltipEvents = []; for (const name of ['pointerover','pointerout','focusin','focusout','pointerdown','keydown','scroll','blur','resize']) window.addEventListener(name, e => {window.tooltipEvents.push({name, time: performance.now(), target: e.target?.id || e.target?.className, related: e.relatedTarget?.id || e.relatedTarget?.className}); if (window.tooltipEvents.length > 60) window.tooltipEvents.shift();}, true);});
   const showTip = async (button, label, side) => {
    await button.hover(); const tip = page.locator('#one-tooltip.visible');
@@ -39,6 +45,9 @@ async function run() {
     const expanded = await page.locator('#sidebar-toggle').getAttribute('aria-expanded') === 'true';
     if (expanded === collapsed) await page.locator('#sidebar-toggle').click();
     await expect.poll(() => page.locator('.sidebar').evaluate(e => Math.round(e.getBoundingClientRect().width))).toBe(collapsed ? 56 : 208);
+    const captions=await page.locator('.sidebar-group-caption').evaluateAll(nodes=>nodes.map(e=>({height:e.getBoundingClientRect().height,opacity:Number(getComputedStyle(e).opacity),font:getComputedStyle(e).fontSize})));
+    for(const caption of captions){assert.equal(caption.height,collapsed?0:16);assert.ok(collapsed?caption.opacity===0:caption.opacity>.8);assert.equal(caption.font,'11px');}
+    if(collapsed)for(const shape of await page.locator('.sidebar .nav').evaluateAll(nodes=>nodes.map(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height}))))assert.deepEqual(shape,{width:40,height:40});
     for (const button of await page.locator('.sidebar .nav').all()) await showTip(button, await button.getAttribute('aria-label'), 'right');
     await showTip(page.locator('[data-page=tools]'), '文件工具', 'right');
     await page.screenshot({path: path.join(out, `sidebar-${theme}-${collapsed ? 'collapsed' : 'expanded'}.png`)});

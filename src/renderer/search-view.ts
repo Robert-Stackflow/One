@@ -2,7 +2,7 @@ import {menuEditorCard,setupMenuEditor} from './menu-editor';
 import {api,q,icon,iconButton,button,esc,switchControl,toast,action} from './ui';
 import {bindPreference} from './preferences';
 import {setupShortcut} from './shortcut';
-import {hydrateFileIcons} from './shell-icons';
+import {SearchResults} from './search-results';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import type {SearchSettings,SearchEntry,SearchContext,SearchState} from '../shared/search';
 const searchSwitch=(key:string,title:string,description='')=>`<div class="setting-row"><div class="setting-copy"><h2>${title}</h2>${description?`<p>${description}</p>`:''}</div>${switchControl('search-'+key,title)}</div>`;
@@ -23,21 +23,130 @@ export function setupSearchPage(){let config:SearchSettings;setupShortcut(q<HTML
  action('index-refresh',()=>api.rebuildSearch());action('index-cancel',()=>api.cancelSearchIndex());action('search-launch',()=>api.showSearch());api.onSearchState(render);void api.searchState().then(render).catch(toast);
 }
 export async function renderSearch(){
- const embedded=new URLSearchParams(location.search).has('embedded');document.body.classList.add('search-window');if(embedded)document.body.classList.add('search-inline');document.querySelector('#app')!.innerHTML=`<div class="search-shell"><header class="search-input-row drag-region">${icon('search')}<input id="file-query" placeholder="搜索文件与文件夹" aria-label="搜索文件与文件夹" autocomplete="off" spellcheck="false">${embedded?'<span id="search-inline-summary" role="status"></span>':''}${iconButton('search-clear','清空','close')}</header><div class="search-filter-row" id="search-filters">${[['','全部'],...(!embedded?[['app:','程序'],['setting:','设置']]:[]),['folder:','文件夹'],['doc:','文档'],['pic:','图片'],['video:','视频'],['audio:','音频']].map(([filter,label])=>`<button data-filter="${filter}" class="quiet">${label}</button>`).join('')}</div><div id="search-results" class="search-results" role="listbox" aria-label="搜索结果"></div><footer class="search-footer"><span id="search-summary" role="status"></span><span id="search-keys">↑↓ 选择 · Enter 打开 · Alt+P 预览</span></footer></div><div id="toast" class="toast" role="status" hidden></div>`;
- const input=q<HTMLInputElement>('file-query');let context:SearchContext={kind:'search',hwnd:0,pid:0,created:'',folders:[]},prefs:SearchSettings,items:SearchEntry[]=[],selected=0,revision=0,timer:ReturnType<typeof setTimeout>,filter='';
- const nameMarkup=(item:SearchEntry)=>{const terms=(input.value.match(/"[^"]*"|\S+/g)||[]).map(t=>t.replace(/^"|"$/g,'')).filter(t=>!t.includes(':'));const lower=item.name.toLowerCase();const matched=new Set<number>();for(const term of terms){const value=term.toLowerCase(),at=lower.indexOf(value);if(at>=0){for(let i=at;i<at+value.length;i++)matched.add(i);}else if(item.matchKind==='fuzzy'){let cursor=0;for(const char of value){const at=lower.indexOf(char,cursor);if(at<0)break;matched.add(at);cursor=at+1;}}}let offset=0;return Array.from(item.name).map(c=>{const active=matched.has(offset);offset+=c.length;return active?`<mark>${esc(c)}</mark>`:esc(c);}).join('');};
- const select=()=>{q('search-results').querySelectorAll<HTMLElement>('[data-result]').forEach((el,i)=>{el.classList.toggle('selected',i===selected);el.setAttribute('aria-selected',String(i===selected));});};
- const layout=()=>{const active=!!input.value.trim()||!!filter;document.body.classList.toggle('search-idle',!embedded&&!active);document.body.classList.toggle('search-has-results',embedded&&(items.length>0||active));void api.searchSize(items.length,active);};
- const render=()=>{layout();q('search-results').innerHTML=items.map((item,i)=>`<div class="search-result ${i===selected?'selected':''}" role="option" aria-selected="${i===selected}" data-result="${i}"><span class="result-icon" data-file-icon="${esc(item.path)}">${icon(item.launchKind==='setting'?'settings':item.launchKind==='app'?'window':item.directory?'folder':'file')}</span><div class="result-name" title="${esc(item.subtitle||item.path)}"><strong>${nameMarkup(item)}</strong><span>${esc(item.subtitle||item.path)}</span></div>${embedded&&i<9?`<kbd class="result-shortcut">Ctrl+${i+1}</kbd>`:''}${!item.launchKind?`<div class="search-row-actions"><button class="icon-button quiet" data-preview="${i}" aria-label="预览 ${esc(item.name)}" title="预览">${icon('preview')}</button><button class="icon-button quiet" data-reveal="${i}" aria-label="定位 ${esc(item.name)}" title="在资源管理器中显示">${icon('folder')}</button></div>`:''}</div>`).join('')||'<div class="search-empty">'+icon('search')+'<span>'+(input.value.trim()?'没有匹配的项目':'输入名称开始搜索')+'</span></div>';hydrateFileIcons(q('search-results'));q('search-results').querySelectorAll<HTMLElement>('[data-result]').forEach(e=>{e.onclick=()=>{selected=Number(e.dataset.result);select();};e.ondblclick=()=>void choose(Number(e.dataset.result));e.oncontextmenu=event=>{event.preventDefault();selected=Number(e.dataset.result);select();void api.searchContextMenu(items[selected].path,{x:event.clientX,y:event.clientY},items[selected].directory).catch(toast);};});q('search-results').querySelectorAll<HTMLButtonElement>('[data-preview]').forEach(b=>b.onclick=e=>{e.stopPropagation();void api.preview(items[Number(b.dataset.preview)].path).catch(toast);});q('search-results').querySelectorAll<HTMLButtonElement>('[data-reveal]').forEach(b=>b.onclick=e=>{e.stopPropagation();void api.revealFile(items[Number(b.dataset.reveal)].path).catch(toast);});};
- const choose=async(index=selected)=>{if(!items[index])return;try{await api.searchChoose(items[index].path);}catch(e){toast(e);}};
- const summary=(text:string,inline=items.length?`${items.length.toLocaleString()} 项`:'')=>{q('search-summary').textContent=text;if(embedded)q('search-inline-summary').textContent=inline;};
- const query=async()=>{if(!isWindowVisible())return;const version=++revision;const text=input.value.trim();layout();if(!embedded&&!text&&!filter){items=[];selected=0;render();return;}if(!text&&!filter){const seen=new Set<string>();items=[...(prefs?.bookmarks||[]),...context.folders.map(f=>f.path)].filter(p=>{const k=p.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;}).map(path=>({path,name:path.split(/[\\/]/).filter(Boolean).pop()||path,directory:true,size:0,modified:0}));selected=0;render();const s=await api.searchState();if(version!==revision)return;summary(items.length?'收藏与已打开的文件夹':s.count?'输入名称开始搜索':'请先在 One 中添加索引目录');return;}
-  q('search-results').setAttribute('aria-busy','true');if(embedded)q('search-inline-summary').textContent='搜索中';try{const result=await api.searchFiles(filter+' '+text,context.kind==='dialog');if(version!==revision)return;if(result.cancelled){q('search-results').setAttribute('aria-busy','false');return;}items=result.items;selected=0;render();q('search-results').setAttribute('aria-busy','false');summary(`${result.total.toLocaleString()} 项${result.total>100?' · 显示前 100 项':''} · ${Math.round(result.elapsed)} ms`,result.total?`${result.total.toLocaleString()} 项`:'无结果');}catch(e){if(version===revision){q('search-results').setAttribute('aria-busy','false');if(embedded)q('search-inline-summary').textContent='';toast(e);}}};
- input.addEventListener('input',e=>{revision++;layout();clearTimeout(timer);if((e as InputEvent).isComposing)return;timer=setTimeout(()=>void query(),75);});input.addEventListener('compositionstart',()=>clearTimeout(timer));input.addEventListener('compositionend',()=>void query());
- document.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();selected=Math.max(0,Math.min(items.length-1,selected+(e.key==='ArrowDown'?1:-1)));select();q('search-results').querySelector('.selected')?.scrollIntoView({block:'nearest'});}else if(e.ctrlKey&&/^[1-9]$/.test(e.key)&&embedded){e.preventDefault();void choose(Number(e.key)-1);}else if(e.key==='Enter'){e.preventDefault();if(document.body.classList.contains('search-idle'))return;if(e.ctrlKey&&items[selected]&&!items[selected].launchKind)void api.revealFile(items[selected].path).catch(toast);else void choose();}else if(e.key==='Escape'){e.preventDefault();void api.closeWindow();}else if(e.altKey&&e.key.toLowerCase()==='p'&&items[selected]&&!items[selected].launchKind){e.preventDefault();void api.preview(items[selected].path).catch(toast);}});
- q('search-clear').onclick=()=>{if(!input.value){void api.closeWindow();return;}input.value='';input.focus();void query();};document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter!;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x===b));input.focus();void query();});
- const applyContext=(c:SearchContext)=>{context=c;document.title=(c.kind==='dialog'?'跳转文件夹':c.kind==='menu'?'文件夹菜单':'文件搜索')+' · One';q('search-keys').textContent=c.kind==='search'?'↑↓ 选择 · Enter 打开 · Alt+P 预览':'↑↓ 选择 · Enter 跳转 · Alt+P 预览';q('search-filters').hidden=c.kind==='dialog';input.placeholder=c.kind==='dialog'?'搜索要跳转的文件夹':embedded?'搜索文件与文件夹':'搜索文件、程序与设置';void query();};
- onWindowVisibility(visible=>{clearTimeout(timer);if(visible)void query();else revision++;});
- api.onSearchFilesChanged(()=>void query());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')clearTimeout(timer);});api.onSearchState(()=>{if(isWindowVisible()&&(input.value.trim()||filter)){clearTimeout(timer);timer=setTimeout(()=>void query(),160);}});api.onSearchContext(applyContext);api.onSearchReset(()=>{revision++;input.value='';filter='';input.focus();void api.searchPreferences().then(p=>{prefs=p;void query();});void api.searchReady();});input.focus();void api.searchReady();prefs=await api.searchPreferences();if(context.hwnd===0)applyContext(await api.searchContext());else void query();
+ const embedded=new URLSearchParams(location.search).has('embedded');
+ document.body.classList.add('search-window');if(embedded)document.body.classList.add('search-inline');
+ const filters=[['','全部'],...(!embedded?[['app:','程序'],['setting:','设置']]:[]),['folder:','文件夹'],['doc:','文档'],['pic:','图片'],['video:','视频'],['audio:','音频']];
+ document.querySelector('#app')!.innerHTML=`<div class="search-shell"><header class="search-input-row drag-region">${icon('search')}<input id="file-query" placeholder="搜索文件与文件夹" aria-label="搜索文件与文件夹" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">${embedded?'<span id="search-inline-summary" role="status"></span>':''}${iconButton('search-clear','清空','close')}</header><div class="search-filter-row" id="search-filters"><div class="tabs" role="tablist" aria-label="搜索类型">${filters.map(([filter,label],i)=>`<button data-filter="${filter}" role="tab" aria-selected="${i===0}" class="${i===0?'selected':''}">${label}</button>`).join('')}</div></div><div id="search-results" class="search-results" role="listbox" aria-label="搜索结果" aria-busy="false"></div><footer class="search-footer"><span id="search-summary" role="status"></span><span id="search-keys">↑↓ 选择 · Enter 打开 · Alt+P 预览</span></footer></div><div id="toast" class="toast" role="status" hidden></div>`;
+ const input=q<HTMLInputElement>('file-query'),list=q('search-results');
+ let context:SearchContext={kind:'search',hwnd:0,pid:0,created:'',folders:[]},prefs:SearchSettings,filter='';
+ let revision=0,navigation=0,shownKey='',composing=false,inputPending=false,backgroundPending=false;
+ let inputTimer:ReturnType<typeof setTimeout>|undefined,refreshTimer:ReturnType<typeof setTimeout>|undefined;
+ let running:{version:number;key:string;navigation:number}|undefined,lastLayout='',lastInlineSummary='';
+ const nameMarkup=(item:SearchEntry)=>{
+  const terms=(input.value.match(/"[^"]*"|\S+/g)||[]).map(t=>t.replace(/^"|"$/g,'')).filter(t=>!t.includes(':'));
+  const lower=item.name.toLowerCase(),matched=new Set<number>();
+  for(const term of terms){const value=term.toLowerCase(),at=lower.indexOf(value);if(at>=0){for(let i=at;i<at+value.length;i++)matched.add(i);}else if(item.matchKind==='fuzzy'){let cursor=0;for(const char of value){const at=lower.indexOf(char,cursor);if(at<0)break;matched.add(at);cursor=at+1;}}}
+  let offset=0;return Array.from(item.name).map(c=>{const active=matched.has(offset);offset+=c.length;return active?`<mark>${esc(c)}</mark>`:esc(c);}).join('');
+ };
+ const results=new SearchResults(list,input,embedded,nameMarkup);
+ // Enriching the same Explorer context only changes ranking, not user intent.
+ const key=()=>JSON.stringify([input.value.trim(),filter,context.kind,context.hwnd]);
+ const layout=()=>{
+  const active=!!input.value.trim()||!!filter;
+  document.body.classList.toggle('search-idle',!embedded&&!active);
+  document.body.classList.toggle('search-has-results',embedded&&(results.count>0||active));
+  const next=embedded?`${results.count}:${active}`:String(active);
+  if(next!==lastLayout){lastLayout=next;void api.searchSize(results.count,active);}
+ };
+ const summary=(text:string,inline=results.count?`${results.count.toLocaleString()} 项`:'')=>{
+  q('search-summary').textContent=text;lastInlineSummary=inline;if(embedded)q('search-inline-summary').textContent=inline;
+ };
+ const choose=async(index=results.selected)=>{const item=results.entry(index);if(item)try{await api.searchChoose(item.path);}catch(e){toast(e);}};
+ const stopTimers=()=>{clearTimeout(inputTimer);clearTimeout(refreshTimer);inputTimer=undefined;refreshTimer=undefined;};
+ const invalidate=()=>{revision++;stopTimers();backgroundPending=false;inputPending=false;list.setAttribute('aria-busy','false');};
+ // Background indexing never cancels an in-flight query. Many notifications become
+ // one follow-up query; typing still invalidates old responses immediately.
+ const refresh=()=>{
+  if(!isWindowVisible()||composing||inputPending)return;
+  backgroundPending=true;if(running||refreshTimer)return;
+  refreshTimer=setTimeout(()=>{refreshTimer=undefined;if(backgroundPending)void query();},160);
+ };
+ const query=async()=>{
+  if(!isWindowVisible()||composing)return;
+  stopTimers();inputPending=false;backgroundPending=false;
+  const request={version:++revision,key:key(),navigation},text=input.value.trim();running=request;layout();
+  const current=()=>request.version===revision&&request.key===key()&&isWindowVisible();
+  const update=(entries:SearchEntry[])=>{
+   // Resolve identity at completion, after any arrows pressed during the request.
+   results.update(entries,shownKey===request.key||navigation!==request.navigation,text?'没有匹配的项目':'输入名称开始搜索');
+   shownKey=request.key;layout();
+  };
+  try{
+   if(!embedded&&!text&&!filter){update([]);summary('');return;}
+   if(!text&&!filter){
+    const seen=new Set<string>(),entries=[...(prefs?.bookmarks||[]),...context.folders.map(f=>f.path)].filter(p=>{const k=p.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;}).map(path=>({path,name:path.split(/[\\/]/).filter(Boolean).pop()||path,directory:true,size:0,modified:0}));
+    update(entries);const s=await api.searchState();if(current())summary(results.count?'收藏与已打开的文件夹':s.count?'输入名称开始搜索':'请先在 One 中添加索引目录');return;
+   }
+   list.setAttribute('aria-busy','true');if(embedded&&shownKey!==request.key)q('search-inline-summary').textContent='搜索中';
+   const result=await api.searchFiles(filter+' '+text,context.kind==='dialog');
+   if(!current())return;
+   if(result.cancelled){if(embedded)q('search-inline-summary').textContent=lastInlineSummary;return;}
+   update(result.items);
+   summary(`${result.total.toLocaleString()} 项${result.total>100?' · 显示前 100 项':''} · ${Math.round(result.elapsed)} ms`,result.total?`${result.total.toLocaleString()} 项`:'无结果');
+  }catch(e){if(current()){if(embedded)q('search-inline-summary').textContent='';toast(e);}}
+  finally{
+   if(running===request){running=undefined;if(current())list.setAttribute('aria-busy','false');if(backgroundPending)refresh();}
+  }
+ };
+ const newQuery=()=>{invalidate();results.select(0);void query();};
+ input.addEventListener('input',e=>{
+  invalidate();inputPending=true;results.select(0);layout();
+  if(composing||(e as InputEvent).isComposing)return;
+  inputTimer=setTimeout(()=>void query(),75);
+ });
+ input.addEventListener('compositionstart',()=>{composing=true;invalidate();inputPending=true;});
+ input.addEventListener('compositionend',()=>{composing=false;void query();});
+ const rowIndex=(target:EventTarget|null)=>target instanceof Element?Number(target.closest<HTMLElement>('[data-result]')?.dataset.result):NaN;
+ list.addEventListener('click',event=>{
+  const index=rowIndex(event.target),item=results.entry(index);if(!item)return;
+  const control=event.target instanceof Element?event.target.closest('[data-preview],[data-reveal]'):null;
+  if(control){void (control.hasAttribute('data-preview')?api.preview(item.path):api.revealFile(item.path)).catch(toast);return;}
+  navigation++;results.select(index);
+ });
+ list.addEventListener('dblclick',event=>{if(event.target instanceof Element&&event.target.closest('button'))return;const index=rowIndex(event.target);if(results.entry(index))void choose(index);});
+ list.addEventListener('contextmenu',event=>{
+  const index=rowIndex(event.target),item=results.entry(index);if(!item)return;
+  event.preventDefault();navigation++;results.select(index);
+  void api.searchContextMenu(item.path,{x:event.clientX,y:event.clientY},item.directory).catch(toast);
+ });
+ document.addEventListener('keydown',e=>{
+  if(e.isComposing||composing)return;
+  if(e.key==='Escape'){e.preventDefault();void api.closeWindow();return;}
+  // SegmentTab handles its own keyboard navigation and button activation.
+  if(e.target instanceof Element&&e.target.closest('#search-filters'))return;
+  const item=results.entry();
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+   e.preventDefault();navigation++;results.select(results.selected+(e.key==='ArrowDown'?1:-1),true);
+  }else if(e.ctrlKey&&/^[1-9]$/.test(e.key)&&embedded){e.preventDefault();void choose(Number(e.key)-1);}
+  else if(e.key==='Enter'){
+   e.preventDefault();if(document.body.classList.contains('search-idle'))return;
+   if(e.ctrlKey&&item&&!item.launchKind)void api.revealFile(item.path).catch(toast);else void choose();
+  }else if(e.altKey&&e.key.toLowerCase()==='p'&&item&&!item.launchKind){e.preventDefault();void api.preview(item.path).catch(toast);}
+ });
+ const syncFilters=()=>document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>{
+  const active=b.dataset.filter===filter;b.classList.toggle('selected',active);b.setAttribute('aria-selected',String(active));
+ });
+ q('search-clear').onclick=()=>{if(!input.value){void api.closeWindow();return;}input.value='';input.focus();newQuery();};
+ document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.onclick=event=>{
+  filter=b.dataset.filter!;syncFilters();if(event.detail)input.focus();newQuery();
+ });
+ const applyContext=(c:SearchContext)=>{
+  const previous=key();context=c;
+  document.title=(c.kind==='dialog'?'跳转文件夹':c.kind==='menu'?'文件夹菜单':'文件搜索')+' · One';
+  q('search-keys').textContent=c.kind==='search'?'↑↓ 选择 · Enter 打开 · Alt+P 预览':'↑↓ 选择 · Enter 跳转 · Alt+P 预览';
+  q('search-filters').hidden=c.kind==='dialog';
+  input.placeholder=c.kind==='dialog'?'搜索要跳转的文件夹':embedded?'搜索文件与文件夹':'搜索文件、程序与设置';
+  if(key()!==previous)newQuery();else refresh();
+ };
+ onWindowVisibility(visible=>{invalidate();if(visible){lastLayout='';void query();}});
+ api.onSearchFilesChanged(refresh);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')invalidate();});
+ api.onSearchState(()=>{if(input.value.trim()||filter)refresh();});
+ api.onSearchContext(applyContext);
+ api.onSearchReset(()=>{
+  invalidate();shownKey='';input.value='';filter='';syncFilters();input.focus();
+  const reset=revision;void api.searchPreferences().then(p=>{prefs=p;if(revision===reset)void query();});void api.searchReady();
+ });
+ input.focus();void api.searchReady();prefs=await api.searchPreferences();
+ if(context.hwnd===0)applyContext(await api.searchContext());else void query();
 }
-
