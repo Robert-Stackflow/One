@@ -1,6 +1,6 @@
-const test=require('node:test'),assert=require('node:assert/strict'),{buildSync}=require('esbuild');
-buildSync({entryPoints:['src/shared/disk-monitor.ts','src/main/disk-monitor.ts','src/main/system-info-service.ts'],outdir:'work/test-system-monitor',bundle:true,platform:'node',outExtension:{'.js':'.cjs'}});
-const {DiskAlertPolicy,validateDiskMonitor}=require('../work/test-system-monitor/shared/disk-monitor.cjs'),{WriterSampler}=require('../work/test-system-monitor/main/disk-monitor.cjs'),{formatInformationValue}=require('../work/test-system-monitor/main/system-info-service.cjs');
+const test=require('node:test'),assert=require('node:assert/strict'),{buildSync}=require('esbuild'),path=require('node:path');
+const output=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','system-monitor');buildSync({entryPoints:['src/shared/disk-monitor.ts','src/main/disk-monitor.ts','src/main/system-info-service.ts'],outdir:output,bundle:true,platform:'node',outExtension:{'.js':'.cjs'}});
+const {DiskAlertPolicy,validateDiskMonitor}=require(path.join(output,'shared/disk-monitor.cjs')),{WriterSampler}=require(path.join(output,'main/disk-monitor.cjs')),{formatInformationValue}=require(path.join(output,'main/system-info-service.cjs'));
 const settings={enabled:true,notify:true,intervalSeconds:2,rules:[{drive:'C:\\',enabled:true,unit:'percent',threshold:10}]};
 const volume=free=>[{drive:'C:\\',free,total:100,type:3,label:'',filesystem:'NTFS'}];
 test('disk warnings alert once per episode and recover with hysteresis',()=>{const p=new DiskAlertPolicy();assert.deepEqual(p.evaluate(volume(9),settings),{entered:['C:\\'],active:['C:\\']});assert.deepEqual(p.evaluate(volume(8),settings).entered,[]);assert.deepEqual(p.evaluate(volume(10.5),settings).active,['C:\\']);assert.deepEqual(p.evaluate(volume(12),settings).active,[]);assert.deepEqual(p.evaluate(volume(9),settings).entered,['C:\\']);});

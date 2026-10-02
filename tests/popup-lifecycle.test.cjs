@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events'),{buildSync}=require('esbuild'),path=require('node:path'),fs=require('node:fs');
-const file=path.resolve('work/tests/popup-lifecycle.cjs');fs.mkdirSync(path.dirname(file),{recursive:true});
+const file=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','popup-lifecycle.cjs');fs.mkdirSync(path.dirname(file),{recursive:true});
 buildSync({entryPoints:['src/main/popup-lifecycle.ts'],outfile:file,bundle:true,platform:'node'});
 const {PopupLifecycle,PopupReadiness,deferPopupBlur}=require(file);
 class Window extends EventEmitter{

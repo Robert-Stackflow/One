@@ -1,0 +1,3 @@
+const fs=require('node:fs/promises'),path=require('node:path');
+async function largeDirectory(folder){await fs.mkdir(folder,{recursive:true});if(!await fs.stat(path.join(folder,'fixture-ready')).catch(()=>null)){let next=0;await Promise.all(Array.from({length:32},async()=>{while(next<30000){const i=next++;await fs.writeFile(path.join(folder,'item-'+String(i).padStart(5,'0')+'.txt'),'entry '+i);}}));await fs.mkdir(path.join(folder,'nested'),{recursive:true});await fs.writeFile(path.join(folder,'nested','inside.txt'),'INNER_FILE');await fs.writeFile(path.join(folder,'zzz-last.txt'),'LAST_FILE');await fs.writeFile(path.join(folder,'fixture-ready'),'ready');}return folder;}
+module.exports={largeDirectory};

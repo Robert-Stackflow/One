@@ -4,5 +4,9 @@
 *.mjs text eol=lf
 *.css text eol=lf
 *.md text eol=lf
+*.json text eol=lf
+*.ps1 text eol=lf
+*.txt text eol=lf
+.gitignore text eol=lf
 *.cmd text eol=crlf
 *.bat text eol=crlf

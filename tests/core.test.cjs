@@ -61,9 +61,9 @@ test('唤醒按绝对时间到期，锁屏暂停，旧配置安全迁移',()=>{
   assert.throws(()=>core.validateUtilities({...defaults,awake:{...timed,expiresAt:0}}));
 });
 before(async () => {
-  await fs.mkdir('work/tests', { recursive: true });
-  await build({ entryPoints: ['tests/runtime.ts'], outfile: 'work/tests/runtime.cjs', bundle: true, platform: 'node', external: ['opencc-js','iconv-lite'] });
-  core = require('../work/tests/runtime.cjs'); fixture = await fs.mkdtemp(path.resolve('work/tests/sample-'));
+  const output=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','core');await fs.mkdir(output, { recursive: true });
+  await build({ entryPoints: ['tests/runtime.ts'], outfile: path.join(output,'runtime.cjs'), bundle: true, platform: 'node', external: ['opencc-js','iconv-lite'] });
+  core = require(path.join(output,'runtime.cjs')); fixture = await fs.mkdtemp(path.join(output,'sample-'));
 });
 test('整理混合换行与空白，去重保持第一行顺序', () => {
   assert.equal(core.transform({ operation:'clean', text:' 甲 \r\n\n 乙\r 丙 ' }), '甲\r\n乙\r\n丙');

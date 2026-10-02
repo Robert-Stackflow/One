@@ -1,6 +1,6 @@
 const {_electron:electron,expect}=require('@playwright/test'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),{snapshot}=require('./app-memory-benchmark.cjs');
 async function run(){
- const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'E:/One-Verification/0.16.16/directory-after'),folder=path.resolve(process.env.ONE_DIRECTORY_FIXTURE_DIR||'E:/One-Verification/0.16.16/directory-files/large');await fs.mkdir(output,{recursive:true});assert.equal((await fs.readdir(folder)).length,30003);
+ const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/directory-after'),folder=path.resolve(process.env.ONE_DIRECTORY_FIXTURE_DIR||'work/current/fixtures/directory');await fs.mkdir(output,{recursive:true});await require('./directory-fixtures.cjs').largeDirectory(folder);assert.equal((await fs.readdir(folder)).length,30003);
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:await fs.mkdtemp(path.join(output,'profile-'))};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.ONE_PACKAGED_EXE?{executablePath:process.env.ONE_PACKAGED_EXE,args:[],env}:{args:[path.resolve('.')],env}),errors=[];app.on('window',p=>p.on('pageerror',e=>errors.push(String(e))));
  try{

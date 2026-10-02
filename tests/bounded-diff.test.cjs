@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{buildSync}=require('esbuild');
-const root=path.resolve('work/bounded-diff-tests');fs.mkdirSync(root,{recursive:true});
+const root=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','bounded-diff');fs.mkdirSync(root,{recursive:true});
 const bundle=path.join(root,'comparison.cjs');buildSync({stdin:{contents:"export {compareTextLines} from './src/main/bounded-diff';export {textDiffRows} from './src/main/text-diff';",resolveDir:path.resolve('.')},outfile:bundle,bundle:true,platform:'node'});
 const {compareTextLines,textDiffRows}=require(bundle);
 const rebuild=(changes,side)=>changes.filter(c=>side==='left'?!c.added:!c.removed).map(c=>c.value).join('');

@@ -1,7 +1,7 @@
 const {_electron:electron,expect}=require('@playwright/test'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const {snapshot}=require('./app-memory-benchmark.cjs');
 async function run(){
- const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'E:/One-Verification/0.16.15/csv-source'),files=path.resolve(process.env.ONE_CSV_FIXTURE_DIR||'E:/One-Verification/0.16.15/csv-files');await fs.mkdir(output,{recursive:true});await fs.mkdir(files,{recursive:true});
+ const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'verification/0.16.15/csv-source'),files=path.resolve(process.env.ONE_CSV_FIXTURE_DIR||'verification/0.16.15/csv-files');await fs.mkdir(output,{recursive:true});await fs.mkdir(files,{recursive:true});
  const file=path.join(files,'wide.csv');if(!await fs.stat(file).catch(()=>null)){const lines=[Array.from({length:120},(_,col)=>'column_'+col).join(',')];for(let row=0;row<1200;row++)lines.push(Array.from({length:120},(_,col)=>`R${row}_C${col}`).join(','));await fs.writeFile(file,lines.join('\r\n'));}
  const profile=await fs.mkdtemp(path.join(output,'profile-')),env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.ONE_PACKAGED_EXE?{executablePath:process.env.ONE_PACKAGED_EXE,args:[],env}:{args:[path.resolve('.')],env}),errors=[];app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));

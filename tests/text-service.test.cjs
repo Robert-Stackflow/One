@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{build}=require('esbuild');
 test('text comparison pages preserve complete dense content, enforce ownership and release worker/cache',async()=>{
- const base=path.resolve('work/text-service-tests');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'runtime-'));
+ const base=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','text-service');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'runtime-'));
  await build({entryPoints:['src/main/text-worker.ts','src/main/text-service.ts'],outdir:root,outExtension:{'.js':'.cjs'},bundle:true,platform:'node',external:['opencc-js','iconv-lite']});const {TextService}=require(path.join(root,'text-service.cjs')),service=new TextService(()=>{});
  try{
   const left='old🙂\n'.repeat(50000),right='new🙂\n'.repeat(50000),report=await service.run(1,{kind:'compare',left,right,ignoreWhitespace:false});assert.equal(report.grouped,true);assert.ok(report.count>600);let original='',revised='';
@@ -15,6 +15,6 @@ test('text comparison pages preserve complete dense content, enforce ownership a
  assert.equal(service.pendingTasks,0);assert.equal(await fs.stat(service.root).then(()=>true,()=>false),false);
 });
 test('cancellation interrupts pathological text work and the next task recovers',async()=>{
- const base=path.resolve('work/text-service-tests');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'cancel-'));await build({entryPoints:['src/main/text-worker.ts','src/main/text-service.ts'],outdir:root,outExtension:{'.js':'.cjs'},bundle:true,platform:'node',external:['opencc-js','iconv-lite']});const {TextService}=require(path.join(root,'text-service.cjs'));let started;const running=new Promise(resolve=>started=resolve),service=new TextService(()=>started());
+ const base=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','text-service');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'cancel-'));await build({entryPoints:['src/main/text-worker.ts','src/main/text-service.ts'],outdir:root,outExtension:{'.js':'.cjs'},bundle:true,platform:'node',external:['opencc-js','iconv-lite']});const {TextService}=require(path.join(root,'text-service.cjs'));let started;const running=new Promise(resolve=>started=resolve),service=new TextService(()=>started());
  try{const pending=service.run(1,{kind:'pipeline',text:'a'.repeat(100000)+'!',steps:[{operation:'replace',pattern:'(a+)+$',replacement:'x',regex:true}]});const rejected=assert.rejects(pending,/已停止/);await running;service.cancel(1);await rejected;assert.equal(await service.run(1,{kind:'pipeline',text:'恢复',steps:[{operation:'upper'}]}),'恢复');}finally{await service.stop();}assert.equal(service.pendingTasks,0);
 });

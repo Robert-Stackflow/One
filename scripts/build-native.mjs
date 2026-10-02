@@ -16,5 +16,6 @@ const levelsBuild=await run('cmd.exe',['/d','/c',resolve('work/build-levels.cmd'
 const monitorBuild=await run('cmd.exe',['/d','/c',resolve('work/build-monitor.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(monitorBuild.stdout);
 const windowBuild=await run('cmd.exe',['/d','/c',resolve('work/build-window-tools.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(windowBuild.stdout);
 const result=await run('cmd.exe',['/d','/c',script],{cwd:resolve('.'),windowsHide:true});process.stdout.write(result.stdout);process.stderr.write(result.stderr);
-await run('cargo',['build','--release','--locked','--manifest-path','native/search-engine/Cargo.toml'],{cwd:resolve('.'),windowsHide:true,env:{...process.env,RUSTFLAGS:'-C target-feature=+crt-static'},maxBuffer:4*1024*1024});
-await copyFile(resolve(process.env.CARGO_TARGET_DIR||'native/search-engine/target','release/one-index.exe'),'dist/native/One.Index.exe');
+const cargoTarget=resolve(process.env.CARGO_TARGET_DIR||'work/rust-search');
+await run('cargo',['build','--release','--locked','--manifest-path','native/search-engine/Cargo.toml'],{cwd:resolve('.'),windowsHide:true,env:{...process.env,CARGO_TARGET_DIR:cargoTarget,RUSTFLAGS:'-C target-feature=+crt-static'},maxBuffer:4*1024*1024});
+await copyFile(resolve(cargoTarget,'release/one-index.exe'),'dist/native/One.Index.exe');

@@ -48,9 +48,15 @@ const execute = promisify(execFile);
 app.setName('One');
 app.setAppUserModelId('local.one.desktop');
 const testMode = process.env.ONE_TEST_MODE === '1';
-if (process.env.ONE_DATA_DIR && testMode) app.setPath('userData', resolve(process.env.ONE_DATA_DIR));
+const developmentMode = !app.isPackaged && process.env.ONE_DEVELOPMENT === '1';
+if (process.env.ONE_DATA_DIR && (testMode || developmentMode)) app.setPath('userData', resolve(process.env.ONE_DATA_DIR));
+if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string }>();
+if(developmentMode)process.on('message',(message:any)=>{
+ if(message?.type==='one:dev-reload'){for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed())window.webContents.reload();}
+ else if(message?.type==='one:dev-quit')app.quit();
+});
 const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
