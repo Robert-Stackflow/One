@@ -1,5 +1,6 @@
 // Diagnostics live only in the isolated test process, never in the release app.
 async function observeFileTasks(app){
+ await require('@playwright/test').expect.poll(()=>app.evaluate(({ipcMain})=>ipcMain._invokeHandlers.has('one:file-tools-run')),{timeout:10000}).toBe(true);
  await app.evaluate(({ipcMain})=>{
   const threads=process.getBuiltinModule('worker_threads'),Original=threads.Worker;
   globalThis.fileTaskTimings=[];
