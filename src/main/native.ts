@@ -49,3 +49,7 @@ export const nativeAvailable = () => !!native;
 const keyUser=koffi.load('user32.dll'),imeLib=koffi.load('imm32.dll');
 const keyState=keyUser.func('int16 __stdcall GetKeyState(int key)'),getForeground=keyUser.func('uintptr_t __stdcall GetForegroundWindow()'),threadId=keyUser.func('uint32 __stdcall GetWindowThreadProcessId(uintptr_t hwnd,void *pid)'),layout=keyUser.func('uintptr_t __stdcall GetKeyboardLayout(uint32 thread)'),imeWindow=imeLib.func('uintptr_t __stdcall ImmGetDefaultIMEWnd(uintptr_t hwnd)'),sendTimeout=keyUser.func('intptr_t __stdcall SendMessageTimeoutW(uintptr_t hwnd,uint32 message,uintptr_t wparam,intptr_t lparam,uint32 flags,uint32 timeout,_Out_ uintptr_t *result)');
 export function keyboardIndicators(){const hwnd=getForeground(),hkl=layout(threadId(hwnd,null)),language=Number(hkl)&0xffff;let mode=0,opened=0;const ime=imeWindow(hwnd);if(ime){const result=[0];if(sendTimeout(ime,0x283,5,0,2,20,result))opened=result[0];if(sendTimeout(ime,0x283,1,0,2,20,result))mode=result[0];}const lang=language===0x804?'中文':language===0x404?'繁体中文':language===0x411?'日文':language===0x412?'韩文':language===0x409?'英文':`输入法 ${language.toString(16)}`;return {ime:`${opened&&mode&1?'中':'A'} · ${lang}`,caps:!!(keyState(0x14)&1),num:!!(keyState(0x90)&1),scroll:!!(keyState(0x91)&1)};}
+
+const asyncState=keyUser.func('int16 __stdcall GetAsyncKeyState(int key)');
+export const capsLockState=()=>!!(keyState(0x14)&1);
+export const modifiersHeld=()=>[0x10,0x11,0x12,0x5b,0x5c,0x14].some(key=>!!(asyncState(key)&0x8000));

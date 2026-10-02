@@ -209,7 +209,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings)){
     const changed=(key:keyof Settings)=>JSON.stringify(previous[key])!==JSON.stringify(next[key]);
     if(changed('colorShortcut')&&!recordingShortcut){try{colorShortcut(next.colorShortcut);}catch(error){colorShortcut(previous.colorShortcut);throw error;}}
     try{await persistSettings(next);}catch(error){if(changed('colorShortcut')&&!recordingShortcut)colorShortcut(previous.colorShortcut);throw error;}
-    const inputKeys=['echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings'] as const;
+    const inputKeys=['quickActions','capsLock','echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings'] as const;
     if(inputKeys.some(changed))input?.update(next);
     if(changed('search')){
       const bridgeKeys=['shortcut','doubleCtrl','explorerTyping','explorerMenu','dialogSwitch'] as const;
@@ -223,7 +223,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings)){
     if(changed('appearance'))refreshWindowAppearance();
     if(['colorHistory','colorVisibleFormats','colorFormat','colorShowEditor'].some(key=>changed(key as keyof Settings)))for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&['main','color-editor'].includes(roles.get(w.webContents.id)||''))w.webContents.send('one:color-settings');
     if(previous.general.launchAtLogin!==next.general.launchAtLogin&&app.isPackaged&&!testMode)app.setLoginItemSettings({openAtLogin:next.general.launchAtLogin});
-    if(!next.keyEcho)echoes?.hide();if(previous.keyEcho&&!next.keyEcho)echoes?.cancelEdit();
+    if(previous.keyEcho&&!next.keyEcho)echoes?.hideTransient();if(previous.keyEcho&&!next.keyEcho)echoes?.cancelEdit();
     return next;
   });saving=task;return task;
 }
@@ -260,6 +260,7 @@ function registerIPC() {
   handle('file-tools-history',()=>fileTools.history());
   handle('file-tools-overview',async(event,active)=>{if(active!==undefined&&typeof active!=='boolean')throw Error('概览请求无效');const w=BrowserWindow.fromWebContents(event.sender);if(active!==undefined)diskMonitor.subscribe(active&&!!w?.isVisible()&&!w.isMinimized(),'overview');return({version:app.getVersion(),index:{count:search.state().count,running:search.state().running,error:search.state().error},volumes:diskMonitor.state.volumes,recent:await fileTools.history()});});
   handle('echo-displays',()=>screen.getAllDisplays().map(d=>({id:String(d.id),name:d.label||'显示器 '+d.id,width:d.workArea.width,height:d.workArea.height})));
+  handle('echo-ready',e=>echoes.ready(BrowserWindow.fromWebContents(e.sender)!),['echo']);
   handle('echo-position',()=>echoes.edit());handle('echo-finish',e=>echoes.finish(BrowserWindow.fromWebContents(e.sender)!),['echo']);
   handle('system-information',(_e,kind,refresh)=>{if(!validInformationKind(kind)||refresh!==undefined&&typeof refresh!=='boolean')throw new Error('系统信息请求无效');return systemInformation.read(kind,refresh);});
   handle('export-system-information',async(_e,reports)=>{if(!Array.isArray(reports)||reports.length>12||JSON.stringify(reports).length>8*1024*1024)throw new Error('系统信息报告无效');const path=await pickPath('save','导出系统信息','系统信息.json');if(!path)return null;await writeFile(path,JSON.stringify({created:new Date().toISOString(),reports},null,2),'utf8');return path;});
@@ -405,7 +406,7 @@ async function start() {
   diskMonitor=new DiskMonitorService(value=>{if(main&&!main.isDestroyed()&&main.isVisible()&&!main.isMinimized())main.webContents.send('one:disk-monitor',value);},(drive,state)=>{const volume=state.volumes.find(v=>v.drive===drive);if(main&&!main.isDestroyed())main.webContents.send('one:disk-alert',{drive,free:volume?.free||0});if(!testMode&&Notification.isSupported()){const notice=new Notification({title:'One · 磁盘空间不足',body:drive+' 剩余 '+((volume?.free||0)/1024**3).toFixed(2)+' GB'});notice.on('click',()=>{showMain();main.webContents.send('one:disk-alert-open');});notice.show();}});
   diskMonitor.configure(settings.diskMonitor);
   echoes=new EchoService(windowFor,()=>settings,placement=>saveSettings(current=>({...current,echo:{...current.echo,keys:{...current.echo.keys,...placement}}})),()=>{if(main&&!main.isDestroyed())main.webContents.send('one:echo-position');});
-  initNative(); foreground(); input = new InputService(settings, { echo, show: showMain, color:()=>void pickColor().catch(error=>echo(error.message)), preview: async hwnd => { const selected: { hwnd: number; path: string }[] = await runMaintenance('selection'); if (foreground()?.hwnd !== hwnd) return; const item = selected.find(row => row.hwnd === hwnd); if (item) await preview(filePath(item.path)); } });
+  initNative(); foreground(); input = new InputService(settings, { echo, level:value=>echoes.level(value),caps:active=>echoes.caps(active),show: showMain, color:()=>void pickColor().catch(error=>echo(error.message)), preview: async hwnd => { const selected: { hwnd: number; path: string }[] = await runMaintenance('selection'); if (foreground()?.hwnd !== hwnd) return; const item = selected.find(row => row.hwnd === hwnd); if (item) await preview(filePath(item.path)); } });
   locksmith=new LocksmithService(state=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:locks',state);});
   awake=new AwakeService(utilityChanged);topmost=new TopmostService(utilityChanged,echo);awake.update(settings.utilities.awake);topmost.update(settings.utilities.topmost);
   search=new SearchService(join(app.getPath('userData'),'file-index.ndjson'),settings.search,searchChanged);searchBridge=new SearchBridge(showSearch,searchChanged);

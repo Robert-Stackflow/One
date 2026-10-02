@@ -8,7 +8,7 @@ export interface ScanProgress { files: number; directories: number; path: string
 export type Edge = 'top' | 'right' | 'bottom' | 'left';
 export type EdgeAction = 'off' | 'volume' | 'brightness';
 export interface EdgeSetting { action: EdgeAction; step: number }
-export interface DisplayBrightness { name: string; supported: boolean; method: string; brightness?: number; error?: string }
+export interface DisplayBrightness { name: string; supported: boolean; method: string; brightness?: number; muted?:boolean; error?: string }
 export type CornerAction = 'off' | 'desktop' | 'tasks' | 'lock' | 'one' | 'start' | 'explorer' | 'screenshot' | 'color' | 'hotkey' | 'command';
 export interface CornerBinding { shortcut: string; command: string; args: string[]; cwd: string }
 export type ToastPosition='top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right';
@@ -16,6 +16,8 @@ export interface Appearance { mode: 'system' | 'light' | 'dark'; accent: string;
 export interface ColorSample { hex: string; rgb: string; hsl: string }
 export interface ScreenCapture { url: string; data?:Uint8Array; width: number; height: number; hex: string; pixels: number; x:number; y:number }
 export interface Settings {
+  quickActions:import('./quick-actions').QuickActions;
+  capsLock:import('./quick-actions').CapsPreferences;
   diskMonitor:import('./disk-monitor').DiskMonitorSettings;
   preview:import('./preview').PreviewPreferences;
   echo:import('./echo').EchoSettings;
@@ -32,6 +34,7 @@ export interface FileEntry { name: string; path: string; directory: boolean; siz
 export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
 export type { PickerData } from './picker';
 export interface OneAPI {
+  echoReady():Promise<void>;
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
   fileToolsCancel(kind?:import('./file-tools').FileToolKind):Promise<void>;
   fileToolsPage(id:string,page:number,group?:number):Promise<import('./file-tools').FileToolRow[]>;

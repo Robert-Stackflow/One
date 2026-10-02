@@ -1,40 +1,23 @@
-import { screen } from 'electron';
 import { uIOhook, UiohookKey, type UiohookKeyboardEvent } from 'uiohook-napi';
 import { spawn } from 'node:child_process';
 import { Settings } from '../shared/types';
-import {AdjustmentQueue} from '../shared/adjustments';
 import {levels} from './levels';
-import { edgeAt } from '../shared/edges';
 import { brightness } from './brightness';
-import { foreground, lockWorkstation, nativeAvailable, nativeError, keyboardIndicators } from './native';
+import { foreground, lockWorkstation, nativeAvailable, nativeError, keyboardIndicators, capsLockState, modifiersHeld } from './native';
 import type {EchoChannel} from '../shared/echo';
 import {echoNames} from '../shared/echo';
-type Callbacks = { echo(text: string,channel?:EchoChannel): void; show(): void; color():void; preview(hwnd: number): Promise<void> };
+import {CapsDeadline} from '../shared/quick-actions';
+import type {LevelState} from '../shared/hud';
+type Callbacks = { echo(text: string,channel?:EchoChannel): void; level(value:LevelState):void;caps(active:boolean):void; show(): void; color():void; preview(hwnd: number): Promise<void> };
 export class InputService {
   private modalActive=false;
-  setModalActive(active:boolean){this.modalActive=active;this.firstCopy=0;this.adjustments.clear();levels.corners(this.settings,active,corner=>this.triggerCorner(corner));}
+  setModalActive(active:boolean){this.modalActive=active;this.configureNative();this.checkIndicators();}
   private running = false; private error = ''; private held = new Set<number>();
-  private firstCopy = 0; private copyTimer?: NodeJS.Timeout;private indicatorTimer?:NodeJS.Timeout;private indicators?:ReturnType<typeof keyboardIndicators>;
+  private capsDeadline=new CapsDeadline();private capsVisible=false;private indicatorTimer?:NodeJS.Timeout;private indicators?:ReturnType<typeof keyboardIndicators>;
   private previewBusy = false; private lastPreview = 0;
-  private generation = 0; private lastErrorEcho = 0;
-  private adjustments = new AdjustmentQueue(async item=>{
-    if(item.generation!==this.generation||!this.settings.edgeScroll||this.blocked())return;
-    const result=await levels.request(item.action,item.point,item.delta);
-    if(item.generation===this.generation){this.error='';this.callbacks.echo((item.action==='volume'?'音量 ':'亮度 ')+result.brightness+'%');}
-  },(error,item)=>{this.error=error instanceof Error?error.message:String(error);if(item.generation===this.generation&&Date.now()-this.lastErrorEcho>4000){this.lastErrorEcho=Date.now();this.callbacks.echo(this.error);}});
+  private lastErrorEcho = 0;
   constructor(private settings: Settings, private callbacks: Callbacks) {
     uIOhook.on('keydown', event => this.key(event)); uIOhook.on('keyup', event => this.held.delete(event.keycode));
-    uIOhook.on('wheel', event => {
-      if (!this.running || !this.settings.edgeScroll || this.blocked() || event.direction !== 3 || !event.rotation) return;
-      const p = screen.screenToDipPoint({ x: event.x, y: event.y }); const displays = screen.getAllDisplays();
-      const d = screen.getDisplayNearestPoint(p); const width = this.settings.edgePixels / d.scaleFactor; const b = d.bounds;
-      const edge = edgeAt(p,b,displays.filter(other => other.id !== d.id).map(other => other.bounds),width,this.settings.edges);
-      if (!edge) return;
-      const { action, step } = this.settings.edges[edge]; if (action === 'off') return;
-      levels.suppress(); const delta = -Math.sign(event.rotation)*Math.max(1,Math.abs(event.rotation))*step;
-      const key = action === 'volume' ? 'volume' : `brightness:${d.id}`;
-      this.adjustments.add(key,{action,delta,point:{x:event.x,y:event.y},generation:this.generation});
-    });
   }
   private blocked() {
     if(this.modalActive)return true;
@@ -44,7 +27,7 @@ export class InputService {
   private key(event: UiohookKeyboardEvent) {
     if (!this.running) return;
     if (this.held.has(event.keycode)) return; this.held.add(event.keycode);
-    if (this.blocked()) { this.firstCopy = 0; return; }
+    if (this.blocked()) return;
     const modifiers = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Win'].filter(Boolean);
     const modifierCodes: number[] = [UiohookKey.Ctrl, UiohookKey.CtrlRight, UiohookKey.Alt, UiohookKey.AltRight, UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Meta, UiohookKey.MetaRight];
     if (this.settings.keyEcho && this.settings.echo.keys.enabled && !([UiohookKey.CapsLock,UiohookKey.NumLock,UiohookKey.ScrollLock] as number[]).includes(event.keycode) && !modifierCodes.includes(event.keycode) && (!this.settings.onlyCombinations || modifiers.length)) {
@@ -58,15 +41,26 @@ export class InputService {
     }
   }
   update(settings: Settings) {
-    this.settings = settings; this.generation++; this.adjustments.clear(); this.firstCopy = 0; clearTimeout(this.copyTimer);
-    const needed = settings.keyEcho || settings.edgeScroll || settings.explorerPreview;
+    this.settings = settings;
+    const needed = settings.keyEcho || settings.explorerPreview;
     try { if (needed && !this.running) { uIOhook.start(); this.running = true; this.error = ''; } else if (!needed && this.running) { uIOhook.stop(); this.running = false; this.held.clear(); } }
     catch (error) { this.error = String(error); }
-    clearInterval(this.indicatorTimer);this.indicators=undefined;if(settings.keyEcho)this.indicatorTimer=setInterval(()=>this.checkIndicators(),160);
-    levels.corners(settings,this.modalActive,corner=>this.triggerCorner(corner));
+    clearInterval(this.indicatorTimer);this.indicators=undefined;if(settings.keyEcho||settings.capsLock.persistent||settings.capsLock.autoOff){this.checkIndicators();this.indicatorTimer=setInterval(()=>this.checkIndicators(),160);}else {this.capsDeadline.reset();this.showCaps(false);}
+    this.configureNative();
     if(settings.edgeScroll){levels.warm();if(Object.values(settings.edges).some(edge=>edge.action==='brightness'))void brightness.status().catch(()=>{});}
   }
-  private checkIndicators(){if(!this.settings.keyEcho||this.blocked())return;try{const next=keyboardIndicators();if(this.indicators)for(const key of ['ime','caps','num','scroll'] as const)if(this.settings.echo[key].enabled&&next[key]!==this.indicators[key])this.callbacks.echo(key==='ime'?next.ime:`${echoNames[key]} · ${next[key]?'开启':'关闭'}`,key);this.indicators=next;}catch(error){this.error=String(error);}}
+  private configureNative(){
+    levels.corners(this.settings,this.modalActive,corner=>this.triggerCorner(corner));
+    levels.quick(this.settings,this.modalActive,level=>{if(!this.blocked()){this.error='';this.callbacks.level(level);}},error=>{this.error=error;if(Date.now()-this.lastErrorEcho>4000){this.lastErrorEcho=Date.now();this.callbacks.echo(error);}});
+  }
+  private showCaps(active:boolean){if(this.capsVisible===active)return;this.capsVisible=active;this.callbacks.caps(active);}
+  private checkIndicators(){try{
+    const caps=capsLockState(),blocked=this.blocked();this.showCaps(caps&&this.settings.capsLock.persistent&&!blocked);
+    if(this.capsDeadline.update(caps,this.settings.capsLock,Date.now())&&!this.modalActive&&!modifiersHeld())uIOhook.keyTap(UiohookKey.CapsLock);
+    if(!this.settings.keyEcho||blocked)return;const next=keyboardIndicators();
+    if(this.indicators)for(const key of ['ime','caps','num','scroll'] as const)if(this.settings.echo[key].enabled&&next[key]!==this.indicators[key]&&!(key==='caps'&&this.settings.capsLock.persistent))this.callbacks.echo(key==='ime'?next.ime:`${echoNames[key]} · ${next[key]?'开启':'关闭'}`,key);
+    this.indicators=next;
+  }catch(error){this.error=String(error);}}
   private triggerCorner(corner:keyof Settings['corners']) {
     if(this.blocked())return;
     try { const action = this.settings.corners[corner];
@@ -92,6 +86,6 @@ export class InputService {
       }
     } catch (error) { this.error = String(error); }
   }
-  status() { return { hook: this.running, native: nativeAvailable(), error: this.error || nativeError }; }
-  stop() { this.generation++; this.adjustments.clear(); this.held.clear(); this.firstCopy = 0; levels.stop();clearInterval(this.indicatorTimer); clearTimeout(this.copyTimer); if (this.running) uIOhook.stop(); this.running = false; }
+  status() { return { hook: this.running||this.settings.edgeScroll||Object.values(this.settings.quickActions).some(value=>value===true)||this.settings.capsLock.autoOff||this.settings.capsLock.persistent, native: nativeAvailable(), error: this.error || nativeError }; }
+  stop() { this.capsDeadline.reset();this.showCaps(false);this.held.clear(); levels.stop();clearInterval(this.indicatorTimer); if (this.running) uIOhook.stop(); this.running = false; }
 }

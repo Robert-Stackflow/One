@@ -1,5 +1,7 @@
 import type {EchoChannel} from './echo';
-export interface EchoFrame {text:string;channel:EchoChannel|'level';enter:boolean}
+export interface LevelState {action:'volume'|'brightness';value:number;muted?:boolean}
+export function volumeBand(value:number,muted=false){return muted?'muted':value<=0?'zero':value<=33?'low':value<=66?'medium':'high';}
+export interface EchoFrame {text:string;channel:EchoChannel|'level';enter:boolean;level?:LevelState;persistent?:boolean}
 export type HUDContent={kind:'level';action:'volume'|'brightness';value:number}|{kind:'lock';label:string;enabled:boolean}|{kind:'keys';keys:string[]}|{kind:'ime';mode:string;language:string}|{kind:'message';text:string};
 export function hudContent(text:string,channel?:EchoFrame['channel']):HUDContent{
  const level=/^(音量|亮度)\s+(\d+)%$/.exec(text);if(level)return {kind:'level',action:level[1]==='音量'?'volume':'brightness',value:Math.max(0,Math.min(100,Number(level[2])))};
