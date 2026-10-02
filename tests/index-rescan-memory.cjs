@@ -1,9 +1,9 @@
-const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const {spawn}=require('node:child_process'),{readProcessCounters}=require('./app-memory-benchmark.cjs');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function run(exe,cache,root){
  const child=spawn(exe,[cache],{windowsHide:true}),exited=new Promise((resolve,reject)=>{child.once('exit',code=>code===0?resolve():reject(Error('Index exit '+code)));child.once('error',reject);});child.stderr.resume();let buffer='',state,serial=0;const pending=new Map(),snapshots=[];
- child.stdout.on('data',chunk=>{buffer+=chunk;let at;while((at=buffer.indexOf('\n'))>=0){const value=JSON.parse(buffer.slice(0,at));buffer=buffer.slice(at+1);if(value.state)state=value.state;else if(pending.has(value.id)){const request=pending.get(value.id);pending.delete(value.id);value.error?request.reject(Error(value.error)):request.resolve(value.result);}}});
+ child.stdout.setEncoding('utf8');child.stdout.on('data',chunk=>{buffer+=chunk;let at;while((at=buffer.indexOf('\n'))>=0){const value=JSON.parse(buffer.slice(0,at));buffer=buffer.slice(at+1);if(value.state)state=value.state;else if(pending.has(value.id)){const request=pending.get(value.id);pending.delete(value.id);value.error?request.reject(Error(value.error)):request.resolve(value.result);}}});
  const send=value=>child.stdin.write(JSON.stringify(value)+'\n'),query=text=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});send({type:'query',id,query:text,fuzzy:true,pinyin:true});});
  const settings={roots:[root],excluded:[],maxEntries:150000},sample=()=>readProcessCounters([{pid:child.pid,name:path.basename(exe)}]);
  try{
@@ -17,11 +17,11 @@ async function run(exe,cache,root){
  }finally{if(child.exitCode===null)child.kill();}
 }
 async function main(){
- const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/index-path-rescan');await fs.mkdir(out,{recursive:true});const owned=await fs.mkdtemp(path.join(os.tmpdir(),'one-path-rescan-')),root=path.join(owned,'files');await fs.mkdir(root);
+ const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/index-rescan-memory');await fs.mkdir(out,{recursive:true});const owned=await fs.mkdtemp(path.join(out,'fixture-')),root=path.join(owned,'files');await fs.mkdir(root);
  try{
   const filler='lowercase-'.repeat(11);for(let first=0;first<100000;first+=100){await Promise.all(Array.from({length:Math.min(100,100000-first)},(_,i)=>fs.writeFile(path.join(root,`record-${String(first+i).padStart(6,'0')}-${filler}End.TXT`),'')));if(first%20000===0)console.log('Created files: '+(first+100));}
-  const before=await run(process.env.ONE_RESCAN_BEFORE,path.join(owned,'before.bin'),root),after=await run(path.resolve('dist/native/One.Index.exe'),path.join(owned,'after.bin'),root);
+  const before=await run(process.env.ONE_RESCAN_BEFORE,path.join(owned,'before.bin'),root),after=await run(path.resolve(process.env.ONE_RESCAN_AFTER||'dist/native/One.Index.exe'),path.join(owned,'after.bin'),root);
   const report={files:100000,before,after,result:after.growthMB<12?'PASS':'FAIL'};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));assert.ok(after.growthMB<12,JSON.stringify({before:before.growthMB,after:after.growthMB}));console.log(JSON.stringify({result:report.result,beforeGrowthMB:before.growthMB,afterGrowthMB:after.growthMB}));
- }finally{const resolved=await fs.realpath(owned),tmp=await fs.realpath(os.tmpdir());assert.equal(path.dirname(resolved).toLowerCase(),tmp.toLowerCase());assert.ok(path.basename(resolved).startsWith('one-path-rescan-'));await fs.rm(resolved,{recursive:true,force:true});}
+ }finally{const resolved=await fs.realpath(owned),parent=await fs.realpath(out);assert.equal(path.dirname(resolved).toLowerCase(),parent.toLowerCase());assert.ok(path.basename(resolved).startsWith('fixture-'));await fs.rm(resolved,{recursive:true,force:true});}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

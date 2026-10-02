@@ -618,6 +618,91 @@ pub fn start(s: Arc<Shared>) -> thread::JoinHandle<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn snapshot_rows(config: &Config, rows: impl Iterator<Item = (String, bool, u64)>) -> Vec<u8> {
+        let cfg = serde_json::to_vec(config).unwrap();
+        let mut bytes = Vec::new();
+        encode(&mut bytes, &Index::default(), &cfg, 10, 20).unwrap();
+        let mut previous = String::new();
+        let mut count = 0u64;
+        for (path, directory, modified) in rows {
+            put_path(&mut bytes, &path, &previous).unwrap();
+            put_meta(&mut bytes, directory, modified).unwrap();
+            previous = path;
+            count += 1;
+        }
+        bytes[28 + cfg.len()..36 + cfg.len()].copy_from_slice(&count.to_le_bytes());
+        bytes
+    }
+    #[test]
+    fn large_snapshot_preserves_order_spelling_and_metadata() {
+        let config = Config {
+            max_entries: 140_001,
+            ..Config::default()
+        };
+        // A decoder must also accept snapshots that weren't written in path order.
+        let bytes = snapshot_rows(
+            &config,
+            (0..140_000)
+                .rev()
+                .map(|n| {
+                    (
+                        format!("D:\\MixedCase\\文件夹\\Report-{n:06}.txt"),
+                        n % 7 == 0,
+                        1234 + n,
+                    )
+                })
+                .chain(std::iter::once(("D:\\MixedCase".into(), true, 1234))),
+        );
+        let (mut index, updated, id) = decode(&mut &bytes[..], &config).unwrap().unwrap();
+        assert_eq!((index.rows.len(), updated, id), (140_001, 10, 20));
+        for (n, row) in index
+            .rows
+            .values()
+            .filter(|row| row.item.path.display() != "D:\\MixedCase")
+            .enumerate()
+        {
+            assert_eq!(
+                row.item.path.display(),
+                format!("D:\\MixedCase\\文件夹\\Report-{n:06}.txt")
+            );
+            assert_eq!(row.item.directory, n % 7 == 0);
+            assert_eq!(
+                row.item.modified,
+                if n % 7 == 0 { 1234 + n as u64 } else { 0 }
+            );
+        }
+        apply(
+            &mut index,
+            vec![Change::Remove("d:\\mixedcase".into())],
+            config.max_entries,
+        );
+        assert!(
+            index.rows.is_empty(),
+            "prefix deletion must work on restored trees"
+        );
+    }
+    #[test]
+    fn snapshot_rejects_duplicate_normalized_paths() {
+        let config = Config {
+            max_entries: 100_000,
+            ..Config::default()
+        };
+        for count in [2, 65_537] {
+            let rows = (0..count).map(|n| {
+                let path = if n == count - 1 {
+                    "d:\\mixedcase\\REPORT-000000.txt".into()
+                } else {
+                    format!("D:\\MixedCase\\Report-{n:06}.txt")
+                };
+                (path, false, 0)
+            });
+            let bytes = snapshot_rows(&config, rows);
+            assert!(
+                decode(&mut &bytes[..], &config).is_err(),
+                "duplicate in snapshot of {count} rows"
+            );
+        }
+    }
     #[test]
     fn precise_ownership() {
         let c = "D:\\One\\file-index.bin";

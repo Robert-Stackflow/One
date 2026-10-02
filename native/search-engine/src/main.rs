@@ -5,6 +5,7 @@ mod enumeration;
 mod incremental;
 mod maintenance;
 mod path_key;
+mod rows;
 mod stored_path;
 use path_key::{PathKey, PathPool};
 use pinyin::ToPinyinMulti;
@@ -291,7 +292,7 @@ impl Record {
 }
 #[derive(Default, Serialize)]
 struct Index {
-    rows: BTreeMap<PathKey, Record>,
+    rows: rows::Rows,
     #[serde(skip)]
     paths: PathPool,
     #[serde(skip)]
@@ -303,20 +304,8 @@ struct Index {
 }
 impl Index {
     fn put(&mut self, mut row: Record) -> Option<Record> {
-        use std::collections::btree_map::Entry;
         row.item.path.share_parent(&mut self.paths);
-        match self.rows.entry(row.item.path.key().clone()) {
-            Entry::Occupied(mut entry) => {
-                // BTreeMap retains the old key when replacing a value.
-                // Reuse that owner so rebuilds and case renames do not duplicate paths.
-                row.item.path.reuse_key(entry.key());
-                Some(entry.insert(row))
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(row);
-                None
-            }
-        }
+        self.rows.put(row)
     }
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -742,6 +731,13 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     for (n, (path, row)) in index
         .rows
         .iter()
+        // Programs/settings live in the launcher index. Their filters reject
+        // every filesystem row, so don't walk millions of unrelated files.
+        .take(if matches!(kind.as_str(), "app" | "setting") {
+            0
+        } else {
+            usize::MAX
+        })
         .chain(extra_rows.iter().filter(|_| include_launchers))
         .enumerate()
     {
