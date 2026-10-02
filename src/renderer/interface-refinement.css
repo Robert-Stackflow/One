@@ -1,5 +1,13 @@
-.one-tooltip{position:fixed;z-index:2147483647;pointer-events:none;max-width:min(340px,calc(100vw - 16px));padding:7px 10px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:#272727;color:#fff;font-size:11px;font-weight:400;line-height:1.45;box-shadow:0 3px 12px #00000012;opacity:0;transform:translateY(3px);transition:opacity 120ms ease,transform 160ms cubic-bezier(.2,.8,.2,1);overflow-wrap:anywhere;user-select:none}
-.one-tooltip.visible{opacity:1;transform:translateY(0)}
+.one-tooltip{position:fixed;z-index:2147483647;pointer-events:none;max-width:min(340px,calc(100vw - 16px));padding:7px 10px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:#272727;color:#fff;font-size:11px;font-weight:400;line-height:1.45;box-shadow:0 3px 12px #00000012;opacity:0;--tooltip-x:0px;--tooltip-y:3px;transform:translate(var(--tooltip-x),var(--tooltip-y));transition:opacity 120ms ease,transform 160ms cubic-bezier(.2,.8,.2,1);overflow-wrap:anywhere;user-select:none}
+.one-tooltip::before{content:"";position:absolute;width:8px;height:8px;background:inherit;border:inherit;border-width:0;transform:rotate(45deg)}
+.one-tooltip[data-side=top]::before{left:calc(var(--tooltip-arrow) - 4px);bottom:-5px;border-right-width:1px;border-bottom-width:1px}
+.one-tooltip[data-side=bottom]{--tooltip-y:-3px}
+.one-tooltip[data-side=bottom]::before{left:calc(var(--tooltip-arrow) - 4px);top:-5px;border-top-width:1px;border-left-width:1px}
+.one-tooltip[data-side=right]{--tooltip-x:-3px;--tooltip-y:0px}
+.one-tooltip[data-side=right]::before{top:calc(var(--tooltip-arrow) - 4px);left:-5px;border-left-width:1px;border-bottom-width:1px}
+.one-tooltip[data-side=left]{--tooltip-x:3px;--tooltip-y:0px}
+.one-tooltip[data-side=left]::before{top:calc(var(--tooltip-arrow) - 4px);right:-5px;border-top-width:1px;border-right-width:1px}
+.one-tooltip.visible{transform:translate(0,0);opacity:1}
 .maintenance-page>.module-toolbar{height:40px;min-height:40px;align-items:center;margin:0 0 24px}
 #maintenance-actions.toolbar{margin:0;min-height:36px;align-items:center;gap:8px}
 .disk-statusbar{flex-wrap:nowrap;gap:12px;min-height:38px;padding:8px 0 0;align-items:center}
