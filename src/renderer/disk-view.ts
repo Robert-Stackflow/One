@@ -149,9 +149,9 @@ export function setupDisk() {
   action('selection-enter',() => { if (selected) enter(selected); });
   action('selection-reveal',() => { const node = selected || current; if (node) return api.revealFile(node.path); });
   action('selection-copy',async () => { const node = selected || current; if (node) { await api.copyText(node.path); toast('已复制路径'); } });
-  action('pick-directory',async () => { const path = await api.pickDirectory(); if(path){if(scanning){await api.cancelScan();while(scanning)await new Promise(r=>setTimeout(r,20));}q<HTMLInputElement>('disk-path').value=path;q('scan').click();} });
-  action('scan',async () => {
-    if (scanning) return; const path = q<HTMLInputElement>('disk-path').value.trim(); if (!path) return toast('请先选择目录');
+  let scanTask:Promise<void>|undefined,folderRevision=0;
+  const scan=async(path:string) => {
+    if (scanning) return; if (!path) return toast('请先选择目录');
     acceptUpdates=true;activeRoot='';scanning = true; firstBatch = true; q<HTMLButtonElement>('scan').disabled = true; q<HTMLButtonElement>('cancel-scan').disabled = false; q('scan-activity').hidden = false;
     // Remove the previous scan's rows before accepting input for a new tree.
     clearTimeout(drawTimer);drawTimer=undefined;tree=new ScanTree();current=undefined;selected=undefined;progress=undefined;map.release();drawnNodes=[];hovered=undefined;filtered=undefined;issues=[];tooltipTarget=undefined;
@@ -164,7 +164,16 @@ export function setupDisk() {
       const cancelled = String(error).includes('扫描已取消'); q('scan-state').textContent = cancelled ? '已停止 · 部分结果' : '扫描未完成';
       q('scan-progress').textContent = cancelled ? '已保留扫描到的内容' : String(error).replace(/^.*Error: /,''); if (!cancelled) toast(error);
     } finally { scanning = false; q('scan-activity').hidden = true; q('disk-results').classList.remove('scanning'); q<HTMLButtonElement>('scan').disabled = false; q<HTMLButtonElement>('cancel-scan').disabled = !acceptUpdates; draw(); }
-  });
+  };
+  const openFolder=async(path:string)=>{
+    const revision=++folderRevision;
+    if(scanning){acceptUpdates=false;await api.cancelScan();await scanTask;}
+    if(revision!==folderRevision)return;
+    q<HTMLInputElement>('disk-path').value=path;
+    await (scanTask=scan(path));
+  };
+  action('pick-directory',async()=>{const path=await api.pickDirectory();if(path)await openFolder(path);});
+  action('scan',()=>{if(scanning)return;folderRevision++;return scanTask=scan(q<HTMLInputElement>('disk-path').value.trim());});
   api.onProgress(value => {
     if (!acceptUpdates||activeRoot&&activeRoot!==value.rootPath) return;activeRoot=value.rootPath;
     if (firstBatch) { tree = new ScanTree(); current = undefined; selected = undefined; issues = []; filtered = undefined; firstBatch = false; }
@@ -172,14 +181,14 @@ export function setupDisk() {
     q('disk-empty').hidden = true; q('disk-results').hidden = false; if(!value.phase||value.phase==='scan'){q('scan-progress').textContent=value.path;q('scan-progress').title=value.path;}
     schedule();
   });
-  action('cancel-scan',async()=>{acceptUpdates=false;await api.cancelScan();q<HTMLButtonElement>('cancel-scan').disabled=true;q('scan-state').textContent='已停止';q('scan-activity').hidden=true;q('scan-progress').textContent='';});
+  action('cancel-scan',async()=>{folderRevision++;acceptUpdates=false;await api.cancelScan();q<HTMLButtonElement>('cancel-scan').disabled=true;q('scan-state').textContent='已停止';q('scan-activity').hidden=true;q('scan-progress').textContent='';});
   action('show-issues',() => { const messages = issues.length ? issues : [...tree.nodes.values()].filter(n => n.issue).map(n => n.path+'：'+n.issue); if (!messages.length) return; q('issues-text').textContent = messages.join('\n\n'); openDialog(q<HTMLDialogElement>('issues-dialog')); });
   action('close-issues',() => closeDialog(q<HTMLDialogElement>('issues-dialog')));
   q('page-disk').addEventListener('dragover',event => { event.preventDefault(); });
   q('page-disk').addEventListener('drop',event => { event.preventDefault(); const file = event.dataTransfer?.files[0]; if (file && !scanning) { q<HTMLInputElement>('disk-path').value = api.droppedFile(file); q('scan').click(); } });
   const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;list.setActive(listShowing());if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();dismissDiskContext?.();q('map-tooltip').hidden=true;tooltipTarget=undefined;hovered=undefined;filtered=undefined;drawnNodes=[];map.release();}};
   onWindowVisibility(refreshVisibility);
-  return {activate(value:boolean){if(active===value)return;active=value;refreshVisibility();}};
+  return {activate(value:boolean){if(active===value)return;active=value;refreshVisibility();},openFolder};
 }
 
 let dismissDiskContext: (()=>void) | undefined;

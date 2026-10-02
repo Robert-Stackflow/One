@@ -13,10 +13,18 @@ export function setupLocksmith(){
   const scan=()=>{if(!paths.length)add(q<HTMLInputElement>('lock-path').value.trim());return api.scanLocks(paths).then(render);};
   q('lock-add').onclick=()=>{add(q<HTMLInputElement>('lock-path').value.trim());q<HTMLInputElement>('lock-path').value='';};q('lock-path').onkeydown=e=>{if(e.key==='Enter')q('lock-add').click();};q('lock-pick-file').onclick=()=>void api.pickFile().then(p=>p&&add(p)).catch(toast);q('lock-pick-folder').onclick=()=>void api.pickDirectory().then(p=>p&&add(p)).catch(toast);q('lock-scan').onclick=q('lock-refresh').onclick=()=>void scan().catch(toast);q('lock-cancel').onclick=()=>void api.cancelLocks().catch(toast);
   q('lock-end-cancel').onclick=q('lock-end-close').onclick=()=>closeDialog(dialog);q('lock-end-confirm').onclick=()=>{const b=q<HTMLButtonElement>('lock-end-confirm');b.disabled=true;void api.endLockProcess(pending).then(()=>closeDialog(dialog)).catch(toast).finally(()=>b.disabled=false);};
-  api.onLockTarget(path=>{paths=[];add(path);void scan().catch(toast);});
+  let targetRevision=0,inspectTask=Promise.resolve();
+  const inspect=(targets:string[])=>{
+    const revision=++targetRevision;
+    return inspectTask=inspectTask.catch(()=>{}).then(async()=>{
+      if(revision!==targetRevision)return;await api.cancelLocks();if(revision!==targetRevision)return;
+      paths=[];for(const path of targets)add(path);q<HTMLInputElement>('lock-path').value='';await scan();
+    });
+  };
+  api.onLockTarget(path=>{void inspect([path]).catch(toast);});
   api.onLocks(render);void api.lockState().then(render).catch(toast);
   const drop=q('lock-targets');drop.addEventListener('dragover',e=>e.preventDefault());drop.addEventListener('drop',e=>{e.preventDefault();for(const file of e.dataTransfer?.files||[]){const path=api.droppedFile(file);if(path)add(path);}});
   const resume=()=>{if(showing()){targets();if(state)render(state);}};
   onWindowVisibility(resume);
-  return{activate(value:boolean){active=value;resume();}};
+  return{activate(value:boolean){active=value;resume();},inspect};
 }

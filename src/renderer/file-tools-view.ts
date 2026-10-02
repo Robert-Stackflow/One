@@ -125,7 +125,7 @@ export function setupFileTools(){
   active.set(owner,task.kind);progress.set(owner,{id:'',kind:task.kind,phase:'准备中',completed:0,total:0});updateButtons();renderProgress();
   try{
    const next=await api.fileToolsRun(task);
-   const current=task.kind!=='document-search'||requestedQuery===queryRevision&&requestedScope===scopeKey()&&task.query===value('documents-query');
+   const current=task.kind==='duplicates'?task.roots[0].toLowerCase()===value('duplicates-root').toLowerCase()&&task.recursive===checked('duplicates-recursive'):task.kind!=='document-search'||requestedQuery===queryRevision&&requestedScope===scopeKey()&&task.query===value('documents-query');
    if(current)reports.set(owner,next);
    if(task.kind==='rename-preview'){autoPreview=true;planFresh=requestedRename===renameRevision;only=null;excluded.clear();if(planFresh)previewWork.clear();else previewWork.request();}
    if(task.kind==='rename-apply'){lastReceipt=next.receipt||'';planFresh=false;}
@@ -200,5 +200,9 @@ export function setupFileTools(){
   previewWork.sync();documentWork.sync();
  };
  onWindowVisibility(syncView);
- return{activate(value:boolean){moduleActive=value;syncView();},select:async(next:ToolTab,id?:string)=>{if(id){const item=(await api.fileToolsHistory()).find(r=>r.id===id);if(item)reports.set(next,item);}await changeTab(next);}};
+ return{activate(value:boolean){moduleActive=value;syncView();},openFolder:async(path:string)=>{
+  if(value('duplicates-root').toLowerCase()!==path.toLowerCase())reports.delete('duplicates');
+  for(const id of ['duplicates-root','documents-root']){input(id).value=path;input(id).dispatchEvent(new Event('change',{bubbles:true}));}
+  await changeTab('duplicates');
+ },select:async(next:ToolTab,id?:string)=>{if(id){const item=(await api.fileToolsHistory()).find(r=>r.id===id);if(item)reports.set(next,item);}await changeTab(next);}};
 }
