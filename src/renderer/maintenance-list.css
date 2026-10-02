@@ -1,0 +1,37 @@
+.content[data-current-page=system]:has(#maintenance-scan-panel:not([hidden])){display:flex;flex-direction:column;overflow:hidden;padding-bottom:20px}
+.content[data-current-page=system]:has(#maintenance-scan-panel:not([hidden])) .page-heading{flex-shrink:0}
+.content[data-current-page=system]:has(#maintenance-scan-panel:not([hidden])) #page-system{display:flex;flex:1;min-height:0}
+.maintenance-page:has(#maintenance-scan-panel:not([hidden])){display:flex;flex:1;min-height:0;flex-direction:column}
+.maintenance-page>.module-toolbar{flex-shrink:0}
+#maintenance-scan-panel{display:flex;flex:1;min-height:0;flex-direction:column}
+#maintenance-scan-panel .maintenance-tools{flex-shrink:0}
+#maintenance-scan-panel .maintenance-layout{flex:1;min-height:0;align-items:stretch}
+#maintenance-scan-panel .maintenance-selection{align-self:start;position:static}
+.maintenance-results{display:flex;min-height:0;flex-direction:column;background:var(--surface)}
+.maintenance-results .maintenance-list-head{flex-shrink:0;border-bottom:1px solid var(--line)}
+#maintenance-rows{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;overflow-anchor:none;scrollbar-gutter:stable;outline:0}
+.maintenance-results .maintenance-item{min-height:96px;padding:14px 16px;border-top:0;border-bottom:1px solid var(--line);align-items:start}
+.maintenance-results .maintenance-entry-heading{flex-wrap:nowrap}
+.maintenance-results .maintenance-entry-heading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maintenance-results .maintenance-category{flex-shrink:0}
+.maintenance-results .maintenance-item-end{flex-shrink:0;max-width:30%}
+.maintenance-results .maintenance-item-end>span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maintenance-item details>summary{display:inline-flex;align-items:center;gap:3px;padding-block:2px;border-radius:3px}
+.maintenance-item details>summary>.icon{width:12px;height:12px;transition:transform .18s var(--ease)}
+.maintenance-item details[open]>summary>.icon{transform:rotate(90deg)}
+.maintenance-item details::details-content{interpolate-size:allow-keywords;height:0;overflow:clip;transition:height .18s var(--ease),content-visibility .18s allow-discrete}
+.maintenance-item details[open]::details-content{height:auto}
+.maintenance-detail-body{padding-bottom:6px;user-select:text}
+#maintenance-rows:focus-visible .maintenance-item.focused{box-shadow:inset 3px 0 var(--accent);background:var(--hover)}
+#maintenance-rows>.maintenance-empty{position:absolute;inset:0;min-height:0}
+.maintenance-list-footer{flex-shrink:0;display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:10px 16px;font-size:10px;color:var(--muted)}
+.maintenance-list-footer>span{white-space:nowrap}
+.maintenance-tools #maintenance-status{min-width:0;max-width:40%;overflow:hidden;text-overflow:ellipsis}
+#maintenance-confirm-list{position:relative;height:min(320px,35vh);max-height:none;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+#maintenance-confirm-list>.virtual-row-space{display:block;padding:0;border:0}
+#maintenance-confirm-list .maintenance-confirm-item{padding:10px 0;border-bottom:1px solid var(--line)}
+#maintenance-confirm-list .maintenance-confirm-item>div{display:flex;min-width:0;flex-direction:column;gap:4px}
+#maintenance-confirm-list .maintenance-confirm-item strong,#maintenance-confirm-list .maintenance-confirm-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-height:720px){#maintenance-scan-panel .maintenance-selection{padding:14px;gap:10px}#maintenance-selected-names{display:none}}
+@media(max-width:850px){#maintenance-scan-panel .maintenance-layout{grid-template-rows:minmax(120px,1fr) auto}#maintenance-scan-panel .maintenance-selection{align-self:stretch}.maintenance-list-shortcuts{display:none}.maintenance-results .maintenance-category{max-width:80px;overflow:hidden;text-overflow:ellipsis}}
+@media(prefers-reduced-motion:reduce){.maintenance-item details>summary>.icon,.maintenance-item details::details-content{transition:none}}
