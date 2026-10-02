@@ -40,9 +40,9 @@ async function main() {
     await page.locator('#scan').click();await expect(page.locator('#disk-size')).not.toHaveText('0 B');
     await expect(page.locator('#scan')).toBeEnabled({timeout:60000});
     const evidence=await page.evaluate(()=>window.scanEvidence);assert.ok(evidence.filter(x=>x.files>0&&x.whileRunning).length>1);assert.ok(evidence.at(-1).files>1000);
-    await expect(page.locator('#disk-canvas')).toBeVisible();await page.locator('#toggle-list').click();await page.locator('#disk-rows tr').first().click();await expect(page.locator('#selection-enter')).toBeEnabled();
+    await expect(page.locator('#disk-canvas')).toBeVisible();await page.locator('#toggle-list').click();await page.locator('#disk-rows .disk-row').first().click();await expect(page.locator('#selection-enter')).toBeEnabled();
     await page.screenshot({path:path.join(output,'空间分析.png')});
-    await page.locator('#disk-rows tr').first().press('Enter');await expect(page.locator('#breadcrumbs button')).not.toHaveCount(1);await page.locator('#disk-back').click();await expect(page.locator('#breadcrumbs button')).toHaveCount(1);
+    await page.locator('#disk-rows .disk-row').first().press('Enter');await expect(page.locator('#breadcrumbs button')).not.toHaveCount(1);await page.locator('#disk-back').click();await expect(page.locator('#breadcrumbs button')).toHaveCount(1);
     await page.locator('#disk-filter').fill('*.json;>1kb');await expect(page.locator('#filter-state')).toContainText('匹配');await page.locator('#clear-disk-filter').click();
     await page.locator('#map-depth').click();await page.getByRole('option',{name:'3 层',exact:true}).click();await page.locator('#toggle-list').click();await expect(page.locator('.disk-inspector')).toBeHidden();await page.locator('#toggle-list').click();
     await page.locator('#disk-canvas').click({button:'right',position:{x:30,y:18}});await expect(page.locator('.disk-context')).toBeVisible();await page.locator('.disk-context button').first().press('Escape');await expect(page.locator('.disk-context')).toHaveCount(0);
@@ -51,7 +51,7 @@ async function main() {
     await expect(page.locator('#disk-size')).not.toHaveText('0 B');
     await expect(page.locator('#scan')).toBeDisabled();
     // Navigate and cancel in one renderer turn so a fast filesystem cannot finish during screenshot capture.
-    await page.evaluate(async()=>{const row=document.querySelector('#disk-rows tr[data-directory=true]');if(!row)throw new Error('No scanned folder');row.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));if(document.querySelectorAll('#breadcrumbs button').length<=1)throw new Error('Navigation did not apply');const stop=document.querySelector('#cancel-scan');if(stop.disabled)throw new Error('Scan completed before cancellation test');stop.click();});
+    await page.evaluate(async()=>{const row=document.querySelector('#disk-rows .disk-row[data-directory=true]');if(!row)throw new Error('No scanned folder');row.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));if(document.querySelectorAll('#breadcrumbs button').length<=1)throw new Error('Navigation did not apply');const stop=document.querySelector('#cancel-scan');if(stop.disabled)throw new Error('Scan completed before cancellation test');stop.click();});
     await expect(page.locator('#scan-state')).toHaveText(/已停止/,{timeout:20000});await expect(page.locator('#disk-results')).toBeVisible();await expect(page.locator('#disk-files')).not.toHaveText('0');
     const partial=await page.locator('#disk-files').innerText();await page.screenshot({path:path.join(output,'扫描部分结果.png')});
     // A second scan can start after cancellation. No stale results from the previous worker.

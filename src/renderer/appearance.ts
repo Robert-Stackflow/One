@@ -3,6 +3,7 @@ import {defaultAppearance} from '../shared/settings';
 import {fontStack} from '../shared/fonts';
 import {loadUIFont} from './font-runtime';
 import {setupFontPicker} from './font-picker';
+import {refreshFileIcons} from './file-icons';
 import {api,q,button,icon,toast} from './ui';
 let current=defaultAppearance();
 let fontRevision=0;
@@ -15,7 +16,7 @@ export function applyAppearance(value:Appearance){
   const accent=dark&&value.accent==='#303030'?'#e4e4e4':value.accent;root.style.setProperty('--accent',accent);
   const rgb=accent.slice(1).match(/../g)!.map(x=>parseInt(x,16));root.style.setProperty('--on-accent',rgb[0]*.299+rgb[1]*.587+rgb[2]*.114>155?'#141414':'#ffffff');
   root.style.setProperty('--radius',value.radius+'px');if(appliedFont!==value.font){root.style.setProperty('--ui-font',fontStack(value.font));appliedFont=value.font;}
-  const revision=++fontRevision;root.dataset.fontStatus='loading';
+  refreshFileIcons();const revision=++fontRevision;root.dataset.fontStatus='loading';
   void loadUIFont(value.font,true).then(stack=>{if(revision!==fontRevision)return;root.style.setProperty('--ui-font',stack);root.dataset.fontStatus='ready';}).catch(()=>{if(revision===fontRevision){root.dataset.fontStatus='error';toast('字体加载失败，请刷新字体列表后重试。');}});
 }
 export function setupAppearance(){void api.appearance().then(applyAppearance).catch(()=>{});api.onAppearance(applyAppearance);system.addEventListener('change',()=>applyAppearance(current));}

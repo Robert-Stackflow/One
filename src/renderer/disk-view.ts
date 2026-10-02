@@ -5,6 +5,7 @@ import { layout, type Tile } from '../shared/treemap';
 import { diskPredicate, filteredTree } from '../shared/disk-filter';
 import {breadcrumbIndices} from '../shared/breadcrumbs';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
+import {DiskList} from './disk-list';
 import { api, q, esc, icon, button, iconButton, size, toast, action } from './ui';
 
 export function diskPage() {
@@ -12,7 +13,7 @@ export function diskPage() {
  <div id="disk-empty" class="empty disk-empty"><div class="big-icon">${icon('disk')}</div><h2>选择要分析的目录</h2></div>
  <div id="disk-results" hidden>
   <div class="disk-commandbar"><div class="map-navigation">${iconButton('disk-back','返回上一层','up')}<div class="breadcrumbs" id="breadcrumbs"></div></div><div class="disk-controls"><div class="filter-field">${icon('search')}<input id="disk-filter" maxlength="500" aria-label="筛选扫描结果" placeholder="筛选文件">${iconButton('clear-disk-filter','清除筛选','close')}</div><select id="map-depth" aria-label="显示层级"><option value="1">1 层</option><option value="2" selected>2 层</option><option value="3">3 层</option><option value="4">4 层</option></select>${iconButton('toggle-list','显示目录列表','panel-right')}${iconButton('filter-help','筛选语法','info')}</div></div>
-  <div class="disk-workspace map-only" id="disk-workspace"><div class="map-frame" id="treemap"><canvas id="disk-canvas" aria-label="空间矩形图，单击选择，双击进入目录"></canvas><div id="map-empty" hidden>这个目录中还没有可显示的文件</div></div><aside class="disk-inspector"><div class="list-heading"><span id="list-title">目录内容</span><span>大小</span></div><div class="disk-list"><table><tbody id="disk-rows"></tbody></table></div><div class="disk-selection" id="disk-selection"><div class="selection-title" id="selection-name"></div><div id="selection-meta"></div><div class="selection-actions">${button('selection-enter','进入目录')}${iconButton('selection-reveal','在资源管理器中定位','folder')}${iconButton('selection-copy','复制路径','copy')}</div></div></aside></div>
+  <div class="disk-workspace map-only" id="disk-workspace"><div class="map-frame" id="treemap"><canvas id="disk-canvas" aria-label="空间矩形图，单击选择，双击进入目录"></canvas><div id="map-empty" hidden>这个目录中还没有可显示的文件</div></div><aside class="disk-inspector"><div class="list-heading"><span id="list-title">目录内容</span><span>大小</span></div><div class="disk-list" id="disk-list"></div><div class="disk-selection" id="disk-selection"><div class="selection-title" id="selection-name"></div><div id="selection-meta"></div><div class="selection-actions">${button('selection-enter','进入目录')}${iconButton('selection-reveal','在资源管理器中定位','folder')}${iconButton('selection-copy','复制路径','copy')}</div></div></aside></div>
   <div class="disk-statusbar"><div class="disk-summary"><strong id="disk-size">0 B</strong><span><b id="disk-files">0</b> 文件</span><span><b id="disk-dirs">0</b> 目录</span></div><span id="filter-state"></span><span id="visible-count"></span><div class="spacer"></div><span class="activity-dot" id="scan-activity" hidden></span><span id="scan-state"></span><button class="quiet" id="show-issues" aria-label="查看跳过的扫描项目" hidden></button></div>
  </div><div class="scan-progress-row"><div class="progress" id="scan-progress"></div></div><div class="map-tooltip" id="map-tooltip" hidden></div>
  ${dialogMarkup({id:"filter-dialog",title:"筛选文件",closeId:"filter-dismiss",body:`<dl class="filter-examples"><dt>*.jpg</dt><dd>文件名或通配符</dd><dt>|*.zip</dt><dd>排除 ZIP 文件</dd><dt>>100mb; &lt;2gb</dt><dd>文件大小</dd><dt>>30days</dt><dd>超过 30 天未修改</dd></dl>`,actions:`${button('close-filter-help','关闭')}`})}`;
@@ -37,7 +38,10 @@ export function setupDisk() {
   const background = document.createElement('canvas'), backgroundContext = background.getContext('2d')!;
   let visibleSize = 0,acceptUpdates=false,activeRoot='',active=false;
   const showing=()=>active&&isWindowVisible();
-  const rows = q('disk-rows'); q<HTMLButtonElement>('cancel-scan').disabled = true;
+  const list=new DiskList(q('disk-list'),node=>{selected=node;selection();paint(drawnNodes,true);},enter,(x,y,node)=>showContextMenu(x,y,node,enter));
+  const listShowing=()=>showing()&&!q('disk-results').hidden&&!q('disk-workspace').classList.contains('map-only');
+  q('toggle-list').setAttribute('aria-pressed','false');
+  q<HTMLButtonElement>('cancel-scan').disabled = true;
   const crumbs=q('breadcrumbs');let crumbPath='',crumbNodes:DiskNode[]=[],crumbButtons:HTMLButtonElement[]=[],crumbOverflow:HTMLButtonElement|undefined,crumbMenu:HTMLElement|undefined;
   function closeCrumbMenu(){crumbMenu?.remove();crumbMenu=undefined;crumbOverflow?.setAttribute('aria-expanded','false');}
   function fitCrumbs(){
@@ -66,7 +70,7 @@ export function setupDisk() {
     q('selection-meta').textContent = `${size(selectedSize)} · ${visibleSize ? (selectedSize/visibleSize*100).toFixed(1) : '0'}%${node.issue ? ' · 已跳过' : ''}`;
     q('selection-enter').textContent = node.directory ? '进入目录' : '预览文件';
     q<HTMLButtonElement>('selection-enter').disabled = node === current;
-    rows.querySelectorAll<HTMLTableRowElement>('tr').forEach(row => row.classList.toggle('selected',row.dataset.path === node.path));
+    list.select(node.path);
   }
   function enter(node: DiskNode) {
     if (!node.directory) { void api.preview(node.path).catch(toast); return; }
@@ -120,11 +124,12 @@ export function setupDisk() {
   let drawnNodes: DiskNode[] = [];
   function draw() {
     if(!showing())return;
+    list.setActive(listShowing());
     if (progress) {
       q('disk-size').textContent = size(progress.bytes); q('disk-files').textContent = progress.files.toLocaleString(); q('disk-dirs').textContent = progress.directories.toLocaleString();
       q('show-issues').hidden=!progress.issues;q('show-issues').textContent=progress.issues?`${progress.issues} 项跳过`:'';
     }
-    if (!current || !tree.root) {drawnNodes=[];paint([]);rows.replaceChildren();q('breadcrumbs').replaceChildren();q('map-empty').hidden=false;q('map-empty').textContent=scanning?'正在读取目录…':'目录已不存在';q('selection-name').textContent='';q('selection-meta').textContent='';q('visible-count').textContent='0 项';q('map-tooltip').hidden=true;return;}
+    if (!current || !tree.root) {drawnNodes=[];paint([]);list.clear();q('breadcrumbs').replaceChildren();q('map-empty').hidden=false;q('map-empty').textContent=scanning?'正在读取目录…':'目录已不存在';q('selection-name').textContent='';q('selection-meta').textContent='';q('visible-count').textContent='0 项';q('map-tooltip').hidden=true;return;}
     q<HTMLButtonElement>('disk-back').disabled = current === tree.root;
     breadcrumbs();
     let source = current;
@@ -136,22 +141,8 @@ export function setupDisk() {
     q('filter-state').textContent = predicateError || (filterValue ? `${size(source.size)} 匹配` : ''); q('filter-state').classList.toggle('error',!!predicateError);
     q('map-empty').hidden = nodes.some(n => n.size > 0); q('map-empty').textContent = filterValue ? '没有匹配的文件' : scanning ? '正在读取这个目录…' : '这个目录没有可显示的文件';
     paint(nodes);
-    // Preserve list position and keyboard focus during progressive updates.
-    const scroll = rows.parentElement!.parentElement!.scrollTop;
-    const focused = document.activeElement instanceof HTMLElement ? document.activeElement.closest('tr')?.getAttribute('data-path') : undefined;
-    const fragment = document.createDocumentFragment();
-    for (const node of nodes.slice(0,500)) {
-      const row = document.createElement('tr'); row.dataset.path = node.path; row.dataset.directory = String(node.directory); row.tabIndex = 0;
-      row.setAttribute('aria-label',`${node.name}，${size(node.size)}，${node.directory ? '文件夹，回车进入' : '文件，回车预览'}`);
-      row.innerHTML = `<td><span class="disk-row-name">${icon(node.directory ? 'folder' : 'file')}<span>${esc(node.name)}</span></span><span class="size-track"><i style="width:${source.size ? node.size/source.size*100 : 0}%"></i></span></td><td>${size(node.size)}</td>`;
-      row.onclick = () => { selected = node; selection(); paint(drawnNodes,true); };
-      row.ondblclick = () => enter(node);
-      row.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); enter(node); } else if (event.key === ' ') { event.preventDefault(); row.click(); } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); (event.key === 'ArrowDown' ? row.nextElementSibling as HTMLElement : row.previousElementSibling as HTMLElement)?.focus(); } };
-      fragment.append(row);
-    }
-    rows.replaceChildren(fragment); rows.parentElement!.parentElement!.scrollTop = scroll;
-    if (focused) ([...rows.children].find(row => (row as HTMLElement).dataset.path === focused) as HTMLElement | undefined)?.focus({preventScroll:true});
-    q('visible-count').textContent = nodes.length > 500 ? `列表显示最大的 500 / ${nodes.length.toLocaleString()} 项` : `${nodes.length.toLocaleString()} 项`;
+    list.update(nodes,source.size,current.path+'\0'+filterValue);
+    q('visible-count').textContent = `${nodes.length.toLocaleString()} 项`;
     selection();
   }
   new ResizeObserver(() => { if (current) paint(drawnNodes); }).observe(frame);
@@ -172,7 +163,7 @@ export function setupDisk() {
   action('clear-disk-filter',() => { q<HTMLInputElement>('disk-filter').value = ''; q('disk-filter').dispatchEvent(new Event('input')); });
   action('filter-help',() => openDialog(q<HTMLDialogElement>('filter-dialog'))); action('close-filter-help',() => closeDialog(q<HTMLDialogElement>('filter-dialog')));
   action('disk-back',() => { if (current) { const parent = tree.parentOf(current); if (parent) enter(parent); } });
-  action('toggle-list',() => { const hidden = q('disk-workspace').classList.toggle('map-only'); q('toggle-list').setAttribute('aria-label',hidden ? '显示目录列表' : '收起目录列表'); q('toggle-list').setAttribute('aria-pressed',String(hidden)); });
+  action('toggle-list',() => { const hidden = q('disk-workspace').classList.toggle('map-only'); q('toggle-list').setAttribute('aria-label',hidden ? '显示目录列表' : '收起目录列表'); q('toggle-list').setAttribute('aria-pressed',String(!hidden));list.setActive(listShowing()); });
   action('selection-enter',() => { if (selected) enter(selected); });
   action('selection-reveal',() => { const node = selected || current; if (node) return api.revealFile(node.path); });
   action('selection-copy',async () => { const node = selected || current; if (node) { await api.copyText(node.path); toast('已复制路径'); } });
@@ -182,7 +173,7 @@ export function setupDisk() {
     acceptUpdates=true;activeRoot='';scanning = true; firstBatch = true; q<HTMLButtonElement>('scan').disabled = true; q<HTMLButtonElement>('cancel-scan').disabled = false; q('scan-activity').hidden = false;
     // Remove the previous scan's rows before accepting input for a new tree.
     clearTimeout(drawTimer);drawTimer=undefined;tree=new ScanTree();current=undefined;selected=undefined;progress=undefined;rectangles=[];drawnNodes=[];hovered=undefined;filtered=undefined;issues=[];
-    rows.replaceChildren();q('breadcrumbs').replaceChildren();crumbPath='';crumbButtons=[];closeCrumbMenu();q('disk-size').textContent='0 B';q('disk-files').textContent='0';q('disk-dirs').textContent='0';q('disk-results').hidden=true;q('disk-empty').hidden=true;q('map-tooltip').hidden=true;
+    list.setActive(false);list.clear();q('breadcrumbs').replaceChildren();crumbPath='';crumbButtons=[];closeCrumbMenu();q('disk-size').textContent='0 B';q('disk-files').textContent='0';q('disk-dirs').textContent='0';q('disk-results').hidden=true;q('disk-empty').hidden=true;q('map-tooltip').hidden=true;
     q('scan-state').textContent = '扫描中'; q('scan-progress').textContent = '正在读取目录…'; q('disk-results').classList.add('scanning');
     try {
       const result = await api.scan(path); issues = result.issues; q('scan-state').textContent = '实时更新'; q('scan-progress').textContent = ''; 
@@ -204,7 +195,7 @@ export function setupDisk() {
   action('close-issues',() => closeDialog(q<HTMLDialogElement>('issues-dialog')));
   q('page-disk').addEventListener('dragover',event => { event.preventDefault(); });
   q('page-disk').addEventListener('drop',event => { event.preventDefault(); const file = event.dataTransfer?.files[0]; if (file && !scanning) { q<HTMLInputElement>('disk-path').value = api.droppedFile(file); q('scan').click(); } });
-  const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();q('map-tooltip').hidden=true;filtered=undefined;}};
+  const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;list.setActive(listShowing());if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();q('map-tooltip').hidden=true;filtered=undefined;}};
   onWindowVisibility(refreshVisibility);
   return {activate(value:boolean){if(active===value)return;active=value;refreshVisibility();}};
 }
@@ -213,7 +204,8 @@ function showContextMenu(x: number,y: number,node: DiskNode,enter: (node: DiskNo
   document.querySelector('.disk-context')?.remove();
   const menu = document.createElement('div'); menu.className = 'disk-context'; menu.setAttribute('role','menu');
   const items: [string, () => unknown][] = [[node.directory ? '进入目录' : '预览文件',() => enter(node)],['在资源管理器中定位',() => api.revealFile(node.path)],['用默认程序打开',() => api.openFile(node.path)],['检查文件占用',()=>api.inspectLocks(node.path)],['复制路径',() => api.copyText(node.path)]];
-  const close = () => { menu.remove(); document.removeEventListener('pointerdown',outside,true); window.removeEventListener('resize',close); window.removeEventListener('scroll',close,true); };
+  const origin=document.activeElement instanceof HTMLElement?document.activeElement:undefined;
+  const close = () => { const focused=menu.contains(document.activeElement);menu.remove();if(focused&&origin?.isConnected)origin.focus({preventScroll:true});document.removeEventListener('pointerdown',outside,true); window.removeEventListener('resize',close); window.removeEventListener('scroll',close,true); };
   const outside = (event: PointerEvent) => { if (!menu.contains(event.target as Node)) close(); };
   for (const [label,work] of items) { const button = document.createElement('button'); button.textContent = label; button.setAttribute('role','menuitem'); button.onclick = () => { close(); Promise.resolve().then(work).catch(toast); }; menu.append(button); }
   menu.onkeydown = event => { if (event.key === 'Escape' || event.key === 'Tab') close(); if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const buttons = [...menu.querySelectorAll('button')]; const i = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[(i+(event.key === 'ArrowDown' ? 1 : buttons.length-1))%buttons.length].focus(); } };
