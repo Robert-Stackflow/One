@@ -12,7 +12,7 @@ const env={...process.env,TEMP:temp,TMP:temp,ONE_DEVELOPMENT:'1',ONE_DATA_DIR:pr
 // A verified current build can be reused when restarting development watchers.
 // This avoids replacing native helpers still used by another development app.
 if(process.argv.includes('--reuse-build')){
- for(const file of ['dist/main/index.cjs','dist/preload/index.cjs','dist/renderer/index.html',...['One.Native','One.Search','One.Index','One.Windows','One.OpenWith','One.Monitor','One.Levels'].map(name=>'dist/native/'+name+'.exe')])await stat(file);
+ for(const file of ['dist/main/index.cjs','dist/preload/index.cjs','dist/renderer/index.html',...['One.Native','One.Search','One.Index','One.Windows','One.OpenWith','One.Monitor','One.Levels','One.Dialog32'].map(name=>'dist/native/'+name+'.exe'),'dist/native/One.Dialog.dll','dist/native/One.Dialog32.dll'])await stat(file);
 }else await promisify(execFile)('cmd.exe',['/d','/c',resolve('scripts/build-windows.cmd')],{cwd:root,env,windowsHide:true,maxBuffer:4*1024*1024}).then(result=>{process.stdout.write(result.stdout);process.stderr.write(result.stderr);});
 let child,stopping=false,restarting=false,timer;const contexts=[];let renderer;
 function launch(){const args=['.'];if(process.env.ONE_DEV_DEBUG_PORT)args.unshift('--remote-debugging-address=127.0.0.1','--remote-debugging-port='+process.env.ONE_DEV_DEBUG_PORT);child=spawn(electron,args,{cwd:root,env,stdio:['inherit','inherit','inherit','ipc'],windowsHide:true});child.on('error',error=>{console.error(error);void finish(1);});child.once('exit',code=>{child=undefined;if(restarting&&!stopping){restarting=false;launch();}else void finish(code??0);});}

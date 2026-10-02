@@ -20,7 +20,7 @@ import {setupSegments} from './segments';
 import {setupWindowVisibility} from './window-visibility';
 setupAppearance();setupTextSelection();setupTooltips();setupSegments();
 const view=new URLSearchParams(location.search).get('view')||'main';
-if(['main','preview','picker','search','color-editor'].includes(view))setupWindowVisibility();
+if(['main','preview','picker','search','color-editor','dialog-bar'].includes(view))setupWindowVisibility();
 const render=async()=>{
  if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
@@ -30,6 +30,7 @@ const render=async()=>{
  else if(view==='picker')(await import('./picker-view')).renderPicker();
  else if(view==='search-menu')await (await import('./search-menu')).renderSearchMenu();
  else if(view==='file-context')await (await import('./file-context-view')).renderFileContextMenu();
+ else if(view==='dialog-bar')await (await import('./dialog-bar-view')).renderDialogBar();
  else if(view==='search')await (await import('./search-view')).renderSearch();
  else (await import('./main-view')).renderMain();
 };

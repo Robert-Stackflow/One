@@ -61,7 +61,7 @@ export function renderMain() {
   const locksmithController=setupLocksmith();const toolsController=setupFileTools();const overviewController=setupOverview((id,report)=>{if(['duplicates','diff','rename','documents'].includes(id)){navigate('tools');void toolsController.select(id as any,report).catch(toast);}else{navigate(id);if(id==='system')q('alerts-tab').click();if(id==='disk'&&report)void diskController.openFolder(report).catch(toast);}});overviewController.activate(true);
   api.onDiskAlert(value=>toast(value.drive+' 剩余 '+(value.free/1024**3).toFixed(2)+' GB'));
   api.onDiskAlertOpen(()=>{navigate('system');q('alerts-tab').click();});
-  api.onSearchSettings(()=>{navigate('search');q('search-tab-menu').click();});
+  api.onSearchSettings(tab=>{navigate('search');q(tab==='entry'?'search-tab-entry':'search-tab-menu').click();});
   api.onNavigatePage(target=>{
     if(!modules.some(item=>item[0]===target.page))return;navigate(target.page);
     if(target.page==='disk'&&target.folder)void diskController.openFolder(target.folder).catch(toast);

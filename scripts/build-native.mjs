@@ -12,6 +12,14 @@ await writeFile(script,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build
 await writeFile('work/build-window-tools.cmd',`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE native\\window-tools.cpp /Fe:dist\\native\\One.Windows.exe /Fo:work\\window-tools.obj /link user32.lib gdi32.lib dwmapi.lib\r\n`);
 await writeFile('work/build-monitor.cmd',`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE native\\disk-monitor.cpp /Fe:dist\\native\\One.Monitor.exe /Fo:work\\disk-monitor.obj /link ole32.lib user32.lib advapi32.lib tdh.lib dxgi.lib wlanapi.lib Bthprops.lib\r\n`);
 await writeFile('work/build-levels.cmd',`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE native\\levels.cpp /Fe:dist\\native\\One.Levels.exe /Fo:work\\levels.obj /link user32.lib ole32.lib oleaut32.lib uuid.lib dxva2.lib wbemuuid.lib\r\n`);
+
+const dialogBuild=arch=>`@echo off
+call "${installation}\\VC\\Auxiliary\\Build\\vcvars${arch===32?'32':'64'}.bat" >nul
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /LD /DUNICODE /D_UNICODE native\\dialog-navigation.cpp /Fe:dist\\native\\One.Dialog${arch===32?'32':''}.dll /Fo:work\\dialog-navigation${arch}.obj /link /IMPLIB:work\\One.Dialog${arch}.lib ${arch===32?'/EXPORT:OneDialogHook=_OneDialogHook@12 ':''}user32.lib ole32.lib shell32.lib uuid.lib
+if errorlevel 1 exit /b 1
+${arch===32?'cl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE native\\search-bridge.cpp /Fe:dist\\native\\One.Dialog32.exe /Fo:work\\dialog32.obj /link user32.lib ole32.lib oleaut32.lib uuid.lib shell32.lib uiautomationcore.lib imm32.lib\r\n':''}`;
+for(const arch of [64,32]){const file=resolve('work/build-dialog'+arch+'.cmd');await writeFile(file,dialogBuild(arch));const result=await run('cmd.exe',['/d','/c',file],{cwd:resolve('.'),windowsHide:true});process.stdout.write(result.stdout);}
 const levelsBuild=await run('cmd.exe',['/d','/c',resolve('work/build-levels.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(levelsBuild.stdout);
 const monitorBuild=await run('cmd.exe',['/d','/c',resolve('work/build-monitor.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(monitorBuild.stdout);
 const windowBuild=await run('cmd.exe',['/d','/c',resolve('work/build-window-tools.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(windowBuild.stdout);

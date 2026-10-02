@@ -1,0 +1,15 @@
+/* The input and result rows reuse the shared search components. */
+html:has(body.dialog-companion),body.dialog-companion{background:transparent!important;overflow:hidden}
+.dialog-companion #app{height:100%;padding:8px;box-sizing:border-box}
+.dialog-companion-shell{height:100%;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--panel-radius);box-shadow:var(--shadow);overflow:hidden}
+.dialog-companion .search-input-row{height:52px;min-height:52px;padding:6px 8px 6px 14px;gap:9px;border:0;background:transparent}
+.dialog-companion .search-input-row>.icon{width:18px;height:18px}
+.dialog-companion .search-input-row input{height:32px;font-size:14px;padding:0;border:0;background:transparent;outline:0}
+.dialog-bar-buttons{display:flex;gap:2px;flex:none;border-left:1px solid var(--line);padding-left:6px}
+.dialog-results-panel{min-height:0;border-top:1px solid var(--line);overflow:hidden;flex:1;animation:dialog-results-in .13s var(--ease)}
+.dialog-companion .search-results{height:100%;padding:4px;scrollbar-gutter:auto}
+.dialog-companion .search-row-actions{display:none}
+.dialog-companion .search-empty{padding:12px;font-size:12px}
+.dialog-companion .toast{max-width:calc(100% - 20px);white-space:normal}
+@keyframes dialog-results-in{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.dialog-results-panel{animation:none}}

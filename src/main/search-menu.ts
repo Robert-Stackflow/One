@@ -16,6 +16,7 @@ export class SearchMenu {
  constructor(private cache:string,private config:()=>SearchSettings,private bridge:SearchBridge,private settings:()=>void,private search:()=>void,private launch:typeof launchMenuProgram=launchMenuProgram,private confirm:(command:MenuBuiltin)=>Promise<boolean>=async()=>false,private favorite:()=>Promise<void>=async()=>{throw new Error('当前文件夹不可用');},private one:(command:MenuBuiltin,context:SearchContext)=>Promise<void>|void=()=>{throw new Error('One 操作不可用');}){this.ready=readFile(cache,'utf8').then(s=>{const a=JSON.parse(s);if(Array.isArray(a))this.recent=a.filter(x=>typeof x==='string').slice(0,30);}).catch(()=>{});}
  private node(label:string,icon:string,action:Action,expandable=false,path?:string):MenuNode{const id=randomUUID();this.actions.set(id,action);return{id,label,icon,kind:action.kind,expandable,...(path?{path}:{})};}
  updateContext(context:SearchContext){this.context=context;}
+ async recentFolders(){await this.ready;return this.recent.slice();}
  private itemNode(item:SearchMenuItem,children?:MenuNode[]):MenuNode{
   if(item.kind==='separator')return{id:item.id,label:'',icon:'',kind:'separator'};
   if(item.kind==='group')return{id:item.id,label:item.label,icon:item.icon||'folder',kind:'group',children:children||[]};
