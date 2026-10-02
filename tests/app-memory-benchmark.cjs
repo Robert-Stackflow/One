@@ -1,5 +1,6 @@
 const {_electron:electron,expect}=require('@playwright/test'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const {execFile}=require('node:child_process'),{promisify}=require('node:util'),koffi=require('koffi');
+const {processTree,totals}=require('./process-tree.cjs');
 const execute=promisify(execFile),delay=ms=>new Promise(r=>setTimeout(r,ms));
 const Memory=koffi.struct('OneAppBenchmarkMemory',{cb:'uint32',PageFaultCount:'uint32',PeakWorkingSetSize:'size_t',WorkingSetSize:'size_t',QuotaPeakPagedPoolUsage:'size_t',QuotaPagedPoolUsage:'size_t',QuotaPeakNonPagedPoolUsage:'size_t',QuotaNonPagedPoolUsage:'size_t',PagefileUsage:'size_t',PeakPagefileUsage:'size_t',PrivateUsage:'size_t',PrivateWorkingSetSize:'size_t',SharedCommitUsage:'size_t'});
 const Time=koffi.struct('OneAppBenchmarkTime',{low:'uint32',high:'uint32'}),kernel=koffi.load('kernel32.dll'),psapi=koffi.load('psapi.dll');
@@ -7,15 +8,16 @@ const open=kernel.func('void * __stdcall OpenProcess(uint32, int, uint32)'),clos
 const getMemory=psapi.func('int __stdcall GetProcessMemoryInfo(void *, _Out_ OneAppBenchmarkMemory *, uint32)');
 const times=kernel.func('int __stdcall GetProcessTimes(void *, _Out_ OneAppBenchmarkTime *, _Out_ OneAppBenchmarkTime *, _Out_ OneAppBenchmarkTime *, _Out_ OneAppBenchmarkTime *)');
 function readProcessCounters(list){
- const processes=[];for(const p of list){const pid=p.ProcessId??p.pid,name=p.Name??p.name,h=open(0x410,0,pid);if(!h)continue;try{const m={cb:koffi.sizeof(Memory)},creation={},exit={},system={},user={};if(!getMemory(h,m,m.cb))continue;const ok=times(h,creation,exit,system,user),toSeconds=t=>(t.high*4294967296+t.low)/1e7;processes.push({pid,name,resident:m.WorkingSetSize,privateResident:m.PrivateWorkingSetSize,private:m.PrivateUsage,cpuSeconds:ok?toSeconds(system)+toSeconds(user):0});}finally{close(h);}}
- return{at:performance.now(),resident:processes.reduce((n,p)=>n+p.resident,0),privateResident:processes.reduce((n,p)=>n+p.privateResident,0),private:processes.reduce((n,p)=>n+p.private,0),cpuSeconds:processes.reduce((n,p)=>n+p.cpuSeconds,0),processes};
+ const processes=[];for(const p of list){const pid=p.ProcessId??p.pid,name=p.Name??p.name,h=open(0x410,0,pid);if(!h)continue;try{const m={cb:koffi.sizeof(Memory)},creation={},exit={},system={},user={};if(!times(h,creation,exit,system,user))continue;const created=((BigInt(creation.high)<<32n)|BigInt(creation.low)).toString();if(p.created&&p.created!==created||!getMemory(h,m,m.cb))continue;const toSeconds=t=>(t.high*4294967296+t.low)/1e7;processes.push({pid,name,parentPid:p.ParentProcessId??p.parentPid,created,resident:m.WorkingSetSize,privateResident:m.PrivateWorkingSetSize,private:m.PrivateUsage,cpuSeconds:toSeconds(system)+toSeconds(user)});}finally{close(h);}}
+ return totals(processes);
 }
 async function snapshot(app,rootOverride){
- const root=rootOverride??await app.evaluate(()=>process.pid),{stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name | ConvertTo-Json -Compress'],{windowsHide:true,maxBuffer:4*1024*1024});
+ const root=rootOverride??await app.evaluate(()=>process.pid),created=readProcessCounters([{pid:root}]).processes[0]?.created;if(!created)throw Error('Root process unavailable for sampling');
+ const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name | ConvertTo-Json -Compress'],{windowsHide:true,maxBuffer:4*1024*1024});
  const list=JSON.parse(stdout),owned=new Set([root]);let changed=true;while(changed){changed=false;for(const p of list)if(owned.has(p.ParentProcessId)&&!owned.has(p.ProcessId)){owned.add(p.ProcessId);changed=true;}}
- const counters=readProcessCounters(list.filter(p=>owned.has(p.ProcessId)));
+ const raw=readProcessCounters(list.filter(p=>owned.has(p.ProcessId))),selected=processTree(raw.processes,root,created),counters=totals(selected,raw.at),selectedIds=new Set(selected.map(p=>p.pid));
  const windows=app?await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().map(w=>({view:new URL(w.webContents.getURL()).searchParams.get('view'),query:new URL(w.webContents.getURL()).search,visible:w.isVisible(),pid:w.webContents.getOSProcessId()}))):[];
- return {...counters,windows};
+ return {...counters,excludedProcesses:raw.processes.filter(p=>!selectedIds.has(p.pid)).map(p=>({pid:p.pid,name:p.name,parentPid:p.parentPid,created:p.created,reason:'parent PID reused; creation order cannot establish ancestry'})),windows};
 }
 async function main(){
  const out=path.resolve(process.env.ONE_APP_OUTPUT||'work/app-memory');await fs.mkdir(out,{recursive:true});const name=process.env.ONE_BENCH_NAME||'current',profile=await fs.mkdtemp(path.join(out,name+'-'));
