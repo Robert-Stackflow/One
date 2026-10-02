@@ -1,0 +1,27 @@
+const {_electron:electron,expect}=require('@playwright/test'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+const {observeFileTasks,fileTaskTimings}=require('./file-task-observer.cjs');
+async function run(){
+ const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/automatic-preview');await fs.mkdir(out,{recursive:true});const profile=await fs.mkdtemp(path.join(out,'profile-')),files=await fs.mkdtemp(path.join(out,'files-'));await fs.writeFile(path.join(files,'old.txt'),'fixture');
+ const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+ const app=await electron.launch(process.env.ONE_PACKAGED_EXE?{executablePath:process.env.ONE_PACKAGED_EXE,args:[],env}:{args:[path.resolve('.')],env});const errors=[];app.on('window',p=>p.on('pageerror',e=>errors.push(String(e))));
+ try{
+  await observeFileTasks(app);const main=await app.firstWindow();await main.waitForSelector('#overview-index');await main.locator('[data-page=tools]').click();await main.locator('#tool-tab-rename').click();await main.locator('#rename-paths').fill(files);await main.locator('#rename-search').fill('old');await main.locator('#rename-replace').fill('first');await main.locator('#tool-run').click();await expect(main.locator('#rename-apply')).toBeEnabled();
+  const count=async()=>(await fileTaskTimings(app)).filter(row=>row.kind==='rename-preview').length;
+  const baseline=await count();await main.locator('#rename-replace').fill('other');await main.locator('#tool-tab-documents').click();await main.waitForTimeout(650);assert.equal(await count(),baseline,'A hidden rename tab must not start an automatic scan');
+  await main.locator('#tool-tab-rename').click();await expect(main.locator('#rename-apply')).toBeEnabled();await expect(main.locator('.rename-result-row')).toContainText('other.txt');assert.equal(await count(),baseline+1);
+  await main.locator('#rename-replace').fill('hidden');await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=main')).hide());await main.waitForTimeout(650);assert.equal(await count(),baseline+1,'A hidden native window must not start an automatic scan');
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=main')).show());await expect(main.locator('.rename-result-row')).toContainText('hidden.txt');await expect(main.locator('#rename-apply')).toBeEnabled();assert.equal(await count(),baseline+2);
+  await main.locator('#rename-replace').fill('away');await main.locator('[data-page=text]').click();await main.waitForTimeout(650);assert.equal(await count(),baseline+2,'Leaving the module must not start a deferred rename scan');
+  await main.locator('[data-page=tools]').click();await expect(main.locator('.rename-result-row')).toContainText('away.txt');await expect(main.locator('#rename-apply')).toBeEnabled();assert.equal(await count(),baseline+3);
+  // Merely leaving an already applied input fires change as well as input.
+  await main.locator('#rename-search').click();await main.locator('#tool-tab-documents').click();await main.waitForTimeout(650);assert.equal(await count(),baseline+3,'Blur without changed values must not invalidate a fresh preview');await main.locator('#tool-tab-rename').click();await expect(main.locator('#rename-apply')).toBeEnabled();await main.waitForTimeout(650);assert.equal(await count(),baseline+3);
+  await main.locator('#rename-regex').check();await expect(main.locator('#rename-apply')).toBeEnabled();await expect.poll(count).toBe(baseline+4);
+  await main.locator('#rename-case-mode').click();await main.getByRole('option',{name:'全部大写',exact:true}).click();await expect(main.locator('.rename-result-row')).toContainText('AWAY.txt');await expect(main.locator('#rename-apply')).toBeEnabled();assert.equal(await count(),baseline+5);
+  await main.locator('#rename-replace').fill('minimized');await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=main')).minimize());await main.waitForTimeout(650);assert.equal(await count(),baseline+5,'A minimized window must retain its pending preview');
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=main')).restore());await expect(main.locator('.rename-result-row')).toContainText('MINIMIZED.txt');await expect(main.locator('#rename-apply')).toBeEnabled();assert.equal(await count(),baseline+6);
+  await main.locator('#rename-replace').fill('rapid-a');await main.locator('#rename-replace').fill('rapid-b');await main.locator('#rename-replace').fill('latest');await expect(main.locator('.rename-result-row')).toContainText('LATEST.txt');await expect(main.locator('#rename-apply')).toBeEnabled();assert.equal(await count(),baseline+7);
+  assert.deepEqual(await fs.readdir(files),['old.txt'],'Automatic previews must never rename files');assert.deepEqual(errors,[]);
+  const result={result:'PASS',tabHiddenDefers:true,nativeHiddenDefers:true,minimizedDefers:true,moduleHiddenDefers:true,resumeLatestRules:true,unchangedBlurKeepsPreview:true,checkboxAndCustomSelect:true,rapidEditsCoalesce:true,previews:await count(),errors};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+ }finally{await app.close();}
+}
+run().catch(error=>{console.error(error);process.exitCode=1;});

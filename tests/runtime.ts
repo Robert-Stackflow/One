@@ -1,0 +1,18 @@
+export { transform, lines } from '../src/shared/text';
+export { CornerTrigger } from '../src/shared/corner';
+export { defaultSettings, validateSettings } from '../src/shared/settings';
+export { layout } from '../src/shared/treemap';
+export { edgeAt } from '../src/shared/edges';
+export { ScanTree } from '../src/shared/scan-tree';
+export { diskPredicate, filteredTree } from '../src/shared/disk-filter';
+export { scanDirectory } from '../src/main/scan';
+export { readText, saveText } from '../src/main/text-files';
+export {colorFormats,colorFormatNames} from '../src/shared/colors';
+export {fileResponse} from '../src/main/file-response';
+export {awakeEffective,defaultUtilities,validateUtilities} from '../src/shared/utilities';
+export {searchMatcher,defaultSearch,validateSearch,validateMenu} from '../src/shared/search';
+export {TextBuffer,newlineCount} from '../src/shared/text-buffer';
+export {validateSteps} from '../src/shared/text-tools';
+export {loupeBounds,overlayDisplay,inlineSearchHeight,inlineSearchInset} from '../src/shared/overlay';
+export {hudContent} from '../src/shared/hud';
+export {breadcrumbIndices} from '../src/shared/breadcrumbs';

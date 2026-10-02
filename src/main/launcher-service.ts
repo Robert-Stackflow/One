@@ -1,0 +1,18 @@
+import {isAbsolute} from 'node:path';
+import {applicationImage,installedApplications,launchApplication} from './open-with';
+import type {SearchEntry} from '../shared/search';
+export const settingsCatalog:readonly (readonly [string,string])[]=[
+ ['设置',''],['显示器 分辨率 缩放 显示设置','display'],['声音 音量 音频','sound'],['通知','notifications'],['电源 睡眠 电池','powersleep'],['存储 磁盘容量','storagesense'],['多任务 窗口','multitasking'],['系统信息 关于电脑','about'],['蓝牙','bluetooth'],['设备 打印机','printers'],['鼠标','mousetouchpad'],['触摸板','devices-touchpad'],['键盘 输入','typing'],['USB','usb'],['网络 状态','network-status'],['Wi-Fi 无线网络','network-wifi'],['以太网 有线网络','network-ethernet'],['VPN','network-vpn'],['代理 proxy','network-proxy'],['移动热点','network-mobilehotspot'],['飞行模式','network-airplanemode'],['个性化 背景 壁纸','personalization-background'],['颜色 主题模式','colors'],['锁屏','lockscreen'],['主题','themes'],['字体','fonts'],['开始菜单','personalization-start'],['任务栏','taskbar'],['程序 已安装的应用 卸载','appsfeatures'],['默认应用 打开方式','defaultapps'],['启动应用 启动项','startupapps'],['账户 个人信息','yourinfo'],['登录 密码 PIN','signinoptions'],['家庭 其他用户','otherusers'],['时间 日期','dateandtime'],['区域','regionformatting'],['语言 输入法','regionlanguage'],['辅助功能 显示','easeofaccess-display'],['放大镜','easeofaccess-magnifier'],['旁白','easeofaccess-narrator'],['高对比度','easeofaccess-highcontrast'],['隐私','privacy'],['定位 权限','privacy-location'],['相机 摄像头 权限','privacy-webcam'],['麦克风 权限','privacy-microphone'],['Windows 更新 update','windowsupdate'],['Windows 安全中心','windowsdefender'],['激活','activation'],['恢复 重置电脑','recovery'],['远程桌面','remotedesktop'],['剪贴板','clipboard'],['疑难解答','troubleshoot']
+];
+type Launcher=SearchEntry&{target:string;iconPath?:string};
+export class LauncherService{
+ private records=new Map<string,Launcher>();private pending?:Promise<void>;private updated=0;private stopped=false;
+ constructor(private changed:(entries:SearchEntry[])=>void){for(const [keywords,uri]of settingsCatalog){const name=keywords.split(' ')[0],path='one-launcher:setting:'+uri;this.records.set(path.toLowerCase(),{path,name:keywords,directory:false,size:0,modified:0,launchKind:'setting',target:'ms-settings:'+uri,subtitle:'Windows 设置 · '+name});}}
+ entries(){return [...this.records.values()].map(({target,iconPath,...entry})=>entry);}
+ get(path:string){return this.records.get(path.toLowerCase());}
+ refresh(){if(this.stopped||this.pending||Date.now()-this.updated<120000)return;this.pending=installedApplications().then(apps=>{if(this.stopped)return;const next=new Map([...this.records].filter(([,entry])=>entry.launchKind==='setting'));for(const app of apps){if(typeof app.id!=='string'||typeof app.name!=='string'||!app.id||!app.name)continue;const path='one-launcher:app:'+app.id;next.set(path.toLowerCase(),{path,name:app.name,directory:false,size:0,modified:0,launchKind:'app',target:'shell:AppsFolder\\'+app.id,iconPath:app.file&&isAbsolute(app.file)?app.file:undefined,subtitle:'程序'});}this.records=next;this.updated=Date.now();this.changed(this.entries());}).catch(()=>{this.updated=Date.now()-100000;}).finally(()=>{this.pending=undefined;});}
+ enrich(entry:SearchEntry){const value=this.get(entry.path);return value?{...entry,name:value.launchKind==='setting'?(value.target==='ms-settings:appsfeatures'?'已安装的应用':value.name.split(' ')[0]):value.name,launchKind:value.launchKind,subtitle:value.subtitle}:entry;}
+ icon(path:string){const item=this.get(path);return item?.launchKind==='app'?applicationImage(item.target):Promise.resolve('');}
+ async open(path:string){const item=this.get(path);if(!item||item.launchKind!=='app')throw new Error('程序已不可用，请重新搜索');await launchApplication(item.target);}
+ stop(){this.stopped=true;}
+}

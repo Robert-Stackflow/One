@@ -1,0 +1,13 @@
+#appearance-font{width:230px;max-width:65%}
+.font-popup{display:flex;flex-direction:column;padding:6px;max-height:min(430px,calc(100vh - 16px));overflow:hidden}
+.font-search{display:flex;align-items:center;gap:7px;padding:2px 4px 7px;border-bottom:1px solid var(--line)}
+.font-search>.icon{width:16px;height:16px;color:var(--muted);flex:none}
+.font-search input{width:0;min-width:0;flex:1;border:0;background:transparent;box-shadow:none!important;font-size:13px;padding-inline:3px;outline:none}
+.font-search:focus-within{border-bottom-color:color-mix(in srgb,var(--fg) 24%,var(--surface))}.font-search button{flex:none;width:28px;min-height:28px;padding:6px}
+.font-options{position:relative;min-height:38px;max-height:280px;overflow:auto;overscroll-behavior:contain;padding:5px 0}
+.font-popup .font-option{min-height:30px;padding:6px 30px 6px 10px;line-height:1.5}
+.font-option>span,.font-option>small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.font-option>small{color:var(--muted);font-size:10px}
+.font-sample{flex:none;border-top:1px solid var(--line);padding:13px 10px 10px;font-size:17px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.font-status,.font-empty{color:var(--muted);font-size:11px;padding:10px}
+.font-status[hidden]{display:none}

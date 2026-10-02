@@ -1,0 +1,19 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events'),childProcess=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),{buildSync}=require('esbuild');
+const file=path.resolve('work/tests/monitor-demand.cjs');fs.mkdirSync(path.dirname(file),{recursive:true});buildSync({entryPoints:['src/main/disk-monitor.ts'],outfile:file,bundle:true,platform:'node'});
+const {DiskMonitorService}=require(file);
+function fakeChild(args){const child=new EventEmitter();child.args=args;child.commands=[];child.stdout=new EventEmitter();child.stdout.setEncoding=()=>child.stdout;child.stderr={resume(){}};child.stdin=new EventEmitter();child.stdin.writable=true;child.stdin.write=text=>{child.commands.push(text);return true;};child.stdin.end=text=>{child.commands.push(text);process.nextTick(()=>child.emit('exit',0));};child.kill=()=>child.emit('exit',0);return child;}
+const raw=(created,bytes,epoch,sampling=true)=>({created,volumes:[{drive:'C:\\',label:'',filesystem:'NTFS',total:100,free:5,type:3}],processes:sampling?[{pid:10,started:'one',name:'writer.exe',path:'C:\\writer.exe',bytes,operations:bytes}]:[],fileWrites:[],samplingWriters:sampling,samplingEpoch:epoch,trace:'off',traceCode:0,cpuPercent:1,memoryTotal:100,memoryFree:50,uptimeSeconds:10});
+test('capacity monitoring collects writers only on demand without restarting or replaying stale samples',t=>{
+ const children=[],alerts=[];t.mock.method(childProcess,'spawn',(_file,args)=>{const child=fakeChild(args);children.push(child);return child;});
+ const service=new DiskMonitorService(()=>{},drive=>alerts.push(drive));const emit=(child,value)=>child.stdout.emit('data',JSON.stringify(value)+'\n');
+ service.configure({enabled:true,notify:true,intervalSeconds:2,rules:[{drive:'C:\\',enabled:true,unit:'percent',threshold:10}]});
+ assert.deepEqual(children[0].args,['capacity','2000']);const child=children[0];emit(child,raw(1000,100,0,false));assert.deepEqual(alerts,['C:\\']);assert.deepEqual(service.state.writers,[]);
+ service.subscribe(true,'overview');service.subscribe(true,'information');assert.equal(children.length,1);assert.deepEqual(child.commands,[]);
+ service.subscribe(true,'maintenance');assert.deepEqual(child.commands,['writers 1 1\n']);assert.equal(service.state.writersReady,false);
+ emit(child,raw(2000,100,0));assert.deepEqual(service.state.writers,[],'An older epoch must not prime the sampler');
+ emit(child,raw(3000,200,1));assert.equal(service.state.writersReady,false);emit(child,raw(5000,400,1));assert.equal(service.state.writersReady,true);assert.equal(service.state.writers[0].bytesPerSecond,100);
+ service.subscribe(false,'maintenance');assert.deepEqual(child.commands,['writers 1 1\n','writers 0 2\n']);emit(child,raw(6000,1000,1));assert.deepEqual(service.state.writers,[]);
+ service.subscribe(true,'maintenance');emit(child,raw(7000,1200,1));assert.equal(service.state.writersReady,false);emit(child,raw(8000,1300,3));emit(child,raw(10000,1500,3));assert.equal(service.state.writers[0].totalBytes,200,'Restarted sampling must not include the inactive period');assert.deepEqual(alerts,['C:\\'],'Mode changes must not reset the low-space episode');assert.equal(children.length,1);
+ service.trace(true);assert.equal(children.length,2);assert.equal(children[1].args[0],'trace');service.subscribe(false,'maintenance');service.subscribe(false,'overview');service.subscribe(false,'information');service.configure({enabled:false,notify:false,intervalSeconds:2,rules:[]});assert.equal(children.length,2);assert.equal(children[1].commands.length,0,'Explicit tracing must continue when no page is subscribed');
+ service.trace(false);assert.equal(children[1].commands.at(-1),'stop\n');service.stop();service.subscribe(true,'maintenance');assert.equal(children.length,2);
+});

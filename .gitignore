@@ -1,0 +1,13 @@
+.tools/
+node_modules/
+dist/
+release/
+artifacts/
+work/
+*.log
+
+native/search-engine/target/
+*.obj
+*.pdb
+*.ilk
+*.pch

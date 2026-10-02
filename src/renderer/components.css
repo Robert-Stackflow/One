@@ -1,0 +1,30 @@
+.tabs{position:relative;isolation:isolate}.tabs.segment-ready::before{content:"";position:absolute;left:0;top:0;width:var(--segment-width);height:var(--segment-height);transform:translate(var(--segment-x),var(--segment-y));background:var(--surface);border-radius:999px;box-shadow:0 1px 3px #0000000d;transition:transform .22s cubic-bezier(.2,.8,.2,1),width .22s cubic-bezier(.2,.8,.2,1),height .22s cubic-bezier(.2,.8,.2,1);pointer-events:none;z-index:0}.tabs.segment-ready>button.selected,.tabs.segment-ready>button[aria-selected=true]{background:transparent;box-shadow:none}.tabs>button{position:relative;z-index:1}
+.one-dialog{padding:0;width:440px;max-width:calc(100vw - 32px);overflow:hidden}.one-dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 24px 0}.one-dialog-heading h2{font-size:17px}.one-dialog-body{padding:16px 24px 24px;color:var(--muted);font-size:13px;line-height:1.8;max-height:60vh;overflow:auto}.one-dialog-actions{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--line)}.one-dialog::backdrop{background:#0003;backdrop-filter:blur(2px)}.one-dialog.closing{animation:dialog-out .12s ease forwards}.one-dialog.closing::backdrop{animation:dialog-backdrop-out .12s ease forwards}@keyframes dialog-out{to{opacity:0;transform:translateY(5px) scale(.985)}}@keyframes dialog-backdrop-out{to{background:#0000;backdrop-filter:blur(0)}}
+@media(prefers-reduced-motion:reduce){.tabs.segment-ready::before{transition:none}.one-dialog.closing,.one-dialog.closing::backdrop{animation:none}}
+
+/* A single scrolling body keeps headings and confirmation actions visible. */
+.one-dialog{max-height:calc(100vh - 48px);border-radius:var(--panel-radius);box-shadow:0 12px 36px #00000014,0 2px 6px #00000008}
+.one-dialog[open]{display:flex;flex-direction:column}
+.one-dialog.dialog-wide{width:640px}
+.one-dialog-heading{flex-shrink:0;padding:20px 24px 8px;gap:16px}
+.one-dialog-heading h2{font-size:16px;font-weight:550;line-height:1.5;margin:0;min-width:0;overflow-wrap:anywhere}
+.one-dialog-heading>.icon-button{flex-shrink:0}
+.one-dialog-body{min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain;padding:12px 24px 24px;color:var(--fg);scrollbar-gutter:stable}
+.one-dialog-body>p{margin:0 0 12px;line-height:1.8;color:var(--muted)}
+.one-dialog-actions{flex-shrink:0;background:var(--surface);padding:14px 24px;align-items:center}
+.one-dialog .confirm-items,.one-dialog #maintenance-receipts,.one-dialog #diff-content,.one-dialog pre{max-height:none;overflow:visible}
+.one-dialog .confirm-items{margin:12px 0 0}
+.one-dialog .format-options{min-width:0;padding:0;gap:0 16px}
+.one-dialog .filter-examples{margin:0}
+.one-dialog .filter-examples dt{color:var(--fg);font-family:Consolas,monospace}
+.one-dialog.text-diff-dialog{width:960px}
+.one-dialog#menu-json-dialog .one-dialog-body,.one-dialog.icon-picker-dialog .one-dialog-body{display:flex;flex-direction:column;overflow:hidden}
+.one-dialog #menu-json{height:min(380px,50vh);min-height:80px;margin:0;resize:none}
+.one-dialog .icon-picker-grid{min-height:0;flex:1}
+.one-dialog.icon-picker-dialog .one-dialog-actions{justify-content:space-between;color:var(--muted);font-size:12px}
+.one-dialog .dialog-error{flex-shrink:0;margin:12px 0 0}
+.one-dialog[open]:not(.closing){animation:one-dialog-in .18s var(--ease)}
+.one-dialog[open]:not(.closing)::backdrop{animation:one-dialog-backdrop-in .18s ease}
+@keyframes one-dialog-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes one-dialog-backdrop-in{from{background:#0000;backdrop-filter:blur(0)}to{background:#0003;backdrop-filter:blur(2px)}}
+@media(prefers-reduced-motion:reduce){.one-dialog[open],.one-dialog[open]::backdrop{animation:none!important}}

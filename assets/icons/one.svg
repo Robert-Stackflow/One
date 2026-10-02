@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>One</title>
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="#252c29"/>
+  <path d="M180 77C168 60 151 52 128 52C86 52 60 81 60 124V132C60 175 86 204 128 204C150 204 167 197 180 184L158 162C151 169 141 173 128 173C105 173 93 157 93 132V124C93 99 105 83 128 83C140 83 150 87 157 96Z" fill="#f4f5ef"/>
+  <path d="M166 101L185 88C191 84 198 88 198 95V170C198 180 192 186 182 186C172 186 166 180 166 170V120L162 116C157 111 159 106 166 101Z" fill="#b3cbb8" stroke="#252c29" stroke-width="8" stroke-linejoin="round"/>
+</svg>

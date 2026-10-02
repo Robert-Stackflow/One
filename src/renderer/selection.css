@@ -1,0 +1,4 @@
+/* App chrome is not a text document; editors and readable data opt in. */
+body{user-select:none}
+input,textarea,[contenteditable=true],.cm-content,pre,code,td,dd,[data-selectable],.textLayer,.slide-text,.font-alphabet{user-select:text}
+button,button *,[role=tab],[role=menuitem],.cm-gutters,.cm-gutters *{user-select:none}

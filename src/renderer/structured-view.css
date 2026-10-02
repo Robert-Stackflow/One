@@ -1,0 +1,16 @@
+.preview-body.type-json:has(.structure-view),.preview-body.type-yaml:has(.structure-view){overflow:hidden}
+.data-tree.structure-view{height:100%;min-height:0;display:flex;flex-direction:column;padding:0;font:12px/1.5 'Cascadia Code',Consolas,'Microsoft YaHei UI',monospace}
+.structure-heading{display:flex;align-items:center;gap:12px;flex:0 0 40px;padding:4px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.preview-window .structure-heading>.icon-button{margin-left:auto;width:28px;height:28px;min-width:28px;min-height:28px;max-width:28px;flex:0 0 28px;padding:5px}
+.structure-scroll{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;outline:none;scrollbar-gutter:stable}
+.virtual-row-space{position:relative;min-width:100%;overflow:clip}.virtual-row-items{position:absolute;inset:0 0 auto}
+.structure-row{box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 14px 0 calc(14px + var(--structure-depth)*16px);min-width:0;width:100%;border-radius:0}
+.structure-row.is-current{background:var(--selected)}.structure-scroll:focus-visible .structure-row.is-current{box-shadow:inset 3px 0 var(--fg)}
+.structure-row .tree-spacer{width:14px;flex:0 0 14px}.structure-row>.tree-toggle{height:100%;padding:0;min-width:0;max-width:calc(100% - 36px);flex:0 1 auto;gap:10px;color:var(--fg)}
+.structure-row .tree-toggle strong,.structure-row .data-key{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
+.structure-row .tree-toggle>span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}.structure-row .tree-toggle .icon{transition:transform .16s var(--ease);flex-shrink:0}
+.structure-row .tree-toggle:disabled{opacity:1;cursor:default}.structure-row .data-key{max-width:40%;flex-shrink:0}.structure-row .data-value{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview-window .structure-row .data-copy,.preview-window .structure-row .data-expand-value{width:26px;height:26px;min-width:26px;min-height:26px;max-width:26px;flex:0 0 26px;padding:5px}
+.structure-row .data-copy{margin-left:auto}.structure-row .data-expand-value{opacity:.65}.structure-row.is-current .data-copy{opacity:1}.structure-pending{color:var(--muted);padding-left:24px}
+.structure-value-dialog .one-dialog-body{height:min(440px,62vh);padding:0;overflow:hidden}.structure-value-code{height:100%;min-height:0}
+@media(prefers-reduced-motion:reduce){.structure-row .tree-toggle .icon{transition:none}}

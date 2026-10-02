@@ -1,0 +1,3 @@
+.text-value-dialog .one-dialog-body{height:min(440px,62vh);padding:0;overflow:hidden}.text-value-code{height:100%;min-height:0}
+/* Keep text measurements stable while the dialog appears. */
+.text-value-dialog[open]:not(.closing){animation-name:text-value-in}@keyframes text-value-in{from{opacity:0}to{opacity:1}}
