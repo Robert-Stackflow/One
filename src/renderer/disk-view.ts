@@ -4,6 +4,7 @@ import { ScanTree } from '../shared/scan-tree';
 import { layout, type Tile } from '../shared/treemap';
 import { diskPredicate, filteredTree } from '../shared/disk-filter';
 import {breadcrumbIndices} from '../shared/breadcrumbs';
+import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import { api, q, esc, icon, button, iconButton, size, toast, action } from './ui';
 
 export function diskPage() {
@@ -34,7 +35,8 @@ export function setupDisk() {
   let filtered: DiskNode | undefined, filteredAt = 0;
   const canvas = q<HTMLCanvasElement>('disk-canvas'), context = canvas.getContext('2d')!, frame = q('treemap');
   const background = document.createElement('canvas'), backgroundContext = background.getContext('2d')!;
-  let visibleSize = 0,acceptUpdates=false,activeRoot='';
+  let visibleSize = 0,acceptUpdates=false,activeRoot='',active=false;
+  const showing=()=>active&&isWindowVisible();
   const rows = q('disk-rows'); q<HTMLButtonElement>('cancel-scan').disabled = true;
   const crumbs=q('breadcrumbs');let crumbPath='',crumbNodes:DiskNode[]=[],crumbButtons:HTMLButtonElement[]=[],crumbOverflow:HTMLButtonElement|undefined,crumbMenu:HTMLElement|undefined;
   function closeCrumbMenu(){crumbMenu?.remove();crumbMenu=undefined;crumbOverflow?.setAttribute('aria-expanded','false');}
@@ -72,7 +74,7 @@ export function setupDisk() {
     q('map-tooltip').hidden = true; draw();
   }
   function schedule() {
-    if (drawTimer) return;
+    if (!showing()||drawTimer) return;
     drawTimer = setTimeout(() => { drawTimer = undefined; draw(); },180);
   }
   const abbreviate = (text: string, width: number) => {
@@ -82,6 +84,7 @@ export function setupDisk() {
     return text.slice(0,low)+'…';
   };
   function paint(nodes: DiskNode[], reuse = false) {
+    if(!showing())return;
     const width = frame.clientWidth, height = frame.clientHeight; if (width < 1 || height < 1) return;
     const ratio = Math.min(window.devicePixelRatio || 1,2.5);
     if (!reuse || canvas.width !== Math.round(width*ratio) || canvas.height !== Math.round(height*ratio)) {
@@ -116,6 +119,7 @@ export function setupDisk() {
   }
   let drawnNodes: DiskNode[] = [];
   function draw() {
+    if(!showing())return;
     if (progress) {
       q('disk-size').textContent = size(progress.bytes); q('disk-files').textContent = progress.files.toLocaleString(); q('disk-dirs').textContent = progress.directories.toLocaleString();
       q('show-issues').hidden=!progress.issues;q('show-issues').textContent=progress.issues?`${progress.issues} 项跳过`:'';
@@ -167,7 +171,7 @@ export function setupDisk() {
   q('disk-filter').addEventListener('input',() => { filterValue = q<HTMLInputElement>('disk-filter').value.trim(); filtered = undefined; try { predicate = diskPredicate(filterValue); predicateError = ''; } catch (error) { predicateError = (error as Error).message; } schedule(); });
   action('clear-disk-filter',() => { q<HTMLInputElement>('disk-filter').value = ''; q('disk-filter').dispatchEvent(new Event('input')); });
   action('filter-help',() => openDialog(q<HTMLDialogElement>('filter-dialog'))); action('close-filter-help',() => closeDialog(q<HTMLDialogElement>('filter-dialog')));
-  action('disk-back',() => { if (current) { const parent = tree.parents.get(current.path); if (parent) enter(tree.nodes.get(parent)!); } });
+  action('disk-back',() => { if (current) { const parent = tree.parentOf(current); if (parent) enter(parent); } });
   action('toggle-list',() => { const hidden = q('disk-workspace').classList.toggle('map-only'); q('toggle-list').setAttribute('aria-label',hidden ? '显示目录列表' : '收起目录列表'); q('toggle-list').setAttribute('aria-pressed',String(hidden)); });
   action('selection-enter',() => { if (selected) enter(selected); });
   action('selection-reveal',() => { const node = selected || current; if (node) return api.revealFile(node.path); });
@@ -200,6 +204,9 @@ export function setupDisk() {
   action('close-issues',() => closeDialog(q<HTMLDialogElement>('issues-dialog')));
   q('page-disk').addEventListener('dragover',event => { event.preventDefault(); });
   q('page-disk').addEventListener('drop',event => { event.preventDefault(); const file = event.dataTransfer?.files[0]; if (file && !scanning) { q<HTMLInputElement>('disk-path').value = api.droppedFile(file); q('scan').click(); } });
+  const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();q('map-tooltip').hidden=true;filtered=undefined;}};
+  onWindowVisibility(refreshVisibility);
+  return {activate(value:boolean){if(active===value)return;active=value;refreshVisibility();}};
 }
 
 function showContextMenu(x: number,y: number,node: DiskNode,enter: (node: DiskNode) => void) {
