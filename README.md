@@ -8,6 +8,14 @@ Windows 本地工具箱 One 0.16.15，基于 Electron，项目位于 `D:\Reposit
 
 默认关闭主窗口后驻留托盘，可在“设置 → 基本设置”更改；`Ctrl+Alt+O` 打开主窗口。配置保存在 `%APPDATA%\One\settings.json`，升级会补齐新增设置。软件不要求账户，文件与文字在本机处理。
 
+## 开发与缓存
+
+源码、测试和说明使用 Git 管理；`node_modules`、`work`、`dist`、发布目录和本地环境配置均不入库。日常通过 Electron 开发模式检查界面，发布时才生成交付包，不再为每个小改动复制整个构建目录。
+
+`npm run dev` 启动开发窗口。`npm run verify -- file-tools-smoke` 等验证复用 `E:\One-Work\current`（可用 `ONE_WORK_ROOT` 调整），保留结果与截图，测试结束后清理生成的隔离配置。`dist` 只保留当前一次构建，可随时从源码重新生成。
+
+`scripts/clean-generated.ps1` 默认仅列出清理计划；`-Apply` 执行，`-AllWork` 额外清理历史工作目录和当前可重建的 `dist`，保留一份 Rust 编译缓存及少量验证记录。发布包按用户选择仅保留最新两版和使用中的版本；当前额外保护此前使用的 0.15.2。
+
 使用 `Ctrl+Alt+F` 搜索文件、系统已注册的程序和 Windows 设置。程序与设置无需添加索引目录；搜索文件时先添加索引目录。资源管理器直接输入、双击菜单、文件对话框 Ctrl+G 和双按 Ctrl 各自开启，默认关闭，避免与现有 Listary 同时响应。One 不修改 Listary 或 TextPro 的设置。
 
 ## 功能

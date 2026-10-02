@@ -11,3 +11,6 @@ native/search-engine/target/
 *.pdb
 *.ilk
 *.pch
+.env
+.env.*
+!.env.example
