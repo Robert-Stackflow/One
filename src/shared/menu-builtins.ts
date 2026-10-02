@@ -1,6 +1,9 @@
-export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string}
+export type OneMenuPage='home'|'tools'|'text'|'disk'|'system'|'hardware'|'locksmith'|'settings';
+export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneAction?:'pick-color'}
 export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'opened',label:'已打开的文件夹',category:'文件操作',icon:'folder'},
+ {id:'bookmarks',label:'收藏文件夹',category:'文件操作',icon:'star'},
+ {id:'favorite-current',label:'收藏当前文件夹',category:'文件操作',icon:'star'},
  {id:'recent',label:'最近访问',category:'文件操作',icon:'history'},
  {id:'copy-path',label:'复制当前路径',category:'文件操作',icon:'copy'},
  {id:'search',label:'文件搜索',category:'文件操作',icon:'search'},
@@ -27,6 +30,15 @@ export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'sign-out',label:'注销',category:'电源',icon:'power',confirm:'将注销当前账户，请先保存正在编辑的文件。'},
  {id:'restart',label:'重启电脑',category:'电源',icon:'power',confirm:'将立即重启电脑，请先保存正在编辑的文件。'},
  {id:'shutdown',label:'关机',category:'电源',icon:'power',confirm:'将立即关闭电脑，请先保存正在编辑的文件。'},
+ {id:'main-window',label:'打开主窗口',category:'One',icon:'arrow-up-right',onePage:'home',keywords:'概览 One'},
+ {id:'file-tools',label:'文件工具',category:'One',icon:'folder',onePage:'tools',keywords:'重复 文件比较 重命名 全文搜索'},
+ {id:'text-tools',label:'文本处理',category:'One',icon:'text',onePage:'text'},
+ {id:'space-analysis',label:'空间分析',category:'One',icon:'disk',onePage:'disk'},
+ {id:'file-locks',label:'文件占用',category:'One',icon:'lock',onePage:'locksmith'},
+ {id:'system-maintenance',label:'系统维护',category:'One',icon:'system',onePage:'system'},
+ {id:'system-information',label:'系统信息',category:'One',icon:'cpu',onePage:'hardware'},
+ {id:'pick-color',label:'屏幕取色',category:'One',icon:'color',oneAction:'pick-color'},
+ {id:'one-preferences',label:'One 设置',category:'One',icon:'settings',onePage:'settings'},
  {id:'settings',label:'自定义菜单',category:'One',icon:'settings'},
 ];
 export const builtinById=(id:string)=>menuBuiltins.find(command=>command.id===id);

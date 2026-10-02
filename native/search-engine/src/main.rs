@@ -736,6 +736,24 @@ fn current_query(s: &Shared, v: &Value, ticket: u64) -> bool {
         .copied()
         == Some(ticket)
 }
+type Ranked<'a> = BinaryHeap<Reverse<(bool, i32, PathKey, &'a str)>>;
+fn retain_match<'a>(heap: &mut Ranked<'a>, path: &PathKey, points: i32, mode: &'a str, local: bool) {
+    if heap.len() < 100 || heap.peek().is_some_and(|v| (local, points) > (v.0.0, v.0.1)) {
+        heap.push(Reverse((local, points, path.clone(), mode)));
+        if heap.len() > 100 { heap.pop(); }
+    }
+}
+fn ranked_items(heap: &Ranked<'_>, index: &Index, extra: &rows::Rows) -> Vec<Value> {
+    let mut best = heap.iter().map(|r| &r.0).collect::<Vec<_>>();
+    best.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
+    best.iter().map(|(_, _, path, mode)| {
+        let item = &index.rows.get(path).or_else(|| extra.get(path)).unwrap().item;
+        let mut value = serde_json::to_value(item).unwrap();
+        if item.directory { value["modified"] = json!(item.modified / 1_000_000); }
+        value["matchKind"] = json!(mode);
+        value
+    }).collect()
+}
 fn query(s: &Shared, v: &Value, ticket: u64) {
     let start = Instant::now();
     let id = v["id"].as_u64().unwrap_or(0);
@@ -756,8 +774,32 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let launchers = s.launchers.read().unwrap();
     let extra_rows = &launchers.rows;
     let include_launchers = v["includeLaunchers"].as_bool().unwrap_or(false);
-    let mut heap: BinaryHeap<Reverse<(i32, PathKey, &str)>> = BinaryHeap::new();
+    let mut heap: Ranked<'_> = BinaryHeap::new();
     let mut total = 0;
+    let prefix = if current.is_empty() { String::new() } else { format!("{current}\\") };
+    let progressive = v["progressive"].as_bool().unwrap_or(false)
+        && !prefix.is_empty() && !matches!(kind.as_str(), "app" | "setting");
+    // An ordered range visits only the current subtree, without scanning the full index.
+    // ']' is the byte immediately after '\\', so this upper bound includes every child.
+    if progressive {
+        for (n, (path, row)) in index.rows.range(PathKey::lookup(&prefix)..PathKey::lookup(format!("{current}]"))).enumerate() {
+            if n % 1024 == 0 && !current_query(s, v, ticket) {
+                output(json!({"id":id,"result":{"items":[],"total":0,"elapsed":0,"cancelled":true}}));
+                return;
+            }
+            if accepts(row, &kind, &extensions) {
+                if let Some((points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
+                    total += 1;retain_match(&mut heap, path, points, mode, true);
+                }
+            }
+        }
+        if !current_query(s, v, ticket) {
+            output(json!({"id":id,"result":{"items":[],"total":0,"elapsed":0,"cancelled":true}}));
+            return;
+        }
+        output(json!({"id":id,"result":{"items":ranked_items(&heap,&index,extra_rows),"total":total,"localTotal":total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));
+    }
+    let mut local_total = total;
     for (n, (path, row)) in index
         .rows
         .iter()
@@ -778,48 +820,20 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         if !accepts(row, &kind, &extensions) {
             continue;
         }
-        if let Some((mut points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
+        let local = !prefix.is_empty() && path.starts_with(&prefix);
+        if progressive && local { continue; }
+        if let Some((points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
             total += 1;
-            if !current.is_empty() && path.under(&current) {
-                points += 45
-            }
-            if heap.len() < 100 || heap.peek().is_some_and(|v| points > v.0.0) {
-                heap.push(Reverse((points, path.clone(), mode)));
-                if heap.len() > 100 {
-                    heap.pop();
-                }
-            }
+            if local { local_total += 1; }
+            retain_match(&mut heap, path, points, mode, local);
         }
     }
-    let mut best = heap.into_iter().map(|r| r.0).collect::<Vec<_>>();
-    best.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-    let items: Vec<Value> = best
-        .iter()
-        .map(|(_, p, m)| {
-            let mut value = serde_json::to_value(
-                &index
-                    .rows
-                    .get(p)
-                    .or_else(|| extra_rows.get(p))
-                    .unwrap()
-                    .item,
-            )
-            .unwrap();
-            let item = &index
-                .rows
-                .get(p)
-                .or_else(|| extra_rows.get(p))
-                .unwrap()
-                .item;
-            if item.directory {
-                value["modified"] = json!(item.modified / 1_000_000);
-            }
-            value["matchKind"] = json!(m);
-            value
-        })
-        .collect();
+    if !current_query(s, v, ticket) {
+        output(json!({"id":id,"result":{"items":[],"total":0,"elapsed":0,"cancelled":true}}));
+        return;
+    }
     output(
-        json!({"id":id,"result":{"items":items,"total":total,"elapsed":start.elapsed().as_secs_f64()*1000.0}}),
+        json!({"id":id,"result":{"items":ranked_items(&heap,&index,extra_rows),"total":total,"localTotal":local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0}}),
     );
 }
 fn main() {

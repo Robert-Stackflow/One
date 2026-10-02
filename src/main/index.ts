@@ -64,6 +64,9 @@ if(developmentMode)process.on('message',(message:any)=>{
  if(message?.type==='one:dev-reload'){for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed())window.webContents.reload();}
  else if(message?.type==='one:dev-quit')app.quit();
 });
+// The development IPC listener keeps Node's event loop alive after Chromium quits.
+// Disconnect only after normal shutdown has flushed application state.
+if(developmentMode)app.once('will-quit',()=>{if(process.connected)process.disconnect();});
 const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
@@ -90,14 +93,14 @@ const popupLifecycle=new PopupLifecycle();
 const fileIcons=new FileIcons(async path=>{if(path.startsWith('one-builtin:')){const file=builtinImagePath(path.slice(12));return file?shellFileImage(file):'';}if(path.startsWith('one-program:'))return shellFileImage(await programPath(path.slice(12)));const entry=launcher?.get(path);if(entry&&!entry.iconPath)return launcher.icon(path);return shellFileImage(entry?.iconPath||path);});
 const menuPresets=new MenuPresets(()=>launcher?.programFiles()||[]);
 const menuConfirmation=new MenuConfirmation(()=>windowFor('command-confirm',{width:420,height:280,minWidth:420,minHeight:280,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,alwaysOnTop:true,title:'确认操作 · One'}));
-type MenuPanel={window:BrowserWindow;readiness:PopupReadiness;depth:number;point:{x:number;y:number};items:import('../shared/search').MenuNode[];source:string;revision:number;left:boolean};
+type MenuPanel={window:BrowserWindow;readiness:PopupReadiness;depth:number;point:{x:number;y:number};items:import('../shared/search').MenuNode[];bar:import('../shared/search').MenuBar;source:string;revision:number;left:boolean};
 const menuPanels:MenuPanel[]=[];
 function menuFor(sender:number){return menuPanels.find(p=>!p.window.isDestroyed()&&p.window.webContents.id===sender);}
 function hideMenus(from=0){for(const p of menuPanels)if(p.depth>=from&&!p.window.isDestroyed())p.window.hide();if(!from)menuRevision++;}
 function popupFocus(w:BrowserWindow){if(w.isDestroyed())return;w.setAlwaysOnTop(true,'pop-up-menu');w.show();w.moveTop();w.focus();const hwnd=Number(w.getNativeWindowHandle().readBigUInt64LE());if(!searchBridge?.activate(hwnd))void activatePreviewWindow(hwnd).catch(()=>{});}
 function menuPanel(depth:number){let p=menuPanels[depth];if(p&&!p.window.isDestroyed())return p;
  const w=windowFor('search-menu',{width:286,height:100,minWidth:260,minHeight:40,frame:false,skipTaskbar:true,resizable:false,hasShadow:true},'&depth='+depth);
- p={window:w,readiness:new PopupReadiness(w),depth,point:{x:0,y:0},items:[],source:'',revision:0,left:false};menuPanels[depth]=p;if(!depth)menuWindow=w;
+ p={window:w,readiness:new PopupReadiness(w),depth,point:{x:0,y:0},items:[],bar:{top:[],bottom:[]},source:'',revision:0,left:false};menuPanels[depth]=p;if(!depth)menuWindow=w;
  w.on('blur',()=>{const revision=menuRevision;deferPopupBlur(w,()=>{if(menuExecuting||revision!==menuRevision)return false;const focused=BrowserWindow.getFocusedWindow();return !focused||roles.get(focused.webContents.id)!=='search-menu';},()=>hideMenus(),180);});
  w.on('close',e=>{if(!quitting&&!testMode){e.preventDefault();hideMenus(depth);}});w.on('closed',()=>{if(menuPanels[depth]?.window!==w)return;hideMenus(depth+1);if(!depth){menuRevision++;if(menuWindow===w)menuWindow=null;}});return p;
 }
@@ -105,11 +108,12 @@ function positionMenu(p:MenuPanel,width:number,height:number){if(p.window.isDest
  p.left=false;if(p.depth){const parent=menuPanels[p.depth-1];if(!parent||parent.window.isDestroyed()){p.window.hide();return;}const b=parent.window.getBounds();p.left=parent.left||x+w>area.x+area.width;if(p.left){x=b.x-w+4;if(x<area.x){p.left=false;x=b.x+b.width-4;}}}
  p.window.setBounds({x:Math.max(area.x,Math.min(x,area.x+area.width-w)),y:Math.max(area.y,Math.min(p.point.y,area.y+area.height-h)),width:w,height:h},false);
 }
-function sendMenu(p:MenuPanel){p.window.webContents.send('one:menu-reset',p.items);}
+async function favoriteCurrentFolder(){await menuContextReady;const path=searchContext.currentFolder;if(!path)throw new Error('当前文件夹不可用');if(!settings.search.bookmarks.includes(path))await saveSettings(current=>{if(current.search.bookmarks.length>=64)throw new Error('收藏最多包含 64 个文件夹');return {...current,search:{...current.search,bookmarks:[...new Set([...current.search.bookmarks,path])]}};});}
+function sendMenu(p:MenuPanel){if(!p.depth)p.window.webContents.send('one:menu-bar',p.bar);p.window.webContents.send('one:menu-reset',p.items);}
 async function showMenu(hwnd:number){hideMenus();searchWindow?.hide();const revision=menuRevision,p=menuPanel(0);p.point=screen.getCursorScreenPoint();p.source='';positionMenu(p,286,250);
  searchContext={kind:'menu',hwnd,pid:0,created:'',folders:[]};
  menuContextReady=searchBridge.context(hwnd).then(c=>{if(revision===menuRevision){searchContext={...c,kind:'menu'};menuService.updateContext(searchContext);}}).catch(e=>{if(revision===menuRevision)echo(e.message);});
- menuNodes=await menuService.open(searchContext);if(revision!==menuRevision)return;p.items=menuNodes;menuService.updateContext(searchContext);positionMenu(p,286,Math.max(40,menuNodes.reduce((n,i)=>n+(i.kind==='separator'?13:35),55)));sendMenu(p);
+ menuNodes=await menuService.open(searchContext);if(revision!==menuRevision)return;p.items=menuNodes;p.bar=menuService.toolbar();menuService.updateContext(searchContext);positionMenu(p,286,Math.max(40,menuNodes.reduce((n,i)=>n+(i.kind==='separator'?13:35),16+(p.bar.top.length?40:0)+(p.bar.bottom.length?40:0))));sendMenu(p);
  p.readiness.run(()=>{if(revision===menuRevision){sendMenu(p);popupFocus(p.window);}});
  // First child is prepared while the user moves to a menu item.
  menuPanel(1);
@@ -129,7 +133,7 @@ function showSearch(kind:SearchContext['kind']='search',hwnd=foreground()?.hwnd|
  setTimeout(()=>{if(!quitting&&searchWindow===w&&!w.isDestroyed()&&w.isVisible())fileMenu?.warm();},80).unref();
  void searchBridge.context(hwnd).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
-function warmSearchPopups(){launcher?.refresh();searchPopup(false);if(settings.search.explorerTyping)searchPopup(true);if(settings.search.explorerMenu)menuPanel(0);}
+function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();searchPopup(false);if(settings.search.explorerTyping)searchPopup(true);if(settings.search.explorerMenu)menuPanel(0);}
 async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{await searchBridge.jump(searchContext,path);}catch(error){searchWindow?.show();searchWindow?.focus();throw error;}}else{const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
 function utilityState(){return {awake:awake.state(),pinned:topmost.count(),shortcutError:topmost.error};}
 function utilityChanged(){if(!awake||!topmost)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}
@@ -208,6 +212,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings)){
       if(bridgeKeys.some(k=>next.search[k]!==previous.search[k]))searchBridge?.update(next.search);
       search?.configure(next.search);if(main&&!main.isDestroyed())warmSearchPopups();
       if(JSON.stringify([previous.search.roots,previous.search.excluded,previous.search.maxEntries])!==JSON.stringify([next.search.roots,next.search.excluded,next.search.maxEntries]))search?.rebuild(next.search);
+      for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&['main','search'].includes(roles.get(w.webContents.id)||''))w.webContents.send('one:search-preferences',next.search);
     }
     if(changed('utilities')){if(JSON.stringify(previous.utilities.awake)!==JSON.stringify(next.utilities.awake))awake?.update(next.utilities.awake);if(JSON.stringify(previous.utilities.topmost)!==JSON.stringify(next.utilities.topmost))topmost?.update(next.utilities.topmost);}
     if(changed('diskMonitor'))diskMonitor?.configure(next.diskMonitor);
@@ -260,17 +265,18 @@ function registerIPC() {
   handle('file-icons',(_event,paths)=>{if(!Array.isArray(paths)||paths.length>150)throw new Error('文件图标请求无效');for(const path of paths)if(typeof path==='string'&&path.startsWith('one-builtin:')){if(!builtinImagePath(path.slice(12)))throw new Error('系统图标无效');}else if(typeof path==='string'&&path.startsWith('one-program:')){if(!/^[\w .+-]+\.exe$/i.test(path.slice(12)))throw new Error('程序图标无效');}else if(typeof path!=='string'||!launcher?.get(path))filePath(path);return fileIcons.read(paths);},['main','search','search-menu','file-context','picker']);
   handle('search-size',(event,rows,active)=>{const w=BrowserWindow.fromWebContents(event.sender);if(!w||w!==searchWindow||typeof rows!=='number'||!Number.isFinite(rows)||rows<0)return;if(inlineSearch)overlay?.resize(rows,!!active);else {const b=w.getBounds(),area=screen.getDisplayMatching(b).workArea;const height=active?Math.min(560,Math.max(320,area.height-64)):64;const y=active?Math.max(area.y,Math.min(b.y,area.y+area.height-height-16)):b.y;if(Math.abs(b.height-height)>1||Math.abs(b.y-y)>1)w.setBounds({...b,y,height},false);}},['search']);
   handle('search-menu',event=>menuFor(event.sender.id)?.items||[],['search-menu']);
+  handle('menu-bar',event=>menuFor(event.sender.id)?.bar||{top:[],bottom:[]},['search-menu']);
   handle('menu-presets',()=>menuPresets.read());
   handle('menu-confirmation-data',event=>menuConfirmation.data(event.sender.id),['command-confirm']);
   handle('menu-confirmation-answer',(event,accepted)=>{if(typeof accepted!=='boolean')throw new Error('确认操作无效');menuConfirmation.answer(event.sender.id,accepted);},['command-confirm']);
   handle('menu-children',async(_event,id)=>{await menuContextReady;return menuService.children(textValue(id,100));},['search-menu']);
-  handle('menu-open',async(event,id,anchor)=>{const parent=menuFor(event.sender.id);if(!parent)return;const request=++parent.revision;hideMenus(parent.depth+1);if(id===null)return;const item=parent.items.find(n=>n.id===textValue(id,100));if(!item||!anchor||![anchor.top,anchor.right].every(Number.isFinite))throw new Error('菜单位置无效');const rootRevision=menuRevision;await menuContextReady;const items=item.children||await menuService.children(item.id);if(rootRevision!==menuRevision||parent.revision!==request||parent.window.isDestroyed()||!parent.window.isVisible())return;
+  handle('menu-open',async(event,id,anchor)=>{const parent=menuFor(event.sender.id);if(!parent)return;const request=++parent.revision;hideMenus(parent.depth+1);if(id===null)return;const item=[...parent.items,...parent.bar.top,...parent.bar.bottom].find(n=>n.id===textValue(id,100));if(!item||!anchor||![anchor.top,anchor.right].every(Number.isFinite))throw new Error('菜单位置无效');const rootRevision=menuRevision;await menuContextReady;const items=item.children||await menuService.children(item.id);if(rootRevision!==menuRevision||parent.revision!==request||parent.window.isDestroyed()||!parent.window.isVisible())return;
    const p=menuPanel(parent.depth+1),bounds=parent.window.getBounds();p.point={x:bounds.x+Math.min(bounds.width,Math.max(0,anchor.right))-4,y:bounds.y+Math.max(0,Math.min(bounds.height,anchor.top))-7};p.source=item.id;p.items=items;positionMenu(p,286,Math.max(40,Math.min(620,items.length?items.reduce((n,i)=>n+(i.kind==='separator'?13:35),16):70)));sendMenu(p);p.readiness.run(()=>{if(rootRevision===menuRevision&&parent.revision===request&&!parent.window.isDestroyed()&&parent.window.isVisible()&&!p.window.isDestroyed()){sendMenu(p);p.window.setAlwaysOnTop(true,'pop-up-menu');p.window.showInactive();p.window.moveTop();if(anchor.focus)popupFocus(p.window);}});
   },['search-menu']);
   handle('menu-back',event=>{const p=menuFor(event.sender.id);if(p?.depth){hideMenus(p.depth);popupFocus(menuPanels[p.depth-1].window);}},['search-menu']);
   handle('menu-execute',async(_event,id)=>{menuExecuting=true;await menuContextReady;hideMenus();const revision=menuRevision;try{await menuService.execute(textValue(id,100));}catch(error){if(revision===menuRevision&&menuWindow&&!menuWindow.isDestroyed())popupFocus(menuWindow);throw error;}finally{menuExecuting=false;}},['search-menu']);
   handle('menu-size',(event,value)=>{const p=menuFor(event.sender.id);if(p&&value&&[value.width,value.height].every(n=>Number.isFinite(n)&&n>0))positionMenu(p,value.width,value.height);},['search-menu']);
-  handle('menu-favorite',async()=>{await menuContextReady;const path=searchContext.currentFolder;if(!path)throw new Error('当前文件夹不可用');if(!settings.search.bookmarks.includes(path))await saveSettings(current=>({...current,search:{...current.search,bookmarks:[...new Set([...current.search.bookmarks,path])].slice(0,64)}}));hideMenus(1);menuNodes=await menuService.open(searchContext);menuPanel(0).items=menuNodes;return menuNodes;},['search-menu']);
+  handle('menu-favorite',async()=>{await favoriteCurrentFolder();hideMenus(1);menuNodes=await menuService.open(searchContext);const p=menuPanel(0);p.items=menuNodes;p.bar=menuService.toolbar();sendMenu(p);return menuNodes;},['search-menu']);
   handle('menu-settings',()=>{hideMenus();showMain();main.webContents.send('one:search-settings');},['search-menu']);
   handle('search-context-menu',(event,value,point,directory)=>{const owner=BrowserWindow.fromWebContents(event.sender);if(!owner||!point||![point.x,point.y].every(Number.isFinite))throw new Error('右键菜单位置无效');const item=typeof value==='string'?launcher.get(value):undefined,path=item?item.path:filePath(value),b=owner.getContentBounds();fileMenu.show(owner,path,{x:Math.max(0,Math.min(b.width,point.x)),y:Math.max(0,Math.min(b.height,point.y))},directory===true,item?.launchKind,item?launcher.enrich(item).name:undefined);},['search']);
   handle('file-menu-data',event=>fileMenu.data(event.sender.id),['file-context']);
@@ -280,7 +286,14 @@ function registerIPC() {
   handle('file-menu-close',(event,focus,childOnly)=>fileMenu.close(event.sender.id,focus===true,childOnly===true),['file-context']);
   handle('file-menu-action',(_e,session,action,value)=>fileMenu.run(textValue(session,100),action,value===undefined?undefined:textValue(value,32768)),['file-context']);
   handle('search-state',()=>searchState(),['main','search']);handle('search-preferences',()=>settings.search,['main','search']);
-  handle('search-files',async(event,query,foldersOnly)=>{const include=roles.get(event.sender.id)==='search'&&!event.sender.getURL().includes('embedded')&&!foldersOnly;const result=await search.query(query,foldersOnly,searchContext.currentFolder,event.sender.id,include);return {...result,items:result.items.map(item=>launcher.enrich(item))};},['main','search']);handle('search-rebuild',()=>search.rebuild(settings.search));handle('search-cancel',()=>search.cancel());handle('search-show',()=>showSearch());
+  handle('search-files',async(event,query,foldersOnly,token)=>{
+    if(token!==undefined&&(typeof token!=='string'||!/^[a-f0-9-]{36}$/.test(token)))throw new Error('搜索标识无效');
+    const role=roles.get(event.sender.id),include=role==='search'&&!event.sender.getURL().includes('embedded')&&!foldersOnly;
+    const folder=role==='search'?searchContext.currentFolder:'';
+    const enrich=(result:import('../shared/search').SearchResult)=>({...result,items:result.items.map(item=>launcher.enrich(item))});
+    const progress=token?(result:import('../shared/search').SearchResult)=>{if(!event.sender.isDestroyed())event.sender.send('one:search-progress',{token,result:enrich(result)});}:undefined;
+    return enrich(await search.query(query,foldersOnly,folder,event.sender.id,include,progress));
+  },['main','search']);handle('search-rebuild',()=>search.rebuild(settings.search));handle('search-cancel',()=>search.cancel());handle('search-show',()=>showSearch());
   handle('search-context',()=>searchContext,['search']);handle('search-ready',(event)=>{const window=BrowserWindow.fromWebContents(event.sender);if(window){searchReadyWindows.add(event.sender.id);if(window===searchWindow)replaySearchInput(window,searchRevision);}},['search']);
   handle('search-choose',(_e,value)=>chooseSearch(value),['search']);
   handle('inspect-locks',(_event,value)=>{const path=filePath(value);showMain();main.webContents.send('one:lock-target',path);},['main','preview','search']);
@@ -350,6 +363,15 @@ function registerIPC() {
   }, ['preview']);
   handle('open-file', async (_event, path) => { const error = await shell.openPath(filePath(path)); if (error) throw new Error(error); }, ['main','preview','search']);
   handle('reveal-file', (_event, path) => shell.showItemInFolder(filePath(path)), ['main','preview','search']);
+  handle('start-file-drag',async(event,value)=>{
+    const path=filePath(value),info=await stat(path);
+    if(!info.isFile()&&!info.isDirectory())throw new Error('此项目无法拖拽');
+    if(event.sender.isDestroyed())return;
+    const cached=fileIcons.cached(path),image=cached?nativeImage.createFromDataURL(cached):applicationIcon;
+    const id=event.sender.id;nativeMenus.add(id);
+    try{event.sender.startDrag({file:path,icon:image.isEmpty()?applicationIcon:image});}
+    finally{nativeMenus.delete(id);}
+  },['search']);
   handle('search-text', async (_event, text) => { const query = textValue(text, 5000); await shell.openExternal(`https://www.bing.com/search?q=${encodeURIComponent(query)}`); }, ['copy']);
   handle('pick-directory', (_event,path) => pickPath('directory','选择文件夹','',path === undefined ? undefined : filePath(path)));
   handle('scan',(event,path,id)=>{const target=filePath(path);if(typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id))throw new Error('扫描标识无效');diskService.start(target,(result,error)=>{if(!event.sender.isDestroyed())event.sender.send('one:scan-complete',{id,result,error});});});
@@ -380,7 +402,7 @@ async function start() {
   configurePicker(() => settings.search.bookmarks, async () => (await searchBridge.context(0)).folders);
   launcher=new LauncherService(items=>{search.launchers(items);searchChanged();});search.launchers(launcher.entries());launcher.refresh();
   fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}});
-  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch(),undefined,command=>menuConfirmation.request(command));
+  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch(),undefined,command=>menuConfirmation.request(command),favoriteCurrentFolder,async command=>{if(command.onePage){showMain();main.webContents.send('one:navigate-page',command.onePage);}else if(command.oneAction==='pick-color')await pickColor();});
   textService=new TextService((owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>w.webContents.id===owner);if(window&&!window.webContents.isDestroyed())window.webContents.send('one:text-progress',value);});
   fileTools=new FileToolsService(join(app.getPath('userData'),'file-tools'),(owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&w.webContents.id===owner);window?.webContents.send('one:file-tools-progress',value);});
   colorEditor=new ColorEditor(()=>windowFor('color-editor',{width:420,height:360,minWidth:320,minHeight:200,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,title:'颜色 · One'}),()=>({history:settings.colorHistory,formats:settings.colorVisibleFormats,format:settings.colorFormat,showEditor:settings.colorShowEditor}));

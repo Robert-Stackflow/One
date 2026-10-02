@@ -1,6 +1,6 @@
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {cp,mkdir,readdir,rm,stat} from 'node:fs/promises';
+import {readdir,rm,stat} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {context} from 'esbuild';
 import {build} from 'vite';
@@ -23,5 +23,5 @@ for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>void finish());
 launch();
 for(const options of [mainOptions,preloadOptions]){const current=await context({...options,plugins:[plugin()]});contexts.push(current);await current.watch();}
 renderer=await build({root:'src/renderer',base:'./',plugins:[{name:'one-prune-current-build',async writeBundle(_options,bundle){const keep=new Set(Object.keys(bundle));for(const item of await readdir('dist/renderer/assets',{withFileTypes:true}).catch(()=>[]))if(item.isFile()&&!keep.has('assets/'+item.name))await rm(join('dist/renderer/assets',item.name));}}],build:{outDir:'../../dist/renderer',emptyOutDir:false,watch:{}},logLevel:'warn'});
-let initial=true;renderer.on('event',event=>{if(event.code==='ERROR')console.error(event.error);if(event.code!=='END')return;void (async()=>{for(const folder of ['cmaps','standard_fonts','wasm'])await cp('node_modules/pdfjs-dist/'+folder,'dist/renderer/pdf/'+folder,{recursive:true});await cp('assets/file-icons','dist/renderer/file-icons',{recursive:true});if(initial){initial=false;return;}changed(false);})().catch(console.error);});
+let initial=true;renderer.on('event',event=>{if(event.code==='ERROR')console.error(event.error);if(event.code!=='END')return;if(initial){initial=false;return;}changed(false);});
 console.log('Electron 开发模式已启动；界面自动刷新，主进程自动重启。');

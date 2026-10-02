@@ -62,6 +62,7 @@ export function renderMain() {
   api.onDiskAlert(value=>toast(value.drive+' 剩余 '+(value.free/1024**3).toFixed(2)+' GB'));
   api.onDiskAlertOpen(()=>{navigate('system');q('alerts-tab').click();});
   api.onSearchSettings(()=>{navigate('search');q('search-tab-menu').click();});
+  api.onNavigatePage(page=>{if(modules.some(item=>item[0]===page))navigate(page);});
   api.onLockTarget(()=>navigate('locksmith'));
   api.onReceiveText(text => { navigate('text'); receiveText(text); });
 }

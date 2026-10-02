@@ -4,6 +4,7 @@ export class FileIcons {
  private pending=new Map<string,Promise<string>>();
  private queue:Array<()=>void>=[];private active=0;
  constructor(private readIcon:(path:string)=>Promise<string>,private limit=768,private concurrency=4){}
+ cached(path:string){const value=this.cache.get(path.toLowerCase());return value&&value.expires>Date.now()?value.image:'';}
  async read(paths:string[]):Promise<Record<string,string>>{return Object.fromEntries(await Promise.all([...new Set(paths)].map(async path=>[path,await this.icon(path)])));}
  private icon(path:string):Promise<string>{
   const key=path.toLowerCase(),cached=this.cache.get(key);
