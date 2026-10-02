@@ -21,7 +21,8 @@ async function main(){
  try{
   const filler='lowercase-'.repeat(11);for(let first=0;first<100000;first+=100){await Promise.all(Array.from({length:Math.min(100,100000-first)},(_,i)=>fs.writeFile(path.join(root,`record-${String(first+i).padStart(6,'0')}-${filler}End.TXT`),'')));if(first%20000===0)console.log('Created files: '+(first+100));}
   const before=await run(process.env.ONE_RESCAN_BEFORE,path.join(owned,'before.bin'),root),after=await run(path.resolve(process.env.ONE_RESCAN_AFTER||'dist/native/One.Index.exe'),path.join(owned,'after.bin'),root);
-  const report={files:100000,before,after,result:after.growthMB<12?'PASS':'FAIL'};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));assert.ok(after.growthMB<12,JSON.stringify({before:before.growthMB,after:after.growthMB}));console.log(JSON.stringify({result:report.result,beforeGrowthMB:before.growthMB,afterGrowthMB:after.growthMB}));
+  const beforeMiB=before.snapshots[0].private/1024**2,afterMiB=after.snapshots[0].private/1024**2;
+  const report={files:100000,before,after,beforeMiB,afterMiB,result:'MEASURED'};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));assert.ok(after.growthMB<12,JSON.stringify({before:before.growthMB,after:after.growthMB}));assert.ok(afterMiB<=beforeMiB*1.05+2,'Unique filename memory regression');report.result='PASS';await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({result:report.result,beforeMiB,afterMiB,beforeGrowthMB:before.growthMB,afterGrowthMB:after.growthMB}));
  }finally{const resolved=await fs.realpath(owned),parent=await fs.realpath(out);assert.equal(path.dirname(resolved).toLowerCase(),parent.toLowerCase());assert.ok(path.basename(resolved).startsWith('fixture-'));await fs.rm(resolved,{recursive:true,force:true});}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
