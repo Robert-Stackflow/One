@@ -50,7 +50,7 @@ export interface OneAPI {
   onMaintenanceProgress(callback:(value:import('./maintenance').MaintenanceProgress)=>void):()=>void;
   previewPreferences(value?:Partial<import('./preview').PreviewPreferences>):Promise<import('./preview').PreviewPreferences>;
   previewOpenWith():Promise<import('./preview').OpenWithApp[]>;previewOpenIn(id:string):Promise<void>;
-  maintenanceScan(kind:import('./maintenance').MaintenanceKind):Promise<import('./maintenance').MaintenanceReport>;maintenanceApply(report:string,ids:string[]):Promise<import('./maintenance').MaintenanceOutcome>;maintenanceReceipts():Promise<import('./maintenance').MaintenanceReceipt[]>;maintenanceRestore(id:string):Promise<void>;maintenanceManage(kind:'pagefile'|'hibernate-on'):Promise<void>;
+  maintenanceScan(kind:import('./maintenance').MaintenanceKind):Promise<import('./maintenance').MaintenanceReport>;maintenanceCancel(kind:import('./maintenance').MaintenanceKind):Promise<void>;maintenanceApply(report:string,ids:string[]):Promise<import('./maintenance').MaintenanceOutcome>;maintenanceReceipts():Promise<import('./maintenance').MaintenanceReceipt[]>;maintenanceRestore(id:string):Promise<void>;maintenanceManage(kind:'pagefile'|'hibernate-on'):Promise<void>;
   echoDisplays():Promise<{id:string;name:string;width:number;height:number}[]>;positionEcho():Promise<void>;finishEchoPosition():Promise<void>;onEchoPosition(callback:()=>void):()=>void;
   patchSettings(value: SettingsPatch): Promise<Settings>;
   appInfo(): Promise<{version:string;dataPath:string;packaged:boolean}>;

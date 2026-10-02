@@ -20,7 +20,7 @@ const api: OneAPI = {
   onPreviewLoading:cb=>listen('preview-loading',cb),
   previewPreferences:value=>invoke('preview-preferences',value),previewOpenWith:()=>invoke('preview-open-with'),previewOpenIn:id=>invoke('preview-open-in',id),
   echoDisplays:()=>invoke('echo-displays'),positionEcho:()=>invoke('echo-position'),finishEchoPosition:()=>invoke('echo-finish'),onEchoPosition:cb=>listen('echo-position',cb),
-  maintenanceScan:kind=>invoke('maintenance-scan',kind),maintenanceApply:(report,ids)=>invoke('maintenance-apply',report,ids),maintenanceReceipts:()=>invoke('maintenance-receipts'),maintenanceRestore:id=>invoke('maintenance-restore',id),maintenanceManage:kind=>invoke('maintenance-manage',kind),
+  maintenanceScan:kind=>invoke('maintenance-scan',kind),maintenanceCancel:kind=>invoke('maintenance-cancel',kind),maintenanceApply:(report,ids)=>invoke('maintenance-apply',report,ids),maintenanceReceipts:()=>invoke('maintenance-receipts'),maintenanceRestore:id=>invoke('maintenance-restore',id),maintenanceManage:kind=>invoke('maintenance-manage',kind),
   patchSettings:value=>invoke('patch-settings',value),appInfo:()=>invoke('app-info'),
   installedFonts:refresh=>invoke('installed-fonts',refresh),
   uiFontSource:family=>invoke('ui-font-source',family),

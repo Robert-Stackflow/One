@@ -7,6 +7,7 @@ export class MaintenanceClient {
  private fail(error:Error){this.closed=true;for(const p of this.pending.values())p.reject(error);this.pending.clear();}
  private request<T>(operation:string,...args:unknown[]):Promise<T>{if(this.closed)return Promise.reject(new Error('维护服务不可用'));const id=++this.sequence;return new Promise((resolve,reject)=>{this.pending.set(id,{resolve,reject});this.worker.postMessage({id,operation,args});});}
  scan(kind:MaintenanceKind){return this.request<MaintenanceReport>('scan',kind);}
+ cancel(kind:MaintenanceKind){return this.request<void>('cancel',kind);}
  apply(report:string,ids:string[]){return this.request<MaintenanceOutcome>('apply',report,ids);}
  receipts(){return this.request<MaintenanceReceipt[]>('receipts');}
  restore(id:string){return this.request<void>('restore',id);}
