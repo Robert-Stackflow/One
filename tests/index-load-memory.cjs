@@ -20,7 +20,7 @@ async function frozen(source){
  base.copy(head,0,0,8);head.writeUInt32LE(text.length,8);
  return{bytes:Buffer.concat([head,text,base.subarray(12+length)]),delta,config,count:Number(base.readBigUInt64LE(28+length)),sourceBytes:base.length,deltaBytes:delta?.length||0};
 }
-async function run(exe,cache,source){
+async function run(exe,cache,source,cases=queries,verifyConcurrency=false){
  await fs.writeFile(cache,source.bytes);await fs.rm(cache+'.delta',{force:true});if(source.delta)await fs.writeFile(cache+'.delta',source.delta);
  const at=performance.now(),child=spawn(exe,[cache],{windowsHide:true}),handle=open(0x410,0,child.pid);assert.ok(handle);
  let buffer='',state,ready=false,running=false,readyMs,id=0,peakResident=0,peakPrivate=0;const pending=new Map(),errors=[];
@@ -29,17 +29,26 @@ async function run(exe,cache,source){
  const exit=new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('Index exited: '+code)));});exit.catch(()=>{});
  child.stderr.on('data',data=>errors.push(data.toString()));child.stdout.setEncoding('utf8');
  child.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const value=JSON.parse(buffer.slice(0,end));buffer=buffer.slice(end+1);if(value.state){state=value.state;if(state.running)running=true;if(running&&!state.running){ready=true;readyMs??=performance.now()-at;}}else{const request=pending.get(value.id);if(request){clearTimeout(request.timer);pending.delete(value.id);value.error?request.reject(Error(value.error)):request.resolve(value.result);}}}});
- const query=(text,includeLaunchers=false)=>new Promise((resolve,reject)=>{const serial=++id;pending.set(serial,{resolve,reject,timer:setTimeout(()=>{pending.delete(serial);reject(Error('Query timeout: '+text));},20000)});send({type:'query',id:serial,scope:1,query:text,fuzzy:true,pinyin:true,currentFolder:'D:\\Repositories\\One',includeLaunchers});});
+ const query=(text,includeLaunchers=false,options={})=>new Promise((resolve,reject)=>{const serial=++id;pending.set(serial,{resolve,reject,timer:setTimeout(()=>{pending.delete(serial);reject(Error('Query timeout: '+text));},20000)});send({type:'query',id:serial,scope:options.scope??1,query:text,fuzzy:options.fuzzy??true,pinyin:options.pinyin??true,foldersOnly:options.foldersOnly??false,currentFolder:options.currentFolder??'D:\\Repositories\\One',includeLaunchers});});
  try{
   send({type:'init',settings:source.config});const until=performance.now()+60000;
   while(!ready&&performance.now()<until){assert.equal(child.exitCode,null,'Index stopped while loading');await delay(20);}assert.ok(ready,'Cache restore timeout');assert.ok(state.count>0&&state.count<=source.config.maxEntries,JSON.stringify(state));
   await delay(250);const loaded=sample(),results=[];
-  for(const text of queries){const timings=[];let result;for(let n=0;n<2;n++){const start=performance.now();result=await query(text);assert.ok(!result.cancelled);timings.push({wallMs:performance.now()-start,nativeMs:result.elapsed});}results.push({query:text,total:result.total,items:result.items,timings});}
+  for(const entry of cases){const text=typeof entry==='string'?entry:entry.query,options=typeof entry==='string'?{}:entry,timings=[];let result;for(let n=0;n<2;n++){const start=performance.now();result=await query(text,false,options);assert.ok(!result.cancelled);timings.push({wallMs:performance.now()-start,nativeMs:result.elapsed});}results.push({query:text,options,total:result.total,items:result.items,timings});}
+  let concurrency;
+  if(verifyConcurrency){
+   const qq=results.find(r=>r.query==='QQ'),quarter=results.find(r=>r.query==='季度');assert.ok(qq&&quarter);
+   const mixed=await Promise.all([query('QQ',false,{scope:901}),query('季度',false,{scope:902}),query('QQ',false,{scope:901})]);
+   for(const [actual,expected]of [[mixed[1],quarter],[mixed[2],qq]]){assert.ok(!actual.cancelled,'independent/latest window query was cancelled');assert.equal(actual.total,expected.total);assert.deepEqual(actual.items,expected.items);}
+   if(mixed[0].cancelled){assert.deepEqual(mixed[0].items,[]);assert.equal(mixed[0].total,0);}else assert.deepEqual(mixed[0].items,qq.items);
+   const superseded=await Promise.all(Array.from({length:20},(_,n)=>query(n===19?'QQ':'no-result_918923',false,{scope:903})));assert.ok(!superseded.at(-1).cancelled);assert.deepEqual(superseded.at(-1).items,qq.items);assert.equal(superseded.at(-1).total,qq.total);
+   concurrency={independentScopes:true,latestOf20Retained:true,supersededCancelled:superseded.filter(r=>r.cancelled).length};
+  }
   // Deterministic launcher entries isolate filtering cost from application discovery.
   send({type:'launchers',items:[{path:'one-launcher:app:QQ',name:'QQ',directory:false,size:0,modified:0},{path:'one-launcher:setting:display',name:'显示器 分辨率 缩放',directory:false,size:0,modified:0}]});
   const launcherQueries=[];for(const text of ['app: QQ','setting: 显示','setting: xianshiqi']){const timings=[];let result;for(let n=0;n<3;n++){const start=performance.now();result=await query(text,true);assert.ok(!result.cancelled);assert.equal(result.total,1);timings.push(performance.now()-start);}launcherQueries.push({query:text,items:result.items,timings});}
   const settled=sample();assert.deepEqual(errors,[]);send({type:'stop'});child.stdin.end();await exit;
-  return{count:state.count,readyMs,loaded,settled,peakResident,peakPrivate,queries:results,launcherQueries};
+  return{count:state.count,readyMs,loaded,settled,peakResident,peakPrivate,queries:results,launcherQueries,concurrency};
  }finally{clearInterval(timer);for(const request of pending.values())clearTimeout(request.timer);close(handle);if(child.exitCode===null){child.kill();await exit.catch(()=>{});}}
 }
 async function main(){
@@ -58,4 +67,5 @@ async function main(){
  for(const query of report.launcherTimings)assert.ok(query.afterMs<20,'Launcher filter should not traverse the file index: '+query.query);
  report.result='PASS';await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({result:'PASS',count:report.rounds[0].after.count,privateReductionPercent:report.privateReductionPercent,load:report.load,peakPrivate:report.peakPrivate,resultsIdentical:true}));
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
+module.exports={frozen,run,queries};
+if(require.main===module)main().catch(error=>{console.error(error);process.exitCode=1;});

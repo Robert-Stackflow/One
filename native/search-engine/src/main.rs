@@ -542,6 +542,22 @@ struct Term {
     text: String,
     exact: bool,
     bits: u128,
+    fuzzy: bool,
+    typo: bool,
+    separators: u8,
+}
+impl Term {
+    fn new(text: String, exact: bool) -> Self {
+        let fuzzy = !exact && text.len() <= 128 && text.chars().take(2).count() == 2;
+        Self {
+            bits: mask(&text),
+            typo: fuzzy && text.len() >= 4 && text.is_ascii(),
+            separators: text.bytes().filter(|&c| c == b'\\').take(2).count() as u8,
+            text,
+            exact,
+            fuzzy,
+        }
+    }
 }
 fn parse(query: &str, folder: bool) -> (String, Vec<String>, Vec<Term>) {
     let mut tokens = Vec::new();
@@ -586,20 +602,12 @@ fn parse(query: &str, folder: bool) -> (String, Vec<String>, Vec<Term>) {
             {
                 kind = k.into();
                 if !v.is_empty() {
-                    terms.push(Term {
-                        text: v.into(),
-                        exact,
-                        bits: mask(v),
-                    });
+                    terms.push(Term::new(v.into(), exact));
                 }
                 continue;
             }
         }
-        terms.push(Term {
-            bits: mask(&text),
-            text,
-            exact,
-        });
+        terms.push(Term::new(text, exact));
     }
     (kind, extensions, terms)
 }
@@ -646,8 +654,30 @@ fn score(
     let mut total = if row.item.directory { 3 } else { 0 };
     let mut mode = "exact";
     let lower = row.lower();
+    let file_name = std::ptr::eq(lower, path.name());
     for term in terms {
         let t = &term.text;
+        // A normalized basename never contains a separator. Neither literal
+        // name matches nor subsequences/pinyin can match path terms. One-edit
+        // matching can remove a single separator, so retain that exception.
+        if file_name && term.separators > 0 && (!fuzzy || !term.typo || term.separators > 1) {
+            if term.bits & (row.bits | path.prefix_bits()) == term.bits && path.contains_parent(t) {
+                total += 180;
+                continue;
+            }
+            return None;
+        }
+        // File names share their normalized lookup spelling. Their existing
+        // masks include every filename, pinyin and parent-path character.
+        // Missing characters rule out all matches except eligible ASCII typos.
+        // Launcher display names and exceptional spellings keep the full path check.
+        if file_name
+            && term.bits & row.bits != term.bits
+            && !(fuzzy && term.typo && (term.bits & !row.bits).count_ones() <= 2)
+            && term.bits & (row.bits | path.prefix_bits()) != term.bits
+        {
+            return None;
+        }
         let mut value = -1;
         if let Some(at) = lower.find(t) {
             value = if lower == t {
@@ -660,13 +690,13 @@ fn score(
         } else if !term.exact && pinyin && row.phonetic().any(|s| s.contains(t)) {
             value = 540;
             mode = "pinyin";
-        } else if if std::ptr::eq(lower, path.name()) {
+        } else if if file_name {
             term.bits & (row.bits | path.prefix_bits()) == term.bits && path.contains_parent(t)
         } else {
             path.contains(t)
         } {
             value = 180;
-        } else if !term.exact && fuzzy && t.chars().count() >= 2 && t.len() <= 128 {
+        } else if fuzzy && term.fuzzy {
             if term.bits & row.bits == term.bits {
                 if let Some(s) = subsequence(lower, t) {
                     value = 250 + s.min(150);
@@ -683,7 +713,7 @@ fn score(
                     }
                 }
             }
-            if value < 0 && t.len() >= 4 && (term.bits & !row.bits).count_ones() <= 2 {
+            if value < 0 && term.typo && (term.bits & !row.bits).count_ones() <= 2 {
                 let stem = lower.rsplit_once('.').map(|(s, _)| s).unwrap_or(lower);
                 if one_edit(stem, t) || stem.split([' ', '-', '_']).any(|s| one_edit(s, t)) {
                     value = 160;
@@ -1027,6 +1057,77 @@ mod tests {
         }
         let (_, _, t) = parse("\"reprot\"", false);
         assert!(score(&r, r.item.path.key(), &t, true, true).is_none());
+    }
+    #[test]
+    fn matching_keeps_parent_pinyin_typo_and_exceptional_spellings() {
+        for (path, query, fuzzy, pinyin, matched) in [
+            ("D:\\Quarterly\\plain.txt", "quarterly", false, false, true),
+            ("D:\\季度\\plain.txt", "季度", false, false, true),
+            ("D:\\folder\\report.txt", "reprot", true, false, true),
+            ("D:\\folder\\report.txt", "reprot", false, true, false),
+            ("D:\\folder\\report.txt", "\"reprot\"", true, true, false),
+            ("D:\\folder\\report.txt", "reprt", true, false, true),
+            ("D:\\folder\\report.txt", "rpt", true, false, true),
+            ("D:\\folder\\report.txt", "repotr", true, false, true),
+            ("D:\\folder\\report.txt", "rzpqxt", true, false, false),
+            ("D:\\folder\\report.txt", "re/port", true, false, true),
+            ("D:\\folder\\report.txt", "re/port", false, false, false),
+            ("D:\\folder\\report.txt", "r/e/port", true, false, false),
+            ("D:\\folder\\季度报告.txt", "jidubaogao", false, true, true),
+            ("D:\\folder\\季度报告.txt", "jdbg", true, true, true),
+            ("D:\\folder\\季度报告.txt", "jdbg", false, false, false),
+            ("D:\\folder\\季度报告.txt", "\"jdbg\"", true, true, false),
+            ("D:\\folder\\Résumé-Σ.txt", "résumé", false, false, true),
+            ("D:\\İstanbul\\File.txt", "istanbul", false, false, false),
+            ("D:\\İstanbul\\File.txt", "İstanbul", false, false, true),
+            ("D:\\folder\\🙂.txt", "🙂", false, false, true),
+            ("D:\\folder\\文🙂.txt", "文🙂", true, false, true),
+            (
+                "D:/Mixed/Folder/File.TXT",
+                "mixed/folder/file",
+                false,
+                false,
+                true,
+            ),
+            (
+                "D:\\Mixed\\Folder\\File.TXT",
+                "folder/file",
+                false,
+                false,
+                true,
+            ),
+            ("D:\\", "\"D:\\\"", true, true, true),
+            (
+                "\\\\Server\\Share\\文档.txt",
+                "server/share",
+                false,
+                false,
+                true,
+            ),
+        ] {
+            let row = Record::new(path.into(), false, 0);
+            let (_, _, terms) = parse(query, false);
+            assert_eq!(
+                score(&row, row.item.path.key(), &terms, fuzzy, pinyin).is_some(),
+                matched,
+                "{path} / {query}"
+            );
+        }
+        let entry = Entry {
+            path: "one-launcher:app:D:\\SpecialFolder\\Run.exe".into(),
+            name: "Different display name".into(),
+            directory: false,
+            size: 0,
+            modified: 0,
+        };
+        let mut row = Record::new(entry.name.clone(), false, 0);
+        row.set_lower(entry.name.to_lowercase());
+        row.item = StoredEntry::launcher(entry);
+        let (_, _, terms) = parse("\"specialfolder\\run.exe\"", false);
+        assert!(
+            score(&row, row.item.path.key(), &terms, false, false).is_some(),
+            "launcher targets remain searchable even when display names differ"
+        );
     }
     #[test]
     fn boundaries() {

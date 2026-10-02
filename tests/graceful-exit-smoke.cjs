@@ -43,7 +43,7 @@ async function scenario(kind,expectedErrors=0){
    await window.one.patchSettings({search:{roots:[files],explorerTyping:true,explorerMenu:true},preview:{held:true}});
    await window.one.patchSettings({search:{explorerTyping:false,explorerMenu:false}});
   },files);
-  const searchWindows=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(w=>new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')==='search').map(w=>({id:w.webContents.id,embedded:w.webContents.getURL().includes('embedded=1')})));
+  const searchWindows=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(w=>!w.isDestroyed()&&!w.webContents.isDestroyed()&&new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')==='search').map(w=>({id:w.webContents.id,embedded:w.webContents.getURL().includes('embedded=1')})));
   await expect.poll(async()=> (await searchWindows()).length).toBe(2);
   for(const page of app.windows().filter(p=>/view=search(?:&|$)/.test(p.url())))await page.waitForSelector('#file-query');
   if(kind==='text'){
@@ -58,7 +58,7 @@ async function scenario(kind,expectedErrors=0){
   }
   if(kind==='recreate'){
    const originalIds=(await searchWindows()).map(w=>w.id);
-   await app.evaluate(({BrowserWindow})=>{for(const w of BrowserWindow.getAllWindows())if(new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')==='search')w.close();});
+   await app.evaluate(({BrowserWindow})=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')==='search')w.close();});
    await expect.poll(async()=> (await searchWindows()).length).toBe(0);
    await main.evaluate(async()=>{
     await window.one.patchSettings({search:{explorerTyping:true,explorerMenu:true}});
