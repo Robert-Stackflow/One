@@ -25,6 +25,7 @@ const render=async()=>{
  if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
  else if(view==='color-editor')(await import('./color-editor-view')).renderColorEditor();
+ else if(view==='command-confirm')await (await import('./menu-confirmation-view')).renderMenuConfirmation();
  else if(view==='preview')await (await import('./preview-view')).renderPreview();
  else if(view==='picker')(await import('./picker-view')).renderPicker();
  else if(view==='search-menu')await (await import('./search-menu')).renderSearchMenu();

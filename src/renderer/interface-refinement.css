@@ -64,12 +64,32 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .menu-items{display:flex;flex-direction:column}.menu-items>.shortcut-item,.menu-items>hr{flex-shrink:0}
 .shortcut-item>.menu-file-icon{flex:0 0 16px;display:grid;place-items:center;overflow:visible}
 .menu-file-icon>.icon,.menu-file-icon>.windows-file-icon{width:16px;height:16px}
+.menu-item-label>.menu-file-icon,.menu-icon-select>.menu-file-icon{flex:0 0 16px;width:16px;height:16px;display:grid;place-items:center;overflow:visible}
 .shortcut-menu-window .shortcut-item{height:35px;min-height:35px;border-radius:6px;transition:background 100ms ease}
 .shortcut-menu-window .shortcut-item>span{font-size:12px}
 .shortcut-menu-window .shortcut-menu footer{height:39px;padding:4px 7px;background:var(--surface)}
-.shortcut-menu-window .menu-footer-label{font-size:10px;color:var(--muted);margin-left:3px}
 .shortcut-menu-window .shortcut-menu footer .icon-button{width:28px;height:28px;min-height:28px;padding:6px;border-radius:6px}
-.shortcut-menu-window .toast{font-size:10px;padding:6px 10px;bottom:44px}
+.shortcut-menu-window .toast{left:50%;width:max-content;max-width:calc(100vw - 24px);font-size:12px;line-height:1.5;padding:8px 12px;bottom:44px;text-align:center;overflow-wrap:anywhere;border-radius:8px;box-shadow:0 3px 12px #0002}
+.menu-command-select{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;padding:9px 12px;font-weight:400}
+.menu-command-select>.icon{flex:0 0 16px;width:16px;height:16px;color:var(--muted)}
+.command-picker{margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:0 6px 24px #0002;overflow:hidden;display:flex;flex-direction:column}
+.command-picker:not(:popover-open){display:none}
+.command-picker-query{display:flex;gap:8px;align-items:center;padding:7px 8px 10px;border-bottom:1px solid var(--line);flex-shrink:0}
+.command-picker-query>.icon{width:16px;height:16px;color:var(--muted)}
+.command-picker-query>input{border:0!important;background:transparent!important;box-shadow:none!important;padding:0!important;min-height:28px;width:100%;outline:none;color:var(--fg);transition:none}
+.command-picker-body{display:flex;overflow:hidden;min-height:0}
+.command-picker-categories{padding:8px 6px 6px 0;flex:0 0 92px;overflow:auto;border-right:1px solid var(--line)}
+.command-picker-categories>button{width:100%;height:31px;text-align:left;padding:6px 8px;font-size:11px;font-weight:400;border-radius:6px}
+.command-picker-categories>button[aria-pressed=true]{background:var(--selected);color:var(--fg)}
+.command-picker-body>.command-picker-list{flex:1;padding-left:6px}
+.command-picker-list{overflow:auto;min-height:0;padding-top:4px;scrollbar-gutter:stable}
+.command-picker-category{font-size:11px;color:var(--muted);padding:12px 9px 5px}
+.command-picker-list>button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;min-height:35px;border-radius:6px;padding:7px 9px;font-size:12px;font-weight:400}
+.command-picker-list>button>.icon,.command-picker-list .menu-file-icon{width:16px;height:16px;flex:0 0 16px}
+.command-picker-list>button>span:not(.menu-file-icon){flex:1}
+.command-picker-list small{color:var(--muted);font-size:10px}
+.command-picker-list>button[aria-selected=true]{background:var(--hover)}
+.command-picker button{color:var(--fg);transition:background 100ms ease}
 
 .popup-enter{animation:popup-content-enter 120ms cubic-bezier(.2,.8,.2,1) both}@keyframes popup-content-enter{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.popup-enter{animation:none}}
@@ -130,7 +150,20 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .menu-inspector{min-height:0;overflow:auto;padding:14px 18px 18px;scrollbar-gutter:stable}
 .menu-inspector .section-heading{min-height:36px;padding-bottom:12px}
 .menu-inspector-actions{display:flex;gap:2px}.menu-inspector-actions .icon-button{width:28px;height:28px;min-height:28px;padding:6px}
-.menu-editor-row{min-height:38px;padding-block:4px;border-radius:7px}
+.menu-editor-row{position:relative;min-height:38px;padding:4px 4px 4px calc(var(--indent) + 4px);border-radius:7px;gap:3px}
+.menu-editor-row>.tree-toggle.placeholder{display:none}
+.menu-editor-row>.tree-toggle{width:18px;min-width:18px;margin:0}
+.menu-editor-row .menu-item-label{padding-inline:7px;gap:10px}
+.menu-editor-row.disabled{opacity:1}.menu-editor-row.disabled>.tree-toggle,.menu-editor-row.disabled .menu-item-label{opacity:.45}
+.menu-editor-row .menu-visibility{visibility:hidden}.menu-editor-row:hover .menu-visibility,.menu-editor-row:focus-within .menu-visibility,.menu-editor-row.selected .menu-visibility,.menu-editor-row.disabled .menu-visibility{visibility:visible}
+.menu-editor-row .menu-visibility[aria-pressed]{background:transparent;border-color:transparent;box-shadow:none}
+.menu-editor-row.disabled .tree-row-actions{opacity:1}
+.menu-editor-row.dragging{opacity:.45}
+.menu-editor-row[data-drop-position=before]:before,.menu-editor-row[data-drop-position=after]:before{content:"";position:absolute;left:calc(var(--indent) + 6px);right:6px;height:2px;background:var(--fg);border-radius:2px;pointer-events:none;z-index:1}
+.menu-editor-row[data-drop-position=before]:before{top:-1px}.menu-editor-row[data-drop-position=after]:before{bottom:-1px}
+.menu-editor-row[data-drop-position=inside]{outline:1px solid var(--fg);outline-offset:-1px;background:var(--hover)}
+.menu-editor-row[data-drop-position=inside] .tree-row-actions{visibility:hidden}.menu-editor-row[data-drop-position=inside] .menu-item-label{padding-right:80px}
+.menu-editor-row[data-drop-position=inside]:after{content:"移入子菜单";position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--muted);pointer-events:none}
 .menu-editor-row .menu-item-label:hover,.menu-editor-row .menu-item-label:active,.menu-editor-row .tree-row-actions button:hover,.menu-editor-row .tree-toggle:hover{background:transparent;border-color:transparent}
 .menu-editor-row .tree-row-actions button:hover{color:var(--fg)}
 .menu-editor-row .tree-row-actions button[data-delete]:hover{color:#b65a4c}
@@ -144,10 +177,25 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 #menu-shell-fields{display:flex;flex-direction:column;gap:14px}
 .menu-inspector #menu-script{height:106px;min-height:80px;font-family:Consolas,monospace;line-height:1.65;resize:vertical}
 .menu-inspector .menu-field-hint{font-size:10px;color:var(--muted);line-height:1.65;overflow-wrap:anywhere;margin-top:-6px}
-.menu-inspector .menu-enabled{padding-top:6px;border-top:1px solid var(--line);min-height:34px}
+.confirmation-popover{position:fixed;inset:auto;margin:0;width:240px;max-width:calc(100vw - 16px);padding:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);overflow:visible}
+.confirmation-popover:not(:popover-open){display:none}
+.confirmation-popover strong{display:block;font-size:12px;font-weight:550;overflow-wrap:anywhere}.confirmation-popover p{margin:6px 0 0;font-size:11px;color:var(--muted)}
+.confirmation-popover>div{display:flex;justify-content:flex-end;gap:6px;margin-top:12px}.confirmation-popover button{min-height:28px;padding:4px 10px;font-size:11px}
+.confirmation-popover:before{content:"";position:absolute;left:var(--arrow-left);width:8px;height:8px;background:var(--surface);transform:rotate(45deg)}
+.confirmation-popover[data-side=above]:before{bottom:-5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.confirmation-popover[data-side=below]:before{top:-5px;border-left:1px solid var(--line);border-top:1px solid var(--line)}
+.menu-confirm-window #app{height:100%;background:var(--surface);color:var(--fg)}
+.menu-confirm-window button{transition:opacity .12s,transform .12s var(--ease)}
+.menu-confirm-dialog{height:100%;display:flex;flex-direction:column}.menu-confirm-dialog header{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 18px;-webkit-app-region:drag;font-size:11px;color:var(--muted)}
+.menu-confirm-dialog header button{-webkit-app-region:no-drag;width:28px;height:28px;min-height:28px;padding:6px}
+.menu-confirm-content{flex:1;padding:8px 24px 16px}.menu-confirm-symbol{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--soft);margin-bottom:12px}.menu-confirm-symbol .icon{width:21px;height:21px;color:var(--fg)}
+.menu-confirm-content h1{font-size:18px;font-weight:600;margin:0 0 8px;text-align:left}.menu-confirm-content p{font-size:12px;color:var(--muted);line-height:1.7;margin:0;max-width:350px}
+.menu-confirm-dialog footer{padding:0 24px 20px;display:flex;justify-content:flex-end;gap:8px}.menu-confirm-dialog footer button{min-width:78px;height:32px;min-height:32px;font-size:12px}
+#command-confirm-accept{background:#ad463b;border-color:#ad463b;color:white}#command-confirm-accept:hover{background:#993e35;border-color:#993e35}
 .menu-tree-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:180px;gap:12px;color:var(--muted);font-size:12px}
 .menu-tree-empty>.icon{width:24px;height:24px;opacity:.6}
 .menu-add-popup{position:fixed;inset:auto;margin:0;width:190px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);color:var(--fg);animation:popup-content-enter 120ms var(--ease)}
 .menu-add-popup button{display:flex;justify-content:flex-start;gap:10px;width:100%;height:34px;padding:5px 9px;border-radius:6px;font-size:12px}
 .menu-add-popup button>.icon{width:16px;height:16px;color:var(--muted)}
+.menu-inspector .menu-console{flex-direction:row;align-items:center;gap:8px}.menu-inspector .menu-console input{width:16px}
 @media(max-width:850px){.menu-designer{grid-template-columns:minmax(200px,.85fr) minmax(260px,1fr)}.menu-inspector{padding-inline:12px}.menu-inspector .menu-field-pair{grid-template-columns:1fr}.menu-editor-row .tree-row-actions button[data-up],.menu-editor-row .tree-row-actions button[data-down]{display:none}}

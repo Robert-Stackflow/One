@@ -16,6 +16,10 @@ import {inlineSearchBaseHeight} from '../shared/overlay';
 import {SearchMenu} from './search-menu';
 import {FileIcons} from './file-icons';
 import {shellFileImage} from './shell-icons';
+import {programPath} from './program-path';
+import {MenuPresets} from './menu-presets';
+import {builtinImagePath} from './menu-builtins';
+import {MenuConfirmation} from './menu-confirmation';
 import {TextService} from './text-service';
 import {validateSteps} from '../shared/text-tools';
 import {LocksmithService} from './locksmith';
@@ -83,7 +87,9 @@ let inlineSearch=false,overlay:ExplorerOverlay|undefined,menuWindow:BrowserWindo
 let menuExecuting=false,menuRevision=0,menuContextReady:Promise<void>=Promise.resolve();
 const cachedSearch=new Map<boolean,BrowserWindow>(),nativeMenus=new Set<number>();
 const popupLifecycle=new PopupLifecycle();
-const fileIcons=new FileIcons(async path=>{const entry=launcher?.get(path);if(entry&&!entry.iconPath)return launcher.icon(path);return shellFileImage(entry?.iconPath||path);});
+const fileIcons=new FileIcons(async path=>{if(path.startsWith('one-builtin:')){const file=builtinImagePath(path.slice(12));return file?shellFileImage(file):'';}if(path.startsWith('one-program:'))return shellFileImage(await programPath(path.slice(12)));const entry=launcher?.get(path);if(entry&&!entry.iconPath)return launcher.icon(path);return shellFileImage(entry?.iconPath||path);});
+const menuPresets=new MenuPresets(()=>launcher?.programFiles()||[]);
+const menuConfirmation=new MenuConfirmation(()=>windowFor('command-confirm',{width:420,height:280,minWidth:420,minHeight:280,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,alwaysOnTop:true,title:'确认操作 · One'}));
 type MenuPanel={window:BrowserWindow;readiness:PopupReadiness;depth:number;point:{x:number;y:number};items:import('../shared/search').MenuNode[];source:string;revision:number;left:boolean};
 const menuPanels:MenuPanel[]=[];
 function menuFor(sender:number){return menuPanels.find(p=>!p.window.isDestroyed()&&p.window.webContents.id===sender);}
@@ -133,7 +139,7 @@ const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 function windowFor(view: string, options: Electron.BrowserWindowConstructorOptions = {},query='') {
   const a=settings.appearance;const dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;
   const window = new BrowserWindow({ width: 1240, height: 840, minWidth: 840, minHeight: 620, backgroundColor: dark?a.darkBackground:a.lightBackground, title: 'One', show: false,
-    ...(['main','preview','picker','search','color-editor'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
+    ...(['main','preview','picker','search','color-editor','command-confirm'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:true } });
   const windowId = window.webContents.id; roles.set(windowId, view);
   if(view==='file-context'||view==='search-menu')popupLifecycle.track(window);
@@ -233,7 +239,7 @@ async function pickColor(){
     }
   });worker.once('error',error=>{if(colorWorker===worker){closeColors();echo(error.message);}});worker.once('exit',()=>{if(colorWorker===worker)closeColors();});
 }
-function refreshWindowAppearance(){const a=settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
+function refreshWindowAppearance(){const a=settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
 function colorShortcut(value:string){
   if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
   if(value){const normalized=value.replace(/\b(Ctrl)\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');if(!globalShortcut.register(normalized,()=>void pickColor().catch(error=>echo(error.message))))throw new Error('取色快捷键已被占用，请更换组合键');registeredColorShortcut=normalized;}
@@ -251,9 +257,12 @@ function registerIPC() {
   handle('disk-monitor',(event,active,source='maintenance')=>{if(!['maintenance','information'].includes(source)||active!==undefined&&typeof active!=='boolean')throw new Error('磁盘监控请求无效');const w=BrowserWindow.fromWebContents(event.sender);return active===undefined?diskMonitor.state:diskMonitor.subscribe(active&&!!w?.isVisible()&&!w.isMinimized(),source);});
   handle('disk-trace',(_e,enabled)=>{if(typeof enabled!=='boolean')throw new Error('跟踪请求无效');return diskMonitor.trace(enabled);});
   handle('maintenance-scan',(_e,kind)=>maintenance.scan(kind));handle('maintenance-cancel',(_e,kind)=>maintenance.cancel(kind));handle('maintenance-apply',(_e,report,ids)=>maintenance.apply(report,ids));handle('maintenance-receipts',()=>maintenance.receipts());handle('maintenance-restore',(_e,id)=>maintenance.restore(id));handle('maintenance-manage',(_e,kind)=>maintenance.manage(kind));
-  handle('file-icons',(_event,paths)=>{if(!Array.isArray(paths)||paths.length>150)throw new Error('文件图标请求无效');for(const path of paths)if(typeof path!=='string'||!launcher?.get(path))filePath(path);return fileIcons.read(paths);},['main','search','search-menu','file-context','picker']);
+  handle('file-icons',(_event,paths)=>{if(!Array.isArray(paths)||paths.length>150)throw new Error('文件图标请求无效');for(const path of paths)if(typeof path==='string'&&path.startsWith('one-builtin:')){if(!builtinImagePath(path.slice(12)))throw new Error('系统图标无效');}else if(typeof path==='string'&&path.startsWith('one-program:')){if(!/^[\w .+-]+\.exe$/i.test(path.slice(12)))throw new Error('程序图标无效');}else if(typeof path!=='string'||!launcher?.get(path))filePath(path);return fileIcons.read(paths);},['main','search','search-menu','file-context','picker']);
   handle('search-size',(event,rows,active)=>{const w=BrowserWindow.fromWebContents(event.sender);if(!w||w!==searchWindow||typeof rows!=='number'||!Number.isFinite(rows)||rows<0)return;if(inlineSearch)overlay?.resize(rows,!!active);else {const b=w.getBounds(),area=screen.getDisplayMatching(b).workArea;const height=active?Math.min(560,Math.max(320,area.height-64)):64;const y=active?Math.max(area.y,Math.min(b.y,area.y+area.height-height-16)):b.y;if(Math.abs(b.height-height)>1||Math.abs(b.y-y)>1)w.setBounds({...b,y,height},false);}},['search']);
   handle('search-menu',event=>menuFor(event.sender.id)?.items||[],['search-menu']);
+  handle('menu-presets',()=>menuPresets.read());
+  handle('menu-confirmation-data',event=>menuConfirmation.data(event.sender.id),['command-confirm']);
+  handle('menu-confirmation-answer',(event,accepted)=>{if(typeof accepted!=='boolean')throw new Error('确认操作无效');menuConfirmation.answer(event.sender.id,accepted);},['command-confirm']);
   handle('menu-children',async(_event,id)=>{await menuContextReady;return menuService.children(textValue(id,100));},['search-menu']);
   handle('menu-open',async(event,id,anchor)=>{const parent=menuFor(event.sender.id);if(!parent)return;const request=++parent.revision;hideMenus(parent.depth+1);if(id===null)return;const item=parent.items.find(n=>n.id===textValue(id,100));if(!item||!anchor||![anchor.top,anchor.right].every(Number.isFinite))throw new Error('菜单位置无效');const rootRevision=menuRevision;await menuContextReady;const items=item.children||await menuService.children(item.id);if(rootRevision!==menuRevision||parent.revision!==request||parent.window.isDestroyed()||!parent.window.isVisible())return;
    const p=menuPanel(parent.depth+1),bounds=parent.window.getBounds();p.point={x:bounds.x+Math.min(bounds.width,Math.max(0,anchor.right))-4,y:bounds.y+Math.max(0,Math.min(bounds.height,anchor.top))-7};p.source=item.id;p.items=items;positionMenu(p,286,Math.max(40,Math.min(620,items.length?items.reduce((n,i)=>n+(i.kind==='separator'?13:35),16):70)));sendMenu(p);p.readiness.run(()=>{if(rootRevision===menuRevision&&parent.revision===request&&!parent.window.isDestroyed()&&parent.window.isVisible()&&!p.window.isDestroyed()){sendMenu(p);p.window.setAlwaysOnTop(true,'pop-up-menu');p.window.showInactive();p.window.moveTop();if(anchor.focus)popupFocus(p.window);}});
@@ -277,14 +286,14 @@ function registerIPC() {
   handle('inspect-locks',(_event,value)=>{const path=filePath(value);showMain();main.webContents.send('one:lock-target',path);},['main','preview','search']);
   handle('lock-state',()=>locksmith.state());handle('lock-scan',(_event,paths)=>locksmith.scan(paths));handle('lock-cancel',()=>locksmith.cancel());handle('lock-end',(_event,token)=>locksmith.end(token));
   handle('utility-state',()=>utilityState());handle('topmost-windows',()=>topmost.list());handle('topmost-toggle',(_event,id)=>topmost.toggle(id));handle('topmost-clear',()=>topmost.clear());
-  handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor']);
-  handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor']);
+  handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor','command-confirm']);
+  handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor','command-confirm']);
   handle('brightness-status', () => brightness.status());
   handle('settings', () => settings);
   handle('save-settings', (_event,value)=>saveSettings(validateSettings(value)));
   handle('patch-settings',(_event,patch)=>saveSettings(current=>mergeSettings(current,patch)));
   handle('app-info',()=>({version:app.getVersion(),dataPath:app.getPath('userData'),packaged:app.isPackaged}));
-  handle('appearance',()=>settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','search','search-menu','file-context']);
+  handle('appearance',()=>settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','file-context']);
   handle('installed-fonts',(_event,refresh)=>{if(refresh===true)fontSources.clear();return installedFonts(refresh===true);});
   handle('ui-font-source',async(event,family)=>{
     if(roles.get(event.sender.id)!=='main'&&family!==settings.appearance.font.slice(10))throw new Error('字体未被选择');
@@ -292,7 +301,7 @@ function registerIPC() {
     let pending=fontSources.get(family);
     if(!pending){pending=fontSource(family).then(source=>{if(!source)return null;let url:string|undefined;if(source.path){const token=randomUUID();fontAssets.set(token,{path:source.path,mime:extname(source.path).toLowerCase()==='.otf'?'font/otf':'font/ttf'});url=`one-file://asset/${token}/font`;}return{url,local:source.local};}).catch(error=>{fontSources.delete(family);throw error;});fontSources.set(family,pending);}
     return pending;
-  },['main','preview','copy','picker','echo','color-picker','color-editor','search','search-menu','file-context']);
+  },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','file-context']);
   handle('pick-color',()=>pickColor(),['main','color-editor']);
   handle('color-editor-show',(_event,hex)=>{if(hex!==undefined&&(typeof hex!=='string'||!/^#[0-9a-f]{6}$/i.test(hex)))throw new Error('颜色无效');colorEditor.show(hex?.toUpperCase());});
   handle('color-state',()=>colorEditor.snapshot(),['main','color-editor']);
@@ -371,7 +380,7 @@ async function start() {
   configurePicker(() => settings.search.bookmarks, async () => (await searchBridge.context(0)).folders);
   launcher=new LauncherService(items=>{search.launchers(items);searchChanged();});search.launchers(launcher.entries());launcher.refresh();
   fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}});
-  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch());
+  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch(),undefined,command=>menuConfirmation.request(command));
   textService=new TextService((owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>w.webContents.id===owner);if(window&&!window.webContents.isDestroyed())window.webContents.send('one:text-progress',value);});
   fileTools=new FileToolsService(join(app.getPath('userData'),'file-tools'),(owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&w.webContents.id===owner);window?.webContents.send('one:file-tools-progress',value);});
   colorEditor=new ColorEditor(()=>windowFor('color-editor',{width:420,height:360,minWidth:320,minHeight:200,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,title:'颜色 · One'}),()=>({history:settings.colorHistory,formats:settings.colorVisibleFormats,format:settings.colorFormat,showEditor:settings.colorShowEditor}));
@@ -389,5 +398,5 @@ async function start() {
   }
 }
 if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else { app.on('second-instance', showMain); app.whenReady().then(start).catch(error => { console.error(error); app.quit(); }); }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);maintenance?.stop();systemInformation?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();awake?.stop();topmost?.stop();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);maintenance?.stop();systemInformation?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();awake?.stop();topmost?.stop();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

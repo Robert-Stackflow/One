@@ -1,0 +1,6 @@
+import {api,q,button,icon,iconButton,esc} from './ui';
+export async function renderMenuConfirmation(){
+ document.body.className='menu-confirm-window';const data=await api.menuConfirmationData();
+ q('app').innerHTML=`<section class="menu-confirm-dialog" role="alertdialog" aria-labelledby="command-confirm-title" aria-describedby="command-confirm-description"><header><span>确认操作</span>${iconButton('command-confirm-close','取消','close')}</header><div class="menu-confirm-content"><span class="menu-confirm-symbol">${icon(data.icon)}</span><h1 id="command-confirm-title">确认${esc(data.label)}？</h1><p id="command-confirm-description">${esc(data.message)}</p></div><footer>${button('command-confirm-cancel','取消')}${button('command-confirm-accept',data.label)}</footer></section>`;
+ let answering=false;const answer=(accepted:boolean)=>{if(answering)return;answering=true;void api.menuConfirmationAnswer(accepted).catch(()=>{answering=false;});};q('command-confirm-close').onclick=()=>answer(false);q('command-confirm-cancel').onclick=()=>answer(false);q('command-confirm-accept').onclick=()=>answer(true);document.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();answer(false);}});q('command-confirm-cancel').focus();
+}

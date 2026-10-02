@@ -64,7 +64,7 @@ export function setupDisk() {
   }
   function enter(node: DiskNode) {
     if (!node.directory) { void api.preview(node.path).catch(toast); return; }
-    current = tree.nodes.get(node.path) || node; selected = undefined; filtered = undefined; hovered = undefined;
+    current = tree.nodes.get(node.path) || node; selected = undefined; filtered = undefined; hovered = undefined; tooltipTarget = undefined;
     q('map-tooltip').hidden = true; draw();
   }
   function schedule() {
@@ -75,7 +75,12 @@ export function setupDisk() {
     if(!showing())return;
     if (!reuse) {
       map.paint(nodes,Number(q<HTMLSelectElement>('map-depth').value));
-      hovered = undefined; q('map-tooltip').hidden = true; tooltipTarget = undefined;
+      // A scan changes the geometry, not the item the user is inspecting.
+      hovered = tooltipTarget && map.locate(tooltipTarget.node);
+      if (hovered && tooltipTarget) {
+        tooltipTarget.node = hovered.node;
+        showTooltip(false);
+      } else { q('map-tooltip').hidden = true; tooltipTarget = undefined; }
     }
     map.selection(selected,hovered);
   }
@@ -103,14 +108,14 @@ export function setupDisk() {
     q('visible-count').textContent = `${nodes.length.toLocaleString()} 项`;
     selection();
   }
-  new ResizeObserver(() => { if (current) paint(drawnNodes); }).observe(frame);
+  new ResizeObserver(() => { if (current) {paint(drawnNodes);if (tooltipTarget) showTooltip();} }).observe(frame);
   let themeFrame = 0;
   new MutationObserver(()=>{if(!showing()||!current||themeFrame)return;themeFrame=requestAnimationFrame(()=>{themeFrame=0;paint(drawnNodes);});}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
   const tileAt = (event: MouseEvent) => { const rect = canvas.getBoundingClientRect(); return map.hit(event.clientX-rect.left,event.clientY-rect.top); };
   canvas.addEventListener('click',event => { selected = tileAt(event)?.node; selection(); paint(drawnNodes,true); });
   canvas.addEventListener('dblclick',event => { const node = tileAt(event)?.node; if (node) enter(node); });
   let tooltipTarget: {node:DiskNode;x:number;y:number} | undefined, tooltipFrame = 0, tooltipKey = '', tooltipWidth = 0, tooltipHeight = 0;
-  const showTooltip = () => {
+  const showTooltip = (position = true) => {
     tooltipFrame = 0;
     const target = tooltipTarget, tooltip = q('map-tooltip');
     if (!target || !showing()) { tooltip.hidden = true; return; }
@@ -118,17 +123,20 @@ export function setupDisk() {
     tooltip.hidden = false;
     if (key !== tooltipKey) {
       tooltipKey = key;
-      tooltip.innerHTML = `<strong>${esc(node.name)}</strong><span>${size(node.size)}${visibleSize ? ' · '+(node.size/visibleSize*100).toFixed(1)+'%' : ''}</span><small>${esc(node.path)}</small>`;
+      if (!tooltip.firstElementChild) tooltip.innerHTML = '<strong></strong><span></span><small></small>';
+      tooltip.children[0].textContent = node.name;
+      tooltip.children[1].textContent = size(node.size)+(visibleSize ? ' · '+(node.size/visibleSize*100).toFixed(1)+'%' : '');
+      tooltip.children[2].textContent = node.path;
       tooltipWidth = tooltip.offsetWidth; tooltipHeight = tooltip.offsetHeight;
     }
-    tooltip.style.left = Math.max(8,Math.min(x+14,innerWidth-tooltipWidth-12))+'px'; tooltip.style.top = Math.max(8,Math.min(y+16,innerHeight-tooltipHeight-12))+'px';
+    if (position) { tooltip.style.left = Math.max(8,Math.min(x+14,innerWidth-tooltipWidth-12))+'px'; tooltip.style.top = Math.max(8,Math.min(y+16,innerHeight-tooltipHeight-12))+'px'; }
   };
   canvas.addEventListener('mousemove',event => {
     const tile = tileAt(event), node = tile?.node;
     if (hovered?.node.path !== node?.path) { hovered = tile; paint(drawnNodes,true); }
     tooltipTarget = node ? {node,x:event.clientX,y:event.clientY} : undefined;
     if (!node) q('map-tooltip').hidden = true;
-    else if (!tooltipFrame) tooltipFrame = requestAnimationFrame(showTooltip);
+    else if (!tooltipFrame) tooltipFrame = requestAnimationFrame(() => showTooltip());
   });
   canvas.addEventListener('mouseleave',() => { hovered = undefined; tooltipTarget = undefined; q('map-tooltip').hidden = true; paint(drawnNodes,true); });
   canvas.addEventListener('contextmenu',event => { event.preventDefault(); const node = tileAt(event)?.node; if (!node) return; selected = node; selection(); paint(drawnNodes,true); showContextMenu(event.clientX,event.clientY,node,enter); });

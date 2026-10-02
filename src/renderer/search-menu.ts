@@ -6,7 +6,7 @@ import type {MenuNode} from '../shared/search';
 export async function renderSearchMenu(){
  const depth=Number(new URLSearchParams(location.search).get('depth')||0);
  document.body.classList.add('shortcut-menu-window');
- q('app').innerHTML=`<div class="shortcut-menu"><div id="menu-levels"><div class="menu-level" role="menu"></div></div>${depth?'':`<footer>${iconButton('menu-favorite','收藏当前文件夹','star')}<span class="menu-footer-label">快捷菜单</span><span class="spacer"></span>${iconButton('menu-options','自定义菜单','system')}</footer>`}</div><div id="toast" class="toast" hidden></div>`;
+ q('app').innerHTML=`<div class="shortcut-menu"><div id="menu-levels"><div class="menu-level" role="menu"></div></div>${depth?'':`<footer>${iconButton('menu-favorite','收藏当前文件夹','star')}<span class="spacer"></span>${iconButton('menu-options','自定义菜单','system')}</footer>`}</div><div id="toast" class="toast" hidden></div>`;
  let items:MenuNode[]=[],selected=-1,hover:ReturnType<typeof setTimeout>,source='';
  const select=()=>q('menu-levels').querySelectorAll<HTMLElement>('[data-menu-index]').forEach(b=>b.classList.toggle('selected',Number(b.dataset.menuIndex)===selected));
  const expand=(index:number,focus=false)=>{const item=items[index],row=q('menu-levels').querySelector<HTMLElement>(`[data-menu-index="${index}"]`);if(!item||!row||!item.children&&!item.expandable)return;if(source===item.id&&!focus)return;source=item.id;const r=row.getBoundingClientRect();void api.menuOpen(item.id,{top:r.top,right:innerWidth,focus}).catch(toast);};

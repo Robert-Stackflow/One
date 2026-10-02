@@ -103,6 +103,13 @@ async function scenario(kind,expectedErrors=0){
    await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(w=>w.webContents.getURL().includes('view=file-context')&&w.isVisible()).length)).toBe(2);
    await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().some(w=>w.webContents.getURL().includes('view=preview')))).toBe(true);
   }
+  if(kind==='command-confirm'){
+   const {installMenuBridge,triggerMenuBridge}=require('./menu-bridge-fixture.cjs');await installMenuBridge(app);
+   const preferences=await main.evaluate(()=>window.one.searchPreferences());preferences.menu.push({id:'power-exit',parent:'',label:'关机',kind:'builtin',target:'shutdown',args:[],cwd:'',icon:'power',enabled:true});
+   await main.evaluate(menu=>window.one.patchSettings({search:{menu,explorerMenu:true}}),preferences.menu);await triggerMenuBridge(app);
+   await expect.poll(()=>app.windows().some(p=>p.url().includes('view=search-menu')&&p.url().includes('depth=0'))).toBe(true);const popup=app.windows().find(p=>p.url().includes('view=search-menu')&&p.url().includes('depth=0'));
+   await popup.getByRole('menuitem',{name:'关机',exact:true}).click();await expect.poll(()=>app.windows().some(p=>p.url().includes('view=command-confirm'))).toBe(true);await app.windows().find(p=>p.url().includes('view=command-confirm')).waitForSelector('#command-confirm-cancel');
+  }
   await main.evaluate(()=>new Promise(resolve=>setTimeout(resolve,250)));
   const start=Date.now();
   // Disconnect the test's Node debugger before quit so it cannot hold native shutdown open.
@@ -138,7 +145,7 @@ async function scenario(kind,expectedErrors=0){
 async function run(){
  await fs.mkdir(path.join(path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/graceful-exit-smoke'),'logs'),{recursive:true});
  const oldErrors=Number(process.env.ONE_EXPECT_EXIT_ERRORS||0),results=[];
- for(const kind of process.env.ONE_EXIT_SCENARIO?[process.env.ONE_EXIT_SCENARIO]:oldErrors?['quit']:['quit','recreate','menus','picker'])results.push(await scenario(kind,oldErrors));
+ for(const kind of process.env.ONE_EXIT_SCENARIO?[process.env.ONE_EXIT_SCENARIO]:oldErrors?['quit']:['quit','recreate','menus','picker','command-confirm'])results.push(await scenario(kind,oldErrors));
  console.log(JSON.stringify({result:'PASS',results},null,2));
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

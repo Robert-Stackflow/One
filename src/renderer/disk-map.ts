@@ -106,6 +106,10 @@ export class DiskMap {
     return tile;
   }
 
+  locate(node: DiskNode): Tile | undefined {
+    return this.scene ? this.find(this.scene,node) : undefined;
+  }
+
   selection(selected?: DiskNode, hovered?: Tile) {
     if (selected !== this.selected) {
       this.selected = selected;
