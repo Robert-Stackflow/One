@@ -11,6 +11,7 @@
     "build": "node scripts/build.mjs",
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit",
+    "check:docs": "node scripts/check-docs.mjs",
     "test": "node scripts/test.mjs",
     "test:ui": "npm run build && node tests/electron-smoke.cjs",
     "package": "node scripts/package.mjs",
