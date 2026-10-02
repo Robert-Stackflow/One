@@ -1,0 +1,13 @@
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),{execFile}=require('node:child_process'),run=require('node:util').promisify(execFile);
+async function model(bundle,mode){
+ const api=require(bundle),children=[],nodes=Array.from({length:300000},(_,i)=>({name:'item-'+i,path:'D:\\map\\item-'+i,size:i%997+1,directory:false,children}));global.gc();const before=process.memoryUsage(),start=performance.now(),map=mode==='before'?api.layout(nodes,3,3,1024,685):new api.TreemapLayout(nodes,3,3,1024,685),buildMs=performance.now()-start;let count=0,area=0;
+ const visit=(node,x,y,width,height)=>{count++;area+=width*height;};if(mode==='before')for(const t of map)visit(t.node,t.x,t.y,t.width,t.height);else map.forEach(visit);assert.equal(count,nodes.length);assert.ok(Math.abs(area-1024*685)<.0001);if(mode==='after')assert.equal(map.find(nodes.at(-1))?.node,nodes.at(-1));
+ global.gc();global.gc();const after=process.memoryUsage();console.log(JSON.stringify({count,area,buildMs,retainedBytes:after.heapUsed+after.arrayBuffers-before.heapUsed-before.arrayBuffers,totalBytes:after.heapUsed+after.arrayBuffers}));global.retained=map;
+}
+async function main(){
+ const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/treemap-memory-smoke'),ref='410095f';await fs.mkdir(output,{recursive:true});const old=(await run('git',['show',ref+':src/shared/treemap.ts'],{windowsHide:true,maxBuffer:1024*1024})).stdout;
+ await require('esbuild').build({stdin:{contents:old,resolveDir:path.resolve('src/shared'),loader:'ts'},bundle:true,platform:'node',outfile:path.join(output,'before.cjs')});await require('esbuild').build({entryPoints:['src/shared/treemap.ts'],bundle:true,platform:'node',outfile:path.join(output,'after.cjs')});const rounds=[];
+ for(let i=0;i<2;i++){const round={};for(const mode of i?['after','before']:['before','after'])round[mode]=JSON.parse((await run(process.execPath,['--expose-gc',__filename,'--model',path.join(output,mode+'.cjs'),mode],{windowsHide:true,timeout:60000,maxBuffer:1024*1024})).stdout);rounds.push(round);}
+ const average=mode=>rounds.reduce((s,r)=>s+r[mode].retainedBytes,0)/rounds.length,reduction=100*(1-average('after')/average('before'));assert.ok(reduction>50);const result={result:'PASS',baseline:ref,scope:'retained complete layout model, excluding file nodes; not whole-app memory or old capped renderer retention',rounds,retainedReductionPercent:reduction};await fs.writeFile(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}
+if(process.argv[2]==='--model')model(process.argv[3],process.argv[4]).catch(e=>{console.error(e);process.exitCode=1;});else main().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,11 +1,12 @@
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
 import type { DiskNode, ScanProgress } from '../shared/types';
 import { ScanTree } from '../shared/scan-tree';
-import { layout, type Tile } from '../shared/treemap';
+import type { Tile } from '../shared/treemap';
 import { diskPredicate, filteredTree } from '../shared/disk-filter';
 import {breadcrumbIndices} from '../shared/breadcrumbs';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import {DiskList} from './disk-list';
+import {DiskMap} from './disk-map';
 import { api, q, esc, icon, button, iconButton, size, toast, action } from './ui';
 
 export function diskPage() {
@@ -19,23 +20,12 @@ export function diskPage() {
  ${dialogMarkup({id:"filter-dialog",title:"筛选文件",closeId:"filter-dismiss",body:`<dl class="filter-examples"><dt>*.jpg</dt><dd>文件名或通配符</dd><dt>|*.zip</dt><dd>排除 ZIP 文件</dd><dt>>100mb; &lt;2gb</dt><dd>文件大小</dd><dt>>30days</dt><dd>超过 30 天未修改</dd></dl>`,actions:`${button('close-filter-help','关闭')}`})}`;
 }
 
-function fileColor(node: DiskNode, depth: number) {
-  if (node.directory) return ['#bdcbdc','#cbd6e3','#d8e0ea','#e3e9f1'][Math.min(depth,3)];
-  const ext = node.name.split('.').pop()?.toLowerCase() || '';
-  if (/^(png|jpg|jpeg|gif|webp|bmp|ico|svg|heic|raw)$/.test(ext)) return '#afd0c1';
-  if (/^(mp4|mkv|webm|mov|avi|mp3|wav|flac|ogg|m4a)$/.test(ext)) return '#c5b8df';
-  if (/^(zip|7z|rar|gz|tar|xz|iso)$/.test(ext)) return '#dfc5a7';
-  if (/^(txt|md|pdf|docx?|xlsx?|pptx?|json|js|ts|tsx|css|html|py|cs|rs|go|xml|yaml|yml|csv|log)$/.test(ext)) return '#b8d4e1';
-  return '#ced1d6';
-}
-
 export function setupDisk() {
   let tree = new ScanTree(), current: DiskNode | undefined, selected: DiskNode | undefined;
   let issues: string[] = [], progress: ScanProgress | undefined, scanning = false, firstBatch = true, drawTimer: ReturnType<typeof setTimeout> | undefined;
-  let rectangles: Tile[] = [], hovered: DiskNode | undefined, filterValue = '', predicate = diskPredicate(''), predicateError = '';
+  let hovered: Tile | undefined, filterValue = '', predicate = diskPredicate(''), predicateError = '';
   let filtered: DiskNode | undefined, filteredAt = 0;
-  const canvas = q<HTMLCanvasElement>('disk-canvas'), context = canvas.getContext('2d')!, frame = q('treemap');
-  const background = document.createElement('canvas'), backgroundContext = background.getContext('2d')!;
+  const canvas = q<HTMLCanvasElement>('disk-canvas'), frame = q('treemap'), map = new DiskMap(canvas);
   let visibleSize = 0,acceptUpdates=false,activeRoot='',active=false;
   const showing=()=>active&&isWindowVisible();
   const list=new DiskList(q('disk-list'),node=>{selected=node;selection();paint(drawnNodes,true);},enter,(x,y,node)=>showContextMenu(x,y,node,enter));
@@ -81,45 +71,13 @@ export function setupDisk() {
     if (!showing()||drawTimer) return;
     drawTimer = setTimeout(() => { drawTimer = undefined; draw(); },180);
   }
-  const abbreviate = (text: string, width: number) => {
-    if (context.measureText(text).width <= width) return text;
-    let low = 0, high = text.length;
-    while (low < high) { const mid = Math.ceil((low+high)/2); if (context.measureText(text.slice(0,mid)+'…').width <= width) low = mid; else high = mid-1; }
-    return text.slice(0,low)+'…';
-  };
   function paint(nodes: DiskNode[], reuse = false) {
     if(!showing())return;
-    const width = frame.clientWidth, height = frame.clientHeight; if (width < 1 || height < 1) return;
-    const ratio = Math.min(window.devicePixelRatio || 1,2.5);
-    if (!reuse || canvas.width !== Math.round(width*ratio) || canvas.height !== Math.round(height*ratio)) {
-    canvas.width = Math.round(width*ratio); canvas.height = Math.round(height*ratio);
-    context.setTransform(ratio,0,0,ratio,0,0); context.clearRect(0,0,width,height); rectangles = [];
-    const depthLimit = Number(q<HTMLSelectElement>('map-depth').value);
-    const drawLevel = (items: DiskNode[], x: number, y: number, w: number, h: number, depth: number) => {
-      // Tiny entries retain area but don't create costly individual DOM nodes or labels.
-      for (const tile of layout(items,x,y,w,h)) {
-        if (tile.width < 1 || tile.height < 1 || rectangles.length >= 2400) continue;
-        const tx = tile.x+1.5, ty = tile.y+1.5, tw = Math.max(0,tile.width-3), th = Math.max(0,tile.height-3);
-        rectangles.push(tile); context.fillStyle = fileColor(tile.node,depth);
-        context.beginPath(); context.roundRect(tx,ty,tw,th,Math.min(5,tw/2,th/2)); context.fill();
-        const nested = tile.node.directory && depth+1 < depthLimit && tile.node.children.some(n => n.size > 0) && tw > 95 && th > 85;
-        if (tw > 44 && th > 23) {
-          context.save(); context.beginPath(); context.rect(tx+7,ty+5,tw-14,th-10); context.clip();
-          context.fillStyle = '#344359'; context.font = `${depth === 0 ? 550 : 450} 12px ${getComputedStyle(canvas).fontFamily}`;
-          context.fillText(abbreviate(tile.node.name,tw-16),tx+8,ty+18);
-          if (!nested && th > 49 && tw > 63) { context.font = '11px "Segoe UI", sans-serif'; context.fillStyle = '#526079'; context.fillText(size(tile.node.size),tx+8,ty+36); }
-          context.restore();
-        }
-        if (nested) drawLevel(tile.node.children,tx+4,ty+28,tw-8,th-32,depth+1);
-      }
-    };
-    drawLevel(nodes,3,3,width-6,height-6,0);
-    background.width = canvas.width; background.height = canvas.height; backgroundContext.drawImage(canvas,0,0);
-    } else { context.setTransform(1,0,0,1,0,0); context.clearRect(0,0,canvas.width,canvas.height); context.drawImage(background,0,0); context.setTransform(ratio,0,0,ratio,0,0); }
-    for (const tile of rectangles) if (tile.node.path === selected?.path || tile.node.path === hovered?.path) {
-      context.strokeStyle = tile.node.path === selected?.path ? '#3f5d89' : '#ffffff'; context.lineWidth = 2;
-      context.beginPath(); context.roundRect(tile.x+2.5,tile.y+2.5,Math.max(0,tile.width-5),Math.max(0,tile.height-5),3); context.stroke();
+    if (!reuse) {
+      map.paint(nodes,Number(q<HTMLSelectElement>('map-depth').value));
+      hovered = undefined; q('map-tooltip').hidden = true; tooltipTarget = undefined;
     }
+    map.selection(selected,hovered);
   }
   let drawnNodes: DiskNode[] = [];
   function draw() {
@@ -146,18 +104,34 @@ export function setupDisk() {
     selection();
   }
   new ResizeObserver(() => { if (current) paint(drawnNodes); }).observe(frame);
-  const tileAt = (event: MouseEvent) => { const rect = canvas.getBoundingClientRect(); const x = event.clientX-rect.left, y = event.clientY-rect.top; for (let i=rectangles.length-1;i>=0;i--) { const t=rectangles[i]; if(x >= t.x && y >= t.y && x < t.x+t.width && y < t.y+t.height) return t.node; } };
-  canvas.addEventListener('click',event => { selected = tileAt(event); selection(); paint(drawnNodes,true); });
-  canvas.addEventListener('dblclick',event => { const node = tileAt(event); if (node) enter(node); });
+  let themeFrame = 0;
+  new MutationObserver(()=>{if(!showing()||!current||themeFrame)return;themeFrame=requestAnimationFrame(()=>{themeFrame=0;paint(drawnNodes);});}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
+  const tileAt = (event: MouseEvent) => { const rect = canvas.getBoundingClientRect(); return map.hit(event.clientX-rect.left,event.clientY-rect.top); };
+  canvas.addEventListener('click',event => { selected = tileAt(event)?.node; selection(); paint(drawnNodes,true); });
+  canvas.addEventListener('dblclick',event => { const node = tileAt(event)?.node; if (node) enter(node); });
+  let tooltipTarget: {node:DiskNode;x:number;y:number} | undefined, tooltipFrame = 0, tooltipKey = '', tooltipWidth = 0, tooltipHeight = 0;
+  const showTooltip = () => {
+    tooltipFrame = 0;
+    const target = tooltipTarget, tooltip = q('map-tooltip');
+    if (!target || !showing()) { tooltip.hidden = true; return; }
+    const {node,x,y} = target, key = node.path+'\0'+node.size+'\0'+visibleSize;
+    tooltip.hidden = false;
+    if (key !== tooltipKey) {
+      tooltipKey = key;
+      tooltip.innerHTML = `<strong>${esc(node.name)}</strong><span>${size(node.size)}${visibleSize ? ' · '+(node.size/visibleSize*100).toFixed(1)+'%' : ''}</span><small>${esc(node.path)}</small>`;
+      tooltipWidth = tooltip.offsetWidth; tooltipHeight = tooltip.offsetHeight;
+    }
+    tooltip.style.left = Math.max(8,Math.min(x+14,innerWidth-tooltipWidth-12))+'px'; tooltip.style.top = Math.max(8,Math.min(y+16,innerHeight-tooltipHeight-12))+'px';
+  };
   canvas.addEventListener('mousemove',event => {
-    const node = tileAt(event), tooltip = q('map-tooltip');
-    if (hovered?.path !== node?.path) { hovered = node; paint(drawnNodes,true); }
-    tooltip.hidden = !node; if (!node) return;
-    tooltip.innerHTML = `<strong>${esc(node.name)}</strong><span>${size(node.size)}${visibleSize ? ' · '+(node.size/visibleSize*100).toFixed(1)+'%' : ''}</span><small>${esc(node.path)}</small>`;
-    tooltip.style.left = Math.max(8,Math.min(event.clientX+14,window.innerWidth-tooltip.offsetWidth-12))+'px'; tooltip.style.top = Math.max(8,Math.min(event.clientY+16,window.innerHeight-tooltip.offsetHeight-12))+'px';
+    const tile = tileAt(event), node = tile?.node;
+    if (hovered?.node.path !== node?.path) { hovered = tile; paint(drawnNodes,true); }
+    tooltipTarget = node ? {node,x:event.clientX,y:event.clientY} : undefined;
+    if (!node) q('map-tooltip').hidden = true;
+    else if (!tooltipFrame) tooltipFrame = requestAnimationFrame(showTooltip);
   });
-  canvas.addEventListener('mouseleave',() => { hovered = undefined; q('map-tooltip').hidden = true; paint(drawnNodes,true); });
-  canvas.addEventListener('contextmenu',event => { event.preventDefault(); const node = tileAt(event); if (!node) return; selected = node; selection(); paint(drawnNodes,true); showContextMenu(event.clientX,event.clientY,node,enter); });
+  canvas.addEventListener('mouseleave',() => { hovered = undefined; tooltipTarget = undefined; q('map-tooltip').hidden = true; paint(drawnNodes,true); });
+  canvas.addEventListener('contextmenu',event => { event.preventDefault(); const node = tileAt(event)?.node; if (!node) return; selected = node; selection(); paint(drawnNodes,true); showContextMenu(event.clientX,event.clientY,node,enter); });
   q('map-depth').addEventListener('change',draw);
   q('disk-filter').addEventListener('input',() => { filterValue = q<HTMLInputElement>('disk-filter').value.trim(); filtered = undefined; try { predicate = diskPredicate(filterValue); predicateError = ''; } catch (error) { predicateError = (error as Error).message; } schedule(); });
   action('clear-disk-filter',() => { q<HTMLInputElement>('disk-filter').value = ''; q('disk-filter').dispatchEvent(new Event('input')); });
@@ -172,7 +146,7 @@ export function setupDisk() {
     if (scanning) return; const path = q<HTMLInputElement>('disk-path').value.trim(); if (!path) return toast('请先选择目录');
     acceptUpdates=true;activeRoot='';scanning = true; firstBatch = true; q<HTMLButtonElement>('scan').disabled = true; q<HTMLButtonElement>('cancel-scan').disabled = false; q('scan-activity').hidden = false;
     // Remove the previous scan's rows before accepting input for a new tree.
-    clearTimeout(drawTimer);drawTimer=undefined;tree=new ScanTree();current=undefined;selected=undefined;progress=undefined;rectangles=[];drawnNodes=[];hovered=undefined;filtered=undefined;issues=[];
+    clearTimeout(drawTimer);drawTimer=undefined;tree=new ScanTree();current=undefined;selected=undefined;progress=undefined;map.release();drawnNodes=[];hovered=undefined;filtered=undefined;issues=[];tooltipTarget=undefined;
     list.setActive(false);list.clear();q('breadcrumbs').replaceChildren();crumbPath='';crumbButtons=[];closeCrumbMenu();q('disk-size').textContent='0 B';q('disk-files').textContent='0';q('disk-dirs').textContent='0';q('disk-results').hidden=true;q('disk-empty').hidden=true;q('map-tooltip').hidden=true;
     q('scan-state').textContent = '扫描中'; q('scan-progress').textContent = '正在读取目录…'; q('disk-results').classList.add('scanning');
     try {
@@ -195,21 +169,32 @@ export function setupDisk() {
   action('close-issues',() => closeDialog(q<HTMLDialogElement>('issues-dialog')));
   q('page-disk').addEventListener('dragover',event => { event.preventDefault(); });
   q('page-disk').addEventListener('drop',event => { event.preventDefault(); const file = event.dataTransfer?.files[0]; if (file && !scanning) { q<HTMLInputElement>('disk-path').value = api.droppedFile(file); q('scan').click(); } });
-  const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;list.setActive(listShowing());if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();q('map-tooltip').hidden=true;filtered=undefined;}};
+  const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;list.setActive(listShowing());if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();dismissDiskContext?.();q('map-tooltip').hidden=true;tooltipTarget=undefined;hovered=undefined;filtered=undefined;drawnNodes=[];map.release();}};
   onWindowVisibility(refreshVisibility);
   return {activate(value:boolean){if(active===value)return;active=value;refreshVisibility();}};
 }
 
+let dismissDiskContext: (()=>void) | undefined;
 function showContextMenu(x: number,y: number,node: DiskNode,enter: (node: DiskNode) => void) {
-  document.querySelector('.disk-context')?.remove();
+  dismissDiskContext?.();
   const menu = document.createElement('div'); menu.className = 'disk-context'; menu.setAttribute('role','menu');
   const items: [string, () => unknown][] = [[node.directory ? '进入目录' : '预览文件',() => enter(node)],['在资源管理器中定位',() => api.revealFile(node.path)],['用默认程序打开',() => api.openFile(node.path)],['检查文件占用',()=>api.inspectLocks(node.path)],['复制路径',() => api.copyText(node.path)]];
   const origin=document.activeElement instanceof HTMLElement?document.activeElement:undefined;
-  const close = () => { const focused=menu.contains(document.activeElement);menu.remove();if(focused&&origin?.isConnected)origin.focus({preventScroll:true});document.removeEventListener('pointerdown',outside,true); window.removeEventListener('resize',close); window.removeEventListener('scroll',close,true); };
+  const scrollPositions=new Map<EventTarget,[number,number]>([[document,[window.scrollX,window.scrollY]]]);
+  for(let parent=origin;parent;parent=parent.parentElement||undefined)scrollPositions.set(parent,[parent.scrollLeft,parent.scrollTop]);
+  const close = () => { const focused=menu.contains(document.activeElement);menu.remove();if(focused&&origin?.isConnected)origin.focus({preventScroll:true});document.removeEventListener('pointerdown',outside,true); window.removeEventListener('resize',close); window.removeEventListener('scroll',scrolled,true);if(dismissDiskContext===close)dismissDiskContext=undefined; };
+  const scrolled = (event:Event) => {
+    const target=event.target,initial=target&&scrollPositions.get(target),position=target instanceof HTMLElement?[target.scrollLeft,target.scrollTop]:target===document?[window.scrollX,window.scrollY]:undefined;
+    // Scroll anchoring can correct one device pixel after virtual rows or menu focus settle.
+    // Keep the menu for that rounding correction, but dismiss after real accumulated movement.
+    const tolerance=Math.max(1,1/(window.devicePixelRatio||1));
+    if(initial&&position&&Math.abs(position[0]-initial[0])<=tolerance&&Math.abs(position[1]-initial[1])<=tolerance)return;
+    close();
+  };
   const outside = (event: PointerEvent) => { if (!menu.contains(event.target as Node)) close(); };
   for (const [label,work] of items) { const button = document.createElement('button'); button.textContent = label; button.setAttribute('role','menuitem'); button.onclick = () => { close(); Promise.resolve().then(work).catch(toast); }; menu.append(button); }
-  menu.onkeydown = event => { if (event.key === 'Escape' || event.key === 'Tab') close(); if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const buttons = [...menu.querySelectorAll('button')]; const i = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[(i+(event.key === 'ArrowDown' ? 1 : buttons.length-1))%buttons.length].focus(); } };
-  document.body.append(menu); menu.style.left = Math.min(x,window.innerWidth-menu.offsetWidth-8)+'px'; menu.style.top = Math.min(y,window.innerHeight-menu.offsetHeight-8)+'px'; menu.querySelector('button')?.focus();
-  document.addEventListener('pointerdown',outside,true); window.addEventListener('resize',close); window.addEventListener('scroll',close,true);
+  menu.onkeydown = event => { if (event.key === 'Escape' || event.key === 'Tab') close(); if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const buttons = [...menu.querySelectorAll('button')]; const i = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[(i+(event.key === 'ArrowDown' ? 1 : buttons.length-1))%buttons.length].focus({preventScroll:true}); } };
+  document.body.append(menu); menu.style.left = Math.max(8,Math.min(x,window.innerWidth-menu.offsetWidth-8))+'px'; menu.style.top = Math.max(8,Math.min(y,window.innerHeight-menu.offsetHeight-8))+'px'; menu.querySelector('button')?.focus({preventScroll:true});
+  dismissDiskContext=close;document.addEventListener('pointerdown',outside,true); window.addEventListener('resize',close); window.addEventListener('scroll',scrolled,true);
 }
 
