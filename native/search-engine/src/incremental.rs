@@ -30,25 +30,26 @@ impl Scope {
     fn contains(&self, path: &str) -> bool {
         self.contains_key(&key(path))
     }
+    fn contains_path(&self, path: &PathKey) -> bool {
+        !(path.starts_with(&self.cache) && cache::owned_key(&path.normalized(), &self.cache))
+            && self.roots.iter().any(|root| path.under(root))
+            && !self.excluded.iter().any(|root| path.under(root))
+    }
 }
 // Keep metadata checking bounded, including when the cache contains millions of rows.
 // Clone shared paths only for directories in the current indexing scope.
 fn verification_batch(
     index: &Index,
-    after: Option<&str>,
+    after: Option<&PathKey>,
     scope: &Scope,
-) -> (Vec<(stored_path::StoredPath, u64)>, Option<Arc<str>>) {
+) -> (Vec<(stored_path::StoredPath, u64)>, Option<PathKey>) {
     const ROWS: usize = 8192;
-    let start = after.map_or(Bound::Unbounded, Bound::Excluded);
+    let start = after.cloned().map_or(Bound::Unbounded, Bound::Excluded);
     let mut directories = Vec::new();
     let mut last = None;
-    for (k, row) in index
-        .rows
-        .range::<str, _>((start, Bound::Unbounded))
-        .take(ROWS)
-    {
+    for (k, row) in index.rows.range((start, Bound::Unbounded)).take(ROWS) {
         last = Some(k);
-        if row.item.directory && scope.contains_key(k) {
+        if row.item.directory && scope.contains_path(k) {
             directories.push((row.item.path.clone(), row.item.modified));
         }
     }
@@ -71,7 +72,7 @@ fn update_dir(s: &Shared, path: &str, value: u64, generation: u64) {
     if s.generation.load(Ordering::Relaxed) != generation {
         return;
     }
-    if let Some(row) = index.rows.get_mut(key(path).as_str()) {
+    if let Some(row) = index.rows.get_mut(&PathKey::lookup(key(path))) {
         if row.item.modified != value {
             row.item.modified = value;
             s.persistence
@@ -88,7 +89,7 @@ fn direct_children(s: &Shared, path: &str) -> Vec<String> {
     loop {
         let Some((k, row)) = index
             .rows
-            .range::<str, _>((Bound::Included(cursor.as_str()), Bound::Unbounded))
+            .range((Bound::Included(PathKey::lookup(&cursor)), Bound::Unbounded))
             .next()
         else {
             break;
@@ -96,7 +97,8 @@ fn direct_children(s: &Shared, path: &str) -> Vec<String> {
         if !k.starts_with(&prefix) {
             break;
         }
-        let relative = &k[prefix.len()..];
+        let full = k.normalized();
+        let relative = &full[prefix.len()..];
         if let Some(at) = relative.find('\\') {
             cursor = format!("{}{}\\\u{10ffff}", prefix, &relative[..at]);
         } else {
@@ -148,7 +150,7 @@ fn reconcile(
         .read()
         .unwrap()
         .rows
-        .get(key(path).as_str())
+        .get(&PathKey::lookup(key(path)))
         .map(|r| (r.item.directory, r.item.path.display().replace('/', "\\")));
     if previous
         .as_ref()
@@ -226,7 +228,7 @@ fn reconcile(
             .read()
             .unwrap()
             .rows
-            .get(k.as_str())
+            .get(&PathKey::lookup(&k))
             .map(|r| (r.item.directory, r.item.path.to_string()));
         if previous.as_ref().map(|r| r.0) != Some(kind.is_dir())
             || previous.as_ref().is_some_and(|r| r.1 != child)
@@ -277,13 +279,13 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
                 .num_threads(4)
                 .build()
                 .unwrap();
-            let mut cursor: Option<Arc<str>> = None;
+            let mut cursor: Option<PathKey> = None;
             while !scope.roots.is_empty() {
                 if s.generation.load(Ordering::Relaxed) != generation {
                     return;
                 }
                 let (dirs, next) =
-                    verification_batch(&s.index.read().unwrap(), cursor.as_deref(), &scope);
+                    verification_batch(&s.index.read().unwrap(), cursor.as_ref(), &scope);
                 let Some(next) = next else { break };
                 let changed: Vec<String> = pool.install(|| {
                     dirs.par_iter()
@@ -315,7 +317,7 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
                     .read()
                     .unwrap()
                     .rows
-                    .contains_key(key(root).as_str())
+                    .contains_key(&PathKey::lookup(key(root)))
                 {
                     work.push(root.clone());
                 }
@@ -352,6 +354,7 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
         if s.generation.load(Ordering::Relaxed) != generation {
             return;
         }
+        s.index.write().unwrap().paths.collect();
         let mut state = s.state.lock().unwrap();
         if offline {
             state.running = false;
@@ -394,10 +397,10 @@ mod tests {
         index.put(Record::new("C:\\Scope\\file.txt".into(), false, 1));
         let (first, cursor) = verification_batch(&index, None, &scope);
         assert!(first.len() <= 8192);
-        let (second, last) = verification_batch(&index, cursor.as_deref(), &scope);
+        let (second, last) = verification_batch(&index, cursor.as_ref(), &scope);
         assert_eq!(first.len() + second.len(), 8201);
         assert!(
-            verification_batch(&index, last.as_deref(), &scope)
+            verification_batch(&index, last.as_ref(), &scope)
                 .1
                 .is_none()
         );

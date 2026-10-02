@@ -17,7 +17,7 @@ async function run(exe,cache,root){
  }finally{if(child.exitCode===null)child.kill();}
 }
 async function main(){
- const out=path.resolve('work/index-path-rescan');await fs.mkdir(out,{recursive:true});const owned=await fs.mkdtemp(path.join(os.tmpdir(),'one-path-rescan-')),root=path.join(owned,'files');await fs.mkdir(root);
+ const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/index-path-rescan');await fs.mkdir(out,{recursive:true});const owned=await fs.mkdtemp(path.join(os.tmpdir(),'one-path-rescan-')),root=path.join(owned,'files');await fs.mkdir(root);
  try{
   const filler='lowercase-'.repeat(11);for(let first=0;first<100000;first+=100){await Promise.all(Array.from({length:Math.min(100,100000-first)},(_,i)=>fs.writeFile(path.join(root,`record-${String(first+i).padStart(6,'0')}-${filler}End.TXT`),'')));if(first%20000===0)console.log('Created files: '+(first+100));}
   const before=await run(process.env.ONE_RESCAN_BEFORE,path.join(owned,'before.bin'),root),after=await run(path.resolve('dist/native/One.Index.exe'),path.join(owned,'after.bin'),root);

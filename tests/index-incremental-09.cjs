@@ -2,7 +2,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const wait=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn,label,time=30000){const start=Date.now();while(Date.now()-start<time){if(await fn())return Date.now()-start;await wait(30);}throw Error('Timeout: '+label);}
 async function run(){
  await build({entryPoints:['src/main/search-service.ts'],outfile:'dist/main/search-test.cjs',bundle:true,platform:'node',external:['electron']});const {SearchService}=require('../dist/main/search-test.cjs');
- const out=path.resolve('work/index-incremental-0.9');await fs.mkdir(out,{recursive:true});const root=await fs.mkdtemp(path.join(out,'files-')),cache=path.join(out,path.basename(root)+'.bin');
+ const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/index-incremental');await fs.mkdir(out,{recursive:true});const root=await fs.mkdtemp(path.join(out,'files-')),cache=path.join(out,path.basename(root)+'.bin');
  for(let i=0;i<30;i++){const folder=path.join(root,'group-'+i);await fs.mkdir(folder);await Promise.all(Array.from({length:150},(_,j)=>fs.writeFile(path.join(folder,`季度报告-${String(j).padStart(4,'0')}.txt`),'')));}
  const settings={roots:[root],excluded:[],maxEntries:10000,fuzzy:true,pinyin:true};let service;const start=(file=cache)=>service=new SearchService(file,settings,()=>{});const found=async q=>(await service.query(q)).total;
  const report={};try{

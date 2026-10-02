@@ -1,10 +1,11 @@
-use std::{borrow::Cow, sync::Arc};
+use super::path_key::{PathKey, PathPool};
+use std::borrow::Cow;
 
 /// Share the normalized lookup key, retaining exact display spelling with case bits.
 /// Unicode case expansions, alternate separators and trailing separators remain lossless.
 #[derive(Clone)]
 pub struct StoredPath {
-    key: Arc<str>,
+    key: PathKey,
     spelling: Spelling,
 }
 #[derive(Clone)]
@@ -16,18 +17,23 @@ enum Spelling {
 }
 impl StoredPath {
     pub fn new(path: String) -> Self {
-        let key: Arc<str> = super::key(&path).into();
-        if path == key.as_ref() {
+        let normalized = super::key(&path);
+        let key = PathKey::new(normalized.clone());
+        if path == normalized {
             return Self {
                 key,
                 spelling: Spelling::Same,
             };
         }
-        if path.len() != key.len()
-            || path.bytes().zip(key.bytes()).any(|(original, folded)| {
-                original != folded
-                    && (!original.is_ascii_uppercase() || original.to_ascii_lowercase() != folded)
-            })
+        if path.len() != normalized.len()
+            || path
+                .bytes()
+                .zip(normalized.bytes())
+                .any(|(original, folded)| {
+                    original != folded
+                        && (!original.is_ascii_uppercase()
+                            || original.to_ascii_lowercase() != folded)
+                })
         {
             return Self {
                 key,
@@ -64,19 +70,22 @@ impl StoredPath {
         };
         Self { key, spelling }
     }
-    pub fn key(&self) -> &Arc<str> {
+    pub fn key(&self) -> &PathKey {
         &self.key
     }
-    pub fn reuse_key(&mut self, key: &Arc<str>) {
-        debug_assert_eq!(&self.key, key);
+    pub fn reuse_key(&mut self, key: &PathKey) {
+        debug_assert!(self.key == *key);
         self.key = key.clone();
+    }
+    pub fn share_parent(&mut self, pool: &mut PathPool) {
+        pool.share(&mut self.key);
     }
     pub fn display(&self) -> Cow<'_, str> {
         match &self.spelling {
-            Spelling::Same => Cow::Borrowed(&self.key),
+            Spelling::Same => Cow::Owned(self.key.normalized()),
             Spelling::Full(original) => Cow::Borrowed(original),
             spelling => {
-                let mut bytes = self.key.as_bytes().to_vec();
+                let mut bytes = self.key.normalized().into_bytes();
                 match spelling {
                     Spelling::Small(windows) => {
                         for (offset, mask) in [0, self.key.len().saturating_sub(64)]
@@ -132,7 +141,7 @@ mod tests {
         ] {
             let stored = StoredPath::new(path.into());
             assert_eq!(stored.display(), path);
-            assert_eq!(stored.key().as_ref(), crate::key(path));
+            assert_eq!(stored.key().normalized(), crate::key(path));
             assert_eq!(stored.clone().display(), path);
         }
     }
@@ -142,7 +151,7 @@ mod tests {
             let path = format!("D:\\中文{}\\End.Z", "aB文cD".repeat(size));
             let stored = StoredPath::new(path.clone());
             assert_eq!(stored.display(), path);
-            assert_eq!(stored.key().as_ref(), crate::key(&path));
+            assert_eq!(stored.key().normalized(), crate::key(&path));
             let path = format!(
                 "D:\\{}\\Final-Name.TXT",
                 "long-lowercase-folder\\".repeat(size)

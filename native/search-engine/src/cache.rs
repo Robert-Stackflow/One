@@ -233,11 +233,7 @@ fn decode_batch(index: &mut Index, batch: &mut Vec<Entry>) -> io::Result<()> {
     let rows: Vec<_> =
         pool.install(|| std::mem::take(batch).into_par_iter().map(restore).collect());
     for row in rows {
-        if index
-            .rows
-            .insert(row.item.path.key().clone(), row)
-            .is_some()
-        {
+        if index.put(row).is_some() {
             return Err(bad());
         }
     }
@@ -387,7 +383,7 @@ fn apply(index: &mut Index, changes: Vec<Change>, limit: usize) {
             }
             Change::Put(item) => {
                 let k = key(&item.path);
-                if index.rows.len() < limit || index.rows.contains_key(k.as_str()) {
+                if index.rows.len() < limit || index.rows.contains_key(&PathKey::lookup(&k)) {
                     let row = restore(item);
                     index.put(row);
                 }
@@ -757,11 +753,15 @@ mod tests {
         let packet = packet(&changes).unwrap();
         let mut decoded = decoded;
         apply(&mut decoded, unpack(&packet).unwrap(), config.max_entries);
-        assert!(!decoded.rows.contains_key(key("D:\\bench\\文件夹").as_str()));
+        assert!(
+            !decoded
+                .rows
+                .contains_key(&PathKey::lookup(key("D:\\bench\\文件夹")))
+        );
         assert!(
             decoded
                 .rows
-                .contains_key(key("D:\\bench\\新增.txt").as_str())
+                .contains_key(&PathKey::lookup(key("D:\\bench\\新增.txt")))
         );
     }
 }

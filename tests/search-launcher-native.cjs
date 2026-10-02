@@ -1,7 +1,7 @@
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),{spawn,execFile}=require('node:child_process'),{promisify}=require('node:util');
 const execute=promisify(execFile),wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function run(){
- const out=path.resolve('work/search-015');await fs.mkdir(out,{recursive:true});const folder=await fs.mkdtemp(path.join(out,'native-')),root=path.join(folder,'files'),cache=path.join(folder,'index.bin');await fs.mkdir(root);await fs.writeFile(path.join(root,'QQ fixture.txt'),'test');await fs.writeFile(path.join(root,'季度报告.txt'),'test');
+ const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/search-launcher-native');await fs.mkdir(out,{recursive:true});const folder=await fs.mkdtemp(path.join(out,'native-')),root=path.join(folder,'files'),cache=path.join(folder,'index.bin');await fs.mkdir(root);await fs.writeFile(path.join(root,'QQ fixture.txt'),'test');await fs.writeFile(path.join(root,'季度报告.txt'),'test');
  let child,buffer='',id=0,state,pending=new Map();
  const start=()=>{state=undefined;buffer='';child=spawn(path.resolve('dist/native/One.Index.exe'),[cache],{windowsHide:true});child.stderr.resume();child.stdout.on('data',part=>{buffer+=part;let at;while((at=buffer.indexOf('\n'))>=0){const v=JSON.parse(buffer.slice(0,at));buffer=buffer.slice(at+1);if(v.state)state=v.state;else {const p=pending.get(v.id);if(p){pending.delete(v.id);clearTimeout(p.timer);v.error?p.reject(Error(v.error)):p.resolve(v.result);}}}});send({type:'init',settings:{roots:[root],excluded:[],maxEntries:1000}});};
  const send=v=>child.stdin.write(JSON.stringify(v)+'\n');

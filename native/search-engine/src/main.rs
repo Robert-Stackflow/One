@@ -4,7 +4,9 @@ mod disk;
 mod enumeration;
 mod incremental;
 mod maintenance;
+mod path_key;
 mod stored_path;
+use path_key::{PathKey, PathPool};
 use pinyin::ToPinyinMulti;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -50,12 +52,12 @@ fn under(path: &str, root: &str) -> bool {
 }
 fn erase(index: &mut Index, path: &str) -> bool {
     let k = key(path);
-    let removed = index.rows.remove(k.as_str());
+    let removed = index.rows.remove(&PathKey::lookup(&k));
     if removed.as_ref().is_some_and(|r| r.item.directory) {
         let prefix = format!("{k}\\");
         let keys: Vec<_> = index
             .rows
-            .range::<str, _>((Bound::Included(prefix.as_str()), Bound::Unbounded))
+            .range((Bound::Included(PathKey::lookup(&prefix)), Bound::Unbounded))
             .take_while(|(p, _)| p.starts_with(&prefix))
             .map(|(p, _)| p.clone())
             .collect();
@@ -89,38 +91,36 @@ struct Entry {
 #[derive(Clone)]
 struct StoredEntry {
     path: stored_path::StoredPath,
-    display_name: Option<Box<str>>,
-    name_start: u32,
+    display_name: Option<Box<DisplayName>>,
     directory: bool,
     modified: u64,
     size: u64,
 }
+#[derive(Clone)]
+struct DisplayName {
+    name: Box<str>,
+}
 impl StoredEntry {
     fn new(path: String, directory: bool) -> Self {
         let path = stored_path::StoredPath::new(path);
-        let normalized = path.key().as_ref();
-        let name = Path::new(normalized)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or(normalized);
-        let name_start = (normalized.len() - name.len()) as u32;
         Self {
             path,
             display_name: None,
-            name_start,
             directory,
             modified: 0,
             size: 0,
         }
     }
     fn search_name(&self) -> &str {
-        &self.path.key()[self.name_start as usize..]
+        self.path.key().name()
+    }
+    fn display_name(&self) -> Option<&str> {
+        self.display_name.as_ref().map(|value| value.name.as_ref())
     }
     fn entry(&self) -> Entry {
         let path = self.path.display().into_owned();
         let name = self
-            .display_name
-            .as_deref()
+            .display_name()
             .unwrap_or_else(|| {
                 Path::new(&path)
                     .file_name()
@@ -138,7 +138,9 @@ impl StoredEntry {
     }
     fn launcher(entry: Entry) -> Self {
         let mut item = Self::new(entry.path, entry.directory);
-        item.display_name = Some(entry.name.into_boxed_str());
+        item.display_name = Some(Box::new(DisplayName {
+            name: entry.name.into_boxed_str(),
+        }));
         item.modified = entry.modified;
         item.size = entry.size;
         item
@@ -155,7 +157,7 @@ impl Serialize for StoredEntry {
             size: u64,
         }
         let path = self.path.display();
-        let name = self.display_name.as_deref().unwrap_or_else(|| {
+        let name = self.display_name().unwrap_or_else(|| {
             Path::new(path.as_ref())
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -179,10 +181,14 @@ struct Phonetics {
 #[derive(Clone, Serialize)]
 struct Record {
     item: StoredEntry,
-    lower: Option<Box<str>>,
-    phonetics: Option<Box<Phonetics>>,
+    text: Option<Box<SearchText>>,
     bits: u128,
     seen: u64,
+}
+#[derive(Clone, Serialize)]
+struct SearchText {
+    lower: Option<Box<str>>,
+    phonetics: Option<Box<Phonetics>>,
 }
 impl Record {
     fn new(path: String, directory: bool, seen: u64) -> Self {
@@ -196,8 +202,12 @@ impl Record {
         if lower.is_ascii() {
             return Self {
                 bits: mask(&lower),
-                lower: (lower != name).then(|| lower.into_boxed_str()),
-                phonetics: None,
+                text: (lower != name).then(|| {
+                    Box::new(SearchText {
+                        lower: Some(lower.into_boxed_str()),
+                        phonetics: None,
+                    })
+                }),
                 seen,
                 item,
             };
@@ -237,34 +247,53 @@ impl Record {
             .iter()
             .chain(initials.iter())
             .fold(mask(&lower), |m, s| m | mask(s));
+        let text = (chinese || lower != name).then(|| {
+            Box::new(SearchText {
+                lower: (lower != name).then(|| lower.into_boxed_str()),
+                phonetics: chinese.then(|| {
+                    Box::new(Phonetics {
+                        full: phonetic.into_iter().map(String::into_boxed_str).collect(),
+                        initials: initials.into_iter().map(String::into_boxed_str).collect(),
+                    })
+                }),
+            })
+        });
         Self {
-            lower: (lower != name).then(|| lower.into_boxed_str()),
             item,
-            phonetics: chinese.then(|| {
-                Box::new(Phonetics {
-                    full: phonetic.into_iter().map(String::into_boxed_str).collect(),
-                    initials: initials.into_iter().map(String::into_boxed_str).collect(),
-                })
-            }),
+            text,
             bits,
             seen,
         }
     }
     fn lower(&self) -> &str {
-        self.lower
-            .as_deref()
+        self.text
+            .as_ref()
+            .and_then(|text| text.lower.as_deref())
             .unwrap_or_else(|| self.item.search_name())
     }
     fn phonetic(&self) -> impl Iterator<Item = &str> {
-        self.phonetics
+        self.text
             .iter()
+            .filter_map(|text| text.phonetics.as_ref())
             .flat_map(|p| p.full.iter().chain(p.initials.iter()))
             .map(|s| s.as_ref())
+    }
+    fn set_lower(&mut self, lower: String) {
+        self.text
+            .get_or_insert_with(|| {
+                Box::new(SearchText {
+                    lower: None,
+                    phonetics: None,
+                })
+            })
+            .lower = Some(lower.into_boxed_str());
     }
 }
 #[derive(Default, Serialize)]
 struct Index {
-    rows: BTreeMap<Arc<str>, Record>,
+    rows: BTreeMap<PathKey, Record>,
+    #[serde(skip)]
+    paths: PathPool,
     #[serde(skip)]
     tracking: bool,
     #[serde(skip)]
@@ -275,6 +304,7 @@ struct Index {
 impl Index {
     fn put(&mut self, mut row: Record) -> Option<Record> {
         use std::collections::btree_map::Entry;
+        row.item.path.share_parent(&mut self.paths);
         match self.rows.entry(row.item.path.key().clone()) {
             Entry::Occupied(mut entry) => {
                 // BTreeMap retains the old key when replacing a value.
@@ -346,17 +376,20 @@ fn insert(s: &Shared, batch: &mut Vec<Record>, generation: u64) {
         return;
     }
     for row in batch.drain(..) {
-        let path = row.item.path.key().clone();
+        let path = row.item.path.key();
         if index.tracking && index.touched >= limit {
             break;
         }
-        if index.rows.len() >= limit && !index.rows.contains_key(&path) {
+        if index.rows.len() >= limit && !index.rows.contains_key(path) {
             if !index.tracking {
                 break;
             }
             let stale = index
                 .rows
-                .range::<str, _>((Bound::Included(index.evict.as_str()), Bound::Unbounded))
+                .range((
+                    Bound::Included(PathKey::lookup(&index.evict)),
+                    Bound::Unbounded,
+                ))
                 .find(|(_, r)| r.seen != generation)
                 .map(|(k, _)| k.clone());
             if let Some(stale) = stale {
@@ -413,6 +446,7 @@ fn rebuild(s: Arc<Shared>, config: Config) {
                 || old.max_entries != config.max_entries
             {
                 index.rows.clear();
+                index.paths.clear();
             }
             index.tracking = true;
             index.touched = 0;
@@ -439,6 +473,7 @@ fn rebuild(s: Arc<Shared>, config: Config) {
             .rows
             .retain(|_, r| r.seen == generation);
         s.index.write().unwrap().tracking = false;
+        s.index.write().unwrap().paths.collect();
         {
             let mut state = s.state.lock().unwrap();
             state.running = false;
@@ -614,7 +649,7 @@ fn accepts(row: &Record, kind: &str, exts: &[String]) -> bool {
 }
 fn score(
     row: &Record,
-    path: &str,
+    path: &PathKey,
     terms: &[Term],
     fuzzy: bool,
     pinyin: bool,
@@ -636,7 +671,11 @@ fn score(
         } else if !term.exact && pinyin && row.phonetic().any(|s| s.contains(t)) {
             value = 540;
             mode = "pinyin";
-        } else if path.contains(t) {
+        } else if if std::ptr::eq(lower, path.name()) {
+            term.bits & (row.bits | path.prefix_bits()) == term.bits && path.contains_parent(t)
+        } else {
+            path.contains(t)
+        } {
             value = 180;
         } else if !term.exact && fuzzy && t.chars().count() >= 2 && t.len() <= 128 {
             if term.bits & row.bits == term.bits {
@@ -698,7 +737,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let launchers = s.launchers.read().unwrap();
     let extra_rows = &launchers.rows;
     let include_launchers = v["includeLaunchers"].as_bool().unwrap_or(false);
-    let mut heap: BinaryHeap<Reverse<(i32, Arc<str>, &str)>> = BinaryHeap::new();
+    let mut heap: BinaryHeap<Reverse<(i32, PathKey, &str)>> = BinaryHeap::new();
     let mut total = 0;
     for (n, (path, row)) in index
         .rows
@@ -715,7 +754,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         }
         if let Some((mut points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
             total += 1;
-            if !current.is_empty() && under(path, &current) {
+            if !current.is_empty() && path.under(&current) {
                 points += 45
             }
             if heap.len() < 100 || heap.peek().is_some_and(|v| points > v.0.0) {
@@ -893,7 +932,7 @@ fn main() {
                         .take(3000)
                     {
                         let mut row = Record::new(entry.name.clone(), false, 0);
-                        row.lower = Some(entry.name.to_lowercase().into_boxed_str());
+                        row.set_lower(entry.name.to_lowercase());
                         row.item = StoredEntry::launcher(entry);
                         index.put(row);
                     }
@@ -950,11 +989,11 @@ mod tests {
             );
         }
         let ascii = Record::new("D:\\report.txt".into(), false, 0);
-        assert!(ascii.lower.is_none());
-        assert!(ascii.phonetics.is_none());
+        assert!(ascii.text.is_none());
+        assert_eq!(ascii.phonetic().count(), 0);
         let accented = Record::new("D:\\Résumé.txt".into(), false, 0);
-        assert!(accented.phonetics.is_none());
-        assert!(std::mem::size_of::<Record>() <= 128);
+        assert_eq!(accented.phonetic().count(), 0);
+        assert!(std::mem::size_of::<Record>() <= 96);
         let entry = Entry {
             path: "one-launcher:setting:display".into(),
             name: "显示器 分辨率 缩放".into(),
@@ -963,7 +1002,7 @@ mod tests {
             modified: 0,
         };
         let mut row = Record::new(entry.name.clone(), false, 0);
-        row.lower = Some(entry.name.to_lowercase().into_boxed_str());
+        row.set_lower(entry.name.to_lowercase());
         row.item = StoredEntry::launcher(entry.clone());
         assert_eq!(
             serde_json::to_value(&row.item).unwrap(),
@@ -1016,7 +1055,7 @@ mod scale_benchmark {
             };
             let path = format!("D:\\bench\\group-{}\\{name}", n / 1000);
             let record = Record::new(path.clone(), false, 1);
-            index.rows.insert(record.item.path.key().clone(), record);
+            index.put(record);
         }
         output(
             json!({"benchmark":{"entries":index.rows.len(),"prepareMs":start.elapsed().as_millis()}}),
