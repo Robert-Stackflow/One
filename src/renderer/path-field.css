@@ -1,0 +1,8 @@
+ .one-path-field{display:flex;align-items:center;min-width:0;min-height:var(--control-height);border:1px solid var(--line);border-radius:var(--field-radius);background:var(--surface);transition:border-color .14s var(--ease),box-shadow .14s var(--ease)}
+ .one-path-field:hover{border-color:color-mix(in srgb,var(--fg) 18%,var(--surface))} .one-path-field:focus-within{border-color:color-mix(in srgb,var(--fg) 40%,var(--surface));box-shadow:0 0 0 2px var(--accent-soft)}
+.one-path-field-icon{display:flex;align-items:center;padding-left:11px;color:var(--muted)}.one-path-field-icon>.icon{width:17px;height:17px}
+ .one-path-field>input:not([type=checkbox]):not([type=range]){flex:1;width:0;min-width:0;border:0;border-radius:0;background:transparent;box-shadow:none;padding:7px 10px}
+ .one-path-field>input:not([type=checkbox]):not([type=range]):is(:hover,:focus){border:0;background:transparent;box-shadow:none}
+.one-path-field>button.one-path-field-action{align-self:stretch;min-height:0;padding:6px 13px;border:0;border-left:1px solid var(--line);border-radius:0 calc(var(--field-radius) - 1px) calc(var(--field-radius) - 1px) 0;background:transparent;font-size:12px;color:var(--muted);flex-shrink:0}
+.one-path-field>button.one-path-field-action:hover{background:var(--hover);color:var(--fg)}.one-path-field>button.one-path-field-action>.icon{width:17px;height:17px}
+@media(prefers-reduced-motion:reduce){ .one-path-field{transition:none}}

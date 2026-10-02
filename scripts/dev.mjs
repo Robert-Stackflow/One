@@ -1,6 +1,6 @@
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {cp,mkdir,readdir,rm} from 'node:fs/promises';
+import {cp,mkdir,readdir,rm,stat} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {context} from 'esbuild';
 import {build} from 'vite';
@@ -9,7 +9,11 @@ import {mainOptions,preloadOptions} from './bundle-options.mjs';
 import {workspace} from './workspace.mjs';
 const root=resolve('.'),work=await workspace(),temp=work.temp;
 const env={...process.env,TEMP:temp,TMP:temp,ONE_DEVELOPMENT:'1',ONE_DATA_DIR:process.env.ONE_DATA_DIR||join(work.root,'dev-profile')};delete env.ELECTRON_RUN_AS_NODE;
-await promisify(execFile)('cmd.exe',['/d','/c',resolve('scripts/build-windows.cmd')],{cwd:root,env,windowsHide:true,maxBuffer:4*1024*1024}).then(result=>{process.stdout.write(result.stdout);process.stderr.write(result.stderr);});
+// A verified current build can be reused when restarting development watchers.
+// This avoids replacing native helpers still used by another development app.
+if(process.argv.includes('--reuse-build')){
+ for(const file of ['dist/main/index.cjs','dist/preload/index.cjs','dist/renderer/index.html',...['One.Native','One.Search','One.Index','One.Windows','One.OpenWith','One.Monitor','One.Levels'].map(name=>'dist/native/'+name+'.exe')])await stat(file);
+}else await promisify(execFile)('cmd.exe',['/d','/c',resolve('scripts/build-windows.cmd')],{cwd:root,env,windowsHide:true,maxBuffer:4*1024*1024}).then(result=>{process.stdout.write(result.stdout);process.stderr.write(result.stderr);});
 let child,stopping=false,restarting=false,timer;const contexts=[];let renderer;
 function launch(){const args=['.'];if(process.env.ONE_DEV_DEBUG_PORT)args.unshift('--remote-debugging-address=127.0.0.1','--remote-debugging-port='+process.env.ONE_DEV_DEBUG_PORT);child=spawn(electron,args,{cwd:root,env,stdio:['inherit','inherit','inherit','ipc'],windowsHide:true});child.on('error',error=>{console.error(error);void finish(1);});child.once('exit',code=>{child=undefined;if(restarting&&!stopping){restarting=false;launch();}else void finish(code??0);});}
 function changed(restart){clearTimeout(timer);restarting ||= restart;timer=setTimeout(()=>{if(stopping||!child?.connected)return;if(restarting){console.log('主进程已更新，等待应用正常退出后重启…');child.send({type:'one:dev-quit'});}else{console.log('界面已更新');child.send({type:'one:dev-reload'});}},180);}

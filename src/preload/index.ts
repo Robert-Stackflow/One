@@ -38,10 +38,12 @@ const api: OneAPI = {
   windowAction: action => invoke('window-action',action), windowState: () => invoke('window-state'), onWindowState: callback => listen('window-state',callback), brightnessStatus: () => invoke('brightness-status'),
   settings: () => invoke('settings'), saveSettings: value => invoke('save-settings', value), inputStatus: () => invoke('input-status'),
   pickerData: path => invoke('picker-data', path), pickerChoose: (path, overwrite) => invoke('picker-choose', path, overwrite),
+  pickerPlaces: () => invoke('picker-places'), pickerOpened: () => invoke('picker-opened'), pickerPreferences: value => invoke('picker-preferences', value),
+  pickerClearRecent: () => invoke('picker-clear-recent'),
   transform: request => invoke('transform', request), openText: encoding => invoke('open-text', encoding), saveText: (text, encoding) => invoke('save-text', text, encoding), copyText: text => invoke('copy-text', text),
-  pickFile: () => invoke('pick-file'), droppedFile: file => webUtils.getPathForFile(file), preview: path => invoke('preview', path), previewData: () => invoke('preview-data'), navigatePreview: step => invoke('navigate-preview', step),
+  pickFile: path => invoke('pick-file', path), droppedFile: file => webUtils.getPathForFile(file), preview: path => invoke('preview', path), previewData: () => invoke('preview-data'), navigatePreview: step => invoke('navigate-preview', step),
   openFile: path => invoke('open-file', path), revealFile: path => invoke('reveal-file', path), searchText: text => invoke('search-text', text), sendToWorkbench: text => invoke('send-workbench', text),
-  pickDirectory: () => invoke('pick-directory'), scan, cancelScan: () => invoke('cancel-scan'), scanMaintenance: kind => invoke('maintenance', kind), exportMaintenance: rows => invoke('export-maintenance', rows),
+  pickDirectory: path => invoke('pick-directory', path), scan, cancelScan: () => invoke('cancel-scan'), scanMaintenance: kind => invoke('maintenance', kind), exportMaintenance: rows => invoke('export-maintenance', rows),
   quit: () => invoke('quit'), closeWindow: () => invoke('close-window'), onProgress: callback => listen('progress', callback), onReceiveText: callback => listen('receive-text', callback), onEcho: callback => listen('echo', callback),onEchoHide:callback=>listen('echo-hide',callback), onCopyText: callback => listen('copy-text', callback), onPreviewChanged: callback => listen('preview-changed', callback)
 };
 contextBridge.exposeInMainWorld('one', api);

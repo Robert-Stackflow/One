@@ -30,7 +30,7 @@ export interface Settings {
 export interface MaintenanceRow { name: string; source: string; status: string; command: string; location: string }
 export interface FileEntry { name: string; path: string; directory: boolean; size?: number; packedSize?: number }
 export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
-export interface PickerData { mode: 'file' | 'directory' | 'save'; title: string; path: string; parent: string; name: string; drives: string[]; entries: { name: string; path: string; directory: boolean }[] }
+export type { PickerData } from './picker';
 export interface OneAPI {
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
   fileToolsCancel(kind?:import('./file-tools').FileToolKind):Promise<void>;
@@ -65,7 +65,7 @@ export interface OneAPI {
   settings(): Promise<Settings>; saveSettings(value: Settings): Promise<Settings>;
   transform(request: TextRequest): Promise<string>; openText(encoding: string): Promise<{ path: string; text: string } | null>;
   saveText(text: string, encoding: string): Promise<string | null>; copyText(text: string): Promise<void>;
-  pickFile(): Promise<string | null>; droppedFile(file: File): string;
+  pickFile(initialPath?: string): Promise<string | null>; droppedFile(file: File): string;
   preview(path: string): Promise<void>; previewData(): Promise<PreviewData>; navigatePreview(step: number): Promise<void>;
   selectPreview(path: string): Promise<void>; directoryOpen(path:string):Promise<import('./directory').DirectoryInfo>;directoryPage(id:string,offset:number,limit:number,query?:string):Promise<import('./directory').DirectoryPage>;directoryRelease(id:string):Promise<void>;
   previewResource(path:string):Promise<string|null>;
@@ -76,8 +76,11 @@ export interface OneAPI {
   onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean):Promise<void>; onPreviewClosing(callback:()=>void):()=>void;
   openFile(path: string): Promise<void>; revealFile(path: string): Promise<void>; searchText(text: string): Promise<void>;
   sendToWorkbench(text: string): Promise<void>; inputStatus(): Promise<{ hook: boolean; native: boolean; error: string }>;
-  pickerData(path?: string): Promise<PickerData>; pickerChoose(path: string, overwrite?: boolean): Promise<{ overwrite: boolean }>;
-  pickDirectory(): Promise<string | null>; scan(path: string): Promise<ScanSummary>; cancelScan(): Promise<void>;
+  pickerData(path?: string): Promise<import('./picker').PickerData>; pickerChoose(path: string, overwrite?: boolean): Promise<{ overwrite: boolean }>;
+  pickerPlaces(): Promise<import('./picker').PickerPlaces>; pickerOpened(): Promise<import('./picker').PickerOpened>;
+  pickerClearRecent(): Promise<void>;
+  pickerPreferences(value: import('./picker').PickerPreferences): Promise<import('./picker').PickerPreferences>;
+  pickDirectory(initialPath?: string): Promise<string | null>; scan(path: string): Promise<ScanSummary>; cancelScan(): Promise<void>;
   brightnessStatus(): Promise<DisplayBrightness[]>;
   windowAction(action: 'minimize' | 'maximize' | 'close'): Promise<void>;
   windowState(): Promise<{ maximized: boolean; visible: boolean }>;
