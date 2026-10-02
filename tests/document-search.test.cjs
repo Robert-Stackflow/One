@@ -22,3 +22,41 @@ test('Updating a legacy index refreshes unchanged files once and then reuses the
  const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(path.join(root,'cache','documents.sqlite'));try{db.prepare('UPDATE chunks SET text=? WHERE path=?').run('STALE_EXTRACTOR_TEXT',file);db.exec('ALTER TABLE files DROP COLUMN extractor');}finally{db.close();}
  assert.equal((await hits(folder,'STALE_EXTRACTOR_TEXT')).length,1);const updated=await index(folder);assert.equal(updated.stats.indexed,1);assert.equal(updated.stats.cached,0);assert.equal((await hits(folder,'CURRENT_EXTRACTOR_TEXT')).length,1);assert.equal((await hits(folder,'STALE_EXTRACTOR_TEXT')).length,0);const cached=await index(folder);assert.equal(cached.stats.indexed,0);assert.equal(cached.stats.cached,1);
 });
+
+test('Legacy chunk ownership migrates once, updates exact files and retains failed versions within a batch',async()=>{
+ const folder=path.join(root,'owners');await fs.mkdir(folder);const count=140;
+ for(let i=0;i<count;i++)await fs.writeFile(path.join(folder,`entry-${i}.txt`),`OWNER_BODY_${i}_END `+'complete paragraph '.repeat(1300));
+ assert.equal((await index(folder)).stats.indexed,count);
+ const {DatabaseSync}=require('node:sqlite'),database=path.join(root,'cache','documents.sqlite');
+ let db=new DatabaseSync(database);try{db.exec('DROP TABLE document_chunks');}finally{db.close();}
+ await fs.writeFile(path.join(folder,'entry-0.txt'),'REPLACED_OWNER_ZERO');await fs.writeFile(path.join(folder,'entry-1.txt'),'REPLACED_OWNER_ONE');await fs.unlink(path.join(folder,'entry-2.txt'));await fs.writeFile(path.join(folder,'entry-3.txt'),Buffer.from([1,0,3,0]));
+ const update=await index(folder);assert.equal(update.stats.indexed,2);assert.equal(update.stats.cached,count-4);assert.equal(update.issueCount,1);
+ assert.equal((await hits(folder,'REPLACED_OWNER_ZERO')).length,1);assert.equal((await hits(folder,'OWNER_BODY_0_END')).length,0);assert.equal((await hits(folder,'OWNER_BODY_2_END')).length,0);assert.equal((await hits(folder,'OWNER_BODY_3_END')).length,1);
+ db=new DatabaseSync(database);try{
+  assert.equal(db.prepare('SELECT count(*) AS n FROM chunks c LEFT JOIN document_chunks d ON c.rowid=d.chunk WHERE d.chunk IS NULL OR c.path<>d.path').get().n,0);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM document_chunks d LEFT JOIN chunks c ON c.rowid=d.chunk WHERE c.rowid IS NULL').get().n,0);
+ }finally{db.close();}
+ await fs.writeFile(path.join(folder,'entry-3.txt'),'REPAIRED_OWNER_THREE');const repaired=await index(folder);assert.equal(repaired.stats.indexed,1);assert.equal(repaired.issueCount,0);assert.equal((await hits(folder,'REPAIRED_OWNER_THREE')).length,1);assert.equal((await hits(folder,'OWNER_BODY_3_END')).length,0);
+});
+
+test('Removing scoped stale documents preserves other scopes and nested files during a nonrecursive update',async()=>{
+ const folder=path.join(root,'scoped'),nested=path.join(folder,'nested'),other=path.join(root,'separate');await fs.mkdir(nested,{recursive:true});await fs.mkdir(other);
+ const top=path.join(folder,'top.txt'),child=path.join(nested,'child.txt'),outside=path.join(other,'other.txt');await fs.writeFile(top,'SCOPED_TOP');await fs.writeFile(child,'SCOPED_CHILD');await fs.writeFile(outside,'OTHER_SCOPE');await index(folder);await index(other);
+ await fs.unlink(top);await fs.unlink(child);await run({kind:'document-index',roots:[folder],recursive:false,extensions:''});
+ assert.equal((await hits(folder,'SCOPED_TOP')).length,0);assert.equal((await hits(folder,'SCOPED_CHILD')).length,1);assert.equal((await hits(other,'OTHER_SCOPE')).length,1);
+ await index(folder);assert.equal((await hits(folder,'SCOPED_CHILD')).length,0);assert.equal((await hits(other,'OTHER_SCOPE')).length,1);
+ const {DatabaseSync}=require('node:sqlite'),db=new DatabaseSync(path.join(root,'cache','documents.sqlite'));try{assert.equal(db.prepare('SELECT count(*) AS n FROM document_chunks WHERE path=? OR path=?').get(top,child).n,0);}finally{db.close();}
+});
+
+test('Small probe reuse and streamed text preserve encoded Unicode, BOMs and final line positions',async()=>{
+ const folder=path.join(root,'encoded'),iconv=require('iconv-lite');await fs.mkdir(folder);
+ for(const encoding of ['utf8','gbk','utf16le','utf16be'])for(const large of [false,true]){
+  const marker='ENCODED_'+encoding+'_COMPLETE',ending='ENDING_'+encoding+'_COMPLETE',text=marker+' 中文\n'+(large?'正文内容\n'.repeat(12000):'')+ending;
+  let body=iconv.encode(text,encoding);if(encoding==='utf8')body=Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),body]);if(encoding==='utf16le')body=Buffer.concat([Buffer.from([0xff,0xfe]),body]);if(encoding==='utf16be')body=Buffer.concat([Buffer.from([0xfe,0xff]),body]);
+  await fs.writeFile(path.join(folder,encoding+(large?'-large':'-small')+'.txt'),body);
+ }
+ await fs.writeFile(path.join(folder,'empty.txt'),'');const report=await index(folder);assert.equal(report.stats.indexed,9);assert.equal(report.issueCount,0);
+ for(const encoding of ['utf8','gbk','utf16le','utf16be']){
+  const start=await hits(folder,'ENCODED_'+encoding+'_COMPLETE'),end=await hits(folder,'ENDING_'+encoding+'_COMPLETE');assert.equal(start.length,2);assert.ok(start.every(row=>row.line===1&&row.snippet.includes('中文')));assert.equal(end.length,2);assert.equal(end.find(row=>row.path.endsWith('-large.txt')).line,12002);assert.equal(end.find(row=>row.path.endsWith('-small.txt')).line,2);
+ }
+});

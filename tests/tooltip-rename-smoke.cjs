@@ -14,7 +14,7 @@ async function run() {
   await app.evaluate(({BrowserWindow})=>{BrowserWindow.prototype.focus=function(){};BrowserWindow.prototype.show=BrowserWindow.prototype.showInactive;});
   await win.evaluate(w => {w.setBounds({x:-10000,y:-10000,width:1250,height:900}); w.showInactive();});
   assert.deepEqual(await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>({caption:group.querySelector('h2').textContent,pages:[...group.querySelectorAll('[data-page]')].map(b=>b.dataset.page)}))),[
-   {caption:'文件',pages:['tools','text','search']},{caption:'工具',pages:['input','disk','preview','color']},{caption:'系统',pages:['system','hardware']}
+   {caption:'文件',pages:['tools','text','search']},{caption:'工具',pages:['input','disk','preview','color']},{caption:'系统',pages:['system','hardware','locksmith']}
   ]);
   assert.equal(await page.locator('.sidebar-navigation>[data-page]').getAttribute('data-page'),'home');
   assert.equal(await page.locator('.sidebar>[data-page]').getAttribute('data-page'),'settings');

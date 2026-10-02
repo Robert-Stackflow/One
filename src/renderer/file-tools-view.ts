@@ -3,6 +3,7 @@ import {customControls} from './controls';
 import {confirmDialog} from './dialog';
 import {hydrateFileIcons} from './shell-icons';
 import {setupViewportPanel} from './viewport-panel';
+import {PagedResultList,type ResultLocation} from './paged-result-list';
 import {DeferredWork} from './deferred-work';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import {defaultRename,type RenameOptions,type FileToolTask,type FileToolReport,type FileToolKind,type FileToolRow,type FileToolProgress} from '../shared/file-tools';
@@ -43,12 +44,15 @@ export function fileToolsPage(){return `<div class="module-toolbar file-tools-to
  <section id="tool-pane-documents" class="file-tool-pane" hidden><div class="tool-config">${folderField('documents-root','文档范围')}<div class="tool-document-search">${icon('search')}<input id="documents-query" aria-label="搜索文档正文" placeholder="搜索文档正文，支持中文与短语" maxlength="256">${button('documents-search','搜索')}</div><div class="tool-options"><label><input id="documents-recursive" type="checkbox" checked>包含子文件夹</label><span id="documents-index-state" class="tool-hint">选择范围后首次搜索会建立本地正文索引</span><button id="documents-issues" class="quiet" hidden>查看未完成项</button></div></div></section>
  <div id="tool-progress" class="tool-progress" role="status" hidden><span class="tool-progress-dot"></span><strong id="tool-phase"></strong><span id="tool-count"></span><span id="tool-current-path"></span></div><div class="tool-result-heading"><div><h2 id="tool-result-title">查找内容相同的文件</h2><span id="tool-result-detail"></span></div><button id="tool-issues" class="quiet" hidden></button></div><div id="tool-results" class="tool-results"><div class="tool-empty">${icon('copy')}<h3>先选择扫描范围</h3><p>按大小筛选，再校验完整文件内容。</p></div></div>`;}
 export function setupFileTools(){
- let tab:ToolTab='duplicates',diffMode:'file'|'folder'='file',report:FileToolReport|undefined,page=0,revision=0,loading=false,active=new Map<string,FileToolKind>(),reports=new Map<ToolTab,FileToolReport>(),lastReceipt='',documentIndexed=false,autoPreview=false,planFresh=false,renameRevision=0,queryRevision=0,groupRevision=0,indexedScope='',indexReport:FileToolReport|undefined,only:Set<number>|null=null,excluded=new Set<number>(),moduleActive=false;
- let visible=false,viewDirty=true,reading=0;
+ let tab:ToolTab='duplicates',diffMode:'file'|'folder'='file',report:FileToolReport|undefined,active=new Map<string,FileToolKind>(),reports=new Map<ToolTab,FileToolReport>(),lastReceipt='',documentIndexed=false,autoPreview=false,planFresh=false,renameRevision=0,queryRevision=0,indexedScope='',indexReport:FileToolReport|undefined,only:Set<number>|null=null,excluded=new Set<number>(),moduleActive=false;
+ let visible=false,viewDirty=true;
+ let resultList:PagedResultList<FileToolRow>|undefined,groupList:PagedResultList<FileToolRow>|undefined,selectedGroup:number|undefined,openOnGroup=false,renderedReportId='';
+ const locations=new Map<string,{main:ResultLocation;group?:number;detail?:ResultLocation;detailOpen:boolean}>();
  const progress=new Map<ToolTab,FileToolProgress>();
  const showing=()=>moduleActive&&isWindowVisible();
  const viewport=q('page-tools').closest<HTMLElement>('.content')!;
- setupViewportPanel(viewport,q('tool-results'),()=>q('tool-results').querySelector('.with-detail')&&matchMedia('(max-width:1060px)').matches?360:180);
+ const panel=q('tool-results'),docking=setupViewportPanel(viewport,panel);
+ const narrow=matchMedia('(max-width:1060px)');
  const input=(id:string)=>q<HTMLInputElement>(id),value=(id:string)=>input(id).value.trim(),checked=(id:string)=>input(id).checked,key=(kind:FileToolKind):ToolTab=>kind.startsWith('rename-')?'rename':kind.startsWith('document-')?'documents':kind as ToolTab;
  const root=(id:string)=>{const path=value(id);if(!path)throw Error('请先选择文件夹');return[path];};
  for(const name of ['duplicates-root','documents-root','rename-paths'])input(name).value=localStorage.getItem('tool-'+name)||'';
@@ -63,33 +67,55 @@ export function setupFileTools(){
   if(r.leftText!==undefined)return `<article class="file-diff-hunk diff-change"><header><strong>${esc(r.status)}</strong><span>原始 ${r.oldLine} 行 · 对照 ${r.newLine} 行</span></header><div class="diff-column-headings"><span>原始</span><span>对照</span></div><div class="diff-columns"><pre>${esc(r.leftText)}</pre><pre>${esc(r.rightText)}</pre></div></article>`;
   const path=String(r.right||r.left||r.path||'');return `<div class="tool-file-row"><span class="tool-file-icon" data-file-icon="${esc(path)}">${icon(r.directory?'folder':'file')}</span><div><strong>${esc(r.name||path.split(/[\\/]/).pop())}<small>${esc(r.status)}</small></strong><small>${esc(r.left||'—')} → ${esc(r.right||'—')}</small>${r.leftHash?`<code>SHA-256<br>${esc(r.leftHash)}<br>${esc(r.rightHash)}</code>`:''}</div>${pathActions(path)}</div>`;
  };
- const loadPage=async(reset=false)=>{
-  if(!showing()||!report||loading)return;
-  loading=true;reading++;const current=report,request=revision;
-  try{
-   const rows=await api.fileToolsPage(current.id,page);
-   if(!showing()||request!==revision||current!==report)return;
-   const list=q('tool-result-list');if(reset)list.replaceChildren();
-   list.insertAdjacentHTML('beforeend',rows.map(rowHTML).join(''));page++;
-   q('tool-more').hidden=page*100>=current.count;
-   hydrateFileIcons(list,()=>showing()&&request===revision);selection();
-   if(current.kind==='duplicates'&&reset&&rows.length)void showGroup(rows[0].id).catch(toast);
-  }finally{reading--;if(request===revision)loading=false;}
+ const remember=()=>{
+  if(!renderedReportId||!resultList)return;
+  locations.set(renderedReportId,{main:resultList.location(),group:selectedGroup,detail:groupList?.location(),detailOpen:panel.classList.contains('detail-open')});
+  while(locations.size>8)locations.delete(locations.keys().next().value!);
  };
- const showGroup=async(group:number,reveal=false)=>{
-  if(!showing()||!report||report.kind!=='duplicates')return;
-  q('tool-result-list').querySelectorAll<HTMLElement>('[data-group]').forEach(row=>{const active=Number(row.dataset.group)===group;row.dataset.active=String(active);row.setAttribute('aria-pressed',String(active));row.tabIndex=active?0:-1;});
-  const id=report.id,request=revision,groupRequest=++groupRevision;reading++;
-  try{
-   const files=await api.fileToolsPage(id,0,group);
-   if(!showing()||request!==revision||report?.id!==id||groupRequest!==groupRevision)return;
-   q('tool-group-files').innerHTML=files.map(file=>`<div class="tool-file-row"><span class="tool-file-icon" data-file-icon="${esc(file.path)}">${icon('file')}</span><div><strong>${esc(String(file.path).split(/[\\/]/).pop())}</strong><small>${esc(file.path)}</small></div>${pathActions(String(file.path))}</div>`).join('');
-   q('tool-group-title').textContent='重复组中的文件';q('tool-group-more').dataset.group=String(group);q('tool-group-more').dataset.page='1';q('tool-group-more').hidden=files.length<100;
-   hydrateFileIcons(q('tool-group-files'),()=>showing()&&request===revision&&groupRequest===groupRevision);
-   if(reveal&&!q('tool-results').classList.contains('viewport-docked')&&matchMedia('(max-width:1060px)').matches){requestAnimationFrame(()=>{if(showing()&&request===revision&&groupRequest===groupRevision)q('tool-group-title').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});});}
-  }finally{reading--;}
+ const syncLists=()=>{
+  const docked=panel.classList.contains('viewport-docked'),detailOpen=narrow.matches&&panel.classList.contains('detail-open');
+  if(!docked&&groupList){const top=-parseFloat(getComputedStyle(viewport).paddingTop)+'px';if(panel.style.getPropertyValue('--tool-heading-top')!==top)panel.style.setProperty('--tool-heading-top',top);}
+  if(resultList){resultList.setViewport(docked?panel.querySelector<HTMLElement>('.tool-result-scroll')!:viewport);resultList.setActive(showing()&&!detailOpen);}
+  if(groupList){groupList.setViewport(docked?panel.querySelector<HTMLElement>('.duplicate-detail')!:viewport);groupList.setActive(showing()&&(!narrow.matches||detailOpen));}
  };
- const display=async(next?:FileToolReport)=>{revision++;loading=false;report=next;page=0;viewDirty=true;if(!showing())return;viewDirty=false;progressTitle();if(!next){q('tool-results').innerHTML=`<div class="tool-empty">${icon(tab==='rename'?'rename':tab==='diff'?'braces':'search')}<h3>${tab==='documents'?'搜索文档中的内容':'选择范围后开始'}</h3><p>${tab==='documents'?'首次提取正文，后续查询使用本地索引。':'任务在后台执行，可随时停止。'}</p></div>`;return;}if(!next.count){q('tool-results').innerHTML=`<div class="tool-empty">${icon('check')}<h3>${esc(next.summary)}</h3><p>${next.issueCount?'部分项目未完成，可查看上方详情。':'任务已完成。'}</p></div>`;return;}q('tool-results').innerHTML=`<div class="tool-result-layout ${next.kind==='duplicates'?'with-detail':''}"><div class="tool-result-scroll"><div id="tool-result-list"></div><button id="tool-more" class="quiet">加载更多</button></div>${next.kind==='duplicates'?'<aside class="duplicate-detail"><div class="tool-group-heading"><h3 id="tool-group-title">重复组中的文件</h3><button id="tool-group-back" class="quiet" type="button">'+icon('back')+'返回重复组</button></div><div id="tool-group-files"></div><button id="tool-group-more" class="quiet" hidden>加载更多文件</button></aside>':''}</div>`;action('tool-more',()=>loadPage());if(next.kind==='duplicates')action('tool-group-back',()=>{const row=q('tool-result-list').querySelector<HTMLButtonElement>('[data-active=true]');row?.focus({preventScroll:true});row?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});});if(next.kind==='duplicates')action('tool-group-more',async()=>{const control=q('tool-group-more'),group=Number(control.dataset.group),page=Number(control.dataset.page),request=revision;reading++;try{const files=await api.fileToolsPage(next.id,page,group);if(!showing()||request!==revision||report!==next||!control.isConnected||Number(control.dataset.group)!==group)return;q('tool-group-files').insertAdjacentHTML('beforeend',files.map(file=>`<div class="tool-file-row"><div><strong>${esc(String(file.path).split(/[\\/]/).pop())}</strong><small>${esc(file.path)}</small></div>${pathActions(String(file.path))}</div>`).join(''));control.dataset.page=String(page+1);control.hidden=files.length<100;}finally{reading--;}});await loadPage(true);};
+ const showGroup=(group:number,reveal=false)=>{
+  if(!showing()||report?.kind!=='duplicates'||!resultList)return;
+  const value=resultList.get(group);if(!value){resultList.choose(group);return;}
+  if(selectedGroup!==group){
+   const previous=locations.get(report.id),current=report;
+   selectedGroup=group;groupList?.dispose();q('tool-group-files').replaceChildren();
+   q('tool-group-title').textContent='重复组中的文件 · '+Number(value.files).toLocaleString()+' 份';
+   groupList=new PagedResultList(q('tool-group-files'),{count:Number(value.files),pageSize:current.pageSize,estimate:78,label:'重复组中的文件',read:page=>api.fileToolsPage(current.id,page,group),error:toast,
+    markup:file=>'<div class="tool-file-row"><span class="tool-file-icon" data-file-icon="'+esc(file.path)+'">'+icon('file')+'</span><div><strong>'+esc(String(file.path).split(/[\\/]/).pop())+'</strong><small>'+esc(file.path)+'</small></div>'+pathActions(String(file.path))+'</div>',
+    activate:file=>{void api.preview(String(file.path)).catch(toast);}});
+   if(previous?.group===group&&previous.detail)groupList.restore(previous.detail);
+   resultList.refresh();
+  }
+  if((reveal||openOnGroup)&&narrow.matches){openOnGroup=false;remember();panel.classList.add('detail-open');viewport.scrollTop=0;}
+  syncLists();docking.refresh();
+  if(reveal&&narrow.matches)requestAnimationFrame(()=>{if(showing())q('tool-group-files').focus({preventScroll:true});});
+ };
+ const display=async(next?:FileToolReport)=>{
+  if(!showing()){remember();report=next;viewDirty=true;return;}
+  remember();resultList?.dispose();groupList?.dispose();resultList=groupList=undefined;selectedGroup=undefined;openOnGroup=false;
+  report=next;renderedReportId=next?.id||'';viewDirty=false;progressTitle();panel.classList.remove('detail-open');
+  if(!next){panel.innerHTML='<div class="tool-empty">'+icon(tab==='rename'?'rename':tab==='diff'?'braces':'search')+'<h3>'+(tab==='documents'?'搜索文档中的内容':'选择范围后开始')+'</h3><p>'+(tab==='documents'?'首次提取正文，后续查询使用本地索引。':'任务在后台执行，可随时停止。')+'</p></div>';return;}
+  if(!next.count){panel.innerHTML='<div class="tool-empty">'+icon('check')+'<h3>'+esc(next.summary)+'</h3><p>'+(next.issueCount?'部分项目未完成，可查看上方详情。':'任务已完成。')+'</p></div>';return;}
+  panel.innerHTML='<div class="tool-result-layout '+(next.kind==='duplicates'?'with-detail':'')+'"><div class="tool-result-scroll"><div id="tool-result-list"></div></div>'+(next.kind==='duplicates'?'<aside class="duplicate-detail"><div class="tool-group-heading"><h3 id="tool-group-title">重复组中的文件</h3><button id="tool-group-back" class="quiet" type="button">'+icon('back')+'返回重复组</button></div><div id="tool-group-files"></div></aside>':'')+'</div>';
+  resultList=new PagedResultList(q('tool-result-list'),{count:next.count,pageSize:next.pageSize,estimate:next.kind==='document-search'?180:next.kind==='diff'?200:78,label:next.summary,read:page=>api.fileToolsPage(next.id,page),markup:rowHTML,error:toast,
+   selected:(row)=>{if(next.kind==='duplicates')showGroup(row.id);},
+   activate:row=>{if(next.kind==='duplicates')showGroup(row.id,true);else if(row.path)void api.preview(String(row.path)).catch(toast);},
+   decorate:(row,value)=>{
+    const group=row.querySelector<HTMLButtonElement>('[data-group]');if(group){const active=selectedGroup===value.id;if(group.dataset.active!==String(active)){group.dataset.active=String(active);group.setAttribute('aria-pressed',String(active));group.tabIndex=active?0:-1;}}
+    const checkbox=row.querySelector<HTMLInputElement>('[data-rename-id]');if(checkbox&&!checkbox.disabled)checkbox.checked=selected(value.id);
+   }});
+  syncLists();const saved=locations.get(next.id);if(saved){resultList.restore(saved.main);openOnGroup=saved.detailOpen;}
+  if(next.kind==='duplicates')action('tool-group-back',()=>{panel.classList.remove('detail-open');syncLists();resultList?.choose(selectedGroup||0,true);docking.refresh();});
+  docking.refresh();selection();
+ };
+ new ResizeObserver(()=>{if(showing())syncLists();}).observe(viewport);
+ new MutationObserver(()=>{if(showing())syncLists();}).observe(panel,{attributes:true,attributeFilter:['class']});
+ narrow.addEventListener('change',()=>{if(showing())syncLists();});
  const run=async(task:FileToolTask)=>{
   const owner=key(task.kind),requestedRename=renameRevision,requestedQuery=queryRevision;
   const requestedScope=task.kind==='document-index'||task.kind==='document-search'?task.roots[0].toLowerCase()+':'+Boolean(task.recursive):'';
@@ -153,7 +179,6 @@ export function setupFileTools(){
   if(!value('documents-query')){documentWork.clear();reports.delete('documents');if(active.get('documents')==='document-search')void api.fileToolsCancel('document-search').catch(()=>{});if(tab==='documents')void display().catch(toast);return;}
   documentWork.request();
  };
- q('tool-results').addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(e.key)||!(e.target instanceof HTMLButtonElement)||!e.target.matches('[data-group]'))return;const rows=[...q('tool-result-list').querySelectorAll<HTMLButtonElement>('[data-group]')],at=rows.indexOf(e.target);if(at<0)return;e.preventDefault();const index=e.key==='Home'?0:e.key==='End'?rows.length-1:Math.max(0,Math.min(rows.length-1,at+(e.key==='ArrowDown'?1:-1))),row=rows[index];row.focus({preventScroll:true});row.scrollIntoView({block:'nearest'});void showGroup(Number(row.dataset.group)).catch(toast);});
  q('tool-results').addEventListener('change',e=>{const input=e.target as HTMLInputElement;if(input.dataset.renameId!==undefined){const id=Number(input.dataset.renameId);if(only){if(input.checked)only.add(id);else only.delete(id);}else if(input.checked)excluded.delete(id);else excluded.add(id);selection();}});
  q('tool-results').addEventListener('click',e=>{const target=e.target instanceof Element?e.target.closest<HTMLElement>('[data-group],[data-tool-preview],[data-tool-reveal],[data-tool-copy]'):null;if(!target)return;void(async()=>{if(target.dataset.group!==undefined)return showGroup(Number(target.dataset.group),true);if(target.dataset.toolPreview)return api.preview(target.dataset.toolPreview);if(target.dataset.toolReveal)return api.revealFile(target.dataset.toolReveal);if(target.dataset.toolCopy){await api.copyText(target.dataset.toolCopy);toast('已复制路径');}})().catch(toast);});
  action('tool-issues',async()=>{if(!report)return;await confirmDialog({title:`${report.issueCount} 项未完成`,message:report.issues.map(i=>i.path+'\n'+i.error).join('\n\n')+(report.issueCount>report.issues.length?'\n仅列出前 100 项。':''),confirm:'知道了'});});
@@ -163,11 +188,11 @@ export function setupFileTools(){
   const next=showing();
   if(visible!==next){
    visible=next;
-   if(!next){revision++;groupRevision++;if(reading)viewDirty=true;loading=false;}
+   if(!next){remember();resultList?.setActive(false);groupList?.setActive(false);}
    else{
     updateButtons();selection();renderDocumentStatus();renderProgress();
     if(viewDirty)void display(report).catch(toast);
-    else hydrateFileIcons(q('tool-results'),showing);
+    else {syncLists();const saved=report&&locations.get(report.id);if(saved&&!panel.classList.contains('viewport-docked'))resultList?.restore(saved.main);hydrateFileIcons(q('tool-results'),showing);}
    }
   }
   previewWork.sync();documentWork.sync();

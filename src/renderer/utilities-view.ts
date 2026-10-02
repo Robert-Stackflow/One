@@ -1,4 +1,3 @@
-import {locksmithCard,setupLocksmith} from './locksmith-view';
 import {api,q,button,iconButton,icon,esc,switchControl,toast} from './ui';
 import {bindPreference} from './preferences';
 import {setupShortcut} from './shortcut';
@@ -15,9 +14,8 @@ export function utilitiesPage(){return `<div data-enhancement-panel="awake" hidd
 <div class="preference-row"><label><input type="checkbox" id="topmost-border">边框提示</label><input id="topmost-color" class="color-value" aria-label="置顶提示颜色" maxlength="7"></div>
 <div class="preference-row"><label for="topmost-opacity">边框不透明度</label><div class="field-group"><input id="topmost-opacity" type="number" min="0" max="100" step="5" aria-label="边框不透明度"><span>%</span></div></div><div class="preference-row"><label for="topmost-thickness">边框粗细</label><div class="field-group"><input id="topmost-thickness" type="number" min="1" max="20" aria-label="边框粗细"><span>像素</span></div></div><div class="preference-row"><label for="topmost-sound">播放提示音</label>${switchControl('topmost-sound','置顶时播放提示音')}</div><div class="preference-row"><label for="topmost-contextMenu">标题栏菜单入口</label>${switchControl('topmost-contextMenu','标题栏菜单中显示始终置顶')}</div><div class="preference-row"><label for="topmost-excluded">排除应用</label><input id="topmost-excluded" aria-label="置顶排除应用" placeholder="程序名，用逗号分隔"></div>
 <div class="preference-row"><label><input type="checkbox" id="topmost-fullscreen">全屏时暂停快捷键</label></div><div class="settings-actions"><span class="utility-message" id="topmost-error" role="status"></span><div class="spacer"></div></div>
-</div><div class="settings-card topmost-window-card"><div class="section-heading utility-window-heading"><h2>窗口</h2><div>${button('topmost-clear','取消全部置顶')}${iconButton('topmost-refresh','刷新窗口','refresh')}</div></div><div class="window-list" id="topmost-windows"></div></div></div></div><div data-enhancement-panel="locksmith" hidden>${locksmithCard()}</div>`;}
+</div><div class="settings-card topmost-window-card"><div class="section-heading utility-window-heading"><h2>窗口</h2><div>${button('topmost-clear','取消全部置顶')}${iconButton('topmost-refresh','刷新窗口','refresh')}</div></div><div class="window-list" id="topmost-windows"></div></div></div></div>`;}
 export function setupUtilities(){
-  setupLocksmith();
   setupShortcut(q<HTMLInputElement>('topmost-shortcut'));
   let latest:UtilityState|undefined;
   const renderState=(s:UtilityState)=>{latest=s;if(!isWindowVisible()||q('page-input').hidden)return;const a=s.awake;q('awake-state').textContent=a.active?'唤醒中':a.locked&&a.mode!=='off'?'锁屏暂停':'已关闭';q('awake-state').classList.toggle('running',a.active);q<HTMLButtonElement>('awake-stop').disabled=a.mode==='off';q('awake-message').textContent=a.error||((a.mode==='timed'||a.mode==='until')?`剩余 ${Math.ceil(a.remaining/60000)} 分钟 · ${new Date(a.expiresAt).toLocaleString()}`:a.active?(a.display?'保持系统与屏幕开启':'保持系统运行，屏幕可按原计划关闭'):'');q('topmost-error').textContent=s.shortcutError;};

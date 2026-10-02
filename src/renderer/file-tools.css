@@ -64,3 +64,26 @@
 @media(max-width:1060px){.rename-config{grid-template-columns:1fr}.rename-scope{border-right:0;border-bottom:1px solid var(--line)}.rename-scope-options{flex-wrap:wrap}.rename-actions{flex-wrap:wrap}.rename-format-body{grid-template-columns:1fr}.rename-enumerate-option{grid-column:1}.rename-format-caption{display:none}}
 @media(max-width:760px){.rename-rules .tool-field-pair{grid-template-columns:1fr}.rename-number-fields{grid-template-columns:1fr}.rename-scope,.rename-rules{padding:18px}.rename-format>summary{padding:12px 18px}.rename-format-body{padding:4px 18px 18px}}
 @media(prefers-reduced-motion:reduce){.rename-format>summary,.rename-format>summary>.icon{transition:none}.rename-format[open]>.rename-format-body{animation:none}}
+
+/* Only mounted rows participate in layout; full snippets and diff blocks remain selectable. */
+.tool-results:not(.viewport-docked){overflow:clip}
+.tool-visible-row{min-width:0;overflow-anchor:none}
+.tool-visible-row .duplicate-group,.tool-visible-row .tool-file-row,.tool-visible-row .rename-result-row,.tool-visible-row .file-diff-hunk{content-visibility:visible;contain-intrinsic-size:none}
+#tool-result-list,#tool-group-files{outline:none;min-width:0}
+.tool-visible-row[aria-selected=true]:focus-within{box-shadow:inset 2px 0 var(--accent)}
+#tool-result-list:focus-visible .tool-visible-row[aria-selected=true],#tool-group-files:focus-visible .tool-visible-row[aria-selected=true]{box-shadow:inset 2px 0 var(--accent)}
+.tool-result-placeholder{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.tool-result-placeholder>span{display:block;height:8px;max-width:220px;border-radius:4px;background:var(--soft)}
+.tool-result-placeholder>span:last-child{width:70%}
+.tool-page-retry{width:100%;justify-content:center;min-height:78px}
+.duplicate-detail .tool-group-heading{position:sticky;top:0;z-index:1;background:var(--surface);padding-top:12px;margin-top:-16px;border-bottom:1px solid var(--line)}
+.tool-results:not(.viewport-docked) .duplicate-detail .tool-group-heading{top:var(--tool-heading-top,-22px)}
+@media(max-width:1060px){
+ .tool-result-layout.with-detail{grid-template-rows:minmax(0,1fr)!important}
+ .tool-results .with-detail>.duplicate-detail{display:none;border-top:0}
+ .tool-results.detail-open .with-detail>.tool-result-scroll{display:none}
+ .tool-results.detail-open .with-detail>.duplicate-detail{display:block}
+ .tool-results #tool-group-back{display:flex}
+ .tool-results.detail-open .duplicate-detail{animation:tool-pane-in .14s var(--ease)}
+}
+@media(prefers-reduced-motion:reduce){.tool-results.detail-open .duplicate-detail{animation:none}}
