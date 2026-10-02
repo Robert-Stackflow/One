@@ -1,5 +1,16 @@
 export const colorFormatNames = {hex:'HEX',rgb:'RGB',hsl:'HSL',hsv:'HSV',cmyk:'CMYK',hsb:'HSB',hsi:'HSI',hwb:'HWB',ncol:'NCol',xyz:'CIEXYZ',lab:'CIELAB',oklab:'Oklab',oklch:'Oklch',vec4:'VEC4',decimal:'Decimal',hexInt:'HEX Int'} as const;
 export type ColorFormat = keyof typeof colorFormatNames;
+export interface ColorState {history:string[];formats:ColorFormat[];format:ColorFormat;showEditor:boolean;selected:string}
+/** Opaque tints and shades of a sampled sRGB color, never inferred transparency. */
+export function colorVariants(hex:string):{hex:string;label:string}[]{
+  if(!/^#[\da-f]{6}$/i.test(hex))throw new Error('颜色格式无效');
+  const rgb=hex.slice(1).match(/../g)!.map(x=>parseInt(x,16)),colors=new Map<string,string>();
+  for(const amount of [.45,.25,.12,0,-.12,-.25,-.45]){
+    const value='#'+rgb.map(n=>Math.round(amount>0?n+(255-n)*amount:n*(1+amount)).toString(16).padStart(2,'0')).join('').toUpperCase();
+    colors.set(value,amount===0?'当前颜色':`${amount>0?'更亮':'更暗'} ${Math.round(Math.abs(amount)*100)}%`);
+  }
+  colors.set(hex.toUpperCase(),'当前颜色');return [...colors].map(([hex,label])=>({hex,label}));
+}
 const round=(n:number,d=2)=>Number(n.toFixed(d));
 /** sRGB, D65 white point. CMYK is a mathematical conversion, not a printer profile. */
 export function colorFormats(hex:string):Record<ColorFormat,string>{

@@ -7,7 +7,7 @@ export { ScanTree } from '../src/shared/scan-tree';
 export { diskPredicate, filteredTree } from '../src/shared/disk-filter';
 export { scanDirectory } from '../src/main/scan';
 export { readText, saveText } from '../src/main/text-files';
-export {colorFormats,colorFormatNames} from '../src/shared/colors';
+export {colorFormats,colorFormatNames,colorVariants} from '../src/shared/colors';
 export {fileResponse} from '../src/main/file-response';
 export {awakeEffective,defaultUtilities,validateUtilities} from '../src/shared/utilities';
 export {searchMatcher,defaultSearch,validateSearch,validateMenu} from '../src/shared/search';

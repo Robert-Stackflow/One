@@ -25,7 +25,7 @@ export interface Settings {
   keyEcho: boolean; onlyCombinations: boolean; edgeScroll: boolean; copyMenu: boolean; explorerPreview: boolean;
   pauseFullscreen: boolean; excludedApps: string; dwellMs: number; cornerPixels: number; cooldownMs: number;
   copyIntervalMs: number; volumeStep: number; edgePixels: number; corners: Record<'TL' | 'TR' | 'BL' | 'BR', CornerAction>; edges: Record<Edge, EdgeSetting>;
-  cornerBindings: Record<'TL' | 'TR' | 'BL' | 'BR', CornerBinding>; appearance: Appearance; colorShortcut: string; colorHistory: string[]; colorFormat: import('./colors').ColorFormat; colorVisibleFormats: import('./colors').ColorFormat[];
+  cornerBindings: Record<'TL' | 'TR' | 'BL' | 'BR', CornerBinding>; appearance: Appearance; colorShortcut: string; colorHistory: string[]; colorFormat: import('./colors').ColorFormat; colorVisibleFormats: import('./colors').ColorFormat[]; colorShowEditor:boolean;
 }
 export interface MaintenanceRow { name: string; source: string; status: string; command: string; location: string }
 export interface FileEntry { name: string; path: string; directory: boolean; size?: number; packedSize?: number }
@@ -73,6 +73,7 @@ export interface OneAPI {
   appearance(): Promise<Appearance>; installedFonts(refresh?:boolean):Promise<import('./fonts').InstalledFont[]>; onAppearance(callback: (value:Appearance) => void): () => void;
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;
   pickColor(): Promise<void>; colorCapture(): Promise<ScreenCapture|null>; chooseColor(hex: string): Promise<void>; onColor(callback: (value:string) => void): () => void;
+  showColorEditor(hex?:string):Promise<void>;colorState():Promise<import('./colors').ColorState>;onColorSettings(callback:()=>void):()=>void;onColorEditorOpen(callback:(hex:string)=>void):()=>void;colorEditorSize(height:number):Promise<void>;clearColorHistory():Promise<void>;
   onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean):Promise<void>; onPreviewClosing(callback:()=>void):()=>void;
   openFile(path: string): Promise<void>; revealFile(path: string): Promise<void>; searchText(text: string): Promise<void>;
   sendToWorkbench(text: string): Promise<void>; inputStatus(): Promise<{ hook: boolean; native: boolean; error: string }>;

@@ -4,6 +4,14 @@ const { build } = require('esbuild');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 let core; let fixture;
+test('取色相近色保留不透明原色、亮暗顺序并去重；旧设置默认打开面板',()=>{
+ const variants=core.colorVariants('#808080');assert.equal(variants.find(c=>c.label==='当前颜色').hex,'#808080');assert.equal(variants.length,7);
+ assert.ok(parseInt(variants[0].hex.slice(1,3),16)>128);assert.ok(parseInt(variants.at(-1).hex.slice(1,3),16)<128);
+ for(const hex of ['#000000','#FFFFFF','#ff0000']){const colors=core.colorVariants(hex);assert.equal(new Set(colors.map(c=>c.hex)).size,colors.length);assert.ok(colors.some(c=>c.hex===hex.toUpperCase()&&c.label==='当前颜色'));assert.ok(colors.every(c=>/^#[A-F0-9]{6}$/.test(c.hex)));}
+ assert.throws(()=>core.colorVariants('rgba(0,0,0,.5)'));
+ const old=core.defaultSettings();delete old.colorShowEditor;assert.equal(core.validateSettings(old).colorShowEditor,true);assert.equal(core.validateSettings({...old,colorShowEditor:false}).colorShowEditor,false);assert.throws(()=>core.validateSettings({...old,colorShowEditor:1}));
+ const history=core.validateSettings({...old,colorHistory:['#abcdef','#ABCDEF',...Array.from({length:25},(_,n)=>'#'+n.toString(16).padStart(6,'0'))]}).colorHistory;assert.equal(history.length,20);assert.equal(history[0],'#ABCDEF');assert.equal(new Set(history).size,20);
+});
 test('附着搜索高度包含透明安全边距、完整边框、输入栏和受限结果列表',()=>{
  assert.equal(core.inlineSearchInset,2);assert.equal(core.inlineSearchHeight(0),50);
  assert.equal(core.inlineSearchHeight(0,true),90);assert.equal(core.inlineSearchHeight(2,true),142);
