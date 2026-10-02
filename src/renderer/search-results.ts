@@ -12,7 +12,17 @@ export class SearchResults {
  private index=0;
  private serial=0;
  private empty:HTMLElement|null=null;
- constructor(private root:HTMLElement,private input:HTMLInputElement,private embedded:boolean,private nameMarkup:(item:SearchEntry)=>string){}
+ constructor(private root:HTMLElement,private input:HTMLInputElement,private embedded:boolean,private nameMarkup:(item:SearchEntry)=>string,options:{selectOnPointer?:boolean}={}){
+  if(options.selectOnPointer){
+   let x=NaN,y=NaN;
+   root.addEventListener('pointermove',event=>{
+    if(event.pointerType==='touch'||event.buttons||event.clientX===x&&event.clientY===y)return;
+    x=event.clientX;y=event.clientY;
+    const row=event.target instanceof Element?event.target.closest<HTMLElement>('[data-result]'):null,index=Number(row?.dataset.result);
+    if(row&&root.contains(row)&&Number.isInteger(index)&&this.entry(index)&&index!==this.index)this.select(index);
+   });
+  }
+ }
  get count(){return this.entries.length;}
  get selected(){return this.index;}
  entry(index=this.index){return this.entries[index];}

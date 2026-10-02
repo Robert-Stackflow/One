@@ -31,7 +31,9 @@ export class DialogBar{
    if(!this.overlay.attach()){this.overlay=undefined;return;}
    void this.sendData(window,revision);
   };
-  if(window.webContents.isLoading())window.once('ready-to-show',attach);else attach();
+  // A prewarmed window can have painted once while resources are still loading.
+  // ready-to-show may already be past, but did-finish-load is still pending.
+  if(window.webContents.isLoadingMainFrame())window.webContents.once('did-finish-load',attach);else attach();
   try{
    const context=await this.bridge.context(hwnd);
    if(revision!==this.revision||!this.config().dialogSwitch||window.isDestroyed())return;
@@ -52,7 +54,7 @@ export class DialogBar{
    if(context.hwnd!==this.context?.hwnd||context.pid!==this.context?.pid||context.created!==this.context?.created||!this.overlay?.interactive())throw Error('文件对话框已失效');
    // Navigate through the native interface while the attached bar stays visible.
    await this.bridge.jump(context,path);await this.history.remember(path);
-   if(this.context?.hwnd===context.hwnd)this.closeResults();
+   if(this.context?.hwnd===context.hwnd){if(this.window&&!this.window.isDestroyed())await this.sendData(this.window,this.revision);this.closeResults();}
   }finally{this.choosing=false;}
  }
  stop(){this.revision++;this.context=undefined;this.overlay?.detach();this.overlay=undefined;if(this.window&&!this.window.isDestroyed())this.window.destroy();this.window=undefined;}

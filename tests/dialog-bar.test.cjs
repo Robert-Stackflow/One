@@ -7,8 +7,18 @@ test('文件对话框操作栏优先向下展开，并适配屏幕边缘和负�
 test('操作栏先附着，再异步读取目录；过期窗口的结果不会覆盖当前窗口',async()=>{
  const calls=[],pending=[],windows=[],config={dialogSwitch:true,bookmarks:[]};class Overlay{constructor(window,hwnd){this.hwnd=hwnd;this.window=window;}attach(){calls.push(['attach',this.hwnd]);return true;}detach(){calls.push(['detach',this.hwnd]);}interactive(){return true;}resize(){}focusOwner(){}}
  const plugin={name:'overlay-fixture',setup(b){b.onResolve({filter:/dialog-overlay$/},args=>({path:args.path,external:true}));}},loader=id=>id==='electron'?{BrowserWindow:{}}:id.endsWith('dialog-overlay')?{DialogOverlay:Overlay,dialogProcess:()=>42}:require(id);
- const {DialogBar}=await moduleFor('src/main/dialog-bar.ts',loader,[plugin]),create=()=>{const w=new EventEmitter();w.destroyed=false;w.isDestroyed=()=>w.destroyed;w.hide=()=>{};w.destroy=()=>{w.destroyed=true;w.emit('closed');};w.webContents={id:windows.length+1,isLoading:()=>false,send:(...args)=>calls.push(args)};windows.push(w);return w;},bridge={context:hwnd=>new Promise(resolve=>pending.push({hwnd,resolve}))},history={recentFolders:async()=>['C:/recent']};
+ const {DialogBar}=await moduleFor('src/main/dialog-bar.ts',loader,[plugin]),create=()=>{const w=new EventEmitter();w.destroyed=false;w.isDestroyed=()=>w.destroyed;w.hide=()=>{};w.destroy=()=>{w.destroyed=true;w.emit('closed');};w.webContents={id:windows.length+1,isLoadingMainFrame:()=>false,send:(...args)=>calls.push(args)};windows.push(w);return w;},bridge={context:hwnd=>new Promise(resolve=>pending.push({hwnd,resolve}))},history={recentFolders:async()=>['C:/recent']};
  const bar=new DialogBar(create,bridge,()=>config,history);bar.warm();assert.equal(windows.length,1);const first=bar.show(1);assert.deepEqual(calls[1],['attach',1]);assert.equal(pending.length,1);const second=bar.show(2);assert.ok(calls.some(c=>c[0]==='attach'&&c[1]===2));
  pending[1].resolve({kind:'dialog',hwnd:2,pid:42,created:'second',folders:[{path:'C:/new',active:true},{path:'c:/NEW',active:true}]});await second;pending[0].resolve({kind:'dialog',hwnd:1,pid:42,created:'old',folders:[{path:'C:/old',active:true}]});await first;assert.equal(bar.context.hwnd,2);assert.deepEqual((await bar.data()).opened,['C:/new']);await bar.show(2);assert.equal(pending.length,2,'immediate focus transitions do not re-enumerate Explorer');
  const third=bar.show(3);bar.stop();pending[2].resolve({kind:'dialog',hwnd:3,pid:42,created:'third',folders:[]});await third;assert.equal(bar.context,undefined);assert.equal(windows[0].destroyed,true);config.dialogSwitch=false;bar.warm();assert.equal(windows.length,1);
+});
+
+test('预热窗口已经首次绘制但仍在加载时，无需再次聚焦就能附着',async()=>{
+ const attached=[],config={dialogSwitch:true,bookmarks:[]},window=new EventEmitter(),contents=new EventEmitter();let loading=true;
+ window.isDestroyed=()=>false;window.hide=()=>{};window.webContents=Object.assign(contents,{id:1,isLoadingMainFrame:()=>loading,send:()=>{}});
+ class Overlay{constructor(_window,hwnd){this.hwnd=hwnd;}attach(){attached.push(this.hwnd);return true;}detach(){}}
+ const plugin={name:'overlay-fixture',setup(b){b.onResolve({filter:/dialog-overlay$/},args=>({path:args.path,external:true}));}},loader=id=>id==='electron'?{BrowserWindow:{}}:id.endsWith('dialog-overlay')?{DialogOverlay:Overlay,dialogProcess:()=>42}:require(id);
+ const {DialogBar}=await moduleFor('src/main/dialog-bar.ts',loader,[plugin]),bar=new DialogBar(()=>window,{context:async hwnd=>({kind:'dialog',hwnd,pid:42,created:'fixture',folders:[]})},()=>config,{recentFolders:async()=>[]});
+ bar.warm();window.emit('ready-to-show');await bar.show(1);await bar.show(2);assert.deepEqual(attached,[]);
+ loading=false;contents.emit('did-finish-load');assert.deepEqual(attached,[2],'only the latest native dialog attaches without a second foreground event');
 });

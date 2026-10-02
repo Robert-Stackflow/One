@@ -8,7 +8,7 @@ export async function renderDialogBar(){
  document.body.classList.add('dialog-companion','search-window');
  document.querySelector('#app')!.innerHTML=`<div class="dialog-companion-shell"><div class="search-input-row dialog-quick-bar">${icon('search')}<input id="dialog-query" aria-label="搜索文件夹" placeholder="搜索文件夹" role="combobox" aria-autocomplete="list" aria-controls="dialog-results" aria-expanded="false" autocomplete="off" spellcheck="false"><div class="dialog-bar-buttons">${iconButton('dialog-bookmarks','收藏文件夹','star')}${iconButton('dialog-recent','最近访问','history')}${iconButton('dialog-settings','文件对话框设置','settings')}</div></div><div class="dialog-results-panel" hidden><div id="dialog-results" class="search-results" role="listbox" aria-label="跳转目录" aria-busy="false"></div></div></div><div id="toast" class="toast" hidden role="status"></div>`;
  const input=q<HTMLInputElement>('dialog-query'),root=q('dialog-results'),panel=document.querySelector<HTMLElement>('.dialog-results-panel')!;
- const results=new SearchResults(root,input,false,item=>esc(item.name));
+ const results=new SearchResults(root,input,false,item=>esc(item.name),{selectOnPointer:true});
  let data:DialogBarData={opened:[],bookmarks:[],recent:[]},group:''|'bookmarks'|'recent'='',revision=0,composing=false,running=false,pending=false;
  let timer:ReturnType<typeof setTimeout>|undefined,progressive:{token:string;version:number}|undefined;
  let lastSize='';const layout=(shown:boolean)=>{panel.hidden=!shown;input.setAttribute('aria-expanded',String(shown));const count=shown?Math.min(6,results.count):0,active=shown&&!!(input.value.trim()||group),size=count+':'+active;if(size!==lastSize){lastSize=size;void api.dialogBarSize(count,active).catch(()=>{});}};
@@ -35,7 +35,7 @@ export async function renderDialogBar(){
  input.addEventListener('input',()=>{revision++;clearTimeout(timer);group='';for(const id of ['dialog-bookmarks','dialog-recent'])q(id).setAttribute('aria-pressed','false');progressive=undefined;if(!composing)timer=setTimeout(()=>void query(),40);});
  input.addEventListener('focus',()=>void query());
  input.addEventListener('compositionstart',()=>{composing=true;revision++;clearTimeout(timer);});input.addEventListener('compositionend',()=>{composing=false;void query();});
- root.addEventListener('click',event=>{const row=event.target instanceof Element?event.target.closest<HTMLElement>('[data-result]'):null;if(row){const item=results.entry(Number(row.dataset.result));if(item)void choose(item.path);}});
+ root.addEventListener('click',event=>{const row=event.target instanceof Element?event.target.closest<HTMLElement>('[data-result]'):null;if(row){const index=Number(row.dataset.result),item=results.entry(index);if(item){results.select(index);void choose(item.path);}}});
  document.addEventListener('keydown',event=>{
   if(event.isComposing||composing)return;
   if(event.key==='Escape'){event.preventDefault();clear();void api.dialogBarCollapse();}
