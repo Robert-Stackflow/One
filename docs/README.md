@@ -28,6 +28,7 @@
 - [设计规范](development/设计规范.md)
 - [图标设计](development/图标设计.md)
 - [持续优化进度](development/优化进度.md)
+- [原生文件索引模块](development/原生文件索引.md)
 
 ## 调研与历史
 

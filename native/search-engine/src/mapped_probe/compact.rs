@@ -3,7 +3,7 @@
 use super::*;
 use std::io::Read;
 
-struct Writer {
+pub(super) struct Writer {
     temps: Temps,
     parents: BufWriter<File>,
     rows: BufWriter<File>,
@@ -15,7 +15,7 @@ struct Writer {
     count: usize,
 }
 impl Writer {
-    fn new(target: &Path) -> io::Result<Self> {
+    pub(super) fn new(target: &Path) -> io::Result<Self> {
         let mut temps = Temps(Vec::new());
         let mut section = |suffix: &str| -> io::Result<File> {
             let name = target.with_extension(format!("{}.{}.tmp", std::process::id(), suffix));
@@ -47,6 +47,20 @@ impl Writer {
             parent_count: 0,
             count: 0,
         })
+    }
+    pub(super) fn record(&mut self, row: &Record) -> io::Result<()> {
+        let path = Fragments::from_key(row.item.path.key());
+        let display = row.item.path.display();
+        let split = if path.prefix.is_empty() {
+            0
+        } else {
+            display
+                .trim_end_matches(['\\', '/'])
+                .rfind(['\\', '/'])
+                .map_or(0, |at| at + 1)
+        };
+        let (prefix, name) = display.split_at(split);
+        self.write(row, path, prefix, name, row.item.modified())
     }
     fn write(
         &mut self,
@@ -136,7 +150,13 @@ impl Writer {
         }
         Ok(())
     }
-    fn finish(mut self, target: &Path, stop: &AtomicBool) -> io::Result<usize> {
+    pub(super) fn finish(mut self, target: &Path, stop: &AtomicBool) -> io::Result<usize> {
+        // Bounded interning can change parent-count parity. Keep every 64-byte
+        // row within one cache line; an unused zero parent is valid padding.
+        if self.parent_count % 2 != 0 {
+            self.parents.write_all(&[0; PARENT])?;
+            self.parent_count += 1;
+        }
         self.parents.flush()?;
         self.rows.flush()?;
         self.phonetics.out.flush()?;
@@ -149,6 +169,9 @@ impl Writer {
         let data_at = row_at + self.count as u64 * ROW as u64;
         let text_at = data_at + self.phonetics.length as u64;
         let total = text_at + self.text.length as u64;
+        if total > MAX_BYTES {
+            return Err(bad());
+        }
         let final_name = target.with_extension(format!("{}.image.tmp", std::process::id()));
         let file = OpenOptions::new()
             .write(true)
@@ -225,19 +248,7 @@ pub(super) fn run(
                 let row = view.row(id)?;
                 writer.write(&row, path, row.exact_prefix, row.exact_name, row.modified)?;
             }
-            Candidate::Extra(_, row) => {
-                let display = row.item.path.display();
-                let split = if path.prefix.is_empty() {
-                    0
-                } else {
-                    display
-                        .trim_end_matches(['\\', '/'])
-                        .rfind(['\\', '/'])
-                        .map_or(0, |at| at + 1)
-                };
-                let (prefix, name) = display.split_at(split);
-                writer.write(row, path, prefix, name, row.item.modified())?;
-            }
+            Candidate::Extra(_, row) => writer.record(row)?,
         }
     }
     if writer.count != overlay.count(&view) {

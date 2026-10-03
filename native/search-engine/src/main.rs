@@ -939,10 +939,14 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if let Some(result) = mapped_probe::command(&args) {
+        if let Err(error) = result {
+            output(json!({"error":error.to_string()}));
+            std::process::exit(1);
+        }
+        return;
+    }
     match args.get(1).map(String::as_str) {
-        Some("mapped-build") => { mapped_probe::build(&args).unwrap_or_else(|e| {output(json!({"error":e.to_string()}));std::process::exit(1)});return; }
-        Some("mapped-query") => { mapped_probe::serve(&args).unwrap_or_else(|e| {output(json!({"error":e.to_string()}));std::process::exit(1)});return; }
-        Some("mapped-store") => { mapped_probe::store::serve(&args).unwrap_or_else(|e| {output(json!({"error":e.to_string()}));std::process::exit(1)});return; }
         Some("cleanup") => {
             cleanup::run(
                 args.get(2).cloned().unwrap_or_default(),

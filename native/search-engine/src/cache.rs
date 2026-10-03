@@ -1,4 +1,5 @@
 use super::*;
+pub(super) mod stream;
 use std::{
     ffi::OsStr,
     fs::OpenOptions,
@@ -221,7 +222,7 @@ fn restore(item: Entry) -> Record {
     row.item.set_modified(item.modified);
     row
 }
-fn decode_batch(index: &mut Index, batch: &mut Vec<Entry>) -> io::Result<()> {
+pub(super) fn restore_records(batch: Vec<Entry>) -> Vec<Record> {
     use jwalk::rayon::prelude::*;
     static POOL: std::sync::OnceLock<jwalk::rayon::ThreadPool> = std::sync::OnceLock::new();
     let pool = POOL.get_or_init(|| {
@@ -230,9 +231,10 @@ fn decode_batch(index: &mut Index, batch: &mut Vec<Entry>) -> io::Result<()> {
             .build()
             .unwrap()
     });
-    let rows: Vec<_> =
-        pool.install(|| std::mem::take(batch).into_par_iter().map(restore).collect());
-    for row in rows {
+    pool.install(|| batch.into_par_iter().map(restore).collect())
+}
+fn decode_batch(index: &mut Index, batch: &mut Vec<Entry>) -> io::Result<()> {
+    for row in restore_records(std::mem::take(batch)) {
         if index.put(row).is_some() {
             return Err(bad());
         }

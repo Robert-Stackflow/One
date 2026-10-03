@@ -3,7 +3,8 @@
 use super::*;
 mod overlay;
 mod compact;
-pub mod store;
+mod store;
+mod import;
 use overlay::{Candidate, Overlay};
 use std::{
     cmp::Ordering as Order,
@@ -20,6 +21,17 @@ const HEADER: usize = 128;
 const PARENT: usize = 32;
 const ROW: usize = 64;
 const MAX_BYTES: u64 = 1024 * 1024 * 1024;
+/// Diagnostic commands stay separate from the live mutable service. Returning
+/// None lets normal startup continue without opening or migrating any cache.
+pub fn command(args: &[String]) -> Option<io::Result<()>> {
+    Some(match args.get(1).map(String::as_str)? {
+        "mapped-build" => build(args),
+        "mapped-query" => serve(args),
+        "mapped-store" => store::serve(args),
+        "mapped-import" => import::command(args),
+        _ => return None,
+    })
+}
 fn generation() -> io::Result<[u8; 16]> {
     let mut value = [0; 16];
     let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), value.as_mut_ptr(), 16, 2) };
