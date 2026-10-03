@@ -404,6 +404,9 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                             }
                         }
                     }
+                    "metadata" | "directories" | "children" => reply(
+                        &v, catalog::request(&state.base, &state.overlay, &v),
+                    ),
                     _ => reply(
                         &v,
                         query_image(&state.base, &v, &worker_gate, ticket, &state.overlay),
@@ -431,7 +434,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                     let ticket = gate.enqueue(&v);
                     let _ = tx.send(Message::Request(v, ticket));
                 }
-                "apply" | "compact" => {
+                "apply" | "compact" | "metadata" | "directories" | "children" => {
                     let _ = tx.send(Message::Request(v, 0));
                 }
                 "release-query" => {

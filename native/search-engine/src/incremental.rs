@@ -1,4 +1,5 @@
 use super::*;
+use catalog::{FileCatalog, Scope};
 use jwalk::rayon::prelude::*;
 use std::collections::BTreeSet;
 
@@ -8,52 +9,6 @@ pub fn stamp(metadata: &fs::Metadata) -> u64 {
         .ok()
         .and_then(|v| v.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |v| v.as_nanos().min(u64::MAX as u128) as u64)
-}
-struct Scope {
-    roots: Vec<String>,
-    excluded: Vec<String>,
-    cache: String,
-}
-impl Scope {
-    fn new(config: &Config, cache: &str) -> Self {
-        Self {
-            roots: config.roots.iter().map(|r| key(r)).collect(),
-            excluded: config.excluded.iter().map(|r| key(r)).collect(),
-            cache: key(cache),
-        }
-    }
-    fn contains_key(&self, path: &str) -> bool {
-        !cache::owned_key(path, &self.cache)
-            && self.roots.iter().any(|r| under(path, r))
-            && !self.excluded.iter().any(|r| under(path, r))
-    }
-    fn contains(&self, path: &str) -> bool {
-        self.contains_key(&key(path))
-    }
-    fn contains_path(&self, path: &PathKey) -> bool {
-        !(path.starts_with(&self.cache) && cache::owned_key(&path.normalized(), &self.cache))
-            && self.roots.iter().any(|root| path.under(root))
-            && !self.excluded.iter().any(|root| path.under(root))
-    }
-}
-// Keep metadata checking bounded, including when the cache contains millions of rows.
-// Clone shared paths only for directories in the current indexing scope.
-fn verification_batch(
-    index: &Index,
-    after: Option<&PathKey>,
-    scope: &Scope,
-) -> (Vec<(stored_path::StoredPath, u64)>, Option<PathKey>) {
-    const ROWS: usize = 8192;
-    let start = after.cloned().map_or(Bound::Unbounded, Bound::Excluded);
-    let mut directories = Vec::new();
-    let mut last = None;
-    for (k, row) in index.rows.range((start, Bound::Unbounded)).take(ROWS) {
-        last = Some(k);
-        if row.item.directory() && scope.contains_path(k) {
-            directories.push((row.item.path.clone(), row.item.modified()));
-        }
-    }
-    (directories, last.cloned())
 }
 fn remove(s: &Shared, path: &str, generation: u64) {
     let mut index = s.index.write().unwrap();
@@ -79,34 +34,6 @@ fn update_dir(s: &Shared, path: &str, value: u64, generation: u64) {
                 .changes(generation, vec![cache::Change::Put(row.item.entry())]);
         }
     }
-}
-// Seek past nested subtrees instead of walking every descendant for a shallow change.
-fn direct_children(s: &Shared, path: &str) -> Vec<String> {
-    let index = s.index.read().unwrap();
-    let prefix = format!("{}\\", key(path));
-    let mut cursor = prefix.clone();
-    let mut result = Vec::new();
-    loop {
-        let Some((k, row)) = index
-            .rows
-            .range((Bound::Included(PathKey::lookup(&cursor)), Bound::Unbounded))
-            .next()
-        else {
-            break;
-        };
-        if !k.starts_with(&prefix) {
-            break;
-        }
-        let full = k.normalized();
-        let relative = &full[prefix.len()..];
-        if let Some(at) = relative.find('\\') {
-            cursor = format!("{}{}\\\u{10ffff}", prefix, &relative[..at]);
-        } else {
-            result.push(row.item.path.to_string());
-            cursor = format!("{k}\0");
-        }
-    }
-    result
 }
 fn reconcile(
     s: &Shared,
@@ -149,9 +76,9 @@ fn reconcile(
         .index
         .read()
         .unwrap()
-        .rows
-        .get(&PathKey::lookup(key(path)))
-        .map(|r| (r.item.directory(), r.item.path.display().replace('/', "\\")));
+        .lookup(&key(path))
+        .expect("mutable catalog read")
+        .map(|r| (r.directory, r.path.display().replace('/', "\\")));
     if previous
         .as_ref()
         .is_some_and(|r| r.1 != path.replace('/', "\\"))
@@ -227,9 +154,9 @@ fn reconcile(
             .index
             .read()
             .unwrap()
-            .rows
-            .get(&PathKey::lookup(&k))
-            .map(|r| (r.item.directory(), r.item.path.to_string()));
+            .lookup(&k)
+            .expect("mutable catalog read")
+            .map(|r| (r.directory, r.path.to_string()));
         if previous.as_ref().map(|r| r.0) != Some(kind.is_dir())
             || previous.as_ref().is_some_and(|r| r.1 != child)
         {
@@ -239,9 +166,25 @@ fn reconcile(
             added.push(child);
         }
     }
-    for old in direct_children(s, path) {
-        if !seen.contains(&key(&old)) {
-            remove(s, &old, generation);
+    let mut cursor = None;
+    loop {
+        if s.generation.load(Ordering::Relaxed) != generation {
+            return;
+        }
+        let batch = s
+            .index
+            .read()
+            .unwrap()
+            .child_batch(path, cursor.as_deref())
+            .expect("mutable catalog read");
+        for old in batch.paths {
+            if !seen.contains(&old.key().normalized()) {
+                remove(s, old.display().as_ref(), generation);
+            }
+        }
+        cursor = batch.after;
+        if cursor.is_none() {
+            break;
         }
     }
     for child in added {
@@ -280,15 +223,21 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
                 .build()
                 .unwrap();
             let mut cursor: Option<PathKey> = None;
-            while !scope.roots.is_empty() {
+            while !scope.empty() {
                 if s.generation.load(Ordering::Relaxed) != generation {
                     return;
                 }
-                let (dirs, next) =
-                    verification_batch(&s.index.read().unwrap(), cursor.as_ref(), &scope);
-                let Some(next) = next else { break };
+                let batch = s
+                    .index
+                    .read()
+                    .unwrap()
+                    .directory_batch(cursor.as_ref(), &scope)
+                    .expect("mutable catalog read");
+                let Some(next) = batch.after else { break };
                 let changed: Vec<String> = pool.install(|| {
-                    dirs.par_iter()
+                    batch
+                        .directories
+                        .par_iter()
                         .filter_map(|(path, modified)| {
                             if s.generation.load(Ordering::Relaxed) != generation {
                                 return None;
@@ -308,7 +257,23 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
                         })
                         .collect()
                 });
-                work.extend(changed);
+                // Reconcile this bounded batch before reading the next one.
+                // The path cursor survives deletion or subtree replacement;
+                // do not retain every changed directory until verification ends.
+                for path in changed {
+                    if s.generation.load(Ordering::Relaxed) != generation {
+                        return;
+                    }
+                    reconcile(
+                        &s,
+                        &path,
+                        &config,
+                        &scope,
+                        generation,
+                        &mut scanned,
+                        &mut issues,
+                    );
+                }
                 cursor = Some(next);
             }
             for root in &config.roots {
@@ -316,8 +281,9 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
                     .index
                     .read()
                     .unwrap()
-                    .rows
-                    .contains_key(&PathKey::lookup(key(root)))
+                    .lookup(&key(root))
+                    .expect("mutable catalog read")
+                    .is_some()
                 {
                     work.push(root.clone());
                 }
@@ -395,19 +361,29 @@ mod tests {
             index.put(Record::new(path.into(), true, 1));
         }
         index.put(Record::new("C:\\Scope\\file.txt".into(), false, 1));
-        let (first, cursor) = verification_batch(&index, None, &scope);
+        let batch = index.directory_batch(None, &scope).unwrap();
+        let (first, cursor) = (batch.directories, batch.after);
         assert!(first.len() <= 8192);
-        let (second, last) = verification_batch(&index, cursor.as_ref(), &scope);
+        let batch = index.directory_batch(cursor.as_ref(), &scope).unwrap();
+        let (second, last) = (batch.directories, batch.after);
         assert_eq!(first.len() + second.len(), 8201);
         assert!(
-            verification_batch(&index, last.as_ref(), &scope)
-                .1
+            index
+                .directory_batch(last.as_ref(), &scope)
+                .unwrap()
+                .after
                 .is_none()
         );
         for (path, _) in first.iter().chain(&second) {
             assert!(path.display().starts_with("C:\\Scope\\Dir-"));
         }
         let empty = Scope::new(&Config::default(), "C:\\Scope\\cache.bin");
-        assert!(verification_batch(&index, None, &empty).0.is_empty());
+        assert!(
+            index
+                .directory_batch(None, &empty)
+                .unwrap()
+                .directories
+                .is_empty()
+        );
     }
 }

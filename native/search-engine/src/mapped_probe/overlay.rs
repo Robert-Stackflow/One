@@ -149,6 +149,13 @@ impl Overlay {
     pub fn iter<'a, 'v>(&'a self, view: &'v View<'a>, range: Range<usize>, scope: Option<(&str, &str)>) -> Union<'a, 'v> {
         let bounds = scope.map(|(lower,upper)|(Bound::Included(PathKey::lookup(lower)),Bound::Excluded(PathKey::lookup(upper))))
             .unwrap_or((Bound::Unbounded,Bound::Unbounded));
+        self.range(view, range, bounds)
+    }
+    pub fn iter_from<'a, 'v>(&'a self, view: &'v View<'a>, lower: &str) -> io::Result<Union<'a, 'v>> {
+        Ok(self.range(view, view.lower_bound(lower)?..view.count(),
+            (Bound::Included(PathKey::lookup(lower)), Bound::Unbounded)))
+    }
+    fn range<'a, 'v>(&'a self, view: &'v View<'a>, range: Range<usize>, bounds: (Bound<PathKey>, Bound<PathKey>)) -> Union<'a, 'v> {
         let extra = self.extra.range(bounds);
         Union { view, at:range.start, end:range.end, spans:self.hidden.spans.range(..range.end).peekable(), extra:extra.peekable(), next_extra_at:None }
     }

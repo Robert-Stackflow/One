@@ -3,6 +3,7 @@
 use super::*;
 mod overlay;
 mod compact;
+mod catalog;
 mod store;
 mod import;
 use overlay::{Candidate, Overlay};
@@ -448,6 +449,13 @@ impl<'a> View<'a> {
     fn count(&self) -> usize {
         self.rows.len() / ROW
     }
+    fn directory(&self, id: usize) -> io::Result<bool> {
+        let start = id.checked_mul(ROW).ok_or_else(bad)?;
+        let bytes = self.rows.get(start..start + ROW).ok_or_else(bad)?;
+        let flags = uint(bytes, 60)?;
+        if flags > 3 { return Err(bad()); }
+        Ok(flags & 1 != 0)
+    }
     fn possible(&self, id: usize, kind: &str, terms: &[Term], fuzzy: bool) -> io::Result<bool> {
         let start = id.checked_mul(ROW).ok_or_else(bad)?;
         let bytes = self.rows.get(start..start + ROW).ok_or_else(bad)?;
@@ -808,6 +816,8 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                     overlay = next;
                     Ok(overlay.stats(&view))
                 })()
+            } else if matches!(v["type"].as_str(), Some("metadata" | "directories" | "children")) {
+                catalog::request(&worker_path, &overlay, &v)
             } else { query_image(&worker_path, &v, &worker_gate, ticket, &overlay) };
             match result {
                 Ok(result) => output(json!({"id":v["id"],"result":result})),
@@ -828,7 +838,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                 let ticket = gate.enqueue(&v);
                 let _ = tx.send((v, ticket));
             }
-            "apply" => { let _ = tx.send((v, 0)); }
+            "apply" | "metadata" | "directories" | "children" => { let _ = tx.send((v, 0)); }
             "release-query" => {
                 gate.scopes
                     .lock()

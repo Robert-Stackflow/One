@@ -1,4 +1,5 @@
 mod cache;
+mod catalog;
 mod cleanup;
 mod disk;
 mod enumeration;
@@ -1063,6 +1064,13 @@ fn main() {
                 }
             }
             "resync" => incremental::refresh(s.clone(), Vec::new(), true),
+            "metadata" | "directories" | "children" => {
+                let result = catalog::request(&*s.index.read().unwrap(), &v);
+                match result {
+                    Ok(result) => output(json!({"id":v["id"],"result":result})),
+                    Err(error) => output(json!({"id":v["id"],"error":error.to_string()})),
+                }
+            }
             "query" => {
                 let ticket = s.query.fetch_add(1, Ordering::SeqCst) + 1;
                 s.query_scopes
