@@ -225,6 +225,14 @@ pub(super) fn run(
     stop: &AtomicBool,
 ) -> io::Result<usize> {
     let map = Mapping::open(base)?;
+    run_mapping(&map, overlay, target, stop)
+}
+pub(super) fn run_mapping(
+    map: &Mapping,
+    overlay: &Overlay,
+    target: &Path,
+    stop: &AtomicBool,
+) -> io::Result<usize> {
     let mut view = View::new(map.bytes())?;
     overlay.check(&view)?;
     view.validate()?;

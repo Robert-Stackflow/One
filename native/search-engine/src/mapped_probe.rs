@@ -277,6 +277,13 @@ struct Mapping {
     base: NonNull<u8>,
     len: usize,
 }
+// SAFETY: this process-address-space view is PAGE_READONLY/FILE_MAP_READ;
+// bytes() returns only a slice borrowing its owner, and the file denies writes
+// and deletion for the whole mapping lifetime. Handles/views have no thread
+// affinity. Arc retains the view until every borrowing reader has finished.
+// https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile
+unsafe impl Send for Mapping {}
+unsafe impl Sync for Mapping {}
 impl Mapping {
     fn open(path: &Path) -> io::Result<Self> {
         // Share reads only: no writer can truncate or alter the mapped image.
@@ -726,6 +733,13 @@ fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overl
     }
     let start = Instant::now();
     let map = Mapping::open(path)?;
+    query_mapping(&map, v, gate, ticket, overlay, start)
+}
+fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, start: Instant) -> io::Result<Value> {
+    if !gate.current(v, ticket) { return Ok(cancelled()); }
+    if v["query"].as_str().unwrap_or("").len() > 4000 {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "搜索条件过长"));
+    }
     let mut view = View::new(map.bytes())?;
     overlay.check(&view)?;
     let (kind, exts, terms) = parse(v["query"].as_str().unwrap_or(""), v["foldersOnly"].as_bool().unwrap_or(false));
@@ -761,8 +775,10 @@ fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overl
         if !gate.current(v, ticket) { return Ok(cancelled()); }
         output(json!({"id":v["id"],"result":{"items":items(&pass.heap,&view,overlay)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));
     }
-    view.validate()?;
     if !matches!(kind.as_str(), "app" | "setting") {
+        // App/settings queries do not consume file rows or their text. Keep
+        // header/generation checks, but do not touch the entire text section.
+        view.validate()?;
         if overlay.is_empty() {
             for id in 0..view.count() {
                 if id % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
@@ -781,7 +797,6 @@ fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overl
     if !gate.current(v, ticket) { return Ok(cancelled()); }
     let result = json!({"items":items(&pass.heap,&view,overlay)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0});
     drop(pass);
-    drop(map);
     Ok(result)
 }
 pub fn serve(args: &[String]) -> io::Result<()> {

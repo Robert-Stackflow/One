@@ -2,7 +2,7 @@
 //! base/delta pair while a background builder works beside ordinary queries.
 use super::*;
 use overlay::Mutation;
-use std::{path::PathBuf, sync::mpsc};
+use std::{path::PathBuf, sync::{mpsc, Weak}};
 
 const OWNER: &str = "One mapped generation store 1\n";
 const CURRENT: &str = ".one-mapped-current.json";
@@ -92,12 +92,81 @@ fn cleanup(dir: &Path, active: &str) {
         }
     }
 }
+// Readers retain an immutable overlay and a read-only file lease. Concurrent
+// readers/writers of a generation share one immutable mapped view; the lease
+// keeps only a weak mapping reference so idle state does not retain the view.
+struct BaseLease {
+    file: Option<File>,
+    base: PathBuf,
+    delta: PathBuf,
+    retired: AtomicBool,
+    mapping: Mutex<Weak<Mapping>>,
+}
+impl BaseLease {
+    fn open(base: &Path, delta: &Path) -> io::Result<Arc<Self>> {
+        let file = OpenOptions::new().read(true).share_mode(1).open(base)?;
+        Ok(Arc::new(Self {
+            file: Some(file), base: base.into(), delta: delta.into(),
+            retired: AtomicBool::new(false),
+            mapping: Mutex::new(Weak::new()),
+        }))
+    }
+    fn mapping(&self) -> io::Result<Arc<Mapping>> {
+        let mut cached = self.mapping.lock().unwrap();
+        if let Some(mapping) = cached.upgrade() { return Ok(mapping); }
+        let mapping = Arc::new(Mapping::open(&self.base)?);
+        *cached = Arc::downgrade(&mapping);
+        Ok(mapping)
+    }
+}
+impl Drop for BaseLease {
+    fn drop(&mut self) {
+        // Close the deny-delete lease before removing this retired pair.
+        self.file.take();
+        if self.retired.load(Ordering::Relaxed) {
+            let _ = fs::remove_file(&self.base);
+            let _ = fs::remove_file(&self.delta);
+        }
+    }
+}
+struct ReadSnapshot {
+    base: Arc<BaseLease>,
+    overlay: Arc<Overlay>,
+}
+impl ReadSnapshot {
+    fn from_state(state: &State) -> Arc<Self> {
+        Arc::new(Self { base: state.lease.clone(), overlay: state.overlay.clone() })
+    }
+    fn request(&self, request: &Value, gate: &Gate, ticket: u64) -> io::Result<Value> {
+        if matches!(request["type"].as_str(), Some("metadata" | "directories" | "children")) {
+            if gate.stopped.load(Ordering::Relaxed) {
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "索引读取已停止"));
+            }
+            let mapping = self.base.mapping()?;
+            let view = View::new(mapping.bytes())?;
+            crate::catalog::request(&catalog::MappedCatalog {view: &view, overlay: &self.overlay}, request)
+        } else {
+            if !gate.current(request, ticket) { return Ok(cancelled()); }
+            let start = Instant::now();
+            let mapping = self.base.mapping()?;
+            query_mapping(&mapping, request, gate, ticket, &self.overlay, start)
+        }
+    }
+}
+fn publish_readers(published: &RwLock<Arc<ReadSnapshot>>, state: &State) {
+    let next = ReadSnapshot::from_state(state);
+    // No mapping, I/O or query holds this lock. Construct before locking, then
+    // drop the predecessor outside it, including any retired file cleanup.
+    let previous = std::mem::replace(&mut *published.write().unwrap(), next);
+    drop(previous);
+}
 struct State {
     dir: PathBuf,
     id: String,
     base: PathBuf,
     delta: PathBuf,
-    overlay: Overlay,
+    overlay: Arc<Overlay>,
+    lease: Arc<BaseLease>,
 }
 impl State {
     fn open(seed: &Path, dir: &Path) -> io::Result<(Self, File)> {
@@ -165,27 +234,29 @@ impl State {
         let overlay = Overlay::load(&view, Some(&delta))?;
         drop(map);
         cleanup(dir, &current);
+        let lease = BaseLease::open(&base, &delta)?;
         Ok((
             Self {
                 dir: dir.into(),
                 id: current,
                 base,
                 delta,
-                overlay,
+                overlay: Arc::new(overlay),
+                lease,
             },
             lock,
         ))
     }
     fn apply(&mut self, changes: Vec<Mutation>, limit: usize) -> io::Result<Value> {
-        let map = Mapping::open(&self.base)?;
+        let map = self.lease.mapping()?;
         let view = View::new(map.bytes())?;
         let next = self.overlay.stage(&view, changes, limit)?;
         next.save(&self.delta)?;
-        self.overlay = next;
+        self.overlay = Arc::new(next);
         Ok(self.overlay.stats(&view))
     }
     fn needs_merge(&self) -> bool {
-        let Ok(map) = Mapping::open(&self.base) else {
+        let Ok(map) = self.lease.mapping() else {
             return false;
         };
         let Ok(view) = View::new(map.bytes()) else {
@@ -205,12 +276,12 @@ impl State {
         let paths:Vec<String>=serde_json::from_value(request["paths"].clone()).map_err(|_|bad())?;
         if paths.len()>10_000||paths.iter().any(|path|path.len()>131_072||path.contains('\0')) {return Err(bad());}
         let cache=self.dir.join("writer").to_string_lossy().into_owned();
-        let map=Mapping::open(&self.base)?;
+        let map=self.lease.mapping()?;
         let view=View::new(map.bytes())?;
         let changes=filesystem::refresh(&view,&self.overlay,&config,&cache,paths,request["offline"].as_bool().unwrap_or(false),&cancel)?;
         if cancel() {return Err(io::Error::new(io::ErrorKind::Interrupted,"目录更新已取消"));}
         let stats=changes.overlay.stats(&view);
-        if !changes.batches.is_empty() {changes.overlay.save(&self.delta)?;self.overlay=changes.overlay;}
+        if !changes.batches.is_empty() {changes.overlay.save(&self.delta)?;self.overlay=Arc::new(changes.overlay);}
         Ok((json!({"stats":stats,"scanned":changes.scanned,"issues":changes.issues}),changes.batches,config.max_entries))
     }
     fn install(&mut self, new_id: &str, tail: Vec<(Vec<Mutation>, usize)>) -> io::Result<Value> {
@@ -224,13 +295,18 @@ impl State {
         overlay.save(&delta)?;
         let stats = overlay.stats(&view);
         drop(map);
+        // Prepare the next read lease before the manifest commit. Publication
+        // after it is infallible and cannot acknowledge an unreadable version.
+        let lease = BaseLease::open(&base, &delta)?;
         publish(&self.dir, new_id)?;
         // Publication is the commit point. Every earlier failure leaves the
         // old manifest and its acknowledged delta untouched.
         self.id = new_id.into();
         self.base = base;
         self.delta = delta;
-        self.overlay = overlay;
+        self.overlay = Arc::new(overlay);
+        self.lease.retired.store(true, Ordering::Relaxed);
+        self.lease = lease;
         cleanup(&self.dir, new_id);
         Ok(stats)
     }
@@ -258,13 +334,13 @@ impl Merge {
         sender: mpsc::Sender<Message>,
     ) -> io::Result<Self> {
         let id = id()?;
-        let base = state.base.clone();
+        let base = state.lease.clone();
         let target = paths(&state.dir, &id).0;
         let overlay = state.overlay.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
         let thread = thread::spawn(move || {
-            let result = compact::run(&base, &overlay, &target, &flag);
+            let result = base.mapping().and_then(|mapping|compact::run_mapping(&mapping, &overlay, &target, &flag));
             let _ = sender.send(Message::Finished(result));
         });
         Ok(Self {
@@ -315,6 +391,16 @@ pub fn serve(args: &[String]) -> io::Result<()> {
     let worker_gate = gate.clone();
     let refreshes=Arc::new(AtomicU64::new(0));
     let worker_refreshes=refreshes.clone();
+    let published = Arc::new(RwLock::new(ReadSnapshot::from_state(&state)));
+    let reader_published = published.clone();
+    let reader_gate = gate.clone();
+    let (read_tx, read_rx) = mpsc::channel::<(Value, u64)>();
+    let reader = thread::spawn(move || {
+        for (request, ticket) in read_rx {
+            let snapshot = reader_published.read().unwrap().clone();
+            reply(&request, snapshot.request(&request, &reader_gate, ticket));
+        }
+    });
     let (tx, rx) = mpsc::channel();
     let worker_tx = tx.clone();
     let worker = thread::spawn(move || {
@@ -345,6 +431,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                         result.and_then(|_| state.install(&job.id, job.tail))
                     };
                     let success = result.is_ok();
+                    if success { publish_readers(&published, &state); }
                     let retry = job.invalid;
                     if let Some(request) = job.request {
                         reply(&request,result.map(|stats|json!({"stats":stats,"generation":state.id,"mergeMs":job.start.elapsed().as_secs_f64()*1000.0})));
@@ -411,6 +498,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                             Ok(stats)
                         })();
                         let success = result.is_ok();
+                        if success { publish_readers(&published, &state); }
                         reply(&v, result);
                         if success
                             && active.is_none()
@@ -428,13 +516,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                             }
                         }
                     }
-                    "metadata" | "directories" | "children" => reply(
-                        &v, catalog::request(&state.base, &state.overlay, &v),
-                    ),
-                    _ => reply(
-                        &v,
-                        query_image(&state.base, &v, &worker_gate, ticket, &state.overlay),
-                    ),
+                    _ => reply(&v, Err(io::Error::new(io::ErrorKind::InvalidInput, "未知索引修改请求"))),
                 },
             }
         }
@@ -456,7 +538,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
             match v["type"].as_str().unwrap_or("") {
                 "query" => {
                     let ticket = gate.enqueue(&v);
-                    let _ = tx.send(Message::Request(v, ticket));
+                    let _ = read_tx.send((v, ticket));
                 }
                 "refresh" => {
                     let ticket=refreshes.fetch_add(1,Ordering::SeqCst)+1;
@@ -466,7 +548,10 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                     refreshes.fetch_add(1,Ordering::SeqCst);
                     reply(&v,Ok(json!({"cancelled":true})));
                 }
-                "apply" | "compact" | "metadata" | "directories" | "children" => {
+                "metadata" | "directories" | "children" => {
+                    let _ = read_tx.send((v, 0));
+                }
+                "apply" | "compact" => {
                     let _ = tx.send(Message::Request(v, 0));
                 }
                 "release-query" => {
@@ -484,9 +569,11 @@ pub fn serve(args: &[String]) -> io::Result<()> {
     gate.stopped.store(true, Ordering::Relaxed);
     let _ = tx.send(Message::Stop);
     drop(tx);
-    worker
-        .join()
-        .map_err(|_| io::Error::other("Mapped store worker stopped unexpectedly"))?;
+    drop(read_tx);
+    let writer_result = worker.join();
+    let reader_result = reader.join();
+    writer_result.map_err(|_| io::Error::other("Mapped store writer stopped unexpectedly"))?;
+    reader_result.map_err(|_| io::Error::other("Mapped store reader stopped unexpectedly"))?;
     input
 }
 fn reply(request: &Value, result: io::Result<Value>) {
@@ -539,6 +626,7 @@ mod tests {
                 .is_err()
         );
         assert_eq!(state.id, old_id);
+        drop(state);
         drop(lock);
         let (mut restored, lock) = State::open(&seed, &store).unwrap();
         assert_eq!(restored.id, old_id);
@@ -560,6 +648,7 @@ mod tests {
             .unwrap();
         assert_eq!(restored.id, next);
         assert!(!paths(&store, &old_id).0.exists());
+        drop(restored);
         drop(lock);
         fs::remove_file(seed).unwrap();
         let (state, lock) = State::open(&dir.join("missing-seed"), &store).unwrap();
@@ -579,6 +668,58 @@ mod tests {
         assert!(!owns(".one-mapped-current.user.tmp"));
         assert!(!owns(".one-mapped-🙂🙂🙂🙂🙂🙂🙂🙂x.base"));
         drop(map);
+        drop(state);
+        drop(lock);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn readers_hold_confirmed_overlay_and_retired_base_until_the_last_lease() {
+        let dir = std::env::temp_dir().join(format!("one-map-readers-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let seed = dir.join("seed.bin");
+        let store = dir.join("store");
+        let mut index = Index::default();
+        index.put(Record::new("D:\\Old.txt".into(), false, 0));
+        image(&index, &seed).unwrap();
+        let (mut state, lock) = State::open(&seed, &store).unwrap();
+        let published = RwLock::new(ReadSnapshot::from_state(&state));
+        let old = published.read().unwrap().clone();
+        let old_base = state.base.clone();
+        let mapping = state.lease.mapping().unwrap();
+        let weak = Arc::downgrade(&mapping);
+        let lease = state.lease.clone();
+        let shared = thread::spawn(move || {
+            let mapping = lease.mapping().unwrap();
+            assert_eq!(View::new(mapping.bytes()).unwrap().count(), 1);
+            mapping
+        }).join().unwrap();
+        assert!(Arc::ptr_eq(&mapping, &shared), "Concurrent readers must reuse the same mapped view");
+        drop(shared);
+        drop(mapping);
+        assert!(weak.upgrade().is_none(), "Idle leases must not keep mapped pages resident");
+        assert!(state.lease.mapping.lock().unwrap().upgrade().is_none());
+        let gate = Gate::default();
+        let metadata = json!({"type":"metadata","path":"D:\\New.txt"});
+        state.apply(vec![Mutation::Put(Entry {
+            path: "D:\\New.txt".into(), name: String::new(), directory: false,
+            modified: 0, size: 0,
+        })], 100).unwrap();
+        publish_readers(&published, &state);
+        assert_eq!(old.request(&metadata, &gate, 0).unwrap(), Value::Null);
+        assert_eq!(published.read().unwrap().request(&metadata, &gate, 0).unwrap()["path"], "D:\\New.txt");
+        let next = id().unwrap();
+        compact::run(&state.base, &state.overlay, &paths(&store, &next).0, &AtomicBool::new(false)).unwrap();
+        state.install(&next, Vec::new()).unwrap();
+        publish_readers(&published, &state);
+        assert!(old_base.exists(), "A pinned query must retain the retired base");
+        let query = json!({"type":"query","scope":71,"query":""});
+        let ticket = gate.enqueue(&query);
+        assert_eq!(old.request(&query, &gate, ticket).unwrap()["total"], 1);
+        assert_eq!(published.read().unwrap().request(&query, &gate, ticket).unwrap()["total"], 2);
+        drop(old);
+        assert!(!old_base.exists(), "Retired generation is reclaimed after its last reader");
+        drop(published);
+        drop(state);
         drop(lock);
         fs::remove_dir_all(dir).unwrap();
     }
