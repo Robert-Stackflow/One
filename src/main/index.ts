@@ -46,6 +46,7 @@ import type { Settings, TextRequest, ScanSummary, PreviewData, MaintenanceRow } 
 import { brightness } from './brightness';
 import { readText, saveText } from './text-files';
 import { initNative, foreground } from './native';
+import {migrateSearchDefaults} from './search-defaults';
 import {colorFormats} from '../shared/colors';
 import {ColorEditor} from './color-editor';
 import {fileResponse} from './file-response';
@@ -234,7 +235,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings)){
     const inputKeys=['quickActions','capsLock','echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings'] as const;
     if(inputKeys.some(changed))input?.update(next);
     if(changed('search')){
-      const bridgeKeys=['shortcut','doubleCtrl','explorerTyping','explorerMenu','dialogSwitch'] as const;
+      const bridgeKeys=['shortcut','programShortcut','doubleCtrl','explorerTyping','explorerMenu','dialogSwitch'] as const;
       if(bridgeKeys.some(k=>next.search[k]!==previous.search[k]))searchBridge?.update(next.search);
       if(!next.search.dialogSwitch)dialogBar?.stop();search?.configure(next.search);if(main&&!main.isDestroyed())warmSearchPopups();
       if(JSON.stringify([previous.search.roots,previous.search.excluded,previous.search.maxEntries])!==JSON.stringify([next.search.roots,next.search.excluded,next.search.maxEntries]))search?.rebuild(next.search);
@@ -422,6 +423,8 @@ async function start() {
   Menu.setApplicationMenu(null);
   applicationIcon = nativeImage.createFromBuffer(await readFile(join(__dirname,'../icons/one-256.png')));
   try { settings = validateSettings(JSON.parse(await readFile(settingsPath(), 'utf8'))); } catch {}
+  const migratedSearch=migrateSearchDefaults(settings.search,process.env);
+  if(migratedSearch!==settings.search)await persistSettings({...settings,search:migratedSearch});
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); return net.fetch(pathToFileURL(path).toString()); });
   protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request); });
@@ -435,7 +438,7 @@ async function start() {
   initNative(); foreground(); input = new InputService(settings, { echo, level:value=>echoes.level(value),caps:active=>echoes.caps(active),show: showMain, color:()=>void pickColor().catch(error=>echo(error.message)), preview: async hwnd => { const selected: { hwnd: number; path: string }[] = await runMaintenance('selection'); if (foreground()?.hwnd !== hwnd) return; const item = selected.find(row => row.hwnd === hwnd); if (item) await preview(filePath(item.path)); } });
   locksmith=new LocksmithService(state=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:locks',state);});
   awake=new AwakeService(utilityChanged);topmost=new TopmostService(utilityChanged,echo);awake.update(settings.utilities.awake);topmost.update(settings.utilities.topmost);
-  search=new SearchService(join(app.getPath('userData'),'file-index.ndjson'),settings.search,searchChanged);searchBridge=new SearchBridge(showSearch,searchChanged);
+  search=new SearchService(join(app.getPath('userData'),'file-index.ndjson'),settings.search,searchChanged);searchBridge=new SearchBridge(showSearch,searchChanged,echo);
   configurePicker(() => settings.search.bookmarks, async () => (await searchBridge.context(0)).folders);
   launcher=new LauncherService(items=>{search.launchers(items);searchChanged();});search.launchers(launcher.entries());launcher.refresh();
   fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}});

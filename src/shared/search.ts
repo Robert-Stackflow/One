@@ -8,7 +8,7 @@ export type MenuBarPosition='top'|'bottom';
 export interface MenuBarSection {actions:string[];right:string[]}
 export interface MenuBarSettings {top:MenuBarSection;bottom:MenuBarSection}
 export interface MenuBar {top:MenuNode[];bottom:MenuNode[]}
-export interface SearchSettings {maxEntries:number;roots:string[];excluded:string[];priorities:IndexPriorityRule[];shortcut:string;doubleCtrl:boolean;explorerTyping:boolean;explorerMenu:boolean;dialogSwitch:boolean;bookmarks:string[];fuzzy:boolean;pinyin:boolean;menu:SearchMenuItem[];menuVersion:number;menuBar:MenuBarSettings}
+export interface SearchSettings {maxEntries:number;roots:string[];excluded:string[];priorities:IndexPriorityRule[];priorityDefaultsVersion:number;shortcut:string;programShortcut:string;doubleCtrl:boolean;explorerTyping:boolean;explorerMenu:boolean;dialogSwitch:boolean;bookmarks:string[];fuzzy:boolean;pinyin:boolean;menu:SearchMenuItem[];menuVersion:number;menuBar:MenuBarSettings}
 export interface SearchEntry {path:string;name:string;directory:boolean;modified:number;size:number;matchKind?:'exact'|'pinyin'|'fuzzy'|'typo';launchKind?:'app'|'setting';icon?:string;subtitle?:string}
 export interface SearchState {running:boolean;count:number;scanned:number;issues:number;root:string;updated:number;error:string;watching:boolean}
 export interface SearchResult {items:SearchEntry[];total:number;elapsed:number;cancelled?:boolean;partial?:boolean;localTotal?:number}
@@ -17,7 +17,7 @@ export interface SearchContext {kind:'search'|'explorer'|'menu'|'dialog';hwnd:nu
 export const defaultMenu=():SearchMenuItem[]=>[['opened','已打开的文件夹','folder'],['recent','最近访问','history'],['copy-path','复制当前路径','copy'],['terminal','在此打开 PowerShell','terminal'],['settings','自定义菜单','system']].map(([target,label,icon],i)=>({id:'default-'+i,parent:'',kind:'builtin',label,target,args:[],cwd:'',icon,enabled:true}));
 export const bookmarkMenuItem=(id='default-bookmarks'):SearchMenuItem=>({id,parent:'',kind:'builtin',label:'收藏文件夹',target:'bookmarks',args:[],cwd:'',icon:'star',enabled:true});
 export const defaultMenuBar=():MenuBarSettings=>({top:{actions:[],right:[]},bottom:{actions:['favorite','builtin:settings'],right:['builtin:settings']}});
-export const defaultSearch=():SearchSettings=>({maxEntries:2_000_000,roots:[],excluded:[],priorities:[],shortcut:'Ctrl+Alt+F',doubleCtrl:false,explorerTyping:false,explorerMenu:false,dialogSwitch:false,bookmarks:[],fuzzy:true,pinyin:true,menu:[...defaultMenu(),bookmarkMenuItem()],menuVersion:1,menuBar:defaultMenuBar()});
+export const defaultSearch=():SearchSettings=>({maxEntries:2_000_000,roots:[],excluded:[],priorities:[],priorityDefaultsVersion:0,shortcut:'Ctrl+Alt+F',programShortcut:'Ctrl+Alt+P',doubleCtrl:false,explorerTyping:false,explorerMenu:false,dialogSwitch:false,bookmarks:[],fuzzy:true,pinyin:true,menu:[...defaultMenu(),bookmarkMenuItem()],menuVersion:1,menuBar:defaultMenuBar()});
 export function validateMenuBar(value:unknown,menu:SearchMenuItem[]):MenuBarSettings {
  if(value===undefined)return defaultMenuBar();if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('快捷操作栏设置无效');
  const source=value as Record<string,unknown>,seen=new Set<string>();
@@ -40,6 +40,9 @@ export function validateMenu(value:unknown):SearchMenuItem[]{
 export function validateSearch(value:unknown):SearchSettings {
  if(value===undefined)return defaultSearch();const v=value as SearchSettings;
  if(!v||['doubleCtrl','explorerTyping','explorerMenu','dialogSwitch'].some(k=>typeof v[k as keyof SearchSettings]!=='boolean')||typeof v.shortcut!=='string'||v.shortcut.length>100||v.shortcut&&!/^(?:(?:Ctrl|Control|Alt|Shift|Win|Meta|Super)\+)+(?:[A-Z0-9]|F(?:[1-9]|1\d|2[0-4]))$/i.test(v.shortcut))throw new Error('搜索设置无效');
+ const programShortcut=v.programShortcut===undefined?defaultSearch().programShortcut:v.programShortcut;
+ if(typeof programShortcut!=='string'||programShortcut.length>100||programShortcut&&!/^(?:(?:Ctrl|Control|Alt|Shift|Win|Meta|Super)\+)+(?:[A-Z0-9]|F(?:[1-9]|1\d|2[0-4]))$/i.test(programShortcut))throw new Error('程序定位快捷键无效');
+ if(v.priorityDefaultsVersion!==undefined&&v.priorityDefaultsVersion!==0&&v.priorityDefaultsVersion!==1)throw new Error('默认目录版本无效');
  for(const key of ['roots','excluded','bookmarks'] as const)if(!Array.isArray(v[key])||v[key].length>64||v[key].some(x=>typeof x!=='string'||x.length>32768||/[\0\r\n]/.test(x)||!(/^[A-Z]:[\\/]|^\\\\[^\\]+\\[^\\]+/i.test(x))))throw new Error('请选择有效的绝对目录路径');
  if(v.fuzzy!==undefined&&typeof v.fuzzy!=='boolean'||v.pinyin!==undefined&&typeof v.pinyin!=='boolean')throw new Error('匹配设置无效');
  if(v.maxEntries!==undefined&&(!Number.isSafeInteger(v.maxEntries)||v.maxEntries<1000||v.maxEntries>10_000_000))throw new Error('索引上限应为 1,000–10,000,000 项');
@@ -47,7 +50,7 @@ export function validateSearch(value:unknown):SearchSettings {
  const menu=validateMenu(v.menu??defaultMenu());
  // Adopt the formerly injected favorites once; deletion thereafter is intentional.
  if(v.menuVersion===undefined&&v.bookmarks.length&&!menu.some(item=>item.kind==='builtin'&&item.target==='bookmarks')&&menu.length<200){let id='default-bookmarks',suffix=0;while(menu.some(item=>item.id===id))id='default-bookmarks-'+(++suffix);menu.push(bookmarkMenuItem(id));}
- return {maxEntries:v.maxEntries??2_000_000,roots:[...new Set(v.roots)],excluded:[...new Set(v.excluded)],priorities:validateIndexPriorities(v.priorities),bookmarks:[...new Set(v.bookmarks)],shortcut:v.shortcut,doubleCtrl:v.doubleCtrl,explorerTyping:v.explorerTyping,explorerMenu:v.explorerMenu,dialogSwitch:v.dialogSwitch,fuzzy:v.fuzzy??true,pinyin:v.pinyin??true,menu,menuVersion:1,menuBar:validateMenuBar(v.menuBar,menu)};
+ return {maxEntries:v.maxEntries??2_000_000,roots:[...new Set(v.roots)],excluded:[...new Set(v.excluded)],priorities:validateIndexPriorities(v.priorities),priorityDefaultsVersion:v.priorityDefaultsVersion??0,bookmarks:[...new Set(v.bookmarks)],shortcut:v.shortcut,programShortcut,doubleCtrl:v.doubleCtrl,explorerTyping:v.explorerTyping,explorerMenu:v.explorerMenu,dialogSwitch:v.dialogSwitch,fuzzy:v.fuzzy??true,pinyin:v.pinyin??true,menu,menuVersion:1,menuBar:validateMenuBar(v.menuBar,menu)};
 }
 const groups:Record<string,Set<string>>={doc:new Set(['txt','md','pdf','doc','docx','ppt','pptx','xls','xlsx','csv','rtf','epub']),pic:new Set(['png','jpg','jpeg','webp','gif','bmp','tif','tiff','svg','avif','heic']),video:new Set(['mp4','mkv','webm','avi','mov','m4v']),audio:new Set(['mp3','flac','wav','m4a','ogg','aac','opus'])};
 export function searchMatcher(query:string,foldersOnly=false){
