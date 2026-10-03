@@ -1,5 +1,5 @@
 import {lstat,opendir,open,mkdir,writeFile,readFile} from 'node:fs/promises';
-import {isAbsolute,join,resolve,extname,parse} from 'node:path';
+import {isAbsolute,join,resolve,extname,parse,dirname} from 'node:path';
 import {createHash} from 'node:crypto';
 import type {FileStamp,FileToolReport,FileToolRow} from '../shared/file-tools';
 export const extensions=(text:string)=>new Set(text.split(/[;,\s]+/).map(s=>s.replace(/^\*?\./,'').toLowerCase()).filter(Boolean));
@@ -10,8 +10,16 @@ export const unchanged=(a:FileStamp,b:FileStamp)=>a.identity===b.identity&&a.siz
 const hashBufferBytes=256*1024;
 export const partialHashBytes=hashBufferBytes*3;
 export const partialHashCoversFile=(size:number)=>size<=partialHashBytes;
+function overlappingRoots(roots:string[]){
+ if(roots.length<2)return false;
+ const normalized=roots.map(root=>root.toLowerCase()),known=new Set(normalized);
+ if(known.size!==roots.length)return true;
+ for(let root of normalized){for(let parent=dirname(root);parent!==root;root=parent,parent=dirname(root))if(known.has(parent))return true;}
+ return false;
+}
 export async function* walk(roots:string[],recursive:boolean,issue:(path:string,error:unknown)=>void,includeDirectories=false,selectedOnly=false):AsyncGenerator<FileStamp>{
- const seen=new Set<string>(),stack=paths(roots).reverse();while(stack.length){const path=stack.pop()!,key=path.toLowerCase();if(seen.has(key))continue;seen.add(key);let value:FileStamp;try{value=await stamp(path);}catch(e){issue(path,e);continue;}if(selectedOnly||!value.directory){yield value;continue;}if(includeDirectories)yield value;try{const dir=await opendir(path);for await(const e of dir){if(e.isSymbolicLink())continue;const child=join(path,e.name);if(e.isDirectory()){if(recursive)stack.push(child);else if(includeDirectories)try{yield await stamp(child);}catch(e){issue(child,e);}}else if(e.isFile()&&!seen.has(child.toLowerCase())){seen.add(child.toLowerCase());try{yield await stamp(child);}catch(e){issue(child,e);}}}}catch(e){issue(path,e);}}
+ const stack=paths(roots).reverse(),seen=overlappingRoots(stack)?new Set<string>():undefined;
+ while(stack.length){const path=stack.pop()!;if(seen){const key=path.toLowerCase();if(seen.has(key))continue;seen.add(key);}let value:FileStamp;try{value=await stamp(path);}catch(e){issue(path,e);continue;}if(selectedOnly||!value.directory){yield value;continue;}if(includeDirectories)yield value;try{const dir=await opendir(path);for await(const e of dir){if(e.isSymbolicLink())continue;const child=join(path,e.name);if(e.isDirectory()){if(recursive)stack.push(child);else if(includeDirectories)try{yield await stamp(child);}catch(e){issue(child,e);}}else if(e.isFile()){if(seen){const key=child.toLowerCase();if(seen.has(key))continue;seen.add(key);}try{yield await stamp(child);}catch(e){issue(child,e);}}}}catch(e){issue(path,e);}}
 }
 export async function hashFile(file:FileStamp,partial=false,tick:(bytes:number)=>void=()=>{}){
  const handle=await open(file.path,'r');try{const before=await handle.stat({bigint:true});if(identity(before,file.path)!==file.identity||before.mtimeNs.toString()!==file.mtime||Number(before.size)!==file.size)throw Error('文件在扫描后发生变化');const hash=createHash('sha256'),buffer=Buffer.allocUnsafe(hashBufferBytes);let bytes=0;
