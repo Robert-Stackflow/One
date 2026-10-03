@@ -58,7 +58,7 @@ impl Rules {
             Self {linear: Vec::new(), tree: Some(tree)}
         } else {Self {linear: compiled, tree: None}}
     }
-    pub fn rank(&self, path: &PathKey) -> i8 {
+    pub fn rank(&self, path: &impl SearchPath) -> i8 {
         if let Some(tree)=&self.tree {tree.rank(path.prefix().as_bytes(),path.name().as_bytes())}
         else {self.linear.iter().find(|(root, _)| path.under(root)).map_or(0, |(_, rank)| *rank)}
     }

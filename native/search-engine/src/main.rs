@@ -8,6 +8,9 @@ mod path_key;
 mod rows;
 mod stored_path;
 mod priority;
+mod search_access;
+mod mapped_probe;
+use search_access::{SearchPath, SearchRow};
 use path_key::{PathKey, PathPool};
 use pinyin::ToPinyinMulti;
 use serde::{Deserialize, Serialize};
@@ -694,20 +697,14 @@ fn parse(query: &str, folder: bool) -> (String, Vec<String>, Vec<Term>) {
     }
     (kind, extensions, terms)
 }
-fn accepts(row: &Record, kind: &str, exts: &[String]) -> bool {
-    let item = &row.item;
-    if item.path.key().starts_with("one-launcher:") {
-        return exts.is_empty()
-            && (kind.is_empty()
-                || item
-                    .path
-                    .key()
-                    .starts_with(&format!("one-launcher:{kind}:")));
+fn accepts(row: &impl SearchRow, kind: &str, exts: &[String]) -> bool {
+    if let Some(matches) = row.launcher_matches(kind) {
+        return exts.is_empty() && matches;
     }
     if kind == "app" || kind == "setting" {
         return false;
     }
-    if kind == "folder" && !item.directory() || !kind.is_empty() && kind != "folder" && item.directory()
+    if kind == "folder" && !row.directory() || !kind.is_empty() && kind != "folder" && row.directory()
     {
         return false;
     }
@@ -726,9 +723,16 @@ fn accepts(row: &Record, kind: &str, exts: &[String]) -> bool {
         _ => true,
     }
 }
+fn impossible_mask(bits: u128, parent: u128, terms: &[Term], fuzzy: bool) -> bool {
+    let all_bits = bits | parent;
+    terms.iter().any(|term| {
+        term.bits & all_bits != term.bits
+            && !(fuzzy && term.typo && (term.bits & !bits).count_ones() <= 2)
+    })
+}
 fn score(
-    row: &Record,
-    path: &PathKey,
+    row: &impl SearchRow,
+    path: &impl SearchPath,
     terms: &[Term],
     fuzzy: bool,
     pinyin: bool,
@@ -737,20 +741,13 @@ fn score(
     // keys. Their stored mask already covers the name and every pinyin form;
     // the parent mask covers path matches. Reject impossible candidates before
     // resolving the name or search metadata for millions of rows.
-    if matches!(row.item.metadata, Metadata::File | Metadata::Directory(_)) {
-        let bits = row.bits.value();
-        let all_bits = bits | path.prefix_bits();
-        if terms.iter().any(|term| {
-            term.bits & all_bits != term.bits
-                && !(fuzzy && term.typo && (term.bits & !bits).count_ones() <= 2)
-        }) {
-            return None;
-        }
+    if row.plain_name() && impossible_mask(row.bits(), path.prefix_bits(), terms, fuzzy) {
+        return None;
     }
-    let mut total = if row.item.directory() { 3 } else { 0 };
+    let mut total = if row.directory() { 3 } else { 0 };
     let mut mode = "exact";
     let lower = row.lower();
-    let bits = row.bits.value();
+    let bits = row.bits();
     let file_name = std::ptr::eq(lower, path.name());
     for term in terms {
         let t = &term.text;
@@ -939,6 +936,8 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
+        Some("mapped-build") => { mapped_probe::build(&args).unwrap_or_else(|e| {output(json!({"error":e.to_string()}));std::process::exit(1)});return; }
+        Some("mapped-query") => { mapped_probe::serve(&args).unwrap_or_else(|e| {output(json!({"error":e.to_string()}));std::process::exit(1)});return; }
         Some("cleanup") => {
             cleanup::run(
                 args.get(2).cloned().unwrap_or_default(),
