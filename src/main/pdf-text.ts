@@ -1,13 +1,12 @@
-import {readFile} from 'node:fs/promises';
 import {dirname,join} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import type {FileStamp} from '../shared/file-tools';
 import type {DocumentPart,DocumentOptions} from './document-text';
 
-/** Share the file's byte storage with PDF.js instead of copying a second complete PDF. */
+/** Let PDF.js read file ranges as each page is extracted. */
 export async function* extractPdf(file:FileStamp,options:DocumentOptions):AsyncGenerator<DocumentPart>{
  const pdf=await import('pdfjs-dist/legacy/build/pdf.mjs'),root=dirname(require.resolve('pdfjs-dist/package.json'));
- const buffer=await readFile(file.path),data=new Uint8Array(buffer.buffer,buffer.byteOffset,buffer.byteLength);
- const task=pdf.getDocument({data,standardFontDataUrl:join(root,'standard_fonts').replace(/\\/g,'/')+'/',cMapUrl:join(root,'cmaps').replace(/\\/g,'/')+'/',cMapPacked:true,disableFontFace:true,useSystemFonts:false});
+ const task=pdf.getDocument({url:pathToFileURL(file.path).href,disableStream:true,disableAutoFetch:true,standardFontDataUrl:join(root,'standard_fonts').replace(/\\/g,'/')+'/',cMapUrl:join(root,'cmaps').replace(/\\/g,'/')+'/',cMapPacked:true,disableFontFace:true,useSystemFonts:false});
  try{
   const document=await task.promise;
   for(let page=1;page<=document.numPages;page++){
