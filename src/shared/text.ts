@@ -1,7 +1,7 @@
 import * as OpenCC from 'opencc-js';
 import type { TextRequest } from './types';
-const toSimple = OpenCC.Converter({ from: 'twp', to: 'cn' });
-const toTraditional = OpenCC.Converter({ from: 'cn', to: 'twp' });
+let toSimple:ReturnType<typeof OpenCC.Converter>|undefined;
+let toTraditional:ReturnType<typeof OpenCC.Converter>|undefined;
 export const lines = (text: string) => text.replace(/\r\n?/g, '\n').split('\n');
 /** Keep only bounded output pieces instead of several arrays of every input line. */
 function mapLines(text:string,map:(line:string)=>string|undefined,separator='\r\n'){
@@ -26,8 +26,8 @@ export function transform(request: TextRequest): string {
     case 'clean': return mapLines(text,line=>line.trim()||undefined);
     case 'unique': {const seen=new Set<string>();return mapLines(text,line=>{if(seen.has(line))return;seen.add(line);return line;});}
     case 'sort': return lines(text).sort().join('\r\n');
-    case 'simple': return toSimple(text);
-    case 'traditional': return toTraditional(text);
+    case 'simple': return (toSimple??=OpenCC.Converter({from:'twp',to:'cn'}))(text);
+    case 'traditional': return (toTraditional??=OpenCC.Converter({from:'cn',to:'twp'}))(text);
     case 'half': return text.replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, ' ');
     case 'full': return text.replace(/[!-~]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0)).replace(/ /g, '\u3000');
     case 'trim': return mapLines(text,line=>line.trim());
