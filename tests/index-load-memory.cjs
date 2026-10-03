@@ -4,6 +4,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const Memory=koffi.struct('OneRestoreMemory',{cb:'uint32',PageFaultCount:'uint32',PeakWorkingSetSize:'size_t',WorkingSetSize:'size_t',QuotaPeakPagedPoolUsage:'size_t',QuotaPagedPoolUsage:'size_t',QuotaPeakNonPagedPoolUsage:'size_t',QuotaNonPagedPoolUsage:'size_t',PagefileUsage:'size_t',PeakPagefileUsage:'size_t',PrivateUsage:'size_t'});
 const kernel=koffi.load('kernel32.dll'),psapi=koffi.load('psapi.dll'),open=kernel.func('void * __stdcall OpenProcess(uint32, int, uint32)'),close=kernel.func('int __stdcall CloseHandle(void *)'),getMemory=psapi.func('int __stdcall GetProcessMemoryInfo(void *, _Out_ OneRestoreMemory *, uint32)');
+const setAffinity=kernel.func('int __stdcall SetProcessAffinityMask(void *, size_t)');
 const FileTime=koffi.struct('OneQueryFileTime',{low:'uint32',high:'uint32'}),getTimes=kernel.func('int __stdcall GetProcessTimes(void *, _Out_ OneQueryFileTime *, _Out_ OneQueryFileTime *, _Out_ OneQueryFileTime *, _Out_ OneQueryFileTime *)');
 function cpuTime(handle){const created={},exited={},system={},user={};assert.ok(getTimes(handle,created,exited,system,user));return(system.high*2**32+system.low+user.high*2**32+user.low)/10000;}
 const queries=['QQ','季度','jidubaogao','jdbg','ext:json package','folder: downloads','x beauty','reprot','无匹配_2049','"QQ"','"d:\\repositories\\one"','"repositories\\one\\package.json"','"D:/Repositories/One"'];
@@ -24,7 +25,8 @@ async function frozen(source){
 }
 async function run(exe,cache,source,cases=queries,verifyConcurrency=false){
  await fs.writeFile(cache,source.bytes);await fs.rm(cache+'.delta',{force:true});if(source.delta)await fs.writeFile(cache+'.delta',source.delta);
- const at=performance.now(),child=spawn(exe,[cache],{windowsHide:true}),handle=open(0x410,0,child.pid);assert.ok(handle);
+ const affinity=Number(process.env.ONE_INDEX_AFFINITY||0);assert.ok(Number.isSafeInteger(affinity)&&affinity>=0);
+ const at=performance.now(),child=spawn(exe,[cache],{windowsHide:true}),handle=open(affinity?0x610:0x410,0,child.pid);assert.ok(handle);
  let buffer='',state,ready=false,running=false,readyMs,id=0,peakResident=0,peakPrivate=0;const pending=new Map(),errors=[];
  const sample=()=>{const m=memory(handle);peakResident=Math.max(peakResident,m.peakResident);peakPrivate=Math.max(peakPrivate,m.peakPrivate);return m;};
  const timer=setInterval(sample,50),send=value=>child.stdin.write(JSON.stringify(value)+'\n');
@@ -33,6 +35,7 @@ async function run(exe,cache,source,cases=queries,verifyConcurrency=false){
  child.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const value=JSON.parse(buffer.slice(0,end));buffer=buffer.slice(end+1);if(value.state){state=value.state;if(state.running)running=true;if(running&&!state.running){ready=true;readyMs??=performance.now()-at;}}else{const request=pending.get(value.id);if(request){clearTimeout(request.timer);pending.delete(value.id);value.error?request.reject(Error(value.error)):request.resolve(value.result);}}}});
  const query=(text,includeLaunchers=false,options={})=>new Promise((resolve,reject)=>{const serial=++id;pending.set(serial,{resolve,reject,timer:setTimeout(()=>{pending.delete(serial);reject(Error('Query timeout: '+text));},20000)});send({type:'query',id:serial,scope:options.scope??1,query:text,fuzzy:options.fuzzy??true,pinyin:options.pinyin??true,foldersOnly:options.foldersOnly??false,currentFolder:options.currentFolder??'D:\\Repositories\\One',priorities:options.priorities??[],includeLaunchers});});
  try{
+  if(affinity)assert.ok(setAffinity(handle,affinity),'Unable to pin this test helper to the requested processor');
   send({type:'init',settings:source.config});const until=performance.now()+60000;
   while(!ready&&performance.now()<until){assert.equal(child.exitCode,null,'Index stopped while loading');await delay(20);}assert.ok(ready,'Cache restore timeout');assert.ok(state.count>0&&state.count<=source.config.maxEntries,JSON.stringify(state));
   await delay(250);const loaded=sample(),results=[];
@@ -50,7 +53,7 @@ async function run(exe,cache,source,cases=queries,verifyConcurrency=false){
   send({type:'launchers',items:[{path:'one-launcher:app:QQ',name:'QQ',directory:false,size:0,modified:0},{path:'one-launcher:setting:display',name:'显示器 分辨率 缩放',directory:false,size:0,modified:0}]});
   const launcherQueries=[];for(const text of ['app: QQ','setting: 显示','setting: xianshiqi']){const timings=[];let result;for(let n=0;n<3;n++){const start=performance.now();result=await query(text,true);assert.ok(!result.cancelled);assert.equal(result.total,1);timings.push(performance.now()-start);}launcherQueries.push({query:text,items:result.items,timings});}
   const settled=sample();assert.deepEqual(errors,[]);send({type:'stop'});child.stdin.end();await exit;
-  return{count:state.count,readyMs,loaded,settled,peakResident,peakPrivate,queries:results,launcherQueries,concurrency};
+  return{count:state.count,affinity,readyMs,loaded,settled,peakResident,peakPrivate,queries:results,launcherQueries,concurrency};
  }finally{clearInterval(timer);for(const request of pending.values())clearTimeout(request.timer);close(handle);if(child.exitCode===null){child.kill();await exit.catch(()=>{});}}
 }
 async function main(){

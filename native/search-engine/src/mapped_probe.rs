@@ -9,7 +9,7 @@ use std::{
     ptr::NonNull,
 };
 
-const MAGIC: &[u8; 8] = b"ONEMAP01";
+const MAGIC: &[u8; 8] = b"ONEMAP02";
 const HEADER: usize = 64;
 const PARENT: usize = 32;
 const ROW: usize = 64;
@@ -82,6 +82,10 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
     };
     let mut parents = BufWriter::new(section("parents")?);
     let mut rows = BufWriter::new(section("rows")?);
+    let mut phonetic_pool = Pool {
+        out: BufWriter::new(section("phonetics")?),
+        length: 0,
+    };
     let mut pool = Pool {
         out: BufWriter::new(section("data")?),
         length: 0,
@@ -93,7 +97,10 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
         let split = if path.prefix().is_empty() {
             0
         } else {
-            display.trim_end_matches(['\\', '/']).rfind(['\\', '/']).map_or(0, |at| at + 1)
+            display
+                .trim_end_matches(['\\', '/'])
+                .rfind(['\\', '/'])
+                .map_or(0, |at| at + 1)
         };
         let (display_prefix, display_name) = display.split_at(split);
         if key(display_prefix).trim_end_matches('\\') != path.prefix().trim_end_matches('\\') {
@@ -135,7 +142,7 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
             pool.text(text)?.put(&mut bytes, 0);
             phonetics.extend_from_slice(&bytes);
         }
-        let table = pool.bytes(&phonetics)?;
+        let table = phonetic_pool.bytes(&phonetics)?;
         let mut bytes = [0; ROW];
         put32(&mut bytes, 0, parent);
         name.put(&mut bytes, 4);
@@ -156,13 +163,16 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
     parents.flush()?;
     rows.flush()?;
     pool.out.flush()?;
+    phonetic_pool.out.flush()?;
     drop(parents);
     drop(rows);
     drop(pool.out);
+    drop(phonetic_pool.out);
     let parent_at = HEADER as u64;
     let row_at = parent_at + intern.len() as u64 * PARENT as u64;
     let data_at = row_at + index.rows.len() as u64 * ROW as u64;
-    let total = data_at + pool.length as u64;
+    let text_at = data_at + phonetic_pool.length as u64;
+    let total = text_at + pool.length as u64;
     if total > MAX_BYTES {
         return Err(bad());
     }
@@ -178,11 +188,12 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
         (32, row_at),
         (40, data_at),
         (48, total),
+        (56, text_at),
     ] {
         put64(&mut header, at, value);
     }
     out.write_all(&header)?;
-    for path in &temps.0[..3] {
+    for path in &temps.0[..4] {
         io::copy(&mut File::open(path)?, &mut out)?;
     }
     out.flush()?;
@@ -284,7 +295,25 @@ impl Drop for Mapping {
 struct View<'a> {
     parents: &'a [u8],
     rows: &'a [u8],
-    data: &'a [u8],
+    phonetics: &'a [u8],
+    data: TextView<'a>,
+}
+#[derive(Clone, Copy)]
+struct TextView<'a> {
+    bytes: &'a [u8],
+    checked: Option<&'a str>,
+}
+impl<'a> TextView<'a> {
+    fn text(&self, bytes: &[u8], at: usize) -> io::Result<&'a str> {
+        let start = uint(bytes, at)? as usize;
+        let length = uint(bytes, at + 4)? as usize;
+        let end = start.checked_add(length).ok_or_else(bad)?;
+        if let Some(text) = self.checked {
+            text.get(start..end).ok_or_else(bad)
+        } else {
+            std::str::from_utf8(self.bytes.get(start..end).ok_or_else(bad)?).map_err(|_| bad())
+        }
+    }
 }
 impl<'a> View<'a> {
     fn new(bytes: &'a [u8]) -> io::Result<Self> {
@@ -299,30 +328,36 @@ impl<'a> View<'a> {
         let data_at = row_at
             .checked_add(rows.checked_mul(ROW as u64).ok_or_else(bad)?)
             .ok_or_else(bad)?;
+        let text_at = wide(bytes, 56)?;
         if wide(bytes, 24)? != HEADER as u64
             || wide(bytes, 32)? != row_at
             || wide(bytes, 40)? != data_at
             || wide(bytes, 48)? != bytes.len() as u64
-            || wide(bytes, 56)? != 0
-            || data_at > bytes.len() as u64
+            || text_at < data_at
+            || text_at > bytes.len() as u64
+            || (text_at - data_at) % 8 != 0
         {
             return Err(bad());
         }
         Ok(Self {
             parents: &bytes[HEADER..row_at as usize],
             rows: &bytes[row_at as usize..data_at as usize],
-            data: &bytes[data_at as usize..],
+            phonetics: &bytes[data_at as usize..text_at as usize],
+            data: TextView {
+                bytes: &bytes[text_at as usize..],
+                checked: None,
+            },
         })
     }
     fn text(&self, bytes: &[u8], at: usize) -> io::Result<&'a str> {
-        let start = uint(bytes, at)? as usize;
-        let len = uint(bytes, at + 4)? as usize;
-        std::str::from_utf8(
-            self.data
-                .get(start..start.checked_add(len).ok_or_else(bad)?)
-                .ok_or_else(bad)?,
-        )
-        .map_err(|_| bad())
+        self.data.text(bytes, at)
+    }
+    fn validate(&mut self) -> io::Result<()> {
+        // Local results only decode their own strings. Validate the complete
+        // text pool once before global scan; str::get then checks each boundary
+        // without re-reading whole shared prefixes or pinyin strings.
+        self.data.checked = Some(std::str::from_utf8(self.data.bytes).map_err(|_| bad())?);
+        Ok(())
     }
     fn row(&self, id: usize) -> io::Result<MappedRow<'a>> {
         let start = id.checked_mul(ROW).ok_or_else(bad)?;
@@ -334,7 +369,7 @@ impl<'a> View<'a> {
         let count = uint(bytes, 32)? as usize;
         let at = uint(bytes, 28)? as usize;
         let table = self
-            .data
+            .phonetics
             .get(
                 at..at
                     .checked_add(count.checked_mul(8).ok_or_else(bad)?)
@@ -344,9 +379,8 @@ impl<'a> View<'a> {
         if count > 32 {
             return Err(bad());
         }
-        let mut phonetics = Vec::with_capacity(count);
         for span in table.chunks_exact(8) {
-            phonetics.push(self.text(span, 0)?);
+            self.text(span, 0)?;
         }
         let flags = uint(bytes, 60)?;
         if flags > 3 {
@@ -361,7 +395,10 @@ impl<'a> View<'a> {
             lower: self.text(bytes, 12)?,
             exact_prefix: self.text(parent, 8)?,
             exact_name: self.text(bytes, 20)?,
-            phonetics,
+            phonetics: PhoneticTable {
+                entries: table,
+                pool: self.data,
+            },
             bits: wide(bytes, 36)? as u128 | ((wide(bytes, 44)? as u128) << 64),
             modified: wide(bytes, 52)?,
             flags,
@@ -481,12 +518,24 @@ impl PartialEq for Fragments<'_> {
     }
 }
 impl Eq for Fragments<'_> {}
+struct PhoneticTable<'a> {
+    entries: &'a [u8],
+    pool: TextView<'a>,
+}
+impl PhoneticTable<'_> {
+    fn iter(&self) -> impl Iterator<Item = &str> {
+        self.entries.chunks_exact(8).map(|span| {
+            // View::row checked every span against this immutable text pool.
+            self.pool.text(span, 0).unwrap()
+        })
+    }
+}
 struct MappedRow<'a> {
     path: Fragments<'a>,
     lower: &'a str,
     exact_prefix: &'a str,
     exact_name: &'a str,
-    phonetics: Vec<&'a str>,
+    phonetics: PhoneticTable<'a>,
     bits: u128,
     modified: u64,
     flags: u32,
@@ -502,7 +551,7 @@ impl SearchRow for MappedRow<'_> {
         self.bits
     }
     fn phonetic(&self) -> impl Iterator<Item = &str> {
-        self.phonetics.iter().copied()
+        self.phonetics.iter()
     }
     fn plain_name(&self) -> bool {
         self.flags & 2 != 0
@@ -526,16 +575,52 @@ fn items(heap: &Matches<'_>, view: &View<'_>) -> io::Result<Vec<Value>> {
         Ok(json!({"path":path,"name":name,"directory":row.directory(),"modified":if row.directory(){row.modified/1_000_000}else{0},"size":0,"matchKind":r.5}))
     }).collect()
 }
-fn query_image(path: &Path, v: &Value) -> io::Result<Value> {
+#[derive(Default)]
+struct Gate {
+    scopes: Mutex<BTreeMap<u64, u64>>,
+    serial: AtomicU64,
+    stopped: AtomicBool,
+}
+impl Gate {
+    fn current(&self, v: &Value, ticket: u64) -> bool {
+        !self.stopped.load(Ordering::Relaxed)
+            && self
+                .scopes
+                .lock()
+                .unwrap()
+                .get(&v["scope"].as_u64().unwrap_or(0))
+                .copied()
+                == Some(ticket)
+    }
+    fn enqueue(&self, v: &Value) -> u64 {
+        let ticket = self.serial.fetch_add(1, Ordering::Relaxed) + 1;
+        self.scopes
+            .lock()
+            .unwrap()
+            .insert(v["scope"].as_u64().unwrap_or(0), ticket);
+        ticket
+    }
+}
+fn cancelled() -> Value {
+    json!({"items":[],"total":0,"elapsed":0,"cancelled":true})
+}
+fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64) -> io::Result<Value> {
+    if !gate.current(v, ticket) {
+        return Ok(cancelled());
+    }
+    if v["query"].as_str().unwrap_or("").len() > 4000 {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "搜索条件过长"));
+    }
     let start = Instant::now();
     let map = Mapping::open(path)?;
-    let view = View::new(map.bytes())?;
+    let mut view = View::new(map.bytes())?;
     let (kind, exts, terms) = parse(
         v["query"].as_str().unwrap_or(""),
         v["foldersOnly"].as_bool().unwrap_or(false),
     );
     let fuzzy = v["fuzzy"].as_bool().unwrap_or(true);
     let pinyin = v["pinyin"].as_bool().unwrap_or(true);
+    let mut matcher = QueryMatcher::new(&terms, fuzzy, pinyin);
     let rules = priority::Rules::new(
         &serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default(),
     );
@@ -556,7 +641,7 @@ fn query_image(path: &Path, v: &Value) -> io::Result<Value> {
         }
         let row = view.row(id)?;
         if accepts(&row, &kind, &exts) {
-            if let Some((points, mode)) = score(&row, &row.path, &terms, fuzzy, pinyin) {
+            if let Some((points, mode)) = matcher.score(&row, &row.path) {
                 let local = !prefix.is_empty() && row.path.starts_with(&prefix);
                 if skip_local && local {
                     return Ok(());
@@ -582,22 +667,34 @@ fn query_image(path: &Path, v: &Value) -> io::Result<Value> {
     };
     // Local range is found directly in the sorted disk table, before global scan.
     if progressive {
-        for id in view.lower_bound(&prefix)?..view.lower_bound(&format!("{current}]"))? {
+        for (n, id) in
+            (view.lower_bound(&prefix)?..view.lower_bound(&format!("{current}]"))?).enumerate()
+        {
+            if n % 1024 == 0 && !gate.current(v, ticket) {
+                return Ok(cancelled());
+            }
             visit(id, false)?;
         }
     }
     // End the mutable borrows before publishing local results.
     drop(visit);
     if progressive {
+        if !gate.current(v, ticket) {
+            return Ok(cancelled());
+        }
         output(
             json!({"id":v["id"],"result":{"items":items(&heap,&view)?,"total":total,"localTotal":local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}),
         );
     }
+    view.validate()?;
     for id in 0..if matches!(kind.as_str(), "app" | "setting") {
         0
     } else {
         view.count()
     } {
+        if id % 1024 == 0 && !gate.current(v, ticket) {
+            return Ok(cancelled());
+        }
         if !view.possible(id, &kind, &terms, fuzzy)? {
             continue;
         }
@@ -605,7 +702,7 @@ fn query_image(path: &Path, v: &Value) -> io::Result<Value> {
         if !accepts(&row, &kind, &exts) {
             continue;
         }
-        if let Some((points, mode)) = score(&row, &row.path, &terms, fuzzy, pinyin) {
+        if let Some((points, mode)) = matcher.score(&row, &row.path) {
             let local = !prefix.is_empty() && row.path.starts_with(&prefix);
             if progressive && local {
                 continue;
@@ -627,6 +724,9 @@ fn query_image(path: &Path, v: &Value) -> io::Result<Value> {
             }
         }
     }
+    if !gate.current(v, ticket) {
+        return Ok(cancelled());
+    }
     let result = json!({"items":items(&heap,&view)?,"total":total,"localTotal":local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0});
     drop(heap);
     drop(map);
@@ -639,6 +739,21 @@ pub fn serve(args: &[String]) -> io::Result<()> {
         let view = View::new(map.bytes())?;
         output(json!({"ready":true,"count":view.count()}));
     }
+    let gate = Arc::new(Gate::default());
+    let (tx, rx) = std::sync::mpsc::channel::<(Value, u64)>();
+    let worker_gate = gate.clone();
+    let worker_path = path.to_path_buf();
+    // Stdin stays responsive while the worker maps or searches. The mapping is
+    // constructed and dropped in this worker; raw mapping handles never cross
+    // threads. Tickets isolate independent search windows.
+    let worker = thread::spawn(move || {
+        for (v, ticket) in rx {
+            match query_image(&worker_path, &v, &worker_gate, ticket) {
+                Ok(result) => output(json!({"id":v["id"],"result":result})),
+                Err(e) => output(json!({"id":v["id"],"error":e.to_string()})),
+            }
+        }
+    });
     for line in io::stdin().lock().lines() {
         let line = line?;
         if line.len() > 1_000_000 {
@@ -648,14 +763,25 @@ pub fn serve(args: &[String]) -> io::Result<()> {
             continue;
         };
         match v["type"].as_str().unwrap_or("") {
-            "query" => match query_image(path, &v) {
-                Ok(result) => output(json!({"id":v["id"],"result":result})),
-                Err(e) => output(json!({"id":v["id"],"error":e.to_string()})),
-            },
+            "query" => {
+                let ticket = gate.enqueue(&v);
+                let _ = tx.send((v, ticket));
+            }
+            "release-query" => {
+                gate.scopes
+                    .lock()
+                    .unwrap()
+                    .remove(&v["scope"].as_u64().unwrap_or(0));
+            }
             "stop" => break,
             _ => {}
         }
     }
+    gate.stopped.store(true, Ordering::Relaxed);
+    drop(tx);
+    worker
+        .join()
+        .map_err(|_| io::Error::other("Mapped query worker stopped unexpectedly"))?;
     Ok(())
 }
 
@@ -717,13 +843,19 @@ mod tests {
                         "{path} / {query}"
                     );
                     if !view.possible(id, &kind, &terms, fuzzy).unwrap() {
-                        assert!(!accepts(row, &kind, &exts) || score(row, path, &terms, fuzzy, pinyin).is_none());
+                        assert!(
+                            !accepts(row, &kind, &exts)
+                                || score(row, path, &terms, fuzzy, pinyin).is_none()
+                        );
                     }
                 }
             }
         }
         let data = map.bytes().to_vec();
-        assert!(OpenOptions::new().write(true).open(&file).is_err(), "Mapped image must deny concurrent writes");
+        assert!(
+            OpenOptions::new().write(true).open(&file).is_err(),
+            "Mapped image must deny concurrent writes"
+        );
         drop(map);
         assert!(View::new(&data[..63]).is_err());
         let mut corrupt = data.clone();
@@ -739,10 +871,11 @@ mod tests {
         put32(&mut corrupt, rows + 32, u32::MAX);
         assert!(View::new(&corrupt).unwrap().row(0).is_err());
         let mut corrupt = data.clone();
-        let pool = wide(&corrupt, 40).unwrap() as usize;
+        let pool = wide(&corrupt, 56).unwrap() as usize;
         let name = uint(&corrupt, rows + 4).unwrap() as usize;
         corrupt[pool + name] = 0xff;
         assert!(View::new(&corrupt).unwrap().row(0).is_err());
+        assert!(View::new(&corrupt).unwrap().validate().is_err());
         fs::remove_file(file).unwrap();
         fs::remove_dir(dir).unwrap();
     }

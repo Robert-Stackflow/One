@@ -10,7 +10,7 @@ mod stored_path;
 mod priority;
 mod search_access;
 mod mapped_probe;
-use search_access::{SearchPath, SearchRow};
+use search_access::{QueryMatcher, SearchPath, SearchRow};
 use path_key::{PathKey, PathPool};
 use pinyin::ToPinyinMulti;
 use serde::{Deserialize, Serialize};
@@ -741,8 +741,10 @@ fn score(
     // keys. Their stored mask already covers the name and every pinyin form;
     // the parent mask covers path matches. Reject impossible candidates before
     // resolving the name or search metadata for millions of rows.
-    if row.plain_name() && impossible_mask(row.bits(), path.prefix_bits(), terms, fuzzy) {
-        return None;
+    if row.plain_name() {
+        if impossible_mask(row.bits(), path.prefix_bits(), terms, fuzzy) {
+            return None;
+        }
     }
     let mut total = if row.directory() { 3 } else { 0 };
     let mut mode = "exact";
@@ -863,6 +865,8 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let (kind, extensions, terms) = parse(query, v["foldersOnly"].as_bool().unwrap_or(false));
     let fuzzy = v["fuzzy"].as_bool().unwrap_or(true);
     let pinyin = v["pinyin"].as_bool().unwrap_or(true);
+    let mut matcher = QueryMatcher::new(&terms, fuzzy, pinyin);
+    let path_only = matcher.path_only();
     let rules = priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default());
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
     let index = s.index.read().unwrap();
@@ -883,7 +887,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
                 return;
             }
             if accepts(row, &kind, &extensions) {
-                if let Some((points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
+                if let Some((points, mode)) = if path_only { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
                     total += 1;retain_match(&mut heap, path, points, mode, true, rules.rank(path));
                 }
             }
@@ -915,7 +919,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         if !accepts(row, &kind, &extensions) {
             continue;
         }
-        if let Some((points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
+        if let Some((points, mode)) = if path_only { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
             // Most rows fail the text match. Resolve current-folder priority only
             // for matches, where it can affect the count and ranking.
             let local = !prefix.is_empty() && path.starts_with(&prefix);
