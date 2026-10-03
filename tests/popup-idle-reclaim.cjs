@@ -17,15 +17,24 @@ async function run(){
   const count=view=>app.evaluate(({BrowserWindow},view)=>BrowserWindow.getAllWindows().filter(w=>!w.isDestroyed()&&new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')===view).length,view);
   await expect.poll(()=>count('search-menu')).toBeGreaterThan(0);
   // Shorten only the popup idle timers in this isolated main process.
-  await app.evaluate(()=>{const original=globalThis.setTimeout;globalThis.setTimeout=function(callback,delay,...args){return original(callback,delay===60000?80:delay,...args);};});
+  await app.evaluate(()=>{const original=globalThis.setTimeout;globalThis.setTimeout=function(callback,delay,...args){return original(callback,delay===60000?80:delay===300000?500:delay,...args);};});
   await main.evaluate(()=>window.one.showSearch());
   await expect.poll(()=>count('search')).toBeGreaterThan(0);
   const search=app.windows().find(page=>new URL(page.url()||'about:blank').searchParams.get('view')==='search');
   await search.waitForSelector('#file-query');await search.evaluate(()=>window.one.closeWindow());
   await expect.poll(()=>count('search-menu')).toBe(0);
   await expect.poll(()=>count('search')).toBe(0);
+  await main.evaluate(()=>window.one.patchSettings({search:{explorerTyping:true}}));
+  await expect.poll(()=>count('search')).toBe(1);
+  const inline=app.windows().find(page=>page.url().includes('embedded=1'));await inline.waitForSelector('#file-query');
+  const oldId=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('embedded=1')).webContents.id);
+  await expect.poll(()=>count('search')).toBe(0);
+  await app.evaluate(()=>globalThis.popupBridge.stdout.emit('data',JSON.stringify({event:'typing',hwnd:0})+'\n'));
+  await expect.poll(()=>count('search')).toBe(1);
+  await app.windows().find(page=>page.url().includes('embedded=1')).waitForSelector('#file-query');
+  assert.notEqual(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('embedded=1')).webContents.id),oldId);
   assert.deepEqual(await app.evaluate(()=>globalThis.popupMainErrors),[]);
-  console.log(JSON.stringify({result:'PASS',hiddenSearchReleased:true,hiddenMenuReleased:true}));
+  console.log(JSON.stringify({result:'PASS',hiddenSearchReleased:true,hiddenMenuReleased:true,embeddedSearchReclaimedAndRecreated:true}));
  }finally{
   await app.close();
   const resolved=await fs.realpath(profile),parent=await fs.realpath(out);

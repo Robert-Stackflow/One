@@ -135,8 +135,12 @@ async function showMenu(hwnd:number){hideMenus();clearTimeout(menuIdleCleanup);s
 function searchPopup(embedded:boolean){let w=cachedSearch.get(embedded);if(w&&!w.isDestroyed())return w;
  w=windowFor('search',{width:embedded?520:740,height:embedded?inlineSearchBaseHeight:64,minWidth:embedded?240:520,minHeight:embedded?inlineSearchBaseHeight:64,frame:false,titleBarStyle:'default',titleBarOverlay:false,hasShadow:!embedded,thickFrame:!embedded,transparent:embedded,...(embedded?{backgroundColor:'#00000000',roundedCorners:false}:{}),resizable:false,skipTaskbar:true},embedded?'&embedded=1':'');cachedSearch.set(embedded,w);const own=w,windowId=w.webContents.id;
  let idleCleanup:NodeJS.Timeout|undefined;
- w.on('hide',()=>{if(embedded)return;clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},60000);idleCleanup.unref();});
+ const scheduleIdleCleanup=()=>{clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},embedded?300000:60000);idleCleanup.unref();};
+ w.on('hide',scheduleIdleCleanup);
  w.on('show',()=>clearTimeout(idleCleanup));
+ // Direct typing still gets a prewarmed popup after startup, but an unused
+ // renderer need not remain resident for the entire application session.
+ if(embedded)scheduleIdleCleanup();
  w.on('blur',()=>{setTimeout(()=>{if(!own.isDestroyed()&&!nativeMenus.has(windowId)&&!own.isFocused())own.hide();},150);});
  // The BrowserWindow and its webContents are already destroyed when 'closed' fires.
  w.on('close',e=>{if(!quitting&&!testMode){e.preventDefault();own.hide();}});w.on('closed',()=>{clearTimeout(idleCleanup);if(cachedSearch.get(embedded)===own)cachedSearch.delete(embedded);searchReadyWindows.delete(windowId);nativeMenus.delete(windowId);if(searchWindow===own){searchWindow=null;searchRevision++;searchTyping=false;overlay?.detach();overlay=undefined;}});return w;
