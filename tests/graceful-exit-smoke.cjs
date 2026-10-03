@@ -126,12 +126,11 @@ async function scenario(kind,expectedErrors=0){
    });
    await expect.poll(async()=>(await searchWindows()).length).toBe(1);
    // Kill only the isolated app's own index helper to reproduce a lost service.
-   await app.evaluate(()=>{const helper=process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile));if(!helper||helper.exitCode!==null)throw Error('Own index helper missing');helper.kill();});
-   await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).error)).toContain('搜索服务已退出');
-   await search.locator('#file-query').fill('preview missing');
-   await expect(search.locator('.search-empty')).toHaveText('搜索服务不可用');
-   const geometry=await search.locator('.search-empty').evaluate(e=>{const row=e.getBoundingClientRect(),list=e.parentElement.getBoundingClientRect();return{offset:Math.abs((row.top+row.bottom)-(list.top+list.bottom))/2,toastVisible:!document.querySelector('#toast').hidden};});
-   assert.ok(geometry.offset<5,JSON.stringify(geometry));assert.equal(geometry.toastVisible,false);
+   const oldHelperPid=await app.evaluate(()=>{const helper=process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile));if(!helper||helper.exitCode!==null)throw Error('Own index helper missing');helper.kill();return helper.pid;});
+   await expect.poll(()=>app.evaluate(()=>process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile)&&h.exitCode===null)?.pid||0)).not.toBe(oldHelperPid);
+   await expect.poll(()=>main.evaluate(async()=>{const state=await window.one.searchState();return !state.running&&!state.error&&state.count>0;})).toBe(true);
+   await search.locator('#file-query').fill('preview');
+   await expect(search.locator('.search-result').filter({hasText:'preview.txt'})).toHaveCount(1);
    await app.evaluate(({BrowserWindow})=>{for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed()&&new URL(window.webContents.getURL()||'about:blank').searchParams.get('view')==='search')window.close();});
    await expect.poll(async()=>(await searchWindows()).length).toBe(0);
   }
