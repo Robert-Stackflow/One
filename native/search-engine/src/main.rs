@@ -7,6 +7,7 @@ mod maintenance;
 mod path_key;
 mod rows;
 mod stored_path;
+mod priority;
 use path_key::{PathKey, PathPool};
 use pinyin::ToPinyinMulti;
 use serde::{Deserialize, Serialize};
@@ -77,6 +78,8 @@ fn mask(s: &str) -> u128 {
 struct Config {
     roots: Vec<String>,
     excluded: Vec<String>,
+    #[serde(default)]
+    priorities: Vec<priority::Rule>,
     #[serde(default = "default_limit", rename = "maxEntries")]
     max_entries: usize,
 }
@@ -523,9 +526,9 @@ fn rebuild(s: Arc<Shared>, config: Config) {
             *old = config.clone();
         }
         let (mut scanned, mut issues) = (0, 0);
-        for root in &config.roots {
-            s.state.lock().unwrap().root = root.clone();
-            walk(&s, root, &config, generation, &mut scanned, &mut issues);
+        for step in priority::scans(&config) {
+            s.state.lock().unwrap().root = step.root.clone();
+            walk(&s, &step.root, &step.config, generation, &mut scanned, &mut issues);
             if s.generation.load(Ordering::Relaxed) != generation {
                 return;
             }
@@ -830,17 +833,17 @@ fn current_query(s: &Shared, v: &Value, ticket: u64) -> bool {
         .copied()
         == Some(ticket)
 }
-type Ranked<'a> = BinaryHeap<Reverse<(bool, i32, PathKey, &'a str)>>;
-fn retain_match<'a>(heap: &mut Ranked<'a>, path: &PathKey, points: i32, mode: &'a str, local: bool) {
-    if heap.len() < 100 || heap.peek().is_some_and(|v| (local, points) > (v.0.0, v.0.1)) {
-        heap.push(Reverse((local, points, path.clone(), mode)));
+type Ranked<'a> = BinaryHeap<Reverse<(bool, i8, i32, PathKey, &'a str)>>;
+fn retain_match<'a>(heap: &mut Ranked<'a>, path: &PathKey, points: i32, mode: &'a str, local: bool, priority: i8) {
+    if heap.len() < 100 || heap.peek().is_some_and(|v| (local, priority, points) > (v.0.0, v.0.1, v.0.2)) {
+        heap.push(Reverse((local, priority, points, path.clone(), mode)));
         if heap.len() > 100 { heap.pop(); }
     }
 }
 fn ranked_items(heap: &Ranked<'_>, index: &Index, extra: &rows::Rows) -> Vec<Value> {
     let mut best = heap.iter().map(|r| &r.0).collect::<Vec<_>>();
-    best.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
-    best.iter().map(|(_, _, path, mode)| {
+    best.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2)).then(a.3.cmp(&b.3)));
+    best.iter().map(|(_, _, _, path, mode)| {
         let item = &index.rows.get(path).or_else(|| extra.get(path)).unwrap().item;
         let mut value = serde_json::to_value(item).unwrap();
         if item.directory() { value["modified"] = json!(item.modified() / 1_000_000); }
@@ -863,6 +866,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let (kind, extensions, terms) = parse(query, v["foldersOnly"].as_bool().unwrap_or(false));
     let fuzzy = v["fuzzy"].as_bool().unwrap_or(true);
     let pinyin = v["pinyin"].as_bool().unwrap_or(true);
+    let rules = priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default());
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
     let index = s.index.read().unwrap();
     let launchers = s.launchers.read().unwrap();
@@ -883,7 +887,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
             }
             if accepts(row, &kind, &extensions) {
                 if let Some((points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
-                    total += 1;retain_match(&mut heap, path, points, mode, true);
+                    total += 1;retain_match(&mut heap, path, points, mode, true, rules.rank(path));
                 }
             }
         }
@@ -921,7 +925,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
             if progressive && local { continue; }
             total += 1;
             if local { local_total += 1; }
-            retain_match(&mut heap, path, points, mode, local);
+            retain_match(&mut heap, path, points, mode, local, rules.rank(path));
         }
     }
     if !current_query(s, v, ticket) {
