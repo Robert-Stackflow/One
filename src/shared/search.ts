@@ -11,7 +11,7 @@ export interface MenuBar {top:MenuNode[];bottom:MenuNode[]}
 export interface SearchSettings {maxEntries:number;roots:string[];excluded:string[];priorities:IndexPriorityRule[];priorityDefaultsVersion:number;shortcut:string;programShortcut:string;doubleCtrl:boolean;explorerTyping:boolean;explorerMenu:boolean;dialogSwitch:boolean;bookmarks:string[];fuzzy:boolean;pinyin:boolean;menu:SearchMenuItem[];menuVersion:number;menuBar:MenuBarSettings}
 export interface SearchEntry {path:string;name:string;directory:boolean;modified:number;size:number;matchKind?:'exact'|'pinyin'|'fuzzy'|'typo';launchKind?:'app'|'setting';icon?:string;subtitle?:string}
 export interface SearchState {running:boolean;count:number;scanned:number;issues:number;root:string;updated:number;error:string;watching:boolean}
-export interface SearchResult {items:SearchEntry[];total:number;elapsed:number;cancelled?:boolean;partial?:boolean;localTotal?:number}
+export interface SearchResult {items:SearchEntry[];total:number;elapsed:number;cancelled?:boolean;partial?:boolean;partialScope?:'global';localTotal?:number}
 export interface SearchProgress {token:string;result:SearchResult}
 export interface SearchContext {kind:'search'|'explorer'|'menu'|'dialog';hwnd:number;pid:number;created:string;currentFolder?:string;selected?:string[];folders:{path:string;hwnd:number;active:boolean}[]}
 export const defaultMenu=():SearchMenuItem[]=>[['opened','已打开的文件夹','folder'],['recent','最近访问','history'],['copy-path','复制当前路径','copy'],['terminal','在此打开 PowerShell','terminal'],['settings','自定义菜单','system']].map(([target,label,icon],i)=>({id:'default-'+i,parent:'',kind:'builtin',label,target,args:[],cwd:'',icon,enabled:true}));

@@ -18,16 +18,16 @@ async function run(){
    for(const w of BrowserWindow.getAllWindows())w.hide();
   });
   await main.evaluate(async()=>{await window.one.patchSettings({search:{explorerTyping:true,shortcut:''}});await window.one.patchSettings({search:{explorerTyping:false}});});
-  await expect.poll(()=>app.windows().filter(p=>new URL(p.url()||'about:blank').searchParams.get('view')==='search').length).toBe(2);
+  await expect.poll(()=>app.windows().filter(p=>new URL(p.url()||'about:blank').searchParams.get('view')==='search').length).toBe(1);
   await expect.poll(()=>app.evaluate(({ipcMain})=>ipcMain._invokeHandlers.has('one:search-files'))).toBe(true);
   await app.evaluate(async({ipcMain,app})=>{
    global.fixture={delay:30,reverse:false,remove:-1000,version:0};global.calls=[];global.completed=[];global.actions=[];global.iconCalls=0;
    const icon=(await app.getFileIcon(process.execPath,{size:'normal'})).toDataURL();
    ipcMain.removeHandler('one:file-icons');ipcMain.handle('one:file-icons',(_e,paths)=>{global.iconCalls++;return Object.fromEntries(paths.map(p=>[p,icon]));});
    for(const name of ['search-choose','preview','reveal-file','search-context-menu']){const channel='one:'+name;if(ipcMain._invokeHandlers.has(channel)){ipcMain.removeHandler(channel);ipcMain.handle(channel,(_e,...args)=>{global.actions.push({name,args});});}}
-   ipcMain.removeHandler('one:search-files');ipcMain.handle('one:search-files',async(event,query,foldersOnly)=>{
+   ipcMain.removeHandler('one:search-files');ipcMain.handle('one:search-files',async(event,query,foldersOnly,token)=>{
     const fixture={...global.fixture},id=global.calls.length,text=query.replace(/^(app:|setting:|folder:|doc:|pic:|video:|audio:)?\s*/,'');
-    const record={id,query,foldersOnly,sender:event.sender.id,started:Date.now()};global.calls.push(record);
+    const record={id,query,foldersOnly,token,sender:event.sender.id,started:Date.now()};global.calls.push(record);
     await new Promise(r=>setTimeout(r,text==='slow'?700:fixture.delay));
     const order=Array.from({length:100},(_,i)=>i);if(fixture.reverse)order.reverse();
     const launchKind=query.startsWith('app:')?'app':query.startsWith('setting:')?'setting':undefined;
@@ -36,6 +36,7 @@ async function run(){
    });
   });
   await main.evaluate(()=>window.one.showSearch());
+  await expect.poll(()=>app.windows().filter(p=>new URL(p.url()||'about:blank').searchParams.get('view')==='search').length).toBe(2);
   const pages=app.windows().filter(p=>new URL(p.url()||'about:blank').searchParams.get('view')==='search');
   const configure=patch=>app.evaluate((_e,patch)=>Object.assign(global.fixture,patch),patch);
   const counts=()=>app.evaluate(()=>({calls:global.calls.length,completed:global.completed.length,icons:global.iconCalls,actions:global.actions.length}));
@@ -46,7 +47,8 @@ async function run(){
    const initialContext=await page.evaluate(()=>window.one.searchContext());
    await win.evaluate((w,context)=>w.webContents.send('one:search-context',context),initialContext);
    await expect(page.locator('#file-query')).toHaveValue('');
-   const send=(channel='one:search-state')=>win.evaluate((w,channel)=>w.webContents.send(channel,{running:true,count:100,scanned:100,issues:0,root:'D:\\fixture',updated:Date.now(),error:'',watching:false}),channel);
+   let updateVersion=0;
+   const send=(channel='one:search-state',running=false)=>win.evaluate((w,value)=>w.webContents.send(value.channel,{running:value.running,count:100,scanned:100,issues:0,root:'D:\\fixture',updated:value.updated,error:'',watching:false}),{channel,running,updated:Date.now()+ ++updateVersion});
    const ready=()=>expect(page.locator('#search-results')).toHaveAttribute('aria-busy','false');
    const selected=()=>page.locator('.search-result.selected [data-file-icon]').getAttribute('data-file-icon');
    await page.locator('#file-query').fill('x_bea');await expect(page.locator('.search-result')).toHaveCount(100);await ready();
@@ -62,6 +64,8 @@ async function run(){
    const before=await counts();for(let i=0;i<20;i++){await send();await page.waitForTimeout(20);}await page.waitForTimeout(260);await ready();
    const after=await counts(),stable=await page.evaluate(()=>({removed:window.removedRows,tooltipHides:window.tooltipHides,retained:[...window.savedRows].filter(([path,old])=>{const row=[...document.querySelectorAll('.search-result')].find(e=>e.querySelector('[data-file-icon]').dataset.fileIcon===path);return row===old.row&&row.querySelector('img')===old.icon&&row.querySelector('[data-preview]')===old.preview;}).length}));
    assert.equal(stable.removed,0);assert.equal(stable.retained,100);assert.equal(after.icons,before.icons);assert.equal(await selected(),'D:\\fixture\\Entry_5.txt');assert.ok(after.calls-before.calls<=5);assert.ok(after.calls>before.calls);
+   assert.ok((await app.evaluate((_electron,start)=>global.calls.slice(start).every(call=>!call.token),before.calls)),'background refresh should preserve the visible result until complete');
+   const settledCalls=after.calls;await send('one:search-state',true);await page.waitForTimeout(240);assert.equal((await counts()).calls,settledCalls,'indexing in progress should not restart a settled search');
    if(!embedded){assert.equal(stable.tooltipHides,0);await expect(page.locator('#one-tooltip.visible')).toHaveText('预览');}
    const context=await page.evaluate(()=>window.one.searchContext());
    await win.evaluate((w,context)=>w.webContents.send('one:search-context',{...context,pid:123,created:'fixture',currentFolder:'D:\\fixture'}),context);

@@ -84,7 +84,8 @@ export async function renderSearch(){
     update(entries);const s=await api.searchState();if(current())summary(results.count?'收藏与已打开的文件夹':s.count?'输入名称开始搜索':'请先在 One 中添加索引目录');return;
    }
    list.setAttribute('aria-busy','true');if(embedded&&shownKey!==request.key)q('search-inline-summary').textContent='搜索中';
-   const token=crypto.randomUUID();progressive={token,accept:result=>{if(!current()||result.cancelled)return;update(result.items);summary(`本文件夹 · ${result.total.toLocaleString()} 项 · 正在搜索其他位置`,`${result.total.toLocaleString()} 项 · 搜索中`);}};
+   const token=shownKey!==request.key||!results.count?crypto.randomUUID():undefined;
+   if(token)progressive={token,accept:result=>{if(!current()||result.cancelled)return;update(result.items);summary(result.partialScope==='global'?`已找到 ${result.total.toLocaleString()} 项 · 搜索中`:`本文件夹 · ${result.total.toLocaleString()} 项 · 正在搜索其他位置`,`${result.total.toLocaleString()} 项 · 搜索中`);}};
    const result=await api.searchFiles(filter+' '+text,context.kind==='dialog',token);
    if(!current())return;
    if(result.cancelled){if(embedded)q('search-inline-summary').textContent=lastInlineSummary;return;}
@@ -154,7 +155,8 @@ export async function renderSearch(){
  onWindowVisibility(visible=>{invalidate();if(visible){lastLayout='';void query();}});
  api.onSearchFilesChanged(refresh);
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')invalidate();});
- api.onSearchState(()=>{if(input.value.trim()||filter)refresh();});
+ let lastIndexUpdate=0;
+ api.onSearchState(state=>{if(state.running||!state.updated||state.updated===lastIndexUpdate)return;lastIndexUpdate=state.updated;if(input.value.trim()||filter)refresh();});
  api.onSearchContext(applyContext);
  api.onSearchReset(()=>{
   invalidate();shownKey='';input.value='';filter='';syncFilters();input.focus();

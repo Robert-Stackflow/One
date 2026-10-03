@@ -1,5 +1,4 @@
-//! Diagnostic immutable disk-index experiment. Not used by the live index,
-//! which still owns mutable rows, directory tracking and persistence.
+//! Immutable disk index used by the application service and diagnostic tools.
 use super::*;
 mod overlay;
 mod compact;
@@ -24,8 +23,7 @@ const HEADER: usize = 128;
 const PARENT: usize = 32;
 const ROW: usize = 64;
 const MAX_BYTES: u64 = 1024 * 1024 * 1024;
-/// Diagnostic commands stay separate from the live mutable service. Returning
-/// None lets normal startup continue without opening or migrating any cache.
+/// Return None for the legacy in-memory service command path.
 pub fn command(args: &[String]) -> Option<io::Result<()>> {
     Some(match args.get(1).map(String::as_str)? {
         "mapped-build" => build(args),
@@ -735,6 +733,10 @@ impl Gate {
 fn cancelled() -> Value {
     json!({"items":[],"total":0,"elapsed":0,"cancelled":true})
 }
+fn global_partial(v:&Value,pass:&SearchPass<'_, '_>,view:&View<'_>,overlay:&Overlay,launchers:&Index,start:Instant)->io::Result<()> {
+    output(json!({"id":v["id"],"result":{"items":items(&pass.heap,view,overlay,launchers)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true,"partialScope":"global"}}));
+    Ok(())
+}
 fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, launchers: &Index) -> io::Result<Value> {
     if !gate.current(v, ticket) { return Ok(cancelled()); }
     if v["query"].as_str().unwrap_or("").len() > 4000 {
@@ -757,7 +759,8 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
     let prefix = if current.is_empty() { String::new() } else { format!("{current}\\") };
     let upper = format!("{current}]");
-    let progressive = v["progressive"].as_bool().unwrap_or(false) && !prefix.is_empty() && !matches!(kind.as_str(), "app" | "setting");
+    let progressive = v["progressive"].as_bool().unwrap_or(false) && !matches!(kind.as_str(), "app" | "setting");
+    let local_progressive = progressive && !prefix.is_empty();
     let mut pass = SearchPass {
         heap:Matches::new(), total:0, local_total:0, prefix:&prefix, kind:&kind, exts:&exts,
         matcher:QueryMatcher::new(&terms, fuzzy, pinyin),
@@ -765,7 +768,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
     };
     // Merge the same ordered stream for local and global passes. Appending
     // changes after the base would alter which equal-score rows reach top 100.
-    if progressive {
+    if local_progressive {
         let range = view.lower_bound(&prefix)?..view.lower_bound(&upper)?;
         if overlay.is_empty() {
             for (n,id) in range.enumerate() {
@@ -797,18 +800,32 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
             view.validate()?;
             if let Some(verified) = verified_text {verified.store(true,Ordering::Release);}
         }
+        let mut partial_at=Instant::now();
+        let mut partial_count=0;
         if overlay.is_empty() {
             for id in 0..view.count() {
                 if id % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
-                if !view.possible(id,&kind,&terms,fuzzy)? { continue; }
-                pass.candidate(&view,Candidate::Base(id),progressive)?;
+                if view.possible(id,&kind,&terms,fuzzy)? {
+                    pass.candidate(&view,Candidate::Base(id),local_progressive)?;
+                }
+                if progressive && !local_progressive && id % 4096 == 0 && partial_count < 3 && pass.total > 0 && partial_at.elapsed().as_millis() >= if partial_count==0 {60} else {200} {
+                    if !gate.current(v,ticket) { return Ok(cancelled()); }
+                    global_partial(v,&pass,&view,overlay,launchers,start)?;
+                    partial_count+=1;partial_at=Instant::now();
+                }
             }
         } else {
             for (n, candidate) in overlay.iter(&view, 0..view.count(), None).enumerate() {
                 if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
                 let candidate=candidate?;
-                if !possible_candidate(&view,&candidate,&kind,&terms,fuzzy)? { continue; }
-                pass.candidate(&view, candidate, progressive)?;
+                if possible_candidate(&view,&candidate,&kind,&terms,fuzzy)? {
+                    pass.candidate(&view, candidate, local_progressive)?;
+                }
+                if progressive && !local_progressive && n % 4096 == 0 && partial_count < 3 && pass.total > 0 && partial_at.elapsed().as_millis() >= if partial_count==0 {60} else {200} {
+                    if !gate.current(v,ticket) { return Ok(cancelled()); }
+                    global_partial(v,&pass,&view,overlay,launchers,start)?;
+                    partial_count+=1;partial_at=Instant::now();
+                }
             }
         }
     }
@@ -818,7 +835,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
     if v["includeLaunchers"].as_bool().unwrap_or(false) {
         for (n, (path, row)) in launchers.rows.iter().enumerate() {
             if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
-            pass.visit(row, Fragments::from_key(path), Source::Launcher(path), progressive);
+            pass.visit(row, Fragments::from_key(path), Source::Launcher(path), local_progressive);
         }
     }
     if !gate.current(v, ticket) { return Ok(cancelled()); }
