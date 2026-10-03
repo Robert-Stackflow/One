@@ -17,13 +17,14 @@ export function editEndings(before:LineEndings,doc:Text,changes:ChangeSet,insert
 export const yieldText=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
 /** Bounded chunks let navigation and cancellation run while constructing the persistent rope. */
 export async function parseText(text:string,cancelled:()=>boolean=()=>false):Promise<ParsedText|undefined> {
- let doc=Text.empty;const codes:string[]=[];let additional=0;
+ let doc=Text.empty;const codes:string[]=[];let additional=0,last=performance.now();
  for(let at=0;at<text.length;){
   if(cancelled())return;let end=Math.min(text.length,at+65536);
   if(end<text.length&&(text.charCodeAt(end-1)===13||text.charCodeAt(end-1)>=0xd800&&text.charCodeAt(end-1)<=0xdbff))end--;
   const piece=text.slice(at,end),endings=endingsOf(piece);codes.push(endings.codes);additional+=endings.extra;doc=doc.append(Text.of(piece.split(/\r\n|\r|\n/)));at=end;
-  if(text.length>200000)await yieldText();
+  if(text.length>200000&&performance.now()-last>=8){await yieldText();last=performance.now();}
  }
+ if(cancelled())return;
  const all=codes.join('');return {doc,endings:{codes:all,preferred:all[0]||'1',extra:additional}};
 }
 export function serializeText(doc:Text,endings:LineEndings){

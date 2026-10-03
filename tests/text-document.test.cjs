@@ -12,5 +12,10 @@ test('line-ending edits preserve untouched endings across insertion, deletion an
  const pasted=await parseText('新\n行\r\n尾');const insertion=state.changes({from:2,insert:pasted.doc});assert.equal(serializeText(insertion.apply(state.doc),editEndings(parsed.endings,state.doc,insertion,pasted.endings)),'甲\r\n新\n行\r\n尾乙\n丙\r丁');
 });
 test('loading yields and can be cancelled before constructing all content',async()=>{
- let turns=0;const timer=setInterval(()=>turns++,0);const result=await parseText('甲乙\r\n'.repeat(400000),()=>turns>3);clearInterval(timer);assert.equal(result,undefined);assert.ok(turns>3);
+ let turns=0;const timer=setInterval(()=>turns++,0);try{const result=await parseText('甲乙\r\n'.repeat(400000),()=>turns>0);assert.equal(result,undefined);assert.ok(turns>0);}finally{clearInterval(timer);}
+});
+
+test('cancellation during the final cooperative yield cannot publish a complete document',async()=>{
+ let clock=0,turns=0;const isolated={module:{exports:{}},exports:null,require,performance:{now:()=>clock+=10},setTimeout:callback=>{turns++;callback();}};isolated.exports=isolated.module.exports;vm.runInNewContext(result.outputFiles[0].text,isolated);
+ const input='x'.repeat(65536*4),parsed=await isolated.module.exports.parseText(input,()=>turns===4);assert.equal(turns,4);assert.equal(parsed,undefined);
 });
