@@ -3,7 +3,7 @@ import {basename,dirname,join,relative,extname} from 'node:path';
 import {compareTextLines} from './bounded-diff';
 import {textDiffRows} from './text-diff';
 import type {FileToolTask,FileToolReport,FileToolProgress,FileToolRow,FileStamp} from '../shared/file-tools';
-import {walk,hashFile,extensions,fileExtension,writeRows,unchanged} from './file-tool-fs';
+import {walk,hashFile,extensions,fileExtension,writeRows,unchanged,partialHashBytes,partialHashCoversFile} from './file-tool-fs';
 import {readText} from './text-files';
 export interface ToolContext {id:string;dir:string;root:string;database:string;progress:(value:FileToolProgress)=>void}
 export async function runFileTool(task:FileToolTask,context:ToolContext):Promise<FileToolReport>{
@@ -15,11 +15,15 @@ export async function runFileTool(task:FileToolTask,context:ToolContext):Promise
   const types=extensions(task.extensions),sizes=new Map<number,FileStamp[]>(),identities=new Set<string>();let files=0,bytes=0;
   for await(const file of walk(task.roots,task.recursive,issue)){files++;progress('收集文件',files,0,file.path);if(file.size<task.minBytes||types.size&&!types.has(fileExtension(file.path)))continue;if(identities.has(file.identity))continue;identities.add(file.identity);const bucket=sizes.get(file.size);if(bucket)bucket.push(file);else sizes.set(file.size,[file]);}
   const candidates=[...sizes.values()].filter(group=>group.length>1);sizes.clear();identities.clear();let checked=0,total=candidates.reduce((n,g)=>n+g.length,0),wasted=0,duplicates=0;
-  for(const group of candidates){const partials=new Map<string,FileStamp[]>();for(const file of group)try{const hash=await hashFile(file,true,n=>progress('快速筛选',checked,total,file.path,bytes+n));bytes+=Math.min(file.size,768*1024);const bucket=partials.get(hash);if(bucket)bucket.push(file);else partials.set(hash,[file]);checked++;}catch(e){issue(file.path,e);checked++;}
-   for(const subset of partials.values()){if(subset.length<2)continue;const hashes=new Map<string,FileStamp[]>();for(const file of subset)try{const hash=await hashFile(file,false,n=>progress('校验完整内容',checked,total,file.path,bytes+n));bytes+=file.size;const bucket=hashes.get(hash);if(bucket)bucket.push(file);else hashes.set(hash,[file]);}catch(e){issue(file.path,e);}
-    for(const [hash,items]of hashes){if(items.length<2)continue;const id=rows.length,extra=(items.length-1)*items[0].size;wasted+=extra;duplicates+=items.length;await writeRows(context.dir,items.map((file,id)=>({id,...file})),id);rows.push({id,hash,size:items[0].size,files:items.length,wasted:extra,samples:items.slice(0,3).map(f=>f.path)});progress('发现重复组',checked,total,items[0].path,bytes,rows.length);}
+  // Group pages are independent. Keep at most eight writes in flight so many
+  // small duplicate groups do not serialize filesystem metadata operations.
+  const writes:Promise<Error|null>[]=[];
+  const flushWrites=async()=>{const errors=await Promise.all(writes.splice(0));const error=errors.find(Boolean);if(error)throw error;};
+  for(const group of candidates){const partials=new Map<string,FileStamp[]>();for(const file of group)try{const hash=await hashFile(file,true,n=>progress('快速筛选',checked,total,file.path,bytes+n));bytes+=Math.min(file.size,partialHashBytes);const bucket=partials.get(hash);if(bucket)bucket.push(file);else partials.set(hash,[file]);checked++;}catch(e){issue(file.path,e);checked++;}
+   for(const [sample,subset] of partials){if(subset.length<2)continue;const hashes=new Map<string,FileStamp[]>();if(partialHashCoversFile(group[0].size))hashes.set(sample,subset);else for(const file of subset)try{const hash=await hashFile(file,false,n=>progress('校验完整内容',checked,total,file.path,bytes+n));bytes+=file.size;const bucket=hashes.get(hash);if(bucket)bucket.push(file);else hashes.set(hash,[file]);}catch(e){issue(file.path,e);}
+    for(const [hash,items]of hashes){if(items.length<2)continue;const id=rows.length,extra=(items.length-1)*items[0].size;wasted+=extra;duplicates+=items.length;writes.push(writeRows(context.dir,items.map((file,id)=>({id,...file})),id).then(()=>null,error=>error instanceof Error?error:Error(String(error))));rows.push({id,hash,size:items[0].size,files:items.length,wasted:extra,samples:items.slice(0,3).map(f=>f.path)});progress('发现重复组',checked,total,items[0].path,bytes,rows.length);if(writes.length>=8)await flushWrites();}
    }
-  }report.stats={scanned:files,groups:rows.length,duplicateFiles:duplicates,wasted,bytesRead:bytes};report.summary=`发现 ${rows.length} 组重复文件`;
+  }await flushWrites();report.stats={scanned:files,groups:rows.length,duplicateFiles:duplicates,wasted,bytesRead:bytes};report.summary=`发现 ${rows.length} 组重复文件`;
  }else if(task.kind==='diff'){
   if(task.mode==='folder'){
    const left=new Map<string,FileStamp>(),right=new Map<string,FileStamp>();for(const [root,map]of [[task.left,left],[task.right,right]] as const)for await(const file of walk([root],true,issue,true)){const name=relative(root,file.path);if(!name)continue;map.set(name.toLowerCase(),file);progress('扫描目录',left.size+right.size,0,file.path);}

@@ -7,12 +7,15 @@ export function paths(value:unknown){if(!Array.isArray(value)||!value.length||va
 const identity=(s:{dev:bigint;ino:bigint},path:string)=>(process.platform==='win32'?parse(path).root.toLowerCase():s.dev)+':'+s.ino;
 export async function stamp(path:string):Promise<FileStamp>{const s=await lstat(path,{bigint:true});if(s.isSymbolicLink())throw Error('不处理符号链接或目录联接');return{path,size:Number(s.size),mtime:s.mtimeNs.toString(),birthtime:Number(s.birthtimeMs),identity:identity(s,path),directory:s.isDirectory()};}
 export const unchanged=(a:FileStamp,b:FileStamp)=>a.identity===b.identity&&a.size===b.size&&a.mtime===b.mtime&&a.directory===b.directory;
+const hashBufferBytes=256*1024;
+export const partialHashBytes=hashBufferBytes*3;
+export const partialHashCoversFile=(size:number)=>size<=partialHashBytes;
 export async function* walk(roots:string[],recursive:boolean,issue:(path:string,error:unknown)=>void,includeDirectories=false,selectedOnly=false):AsyncGenerator<FileStamp>{
  const seen=new Set<string>(),stack=paths(roots).reverse();while(stack.length){const path=stack.pop()!,key=path.toLowerCase();if(seen.has(key))continue;seen.add(key);let value:FileStamp;try{value=await stamp(path);}catch(e){issue(path,e);continue;}if(selectedOnly||!value.directory){yield value;continue;}if(includeDirectories)yield value;try{const dir=await opendir(path);for await(const e of dir){if(e.isSymbolicLink())continue;const child=join(path,e.name);if(e.isDirectory()){if(recursive)stack.push(child);else if(includeDirectories)try{yield await stamp(child);}catch(e){issue(child,e);}}else if(e.isFile()&&!seen.has(child.toLowerCase())){seen.add(child.toLowerCase());try{yield await stamp(child);}catch(e){issue(child,e);}}}}catch(e){issue(path,e);}}
 }
 export async function hashFile(file:FileStamp,partial=false,tick:(bytes:number)=>void=()=>{}){
- const handle=await open(file.path,'r');try{const before=await handle.stat({bigint:true});if(identity(before,file.path)!==file.identity||before.mtimeNs.toString()!==file.mtime||Number(before.size)!==file.size)throw Error('文件在扫描后发生变化');const hash=createHash('sha256'),buffer=Buffer.allocUnsafe(256*1024);let bytes=0;
-  if(partial&&file.size>buffer.length*3){for(const position of [0,Math.floor((file.size-buffer.length)/2),file.size-buffer.length]){const r=await handle.read(buffer,0,buffer.length,position);hash.update(buffer.subarray(0,r.bytesRead));bytes+=r.bytesRead;tick(bytes);}}
+ const handle=await open(file.path,'r');try{const before=await handle.stat({bigint:true});if(identity(before,file.path)!==file.identity||before.mtimeNs.toString()!==file.mtime||Number(before.size)!==file.size)throw Error('文件在扫描后发生变化');const hash=createHash('sha256'),buffer=Buffer.allocUnsafe(hashBufferBytes);let bytes=0;
+  if(partial&&!partialHashCoversFile(file.size)){for(const position of [0,Math.floor((file.size-buffer.length)/2),file.size-buffer.length]){const r=await handle.read(buffer,0,buffer.length,position);hash.update(buffer.subarray(0,r.bytesRead));bytes+=r.bytesRead;tick(bytes);}}
   else{while(true){const r=await handle.read(buffer,0,buffer.length,null);if(!r.bytesRead)break;hash.update(buffer.subarray(0,r.bytesRead));bytes+=r.bytesRead;tick(bytes);}}
   const after=await handle.stat({bigint:true});if(identity(after,file.path)!==file.identity||after.mtimeNs.toString()!==file.mtime||Number(after.size)!==file.size)throw Error('文件在校验过程中发生变化');return hash.digest('hex');
  }finally{await handle.close();}
