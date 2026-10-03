@@ -1,7 +1,6 @@
 use super::*;
 use catalog::{FileCatalog, Scope};
 use jwalk::rayon::prelude::*;
-use std::collections::BTreeSet;
 
 pub fn stamp(metadata: &fs::Metadata) -> u64 {
     metadata
@@ -35,163 +34,60 @@ fn update_dir(s: &Shared, path: &str, value: u64, generation: u64) {
         }
     }
 }
-fn reconcile(
-    s: &Shared,
-    path: &str,
-    config: &Config,
-    scope: &Scope,
+struct Live<'a> {
+    shared: &'a Shared,
     generation: u64,
-    scanned: &mut usize,
-    issues: &mut usize,
-) {
-    if !scope.contains(path) || s.generation.load(Ordering::Relaxed) != generation {
-        return;
+}
+impl FileCatalog for Live<'_> {
+    fn lookup(&self, path: &str) -> io::Result<Option<catalog::FileState>> {
+        self.shared.index.read().unwrap().lookup(path)
     }
-    // A changed ancestor can become a junction while a notification is queued.
-    for ancestor in Path::new(path).ancestors().skip(1) {
-        if !scope.contains(&ancestor.to_string_lossy()) {
-            break;
-        }
-        if fs::symlink_metadata(ancestor).is_ok_and(|m| m.is_symlink()) {
-            remove(s, path, generation);
-            return;
-        }
+    fn next_file(&self, path: &str) -> io::Result<Option<catalog::FileState>> {
+        self.shared.index.read().unwrap().next_file(path)
     }
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(m) if !m.is_symlink() => m,
-        Ok(_) => {
-            remove(s, path, generation);
-            return;
-        }
-        Err(e) => {
-            if e.kind() == io::ErrorKind::NotFound {
-                remove(s, path, generation);
-            } else {
-                *issues += 1;
-            }
-            return;
-        }
-    };
-    let previous = s
-        .index
-        .read()
-        .unwrap()
-        .lookup(&key(path))
-        .expect("mutable catalog read")
-        .map(|r| (r.directory, r.path.display().replace('/', "\\")));
-    if previous
-        .as_ref()
-        .is_some_and(|r| r.1 != path.replace('/', "\\"))
-    {
-        if let Ok(actual) = fs::canonicalize(path) {
-            let actual = actual.to_string_lossy();
-            let actual = if let Some(rest) = actual.strip_prefix("\\\\?\\UNC\\") {
-                format!("\\\\{rest}")
-            } else {
-                actual
-                    .strip_prefix("\\\\?\\")
-                    .unwrap_or(&actual)
-                    .to_string()
-            };
-            if actual != path {
-                reconcile(s, &actual, config, scope, generation, scanned, issues);
-                return;
-            }
-        }
-    }
-    if previous.as_ref().map(|r| r.0) != Some(metadata.is_dir())
-        || previous
-            .as_ref()
-            .is_some_and(|r| r.1 != path.replace('/', "\\"))
-    {
-        if previous.is_some() {
-            remove(s, path, generation);
-        }
-        if metadata.is_dir() {
-            walk(s, path, config, generation, scanned, issues);
-        } else {
-            insert(
-                s,
-                &mut vec![Record::new(path.into(), false, generation)],
-                generation,
-            );
-            *scanned += 1;
-        }
-        return;
-    }
-    // The index stores names, not file contents. Content writes need no reindex/save.
-    if !metadata.is_dir() {
-        return;
-    }
-    let entries = match fs::read_dir(path) {
-        Ok(entries) => entries,
-        Err(_) => {
-            *issues += 1;
-            return;
-        }
-    };
-    let mut seen = BTreeSet::new();
-    let mut added = Vec::new();
-    for entry in entries {
-        let Ok(entry) = entry else {
-            *issues += 1;
-            continue;
-        };
-        let child = entry.path().to_string_lossy().into_owned();
-        if !scope.contains(&child) {
-            continue;
-        }
-        let Ok(kind) = entry.file_type() else {
-            *issues += 1;
-            continue;
-        };
-        if kind.is_symlink() {
-            continue;
-        }
-        let k = key(&child);
-        seen.insert(k.clone());
-        let previous = s
+    fn directory_batch(
+        &self,
+        after: Option<&PathKey>,
+        scope: &Scope,
+    ) -> io::Result<catalog::DirectoryBatch> {
+        self.shared
             .index
             .read()
             .unwrap()
-            .lookup(&k)
-            .expect("mutable catalog read")
-            .map(|r| (r.directory, r.path.to_string()));
-        if previous.as_ref().map(|r| r.0) != Some(kind.is_dir())
-            || previous.as_ref().is_some_and(|r| r.1 != child)
-        {
-            if previous.is_some() {
-                remove(s, &child, generation);
-            }
-            added.push(child);
-        }
+            .directory_batch(after, scope)
     }
-    let mut cursor = None;
-    loop {
-        if s.generation.load(Ordering::Relaxed) != generation {
-            return;
-        }
-        let batch = s
-            .index
-            .read()
-            .unwrap()
-            .child_batch(path, cursor.as_deref())
-            .expect("mutable catalog read");
-        for old in batch.paths {
-            if !seen.contains(&old.key().normalized()) {
-                remove(s, old.display().as_ref(), generation);
-            }
-        }
-        cursor = batch.after;
-        if cursor.is_none() {
-            break;
-        }
+    fn child_batch(&self, parent: &str, after: Option<&str>) -> io::Result<catalog::ChildBatch> {
+        self.shared.index.read().unwrap().child_batch(parent, after)
     }
-    for child in added {
-        reconcile(s, &child, config, scope, generation, scanned, issues);
+}
+impl filesystem::FilesystemIndex for Live<'_> {
+    fn cancelled(&self) -> bool {
+        self.shared.generation.load(Ordering::Relaxed) != self.generation
     }
-    update_dir(s, path, stamp(&metadata), generation);
-    *scanned += 1;
+    fn remove(&mut self, path: &str) -> io::Result<()> {
+        remove(self.shared, path, self.generation);
+        Ok(())
+    }
+    fn update_dir(&mut self, path: &str, modified: u64) -> io::Result<()> {
+        update_dir(self.shared, path, modified, self.generation);
+        Ok(())
+    }
+    fn put(&mut self, path: &str, directory: bool, modified: u64) -> io::Result<()> {
+        let mut row = Record::new(path.into(), directory, self.generation);
+        row.item.set_modified(modified);
+        insert(self.shared, &mut vec![row], self.generation);
+        Ok(())
+    }
+    fn walk(
+        &mut self,
+        path: &str,
+        config: &Config,
+        scanned: &mut usize,
+        issues: &mut usize,
+    ) -> io::Result<()> {
+        walk(self.shared, path, config, self.generation, scanned, issues);
+        Ok(())
+    }
 }
 pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
     let generation = if offline {
@@ -216,107 +112,103 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
         let config = s.config.lock().unwrap().clone();
         let scope = Scope::new(&config, &s.cache);
         let (mut scanned, mut issues) = (0, 0);
-        let mut work = paths;
-        if offline {
-            let pool = jwalk::rayon::ThreadPoolBuilder::new()
-                .num_threads(4)
-                .build()
-                .unwrap();
-            let mut cursor: Option<PathKey> = None;
-            while !scope.empty() {
-                if s.generation.load(Ordering::Relaxed) != generation {
-                    return;
-                }
-                let batch = s
-                    .index
-                    .read()
-                    .unwrap()
-                    .directory_batch(cursor.as_ref(), &scope)
-                    .expect("mutable catalog read");
-                let Some(next) = batch.after else { break };
-                let changed: Vec<String> = pool.install(|| {
-                    batch
-                        .directories
-                        .par_iter()
-                        .filter_map(|(path, modified)| {
-                            if s.generation.load(Ordering::Relaxed) != generation {
-                                return None;
-                            }
-                            let display = path.display();
-                            match fs::symlink_metadata(display.as_ref()) {
-                                Ok(m)
-                                    if m.is_dir()
-                                        && !m.is_symlink()
-                                        && *modified != 0
-                                        && stamp(&m) == *modified =>
-                                {
-                                    None
-                                }
-                                _ => Some(display.into_owned()),
-                            }
-                        })
-                        .collect()
-                });
-                // Reconcile this bounded batch before reading the next one.
-                // The path cursor survives deletion or subtree replacement;
-                // do not retain every changed directory until verification ends.
-                for path in changed {
+        let mut live = Live {
+            shared: &s,
+            generation,
+        };
+        let result = (|| -> io::Result<()> {
+            let mut work = paths;
+            if offline {
+                let pool = jwalk::rayon::ThreadPoolBuilder::new()
+                    .num_threads(4)
+                    .build()
+                    .unwrap();
+                let mut cursor: Option<PathKey> = None;
+                while !scope.empty() {
                     if s.generation.load(Ordering::Relaxed) != generation {
-                        return;
+                        return Ok(());
                     }
-                    reconcile(
-                        &s,
-                        &path,
-                        &config,
-                        &scope,
-                        generation,
-                        &mut scanned,
-                        &mut issues,
-                    );
+                    let batch = live.directory_batch(cursor.as_ref(), &scope)?;
+                    let Some(next) = batch.after else { break };
+                    let changed: Vec<String> = pool.install(|| {
+                        batch
+                            .directories
+                            .par_iter()
+                            .filter_map(|(path, modified)| {
+                                if s.generation.load(Ordering::Relaxed) != generation {
+                                    return None;
+                                }
+                                let display = path.display();
+                                match fs::symlink_metadata(display.as_ref()) {
+                                    Ok(m)
+                                        if m.is_dir()
+                                            && !m.is_symlink()
+                                            && *modified != 0
+                                            && stamp(&m) == *modified =>
+                                    {
+                                        None
+                                    }
+                                    _ => Some(display.into_owned()),
+                                }
+                            })
+                            .collect()
+                    });
+                    // Reconcile this bounded batch before reading the next one.
+                    // The path cursor survives deletion or subtree replacement;
+                    // do not retain every changed directory until verification ends.
+                    for path in changed {
+                        if s.generation.load(Ordering::Relaxed) != generation {
+                            return Ok(());
+                        }
+                        filesystem::reconcile(
+                            &mut live,
+                            &path,
+                            &config,
+                            &scope,
+                            &mut scanned,
+                            &mut issues,
+                        )?;
+                    }
+                    cursor = Some(next);
                 }
-                cursor = Some(next);
-            }
-            for root in &config.roots {
-                if !s
-                    .index
-                    .read()
-                    .unwrap()
-                    .lookup(&key(root))
-                    .expect("mutable catalog read")
-                    .is_some()
-                {
-                    work.push(root.clone());
+                for root in &config.roots {
+                    if live.lookup(&key(root))?.is_none() {
+                        work.push(root.clone());
+                    }
                 }
             }
-        }
-        // Reconcile the parent before advancing its signature; a second buffered event may not have arrived yet.
-        if !offline {
-            let parents: Vec<_> = work
-                .iter()
-                .filter_map(|p| {
-                    Path::new(p)
-                        .parent()
-                        .map(|p| p.to_string_lossy().into_owned())
-                })
-                .collect();
-            work.extend(parents);
-        }
-        work.sort();
-        work.dedup();
-        for path in work {
+            // Reconcile the parent before advancing its signature; a second buffered event may not have arrived yet.
+            if !offline {
+                let parents: Vec<_> = work
+                    .iter()
+                    .filter_map(|p| {
+                        Path::new(p)
+                            .parent()
+                            .map(|p| p.to_string_lossy().into_owned())
+                    })
+                    .collect();
+                work.extend(parents);
+            }
+            work.sort();
+            work.dedup();
+            for path in work {
+                if s.generation.load(Ordering::Relaxed) != generation {
+                    return Ok(());
+                }
+                filesystem::reconcile(
+                    &mut live,
+                    &path,
+                    &config,
+                    &scope,
+                    &mut scanned,
+                    &mut issues,
+                )?;
+            }
             if s.generation.load(Ordering::Relaxed) != generation {
-                return;
+                return Ok(());
             }
-            reconcile(
-                &s,
-                &path,
-                &config,
-                &scope,
-                generation,
-                &mut scanned,
-                &mut issues,
-            );
-        }
+            Ok(())
+        })();
         if s.generation.load(Ordering::Relaxed) != generation {
             return;
         }
@@ -325,10 +217,18 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
         if offline {
             state.running = false;
         }
+        if let Err(error) = result {
+            state.error = format!("目录校验失败：{error}");
+        } else if state.error.starts_with("目录校验失败：") {
+            state.error.clear();
+        }
         state.scanned = scanned;
         state.issues = issues;
         state.updated = now();
         drop(state);
+        // Every completed mutation has already queued its cache change. Mark
+        // the work finished before observers can immediately request a stop.
+        drop(_working);
         send(&s);
     });
 }

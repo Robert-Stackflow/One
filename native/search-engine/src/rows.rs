@@ -109,6 +109,25 @@ impl Rows {
     pub fn clear(&mut self) {
         *self = Self::default();
     }
+    // A directory can own millions of rows. Do not collect all descendant
+    // path owners before deleting them; the shared-key batch stays small.
+    pub fn remove_descendants(&mut self, prefix: &str) {
+        loop {
+            let batch: Vec<_> = self
+                .keys
+                .range(PathKey::lookup(prefix)..)
+                .take_while(|(path, _)| path.starts_with(prefix))
+                .take(1024)
+                .map(|(path, _)| path.clone())
+                .collect();
+            if batch.is_empty() {
+                break;
+            }
+            for path in batch {
+                self.remove(&path);
+            }
+        }
+    }
     pub fn retain(&mut self, mut predicate: impl FnMut(&PathKey, &mut Record) -> bool) {
         let slots = &mut self.slots;
         self.keys.retain(|key, id| {
@@ -196,6 +215,51 @@ impl Serialize for Rows {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn large_subtree_removal_preserves_adjacent_paths_and_reuses_slots() {
+        let mut index = super::super::Index::default();
+        index.put(Record::new("D:\\Root".into(), true, 0));
+        for n in 0..131_073 {
+            index.put(Record::new(
+                format!("D:\\Root\\nested\\file-{n:06}"),
+                false,
+                0,
+            ));
+        }
+        for path in [
+            "D:\\Root-adjacent",
+            "D:\\Root]",
+            "D:\\Other\\file",
+            "D:\\Rooted\\file",
+        ] {
+            index.put(Record::new(path.into(), false, 0));
+        }
+        let slots = index.rows.slots.next;
+        assert!(super::super::erase(&mut index, "d:/ROOT/"));
+        assert_eq!(index.rows.len(), 4);
+        assert!(!super::super::erase(&mut index, "D:\\Root"));
+        assert!(
+            index
+                .rows
+                .range(PathKey::lookup("d:\\root\\")..PathKey::lookup("d:\\root]"))
+                .next()
+                .is_none()
+        );
+        for n in 0..8193 {
+            index.put(Record::new(format!("D:\\New\\file-{n:06}"), false, 0));
+        }
+        assert_eq!(index.rows.slots.next, slots);
+        assert_eq!(index.rows.len(), 8197);
+        // Removing an ordinary file never deletes a similarly prefixed row.
+        index.put(Record::new("D:\\File".into(), false, 0));
+        index.put(Record::new("D:\\File\\Nested".into(), false, 0));
+        assert!(super::super::erase(&mut index, "D:\\File"));
+        assert!(
+            index
+                .rows
+                .contains_key(&PathKey::lookup("d:\\file\\nested"))
+        );
+    }
     #[test]
     fn removal_replacement_reuse_and_order() {
         let mut rows = Rows::default();

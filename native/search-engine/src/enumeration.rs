@@ -97,15 +97,17 @@ impl<F: Fn(PathBuf, fs::Metadata) -> Option<Record> + Sync, C: Fn() -> bool + Sy
         }
     }
 }
-pub fn walk(
+pub(super) fn enumerate(
     root: &str,
-    s: &Shared,
+    cache_path: &str,
     config: &Config,
     generation: u64,
     scanned: &mut usize,
     issues: &mut usize,
-) {
-    let cache_key = key(&s.cache);
+    cancel: impl Fn() -> bool + Sync,
+    mut consume: impl FnMut(Vec<Record>, usize, usize) -> io::Result<bool>,
+) -> io::Result<()> {
+    let cache_key = key(cache_path);
     let excluded: Vec<_> = config.excluded.iter().map(|p| key(p)).collect();
     let map = |path: PathBuf, meta: fs::Metadata| {
         let path = path.to_string_lossy().into_owned();
@@ -122,11 +124,10 @@ pub fn walk(
         }
         Some(row)
     };
-    let cancel = || s.generation.load(Ordering::Relaxed) != generation;
     let (tx, rx) = sync_channel(16);
     let stop = AtomicBool::new(false);
     let errors = AtomicU64::new(0);
-    thread::scope(|scope| {
+    let result = thread::scope(|scope| {
         let map = &map;
         let cancel = &cancel;
         let stop = &stop;
@@ -154,6 +155,7 @@ pub fn walk(
         });
         let mut batch = Vec::with_capacity(2048);
         let mut last = Instant::now();
+        let mut result = Ok(());
         for rows in rx.iter() {
             if cancel() {
                 break;
@@ -161,24 +163,157 @@ pub fn walk(
             *scanned += rows.len();
             batch.extend(rows);
             if batch.len() >= 2048 || last.elapsed().as_millis() > 180 {
-                insert(s, &mut batch, generation);
-                {
-                    let mut state = s.state.lock().unwrap();
-                    state.scanned = *scanned;
-                    state.issues = *issues + errors.load(Ordering::Relaxed) as usize;
+                let rows = std::mem::replace(&mut batch, Vec::with_capacity(2048));
+                match consume(
+                    rows,
+                    *scanned,
+                    *issues + errors.load(Ordering::Relaxed) as usize,
+                ) {
+                    Ok(true) => {}
+                    Ok(false) => break,
+                    Err(error) => {
+                        result = Err(error);
+                        break;
+                    }
                 }
-                send(s);
                 last = Instant::now();
-                if full(&s.index.read().unwrap(), config.max_entries) {
-                    break;
-                }
             }
         }
         stop.store(true, Ordering::Relaxed);
         drop(rx);
-        if !cancel() {
-            insert(s, &mut batch, generation);
+        if result.is_ok() && !cancel() && !batch.is_empty() {
+            result = consume(
+                batch,
+                *scanned,
+                *issues + errors.load(Ordering::Relaxed) as usize,
+            )
+            .map(|_| ());
         }
+        result
     });
     *issues += errors.load(Ordering::Relaxed) as usize;
+    result
+}
+
+pub fn walk(
+    root: &str,
+    s: &Shared,
+    config: &Config,
+    generation: u64,
+    scanned: &mut usize,
+    issues: &mut usize,
+) {
+    enumerate(
+        root,
+        &s.cache,
+        config,
+        generation,
+        scanned,
+        issues,
+        || s.generation.load(Ordering::Relaxed) != generation,
+        |mut batch, scanned, issues| {
+            insert(s, &mut batch, generation);
+            {
+                let mut state = s.state.lock().unwrap();
+                state.scanned = scanned;
+                state.issues = issues;
+            }
+            send(s);
+            Ok(!full(&s.index.read().unwrap(), config.max_entries))
+        },
+    )
+    .expect("mutable enumeration consumer");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn failing_and_cancelled_consumers_release_backpressured_workers() {
+        let parent = std::env::temp_dir();
+        let dir = parent.join(format!(
+            "one-enumeration-consumer-{}-{}",
+            std::process::id(),
+            now()
+        ));
+        assert_eq!(dir.parent(), Some(parent.as_path()));
+        fs::create_dir(&dir).unwrap();
+        struct Fixture(PathBuf);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let _owned = Fixture(dir.clone());
+        // More packets than the channel can hold: an early consumer error
+        // must stop the producer before thread::scope waits for its exit.
+        for n in 0..25_000 {
+            File::create(dir.join(format!("file-{n:05}"))).unwrap();
+        }
+        let root = dir.to_string_lossy();
+        let config = Config {
+            roots: vec![root.into_owned()],
+            max_entries: 50_000,
+            ..Default::default()
+        };
+        let mut scanned = 0;
+        let mut issues = 0;
+        let mut packets = 0;
+        let error = enumerate(
+            &config.roots[0],
+            "Z:\\unused-cache",
+            &config,
+            1,
+            &mut scanned,
+            &mut issues,
+            || false,
+            |rows, _, _| {
+                packets += 1;
+                assert!(rows.len() <= 3072);
+                Err(io::Error::other("consumer rejected"))
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "consumer rejected");
+        assert_eq!(packets, 1);
+        assert_eq!(issues, 0);
+        assert!(scanned < 25_001);
+        let cancel = AtomicBool::new(false);
+        scanned = 0;
+        packets = 0;
+        enumerate(
+            &config.roots[0],
+            "Z:\\unused-cache",
+            &config,
+            1,
+            &mut scanned,
+            &mut issues,
+            || cancel.load(Ordering::Relaxed),
+            |_, _, _| {
+                packets += 1;
+                cancel.store(true, Ordering::Relaxed);
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert_eq!(packets, 1);
+        assert!(scanned < 25_001);
+        scanned = 0;
+        let mut received = 0;
+        enumerate(
+            &config.roots[0],
+            "Z:\\unused-cache",
+            &config,
+            1,
+            &mut scanned,
+            &mut issues,
+            || false,
+            |rows, _, _| {
+                received += rows.len();
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert_eq!((scanned, received, issues), (25_001, 25_001, 0));
+    }
 }

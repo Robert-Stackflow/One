@@ -3,6 +3,7 @@ mod catalog;
 mod cleanup;
 mod disk;
 mod enumeration;
+mod filesystem;
 mod incremental;
 mod maintenance;
 mod path_key;
@@ -61,15 +62,7 @@ fn erase(index: &mut Index, path: &str) -> bool {
     let removed = index.rows.remove(&PathKey::lookup(&k));
     if removed.as_ref().is_some_and(|r| r.item.directory()) {
         let prefix = format!("{k}\\");
-        let keys: Vec<_> = index
-            .rows
-            .range((Bound::Included(PathKey::lookup(&prefix)), Bound::Unbounded))
-            .take_while(|(p, _)| p.starts_with(&prefix))
-            .map(|(p, _)| p.clone())
-            .collect();
-        for p in keys {
-            index.rows.remove(&p);
-        }
+        index.rows.remove_descendants(&prefix);
     }
     removed.is_some()
 }
@@ -550,6 +543,10 @@ fn rebuild(s: Arc<Shared>, config: Config) {
             .retain(|_, r| r.seen == generation);
         s.index.write().unwrap().tracking = false;
         s.index.write().unwrap().paths.collect();
+        // Queue persistence before announcing completion. A stop immediately
+        // after that notification must not treat this finished scan as partial
+        // or let the saver exit before its final snapshot is requested.
+        persist(s.clone());
         {
             let mut state = s.state.lock().unwrap();
             state.running = false;
@@ -561,8 +558,8 @@ fn rebuild(s: Arc<Shared>, config: Config) {
                 state.error = format!("索引已达到 {} 项上限", config.max_entries);
             }
         }
+        drop(_working);
         send(&s);
-        persist(s.clone());
     });
 }
 fn refresh(s: Arc<Shared>, paths: Vec<String>) {

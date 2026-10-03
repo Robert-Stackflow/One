@@ -7,12 +7,7 @@ use std::{collections::btree_map, iter::Peekable, ops::Range};
 const MAX_EXTRA: usize = 20_000;
 const MAX_INTERVALS: usize = 20_000;
 
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) enum Mutation {
-    Remove(String),
-    Put(Entry),
-}
+pub(super) use crate::cache::Change as Mutation;
 
 #[derive(Clone, Default)]
 struct Hidden {

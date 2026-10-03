@@ -13,7 +13,8 @@ pub const MAX_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_DELTA: u64 = 8 * 1024 * 1024;
 const MAGIC: &[u8; 8] = b"ONEIDX06";
 const DELTA: &[u8; 8] = b"ONEDEL06";
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Change {
     Remove(String),
     Put(Entry),
