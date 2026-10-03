@@ -3,9 +3,10 @@
 //! persisted indexes without duplicating Windows filesystem behavior.
 use super::*;
 use catalog::{FileCatalog, Scope};
+use jwalk::rayon::prelude::*;
 use std::collections::BTreeSet;
 
-pub(super) trait FilesystemIndex: FileCatalog {
+pub(super) trait FilesystemIndex: FileCatalog + Sync {
     fn cancelled(&self) -> bool;
     fn remove(&mut self, path: &str) -> io::Result<()>;
     fn update_dir(&mut self, path: &str, modified: u64) -> io::Result<()>;
@@ -17,6 +18,66 @@ pub(super) trait FilesystemIndex: FileCatalog {
         scanned: &mut usize,
         issues: &mut usize,
     ) -> io::Result<()>;
+}
+
+pub(super) fn verify(
+    sink: &mut impl FilesystemIndex,
+    config: &Config,
+    scope: &Scope,
+    scanned: &mut usize,
+    issues: &mut usize,
+) -> io::Result<()> {
+    let pool = jwalk::rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .build()
+        .map_err(io::Error::other)?;
+    let mut cursor = None;
+    while !scope.empty() {
+        if sink.cancelled() {
+            return Ok(());
+        }
+        let batch = sink.directory_batch(cursor.as_ref(), scope)?;
+        let Some(next) = batch.after else { break };
+        let changed: Vec<String> = pool.install(|| {
+            batch
+                .directories
+                .par_iter()
+                .filter_map(|(path, modified)| {
+                    if sink.cancelled() {
+                        return None;
+                    }
+                    let display = path.display();
+                    match fs::symlink_metadata(display.as_ref()) {
+                        Ok(m)
+                            if m.is_dir()
+                                && !m.is_symlink()
+                                && *modified != 0
+                                && incremental::stamp(&m) == *modified =>
+                        {
+                            None
+                        }
+                        _ => Some(display.into_owned()),
+                    }
+                })
+                .collect()
+        });
+        for path in changed {
+            if sink.cancelled() {
+                return Ok(());
+            }
+            reconcile(sink, &path, config, scope, scanned, issues)?;
+        }
+        cursor = Some(next);
+    }
+    for root in &config.roots {
+        if sink.cancelled() {
+            return Ok(());
+        }
+        if sink.lookup(&key(root))?.is_none() {
+            reconcile(sink, root, config, scope, scanned, issues)?;
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn reconcile(

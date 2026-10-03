@@ -112,27 +112,41 @@ impl Overlay {
         }
         Ok(())
     }
+    fn validate_change(change: &Mutation) -> io::Result<()> {
+        let (path, invalid_meta) = match change {
+            Mutation::Remove(path) => (path.as_str(), false),
+            Mutation::Put(item) => (item.path.as_str(), !item.directory && item.modified != 0),
+        };
+        let normalized = key(path);
+        if path.len() > 131_072 || normalized.is_empty() || path.contains('\0')
+            || normalized.starts_with("one-launcher:") || invalid_meta { return Err(bad()); }
+        Ok(())
+    }
+    // Only edit a caller-owned staged overlay. Errors may leave this staging
+    // copy changed; the published overlay is never edited before commit.
+    pub(super) fn edit(&mut self, view: &View<'_>, change: Mutation, limit: usize) -> io::Result<()> {
+        self.check(view)?;
+        Self::validate_change(&change)?;
+        self.edit_validated(view, change, limit)
+    }
+    fn edit_validated(&mut self, view: &View<'_>, change: Mutation, limit: usize) -> io::Result<()> {
+        self.generation = Some(view.generation);
+        self.apply_one(view, change, limit)?;
+        if self.extra.len() > MAX_EXTRA || self.hidden.spans.len() > MAX_INTERVALS {
+            return Err(io::Error::new(io::ErrorKind::WouldBlock, "磁盘增量需要合并"));
+        }
+        Ok(())
+    }
     pub fn stage(&self, view: &View<'_>, changes: Vec<Mutation>, limit: usize) -> io::Result<Self> {
         self.check(view)?;
         if changes.len() > 10_000 { return Err(bad()); }
-        for change in &changes {
-            let (path, invalid_meta) = match change {
-                Mutation::Remove(path) => (path.as_str(), false),
-                Mutation::Put(item) => (item.path.as_str(), !item.directory && item.modified != 0),
-            };
-            let normalized = key(path);
-            if path.len() > 131_072 || normalized.is_empty() || path.contains('\0')
-                || normalized.starts_with("one-launcher:") || invalid_meta { return Err(bad()); }
-        }
+        for change in &changes { Self::validate_change(change)?; }
         // Staging keeps a rejected/corrupt batch from partly changing queries.
         // This copy is bounded by the change limits, never by the base size.
         let mut next = self.clone();
         next.generation = Some(view.generation);
         for change in changes {
-            next.apply_one(view, change, limit)?;
-            if next.extra.len() > MAX_EXTRA || next.hidden.spans.len() > MAX_INTERVALS {
-                return Err(io::Error::new(io::ErrorKind::WouldBlock, "磁盘增量需要合并"));
-            }
+            next.edit_validated(view, change, limit)?;
         }
         Ok(next)
     }

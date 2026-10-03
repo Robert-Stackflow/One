@@ -196,6 +196,23 @@ impl State {
             || stats["hiddenRanges"].as_u64().unwrap_or(0) >= 4000
             || stats["hiddenRows"].as_u64().unwrap_or(0) >= 1000.max(view.count() as u64 / 4)
     }
+    fn refresh(&mut self, request:&Value, cancel:impl Fn()->bool+Sync) -> io::Result<(Value,Vec<Vec<Mutation>>,usize)> {
+        let mut config:Config=serde_json::from_value(request["config"].clone()).map_err(|_|bad())?;
+        if config.roots.len()>64||config.excluded.len()>64||config.max_entries>10_000_000 {return Err(bad());}
+        // The owned generation files must not index themselves or recursively
+        // generate updates when the store is inside an indexed root.
+        config.excluded.push(self.dir.to_string_lossy().into_owned());
+        let paths:Vec<String>=serde_json::from_value(request["paths"].clone()).map_err(|_|bad())?;
+        if paths.len()>10_000||paths.iter().any(|path|path.len()>131_072||path.contains('\0')) {return Err(bad());}
+        let cache=self.dir.join("writer").to_string_lossy().into_owned();
+        let map=Mapping::open(&self.base)?;
+        let view=View::new(map.bytes())?;
+        let changes=filesystem::refresh(&view,&self.overlay,&config,&cache,paths,request["offline"].as_bool().unwrap_or(false),&cancel)?;
+        if cancel() {return Err(io::Error::new(io::ErrorKind::Interrupted,"目录更新已取消"));}
+        let stats=changes.overlay.stats(&view);
+        if !changes.batches.is_empty() {changes.overlay.save(&self.delta)?;self.overlay=changes.overlay;}
+        Ok((json!({"stats":stats,"scanned":changes.scanned,"issues":changes.issues}),changes.batches,config.max_entries))
+    }
     fn install(&mut self, new_id: &str, tail: Vec<(Vec<Mutation>, usize)>) -> io::Result<Value> {
         let (base, delta) = paths(&self.dir, new_id);
         let map = Mapping::open(&base)?;
@@ -296,6 +313,8 @@ pub fn serve(args: &[String]) -> io::Result<()> {
     drop(map);
     let gate = Arc::new(Gate::default());
     let worker_gate = gate.clone();
+    let refreshes=Arc::new(AtomicU64::new(0));
+    let worker_refreshes=refreshes.clone();
     let (tx, rx) = mpsc::channel();
     let worker_tx = tx.clone();
     let worker = thread::spawn(move || {
@@ -372,8 +391,13 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                             Err(e) => reply(&v, Err(e)),
                         }
                     }
-                    "apply" => {
+                    "apply" | "refresh" => {
                         let result = (|| {
+                            if v["type"]=="refresh" {
+                                let (result,batches,limit)=state.refresh(&v,||worker_gate.stopped.load(Ordering::Relaxed)||worker_refreshes.load(Ordering::Relaxed)!=ticket)?;
+                                if let Some(job)=&mut active {for batch in batches {job.record(batch,limit);}}
+                                return Ok(result);
+                            }
                             let changes: Vec<Mutation> =
                                 serde_json::from_value(v["changes"].clone()).map_err(|_| bad())?;
                             let limit = v["maxEntries"]
@@ -433,6 +457,14 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                 "query" => {
                     let ticket = gate.enqueue(&v);
                     let _ = tx.send(Message::Request(v, ticket));
+                }
+                "refresh" => {
+                    let ticket=refreshes.fetch_add(1,Ordering::SeqCst)+1;
+                    let _=tx.send(Message::Request(v,ticket));
+                }
+                "cancel-refresh" => {
+                    refreshes.fetch_add(1,Ordering::SeqCst);
+                    reply(&v,Ok(json!({"cancelled":true})));
                 }
                 "apply" | "compact" | "metadata" | "directories" | "children" => {
                     let _ = tx.send(Message::Request(v, 0));

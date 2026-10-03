@@ -4,6 +4,7 @@ use super::*;
 mod overlay;
 mod compact;
 mod catalog;
+mod filesystem;
 mod store;
 mod import;
 use overlay::{Candidate, Overlay};

@@ -1,6 +1,5 @@
 use super::*;
 use catalog::{FileCatalog, Scope};
-use jwalk::rayon::prelude::*;
 
 pub fn stamp(metadata: &fs::Metadata) -> u64 {
     metadata
@@ -119,63 +118,7 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
         let result = (|| -> io::Result<()> {
             let mut work = paths;
             if offline {
-                let pool = jwalk::rayon::ThreadPoolBuilder::new()
-                    .num_threads(4)
-                    .build()
-                    .unwrap();
-                let mut cursor: Option<PathKey> = None;
-                while !scope.empty() {
-                    if s.generation.load(Ordering::Relaxed) != generation {
-                        return Ok(());
-                    }
-                    let batch = live.directory_batch(cursor.as_ref(), &scope)?;
-                    let Some(next) = batch.after else { break };
-                    let changed: Vec<String> = pool.install(|| {
-                        batch
-                            .directories
-                            .par_iter()
-                            .filter_map(|(path, modified)| {
-                                if s.generation.load(Ordering::Relaxed) != generation {
-                                    return None;
-                                }
-                                let display = path.display();
-                                match fs::symlink_metadata(display.as_ref()) {
-                                    Ok(m)
-                                        if m.is_dir()
-                                            && !m.is_symlink()
-                                            && *modified != 0
-                                            && stamp(&m) == *modified =>
-                                    {
-                                        None
-                                    }
-                                    _ => Some(display.into_owned()),
-                                }
-                            })
-                            .collect()
-                    });
-                    // Reconcile this bounded batch before reading the next one.
-                    // The path cursor survives deletion or subtree replacement;
-                    // do not retain every changed directory until verification ends.
-                    for path in changed {
-                        if s.generation.load(Ordering::Relaxed) != generation {
-                            return Ok(());
-                        }
-                        filesystem::reconcile(
-                            &mut live,
-                            &path,
-                            &config,
-                            &scope,
-                            &mut scanned,
-                            &mut issues,
-                        )?;
-                    }
-                    cursor = Some(next);
-                }
-                for root in &config.roots {
-                    if live.lookup(&key(root))?.is_none() {
-                        work.push(root.clone());
-                    }
-                }
+                filesystem::verify(&mut live, &config, &scope, &mut scanned, &mut issues)?;
             }
             // Reconcile the parent before advancing its signature; a second buffered event may not have arrived yet.
             if !offline {
