@@ -11,7 +11,7 @@ struct Manifest {
     version: u32,
     id: String,
 }
-fn id() -> io::Result<String> {
+pub(super) fn id() -> io::Result<String> {
     Ok(generation()?.iter().map(|b| format!("{b:02x}")).collect())
 }
 fn valid_id(value: &str) -> bool {
@@ -20,7 +20,7 @@ fn valid_id(value: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
-fn paths(dir: &Path, value: &str) -> (PathBuf, PathBuf) {
+pub(super) fn paths(dir: &Path, value: &str) -> (PathBuf, PathBuf) {
     (
         dir.join(format!(".one-mapped-{value}.base")),
         dir.join(format!(".one-mapped-{value}.delta")),
@@ -267,7 +267,7 @@ impl State {
             || stats["hiddenRanges"].as_u64().unwrap_or(0) >= 4000
             || stats["hiddenRows"].as_u64().unwrap_or(0) >= 1000.max(view.count() as u64 / 4)
     }
-    fn refresh(&mut self, request:&Value, cancel:impl Fn()->bool+Sync) -> io::Result<(Value,Vec<Vec<Mutation>>,usize)> {
+    fn refresh(&mut self, request:&Value, cancel:impl Fn()->bool+Sync) -> io::Result<(Value,Vec<Vec<Mutation>>,usize,bool)> {
         let mut config:Config=serde_json::from_value(request["config"].clone()).map_err(|_|bad())?;
         if config.roots.len()>64||config.excluded.len()>64||config.max_entries>10_000_000 {return Err(bad());}
         // The owned generation files must not index themselves or recursively
@@ -277,23 +277,61 @@ impl State {
         if paths.len()>10_000||paths.iter().any(|path|path.len()>131_072||path.contains('\0')) {return Err(bad());}
         let cache=self.dir.join("writer").to_string_lossy().into_owned();
         let map=self.lease.mapping()?;
-        let view=View::new(map.bytes())?;
-        let changes=filesystem::refresh(&view,&self.overlay,&config,&cache,paths,request["offline"].as_bool().unwrap_or(false),&cancel)?;
+        let progress=|fold|output(json!({"refresh":{"id":request["id"],"state":"folding","fold":fold}}));
+        let mut changes=filesystem::refresh(map,&self.overlay,&config,&cache,paths,request["offline"].as_bool().unwrap_or(false),&cancel,&progress)?;
         if cancel() {return Err(io::Error::new(io::ErrorKind::Interrupted,"目录更新已取消"));}
-        let stats=changes.overlay.stats(&view);
-        if !changes.batches.is_empty() {changes.overlay.save(&self.delta)?;self.overlay=Arc::new(changes.overlay);}
-        Ok((json!({"stats":stats,"scanned":changes.scanned,"issues":changes.issues}),changes.batches,config.max_entries))
+        let mut small_saved=false;
+        if changes.stage.is_none() && !changes.batches.is_empty() {
+            match changes.overlay.save(&self.delta) {
+                Ok(())=>{small_saved=true;},
+                Err(error) if error.kind()==io::ErrorKind::WouldBlock=>{
+                    progress(changes.folds+1);changes.fold(&cache,&cancel)?;
+                },
+                Err(error)=>return Err(error),
+            }
+        }
+        // Save errors in a private generation remain unacknowledged. JSON
+        // expansion can overflow even after a row-bounded scan; fold once more.
+        if let Some(stage)=&mut changes.stage {
+            stage.own_delta();
+            match changes.overlay.save(&stage.delta) {
+                Ok(())=>{},
+                Err(error) if error.kind()==io::ErrorKind::WouldBlock=>{
+                    progress(changes.folds+1);changes.fold(&cache,&cancel)?;
+                    let stage=changes.stage.as_mut().unwrap();stage.own_delta();changes.overlay.save(&stage.delta)?;
+                },
+                Err(error)=>return Err(error),
+            }
+        }
+        // Once the live delta save starts, successful persistence is its
+        // commit point; never report cancellation while leaving new bytes.
+        if cancel() && !small_saved {return Err(io::Error::new(io::ErrorKind::Interrupted,"目录更新已取消"));}
+        let stats=changes.stats()?;
+        let replaced=changes.stage.is_some();
+        if let Some(stage)=&mut changes.stage {
+            self.publish_version(&stage.id,changes.overlay)?;
+            stage.keep();
+        } else if !changes.batches.is_empty() {self.overlay=Arc::new(changes.overlay);}
+        Ok((json!({"stats":stats,"scanned":changes.scanned,"issues":changes.issues,"stagedFolds":changes.folds,"replacedBase":replaced}),changes.batches,config.max_entries,replaced))
     }
     fn install(&mut self, new_id: &str, tail: Vec<(Vec<Mutation>, usize)>) -> io::Result<Value> {
-        let (base, delta) = paths(&self.dir, new_id);
+        let (base, _) = paths(&self.dir, new_id);
         let map = Mapping::open(&base)?;
         let view = View::new(map.bytes())?;
         let mut overlay = Overlay::load(&view, None)?;
         for (changes, limit) in tail {
             overlay = overlay.stage(&view, changes, limit)?;
         }
+        drop(map);
+        self.publish_version(new_id,overlay)
+    }
+    fn publish_version(&mut self, new_id:&str, overlay:Overlay) -> io::Result<Value> {
+        let (base,delta)=paths(&self.dir,new_id);
+        let map=Mapping::open(&base)?;
+        let view=View::new(map.bytes())?;
+        overlay.check(&view)?;
+        let stats=overlay.stats(&view);
         overlay.save(&delta)?;
-        let stats = overlay.stats(&view);
         drop(map);
         // Prepare the next read lease before the manifest commit. Publication
         // after it is infallible and cannot acknowledge an unreadable version.
@@ -307,7 +345,8 @@ impl State {
         self.overlay = Arc::new(overlay);
         self.lease.retired.store(true, Ordering::Relaxed);
         self.lease = lease;
-        cleanup(&self.dir, new_id);
+        // Other builders may still be running. Their owned intermediates are
+        // reclaimed by guards, or by cleanup after the builder thread joins.
         Ok(stats)
     }
 }
@@ -481,8 +520,11 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                     "apply" | "refresh" => {
                         let result = (|| {
                             if v["type"]=="refresh" {
-                                let (result,batches,limit)=state.refresh(&v,||worker_gate.stopped.load(Ordering::Relaxed)||worker_refreshes.load(Ordering::Relaxed)!=ticket)?;
-                                if let Some(job)=&mut active {for batch in batches {job.record(batch,limit);}}
+                                let (result,batches,limit,replaced)=state.refresh(&v,||worker_gate.stopped.load(Ordering::Relaxed)||worker_refreshes.load(Ordering::Relaxed)!=ticket)?;
+                                if let Some(job)=&mut active {
+                                    if replaced {job.invalid=true;job.stop.store(true,Ordering::Relaxed);job.tail.clear();}
+                                    else {for batch in batches {job.record(batch,limit);}}
+                                }
                                 return Ok(result);
                             }
                             let changes: Vec<Mutation> =
@@ -722,5 +764,37 @@ mod tests {
         drop(state);
         drop(lock);
         fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn encoded_delta_overflow_folds_without_rejecting_a_small_filesystem_update() {
+        let dir=std::env::temp_dir().join(format!("one-map-encoded-{}",std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let seed=dir.join("seed.bin");let store=dir.join("store");let root=dir.join("files");
+        fs::create_dir_all(&root).unwrap();image(&Index::default(),&seed).unwrap();
+        let (mut state,lock)=State::open(&seed,&store).unwrap();
+        let prefix=format!("D:\\Legacy\\{}\\","a".repeat(440));
+        let sample=Entry {path:format!("{prefix}old-000000.txt"),name:"old-000000.txt".into(),directory:false,modified:0,size:0};
+        let rows=(8*1024*1024-96*1024)/(serde_json::to_vec(&sample).unwrap().len()+1);
+        assert!(rows+1001<18_976);
+        for first in (0..rows).step_by(10_000) {
+            let changes=(first..rows.min(first+10_000)).map(|n|Mutation::Put(Entry {
+                path:format!("{prefix}old-{n:06}.txt"),..sample.clone()
+            })).collect();
+            state.apply(changes,100000).unwrap();
+        }
+        let old_id=state.id.clone();
+        assert!(fs::metadata(&state.delta).unwrap().len()>7*1024*1024);
+        for n in 0..1000 {fs::write(root.join(format!("actual-{n:04}.txt")),"x").unwrap();}
+        let request=json!({"id":91,"config":{"roots":[root],"excluded":[],"maxEntries":100000},"paths":[],"offline":true});
+        let (result,batches,_,replaced)=state.refresh(&request,||false).unwrap();
+        assert!(replaced);assert_eq!(result["stagedFolds"],1);assert!(batches.is_empty());
+        assert_eq!(result["stats"]["count"],rows+1001);assert_ne!(state.id,old_id);
+        assert_eq!(result["stats"]["changedRows"],0);
+        assert!(fs::metadata(&state.delta).unwrap().len()<1024);
+        drop(state);drop(lock);
+        let (state,lock)=State::open(&dir.join("missing-seed"),&store).unwrap();
+        let map=state.lease.mapping().unwrap();let view=View::new(map.bytes()).unwrap();
+        assert_eq!(state.overlay.count(&view),rows+1001);
+        drop(map);drop(state);drop(lock);fs::remove_dir_all(dir).unwrap();
     }
 }

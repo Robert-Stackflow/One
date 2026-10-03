@@ -150,7 +150,10 @@ impl Writer {
         }
         Ok(())
     }
-    pub(super) fn finish(mut self, target: &Path, stop: &AtomicBool) -> io::Result<usize> {
+    pub(super) fn finish(self, target: &Path, stop: &AtomicBool) -> io::Result<usize> {
+        self.finish_cancel(target, &||stop.load(Ordering::Relaxed))
+    }
+    pub(super) fn finish_cancel(mut self, target: &Path, cancel: &impl Fn()->bool) -> io::Result<usize> {
         // Bounded interning can change parent-count parity. Keep every 64-byte
         // row within one cache line; an unused zero parent is valid padding.
         if self.parent_count % 2 != 0 {
@@ -198,7 +201,7 @@ impl Writer {
         for path in &self.temps.0[..4] {
             let mut input = File::open(path)?;
             loop {
-                if stop.load(Ordering::Relaxed) {
+                if cancel() {
                     return Err(io::Error::new(io::ErrorKind::Interrupted, "索引合并已取消"));
                 }
                 let n = input.read(&mut buffer)?;
@@ -211,7 +214,7 @@ impl Writer {
         out.flush()?;
         out.get_ref().sync_all()?;
         drop(out);
-        if stop.load(Ordering::Relaxed) {
+        if cancel() {
             return Err(io::Error::new(io::ErrorKind::Interrupted, "索引合并已取消"));
         }
         fs::rename(final_name, target)?;
@@ -233,13 +236,21 @@ pub(super) fn run_mapping(
     target: &Path,
     stop: &AtomicBool,
 ) -> io::Result<usize> {
+    run_mapping_cancel(map, overlay, target, &||stop.load(Ordering::Relaxed))
+}
+pub(super) fn run_mapping_cancel(
+    map: &Mapping,
+    overlay: &Overlay,
+    target: &Path,
+    cancel: &impl Fn()->bool,
+) -> io::Result<usize> {
     let mut view = View::new(map.bytes())?;
     overlay.check(&view)?;
     view.validate()?;
     let mut writer = Writer::new(target)?;
     let mut previous = None;
     for (n, candidate) in overlay.iter(&view, 0..view.count(), None).enumerate() {
-        if n % 1024 == 0 && stop.load(Ordering::Relaxed) {
+        if n % 1024 == 0 && cancel() {
             return Err(io::Error::new(io::ErrorKind::Interrupted, "索引合并已取消"));
         }
         let candidate = candidate?;
@@ -262,7 +273,7 @@ pub(super) fn run_mapping(
     if writer.count != overlay.count(&view) {
         return Err(bad());
     }
-    writer.finish(target, stop)
+    writer.finish_cancel(target, cancel)
 }
 
 #[cfg(test)]

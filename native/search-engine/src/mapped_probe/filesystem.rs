@@ -1,32 +1,80 @@
-//! Filesystem writes over a borrowed mapped base and an owned staging overlay.
-//! Commit/persistence belongs to the generation store; no full Index is built.
+//! Filesystem writes use bounded overlays over mapped generations. Full
+//! batches fold into an unpublished owned base; only the store can publish.
 use super::*;
 use crate::catalog::{DirectoryBatch, FileCatalog, FileState, Scope};
 use crate::filesystem::FilesystemIndex;
 use overlay::Mutation;
 
 pub(super) struct Changes {
+    // Drop the mapping before its staged file guard on error/cancellation.
+    pub map: Arc<Mapping>,
     pub overlay: Overlay,
     pub batches: Vec<Vec<Mutation>>,
+    pub stage: Option<Stage>,
+    pub folds: usize,
     pub scanned: usize,
     pub issues: usize,
 }
-struct Writer<'a, 'v, C> {
-    view: &'v View<'a>,
+pub(super) struct Stage {
+    pub id: String,
+    pub base: std::path::PathBuf,
+    pub delta: std::path::PathBuf,
+    guard: Temps,
+}
+impl Stage {
+    fn new(cache: &str) -> io::Result<Self> {
+        let id=store::id()?;
+        let (base,delta)=store::paths(Path::new(cache).parent().ok_or_else(bad)?,&id);
+        Ok(Self {id,guard:Temps(vec![base.clone()]),base,delta})
+    }
+    pub fn own_delta(&mut self) { self.guard.0.push(self.delta.clone()); }
+    pub fn keep(&mut self) { self.guard.0.clear(); }
+}
+impl Changes {
+    pub fn stats(&self) -> io::Result<Value> {
+        Ok(self.overlay.stats(&View::new(self.map.bytes())?))
+    }
+    // JSON expansion can exceed the encoded journal budget even when a batch
+    // fits its replay budget. Fold the final overlay rather than lose writes.
+    pub fn fold(&mut self, cache: &str, cancel: &impl Fn()->bool) -> io::Result<()> {
+        let stage=Stage::new(cache)?;
+        compact::run_mapping_cancel(&self.map,&self.overlay,&stage.base,cancel)?;
+        let next=Arc::new(Mapping::open(&stage.base)?);
+        let overlay=Overlay::load(&View::new(next.bytes())?,None)?;
+        self.map=next;
+        self.overlay=overlay;
+        self.stage=Some(stage);
+        self.batches.clear();
+        self.folds+=1;
+        Ok(())
+    }
+}
+struct Writer<'v, C> {
+    map: Arc<Mapping>,
     overlay: Overlay,
     batches: Vec<Vec<Mutation>>,
+    stage: Option<Stage>,
+    folds: usize,
     changes: usize,
     bytes: usize,
     cache: &'v str,
     limit: usize,
     cancel: &'v C,
+    progress: &'v (dyn Fn(usize)+Sync),
 }
-impl<C: Fn() -> bool + Sync> Writer<'_, '_, C> {
-    fn catalog(&self) -> catalog::MappedCatalog<'_, '_> {
-        catalog::MappedCatalog {
-            view: self.view,
-            overlay: &self.overlay,
-        }
+impl<C: Fn() -> bool + Sync> Writer<'_, C> {
+    fn fold(&mut self) -> io::Result<()> {
+        (self.progress)(self.folds+1);
+        let stage=Stage::new(self.cache)?;
+        compact::run_mapping_cancel(&self.map,&self.overlay,&stage.base,self.cancel)?;
+        let next=Arc::new(Mapping::open(&stage.base)?);
+        let overlay=Overlay::load(&View::new(next.bytes())?,None)?;
+        self.map=next;
+        self.overlay=overlay;
+        // The previous private base can be reclaimed after its view drops.
+        self.stage=Some(stage);
+        self.batches.clear();self.changes=0;self.bytes=0;self.folds+=1;
+        Ok(())
     }
     fn edit(&mut self, change: Mutation) -> io::Result<()> {
         if self.cancelled() {
@@ -36,15 +84,13 @@ impl<C: Fn() -> bool + Sync> Writer<'_, '_, C> {
             Mutation::Remove(path) => path.len(),
             Mutation::Put(row) => row.path.len() + row.name.len() + 64,
         };
-        // Match the generation store's bounded replay history. Refuse the
-        // entire staging transaction rather than silently drop later writes.
-        if self.changes >= 20_000 || self.bytes + bytes > 8 * 1024 * 1024 {
-            return Err(io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "目录更新需要分批合并",
-            ));
+        // Keep each replay batch bounded, but continue the transaction in a
+        // private generation. Neither partial overlays nor bases are published.
+        if self.changes >= 18_000 || self.bytes + bytes > 4 * 1024 * 1024 || self.overlay.nearly_full() {
+            self.fold()?;
         }
-        self.overlay.edit(self.view, change.clone(), self.limit)?;
+        let view=View::new(self.map.bytes())?;
+        self.overlay.edit(&view, change.clone(), self.limit)?;
         if self.batches.last().is_none_or(|batch| batch.len() >= 1024) {
             self.batches.push(Vec::new());
         }
@@ -54,22 +100,25 @@ impl<C: Fn() -> bool + Sync> Writer<'_, '_, C> {
         Ok(())
     }
 }
-impl<C: Fn() -> bool + Sync> FileCatalog for Writer<'_, '_, C> {
+impl<C: Fn() -> bool + Sync> FileCatalog for Writer<'_, C> {
     fn lookup(&self, path: &str) -> io::Result<Option<FileState>> {
-        self.catalog().lookup(path)
+        let view=View::new(self.map.bytes())?;
+        catalog::MappedCatalog {view:&view,overlay:&self.overlay}.lookup(path)
     }
     fn next_file(&self, path: &str) -> io::Result<Option<FileState>> {
-        self.catalog().next_file(path)
+        let view=View::new(self.map.bytes())?;
+        catalog::MappedCatalog {view:&view,overlay:&self.overlay}.next_file(path)
     }
     fn directory_batch(
         &self,
         after: Option<&PathKey>,
         scope: &Scope,
     ) -> io::Result<DirectoryBatch> {
-        self.catalog().directory_batch(after, scope)
+        let view=View::new(self.map.bytes())?;
+        catalog::MappedCatalog {view:&view,overlay:&self.overlay}.directory_batch(after, scope)
     }
 }
-impl<C: Fn() -> bool + Sync> FilesystemIndex for Writer<'_, '_, C> {
+impl<C: Fn() -> bool + Sync> FilesystemIndex for Writer<'_, C> {
     fn cancelled(&self) -> bool {
         (self.cancel)()
     }
@@ -95,7 +144,7 @@ impl<C: Fn() -> bool + Sync> FilesystemIndex for Writer<'_, '_, C> {
         }) {
             return Ok(());
         }
-        if previous.is_none() && self.overlay.count(self.view) >= self.limit {
+        if previous.is_none() && self.overlay.count(&View::new(self.map.bytes())?) >= self.limit {
             return Ok(());
         }
         self.edit(Mutation::Put(Entry {
@@ -127,31 +176,35 @@ impl<C: Fn() -> bool + Sync> FilesystemIndex for Writer<'_, '_, C> {
                     let entry = row.item.entry();
                     self.put(&entry.path, entry.directory, entry.modified)?;
                 }
-                Ok(!self.cancelled() && self.overlay.count(self.view) < self.limit)
+                Ok(!self.cancelled() && self.overlay.count(&View::new(self.map.bytes())?) < self.limit)
             },
         )
     }
 }
 pub(super) fn refresh(
-    view: &View<'_>,
+    map: Arc<Mapping>,
     overlay: &Overlay,
     config: &Config,
     cache: &str,
     paths: Vec<String>,
     offline: bool,
     cancel: impl Fn() -> bool + Sync,
+    progress: &(dyn Fn(usize)+Sync),
 ) -> io::Result<Changes> {
-    overlay.check(view)?;
+    overlay.check(&View::new(map.bytes())?)?;
     let scope = Scope::new(config, cache);
     let mut writer = Writer {
-        view,
+        map,
         overlay: overlay.clone(),
         batches: Vec::new(),
+        stage: None,
+        folds: 0,
         changes: 0,
         bytes: 0,
         cache,
         limit: config.max_entries,
         cancel: &cancel,
+        progress,
     };
     let (mut scanned, mut issues) = (0, 0);
     if offline {
@@ -185,8 +238,11 @@ pub(super) fn refresh(
         return Err(io::Error::new(io::ErrorKind::Interrupted, "目录更新已取消"));
     }
     Ok(Changes {
+        map: writer.map,
         overlay: writer.overlay,
         batches: writer.batches,
+        stage: writer.stage,
+        folds: writer.folds,
         scanned,
         issues,
     })
@@ -208,7 +264,7 @@ mod tests {
         fs::write(&file, "x").unwrap();
         let seed = dir.join("seed.bin");
         image(&Index::default(), &seed).unwrap();
-        let map = Mapping::open(&seed).unwrap();
+        let map = Arc::new(Mapping::open(&seed).unwrap());
         let view = View::new(map.bytes()).unwrap();
         let config = Config {
             roots: vec![root.to_string_lossy().into_owned()],
@@ -218,7 +274,7 @@ mod tests {
         };
         let cache = dir.join("cache.bin").to_string_lossy().into_owned();
         let empty = Overlay::load(&view, None).unwrap();
-        let first = refresh(&view, &empty, &config, &cache, Vec::new(), true, || false).unwrap();
+        let first = refresh(map.clone(), &empty, &config, &cache, Vec::new(), true, || false, &|_|{}).unwrap();
         assert_eq!(first.issues, 0);
         assert_eq!(first.overlay.count(&view), 2);
         assert_eq!(empty.count(&view), 0);
@@ -235,13 +291,14 @@ mod tests {
         let renamed = root.join("QUARTER.TXT");
         fs::rename(&file, &renamed).unwrap();
         let case = refresh(
-            &view,
+            map.clone(),
             &first.overlay,
             &config,
             &cache,
             vec![renamed.to_string_lossy().into_owned()],
             false,
             || false,
+            &|_|{},
         )
         .unwrap();
         assert_eq!(
@@ -260,13 +317,14 @@ mod tests {
         fs::create_dir(&renamed).unwrap();
         fs::write(renamed.join("inside.txt"), "x").unwrap();
         let typed = refresh(
-            &view,
+            map.clone(),
             &case.overlay,
             &config,
             &cache,
             Vec::new(),
             true,
             || false,
+            &|_|{},
         )
         .unwrap();
         assert_eq!(typed.overlay.count(&view), 3);
@@ -286,13 +344,14 @@ mod tests {
         let calls = AtomicU64::new(0);
         assert_eq!(
             refresh(
-                &view,
+                map.clone(),
                 &typed.overlay,
                 &config,
                 &cache,
                 vec![root.to_string_lossy().into_owned()],
                 false,
-                || calls.fetch_add(1, Ordering::Relaxed) > 4
+                || calls.fetch_add(1, Ordering::Relaxed) > 4,
+                &|_|{},
             )
             .err()
             .unwrap()
@@ -301,49 +360,53 @@ mod tests {
         );
         assert_eq!(typed.overlay.count(&view), 3);
         let recovered = refresh(
-            &view,
+            map.clone(),
             &typed.overlay,
             &config,
             &cache,
             Vec::new(),
             true,
             || false,
+            &|_|{},
         )
         .unwrap();
         assert_eq!(recovered.overlay.count(&view), 11);
         let unchanged = refresh(
-            &view,
+            map.clone(),
             &recovered.overlay,
             &config,
             &cache,
             Vec::new(),
             true,
             || false,
+            &|_|{},
         )
         .unwrap();
         assert!(unchanged.batches.is_empty());
         assert_eq!(unchanged.scanned, 0);
-        // A wide generated directory must fail as one staging transaction at
-        // the overlay bound, retaining the acknowledged predecessor.
+        // A full batch folds privately and continues, retaining the original
+        // acknowledged overlay until the store publishes the transaction.
         let mut writer = Writer {
-            view: &view,
+            map: map.clone(),
             overlay: typed.overlay.clone(),
             batches: Vec::new(),
+            stage: None,
+            folds: 0,
             changes: 0,
             bytes: 0,
             cache: &cache,
             limit: 100000,
             cancel: &|| false,
+            progress: &|_|{},
         };
         writer.changes = 20000;
-        assert_eq!(
-            writer
-                .put(&root.join("unpublished.txt").to_string_lossy(), false, 0)
-                .unwrap_err()
-                .kind(),
-            io::ErrorKind::WouldBlock
-        );
-        assert_eq!(writer.overlay.count(&view), 3);
+        writer.put(&root.join("unpublished.txt").to_string_lossy(), false, 0).unwrap();
+        assert_eq!(writer.folds,1);
+        assert!(writer.stage.is_some());
+        assert_eq!(writer.overlay.count(&View::new(writer.map.bytes()).unwrap()),4);
+        assert_eq!(typed.overlay.count(&view),3);
+        drop(writer);
+        drop((first,case,typed,recovered,unchanged));
         drop(map);
         fs::remove_dir_all(dir).unwrap();
     }

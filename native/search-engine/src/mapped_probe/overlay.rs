@@ -59,6 +59,9 @@ impl Overlay {
         view.count() - self.hidden.count + self.extra.len()
     }
     pub fn is_empty(&self) -> bool { self.extra.is_empty() && self.hidden.spans.is_empty() }
+    pub(super) fn nearly_full(&self) -> bool {
+        self.extra.len() >= MAX_EXTRA - 1024 || self.hidden.spans.len() >= MAX_INTERVALS - 1024
+    }
     pub fn stats(&self, view: &View<'_>) -> Value {
         json!({"count":self.count(view),"changedRows":self.extra.len(),"hiddenRows":self.hidden.count,"hiddenRanges":self.hidden.spans.len()})
     }
