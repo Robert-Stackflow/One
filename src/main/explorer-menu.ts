@@ -19,17 +19,22 @@ export function setExplorerMenu(value:unknown):Promise<ExplorerMenuState>{
 }
 async function install(value:{locksmith:boolean;rename:boolean}){
  const root=join(app.getPath('userData'),'explorer-menu');await mkdir(root,{recursive:true});
+ const menus=[
+  {tool:'locksmith',packageName:'One.ExplorerMenu.Locksmith',title:'文件占用',verb:'OneLocks',clsid:'49A8359C-85B9-4E7A-905E-6A724911750A'},
+  {tool:'rename',packageName:'One.ExplorerMenu.Rename',title:'批量重命名',verb:'OneRename',clsid:'57ABA3E6-8D9A-4A16-A717-6541B2241A36'},
+ ].map(menu=>({...menu,enabled:value[menu.tool as keyof typeof value],root:join(root,menu.tool),manifestHash:''}));
  if(value.locksmith||value.rename){
-  for(const name of ['One.Shell.dll','One.Shell.exe']){
-   const source=join(nativeRoot(),name),target=join(root,name);
-   // Loaded shell DLLs must not be overwritten. A hash-versioned filename lets Windows finish old instances.
-   if(name.endsWith('.dll'))continue;await copyFile(source,target);
-  }
   const {createHash}=await import('node:crypto'),bytes=await readFile(join(nativeRoot(),'One.Shell.dll')),dll='One.Shell-'+createHash('sha256').update(bytes).digest('hex').slice(0,16)+'.dll';
-  try{await stat(join(root,dll));}catch{await writeFile(join(root,dll),bytes);}
-  await copyFile(join(__dirname,'../icons/one-256.png'),join(root,'logo.png'));await copyFile(join(__dirname,'../icons/one.ico'),join(root,'one.ico'));
-  const manifest=(await readFile(join(__dirname,'explorer-menu.xml'),'utf8')).replaceAll('One.Shell.dll',dll);await writeFile(join(root,'AppxManifest.xml'),manifest);
+  const template=await readFile(join(__dirname,'explorer-menu.xml'),'utf8');
+  for(const menu of menus){
+   if(!menu.enabled)continue;await mkdir(menu.root,{recursive:true});
+   // Loaded shell DLLs must not be overwritten. Each command has its own package and launch configuration.
+   try{await stat(join(menu.root,dll));}catch{await writeFile(join(menu.root,dll),bytes);}
+   await copyFile(join(nativeRoot(),'One.Shell.exe'),join(menu.root,'One.Shell.exe'));
+   await copyFile(join(__dirname,'../icons/one-256.png'),join(menu.root,'logo.png'));await copyFile(join(__dirname,'../icons/one.ico'),join(menu.root,'one.ico'));
+   const manifest=template.replaceAll('{{PACKAGE}}',menu.packageName).replaceAll('{{TITLE}}',menu.title).replaceAll('{{CLSID}}',menu.clsid).replaceAll('{{VERB}}',menu.verb).replaceAll('One.Shell.dll',dll);
+   await writeFile(join(menu.root,'AppxManifest.template.xml'),manifest);menu.manifestHash=createHash('sha256').update(manifest).digest('hex');
+  }
  }
- const {createHash}=await import('node:crypto'),manifestHash=value.locksmith||value.rename?createHash('sha256').update(await readFile(join(root,'AppxManifest.xml'))).digest('hex'):'';
- const config=join(root,'config.json');await writeFile(config,JSON.stringify({...value,root,manifestHash,executable:process.execPath,appPath:app.isPackaged?'':resolve(app.getAppPath()),profile:app.getPath('userData'),icon:join(root,'one.ico')}));return run('set',config);
+ const config=join(root,'config.json');await writeFile(config,JSON.stringify({menus,root,executable:process.execPath,appPath:app.isPackaged?'':resolve(app.getAppPath()),profile:app.getPath('userData')}));return run('set',config);
 }

@@ -28,15 +28,17 @@ class Command final:public IExplorerCommand {
 public:explicit Command(bool r):rename(r){objects++;}~Command(){objects--;}
  HRESULT __stdcall QueryInterface(REFIID id,void** out) override{if(!out)return E_POINTER;*out=nullptr;if(id==IID_IUnknown||id==IID_IExplorerCommand){*out=static_cast<IExplorerCommand*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
  ULONG __stdcall AddRef() override{return ++refs;}ULONG __stdcall Release() override{ULONG n=--refs;if(!n)delete this;return n;}
- HRESULT __stdcall GetTitle(IShellItemArray*,PWSTR* out) override{return SHStrDupW(rename?L"批量重命名 · One":L"文件占用 · One",out);}
+ HRESULT __stdcall GetTitle(IShellItemArray*,PWSTR* out) override{return SHStrDupW(rename?L"批量重命名":L"文件占用",out);}
  HRESULT __stdcall GetIcon(IShellItemArray*,PWSTR* out) override{const auto icon=setting(L"Icon");return icon.empty()?E_NOTIMPL:SHStrDupW(icon.c_str(),out);}
  HRESULT __stdcall GetToolTip(IShellItemArray*,PWSTR* out) override{*out=nullptr;return E_NOTIMPL;}
  HRESULT __stdcall GetCanonicalName(GUID* out) override{*out=rename?renameCommand:locks;return S_OK;}
- HRESULT __stdcall GetState(IShellItemArray* items,BOOL,EXPCMDSTATE* out) override{DWORD count=0;*out=ECS_HIDDEN;if(enabled(rename)&&items&&SUCCEEDED(items->GetCount(&count))&&count&&count<=(rename?4096u:32u))*out=ECS_ENABLED;return S_OK;}
+ HRESULT __stdcall GetState(IShellItemArray* items,BOOL,EXPCMDSTATE* out) override{if(!out)return E_POINTER;DWORD count=0;*out=ECS_HIDDEN;if(!enabled(rename))return S_OK;
+  // Explorer may query the command before supplying the selection. Validate the actual items in Invoke.
+  if(!items||(SUCCEEDED(items->GetCount(&count))&&count&&count<=(rename?4096u:32u)))*out=ECS_ENABLED;return S_OK;}
  HRESULT __stdcall GetFlags(EXPCMDFLAGS* out) override{*out=ECF_DEFAULT;return S_OK;}
  HRESULT __stdcall EnumSubCommands(IEnumExplorerCommand** out) override{*out=nullptr;return E_NOTIMPL;}
  HRESULT __stdcall Invoke(IShellItemArray* items,IBindCtx*) override {
-  EXPCMDSTATE state;GetState(items,FALSE,&state);if(state!=ECS_ENABLED)return E_INVALIDARG;DWORD count=0;items->GetCount(&count);std::string content=rename?"{\"tool\":\"rename\",\"paths\":[":"{\"tool\":\"locksmith\",\"paths\":[";
+  if(!items)return E_INVALIDARG;EXPCMDSTATE state;GetState(items,FALSE,&state);if(state!=ECS_ENABLED)return E_INVALIDARG;DWORD count=0;items->GetCount(&count);std::string content=rename?"{\"tool\":\"rename\",\"paths\":[":"{\"tool\":\"locksmith\",\"paths\":[";
   for(DWORD i=0;i<count;i++){IShellItem* item=nullptr;HRESULT hr=items->GetItemAt(i,&item);if(FAILED(hr))return hr;PWSTR path=nullptr;hr=item->GetDisplayName(SIGDN_FILESYSPATH,&path);item->Release();if(FAILED(hr))return hr;if(i)content+=',';content+=json(path);CoTaskMemFree(path);if(content.size()>4*1024*1024-2)return E_INVALIDARG;}content+="]}";
   const auto root=setting(L"Profile")+L"\\shell-requests";if(setting(L"Profile").empty())return E_FAIL;if(!CreateDirectoryW(root.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return HRESULT_FROM_WIN32(GetLastError());GUID guid;HRESULT hr=CoCreateGuid(&guid);if(FAILED(hr))return hr;wchar_t id[40];StringFromGUID2(guid,id,40);std::wstring name(id+1,36),path=root+L"\\"+name+L".json";
   HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return HRESULT_FROM_WIN32(GetLastError());DWORD written=0;BOOL ok=WriteFile(file,content.data(),(DWORD)content.size(),&written,nullptr);CloseHandle(file);if(!ok||written!=content.size()){DeleteFileW(path.c_str());return E_FAIL;}hr=launch(path);if(FAILED(hr))DeleteFileW(path.c_str());return hr;

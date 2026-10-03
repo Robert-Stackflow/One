@@ -1,5 +1,5 @@
 .file-action-shell{height:100%;display:flex;flex-direction:column;background:var(--surface)}
-.file-action-header{height:48px;flex:none;display:flex;align-items:center;padding-left:22px;border-bottom:1px solid var(--line)}
+.file-action-header{height:48px;flex:none;display:flex;align-items:center;padding:0 10px 0 22px;border-bottom:1px solid var(--line)}
 .file-action-brand{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
 .file-action-brand>svg{width:18px;height:18px;color:var(--muted)}
 .file-action-brand small{font-size:11px;color:var(--muted);font-weight:400;border-left:1px solid var(--line);padding-left:10px}
@@ -16,20 +16,23 @@
 .file-action-rename #page-tools{flex:1;min-width:0;min-height:0;display:grid;grid-template-columns:324px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:0}
 .file-action-rename #tool-pane-rename{min-height:0;overflow:auto;background:var(--soft);border-right:1px solid var(--line)}
 .file-action-rename .rename-config{display:flex;flex-direction:column;border:0;border-radius:0;background:transparent;overflow:visible}
-.file-action-rename .rename-rules{padding:24px 22px;gap:16px}
+.file-action-config-tabs{position:sticky;top:0;z-index:2;padding:20px 22px 0;background:var(--soft)}
+.file-action-config-tabs .tabs{display:flex;width:100%;background:var(--line)}
+.file-action-config-tabs .tabs button{flex:1;padding:4px 8px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px}
+.file-action-tab-count{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.file-action-config-panel{animation:tool-pane-in .14s var(--ease)}
+.file-action-rename .rename-rules{padding:22px;gap:18px}
 .file-action-rename .rename-section-title>span{display:none}
+.file-action-rename .rename-section-title{margin:0 0 2px;font-size:14px}
 .file-action-rename .rename-rules .tool-field-pair{grid-template-columns:1fr;gap:14px}
 .file-action-rename .rename-match-options{display:grid;grid-template-columns:1fr 1fr;gap:11px 8px}
 .file-action-rename .rename-match-options>label:last-child{grid-column:1/-1}
 .file-action-rename .rename-target-field{max-width:none}
-.file-action-rename .rename-format{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.file-action-rename .rename-format>summary{padding:16px 22px;gap:8px}
-.file-action-rename .rename-format-caption{display:none}
-.file-action-rename .rename-format>summary>.icon{margin-left:auto}
-.file-action-rename .rename-format-body{padding:8px 22px 20px;display:flex;flex-direction:column;align-items:stretch;gap:16px}
+.file-action-format{padding:22px}
+.file-action-rename .rename-format-body{padding:18px 0 0;display:flex;flex-direction:column;align-items:stretch;gap:18px}
 .file-action-rename .rename-format-body>.tool-field,.file-action-rename .rename-number-fields>.tool-field{flex-direction:row;align-items:center;justify-content:space-between;gap:12px}
 .file-action-rename .rename-format-body>.tool-field>.custom-select{width:154px}
-.file-action-rename .rename-number-fields{display:flex;flex-direction:column;gap:12px}
+.file-action-rename .rename-number-fields{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:18px}
 .file-action-rename .rename-number-fields .number-control{width:128px;flex:none}
 .file-action-rename .rename-number-fields input{width:100%;min-width:0}
 .file-action-variable-help{font-size:11px;color:var(--muted)}
@@ -37,19 +40,13 @@
 .file-action-variable-help>summary>.icon{width:14px;height:14px}
 .file-action-variable-help dl{display:grid;grid-template-columns:1fr auto;gap:10px;margin:14px 0 0;font-size:11px}
 .file-action-variable-help dd{margin:0;color:var(--fg)}
-.file-action-rename .file-action-scope>summary{display:flex;align-items:center;gap:8px;padding:16px 22px;cursor:pointer;list-style:none;font-size:13px;font-weight:550}
-.file-action-scope>summary small{margin-left:auto;font-weight:400;color:var(--muted);font-size:11px}
-.file-action-scope>summary>.icon{width:15px;height:15px;color:var(--muted);transition:transform .16s var(--ease)}
-.file-action-scope[open]>summary>.icon{transform:rotate(180deg)}
-.file-action-rename .rename-scope{padding:0 22px 22px;border:0;gap:12px}
-.file-action-rename .rename-scope>h2{display:none}
+.file-action-rename .rename-scope{padding:22px;border:0;gap:16px}
 .file-action-rename .rename-scope-options{display:grid;grid-template-columns:1fr 1fr;gap:12px 8px}
 .file-action-rename .rename-scope-options>label:has(#rename-recursive){grid-column:1/-1}
 .file-action-rename .rename-add-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .file-action-rename .rename-add-actions button{padding:7px 10px;font-size:12px}
-.file-action-rename .rename-config textarea{resize:vertical}
 .file-action-scope-mode{margin:2px 0}
-.file-action-rename .rename-config textarea{min-height:90px;height:90px;max-height:200px;background:var(--surface)}
+.file-action-rename .rename-config textarea{resize:vertical;min-height:112px;height:156px;max-height:260px;background:var(--surface);font-size:11px;line-height:1.8}
 .file-action-results{min-height:0;min-width:0;overflow:auto;padding:22px 22px 14px}
 .file-action-preview-caption{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .file-action-preview-caption h2{font-size:15px;margin:0;font-weight:600}
@@ -85,11 +82,14 @@
 .file-action-locksmith .lock-targets small{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;color:var(--muted)}
 .file-action-locksmith .lock-targets .icon-button{width:25px;height:25px;min-width:25px;min-height:25px;padding:5px;color:var(--muted);opacity:0}
 .file-action-locksmith .lock-targets>div:hover .icon-button,.file-action-locksmith .lock-targets .icon-button:focus-visible{opacity:1}
-.file-action-lock-path{font-size:11px;color:var(--muted);margin:0 4px 12px}
-.file-action-lock-path>summary{cursor:pointer;width:fit-content}
-.file-action-lock-path .lock-target-input{display:flex;flex-wrap:nowrap;gap:6px;margin:12px 0}
-.file-action-lock-path .lock-target-input>input{min-width:0!important;font-size:11px;min-height:34px}
-.file-action-lock-path .lock-target-input>button{padding:0 8px;min-height:34px;font-size:11px}
+.lock-path-popover{--bubble-line:var(--line);position:fixed;inset:auto;margin:0;padding:7px 8px;width:350px;max-width:calc(100vw - 16px);border:1px solid var(--bubble-line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:var(--shadow);overflow:visible;animation:popup-in .14s var(--ease)}
+.lock-path-popover:focus-within{--bubble-line:color-mix(in srgb,var(--fg) 23%,var(--surface))}
+.lock-path-popover:before{content:"";position:absolute;left:var(--arrow-left);width:8px;height:8px;background:var(--surface);transform:rotate(45deg)}
+.lock-path-popover[data-side=below]:before{top:-5px;border-top:1px solid var(--bubble-line);border-left:1px solid var(--bubble-line)}
+.lock-path-popover[data-side=above]:before{bottom:-5px;border-bottom:1px solid var(--bubble-line);border-right:1px solid var(--bubble-line)}
+.lock-path-popover .lock-target-input{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:0;padding:0}
+.lock-path-popover input:not([type=checkbox]):not([type=range]){flex:1;min-width:0;font-size:12px;border:0;background:transparent;padding-inline:6px}
+.lock-path-popover #lock-add{flex:none;font-size:12px;padding-inline:10px}
 .file-action-lock-results{padding:24px;min-width:0;min-height:0;overflow:auto}
 .file-action-lock-results .lock-process{border-radius:10px;padding:14px}
 .file-action-locksmith .lock-process-head button{font-size:11px;min-height:30px;padding:5px 9px;color:var(--muted);background:transparent}
@@ -102,4 +102,4 @@
 .file-action-empty>.icon{width:32px;height:32px;stroke-width:1.25}
 .file-action-empty h3{font-size:14px;font-weight:500;color:var(--fg);margin:0}
 .file-action-locksmith .toast{left:50%}
-@media(prefers-reduced-motion:reduce){.file-action-scope>summary>.icon{transition:none}}
+@media(prefers-reduced-motion:reduce){.file-action-config-panel,.lock-path-popover{animation:none}}

@@ -1,0 +1,2 @@
+.shell-setting-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.shell-status-tag{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:400;line-height:1.4;background:var(--soft);color:var(--muted)}

@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10" xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4" xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6" xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5" IgnorableNamespaces="uap uap10 rescap com desktop4 desktop5 desktop6">
- <Identity Name="One.ExplorerMenu" Publisher="CN=One" Version="1.0.0.0" ProcessorArchitecture="x64"/>
- <Properties><DisplayName>One</DisplayName><PublisherDisplayName>One</PublisherDisplayName><Logo>logo.png</Logo><uap10:AllowExternalContent>true</uap10:AllowExternalContent><desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization><desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization></Properties>
+ <Identity Name="{{PACKAGE}}" Publisher="CN=One" Version="1.0.0.0" ProcessorArchitecture="x64"/>
+ <Properties><DisplayName>{{TITLE}}</DisplayName><PublisherDisplayName>One</PublisherDisplayName><Logo>logo.png</Logo><uap10:AllowExternalContent>true</uap10:AllowExternalContent><desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization><desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization></Properties>
  <Resources><Resource Language="zh-CN"/><Resource Language="en-US"/></Resources>
  <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0"/></Dependencies>
  <Applications><Application Id="Shell" Executable="One.Shell.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
-  <uap:VisualElements AppListEntry="none" DisplayName="One" Description="One 文件工具" BackgroundColor="transparent" Square150x150Logo="logo.png" Square44x44Logo="logo.png"/>
+  <uap:VisualElements AppListEntry="none" DisplayName="{{TITLE}}" Description="{{TITLE}}" BackgroundColor="transparent" Square150x150Logo="logo.png" Square44x44Logo="logo.png"/>
   <Extensions>
-   <com:Extension Category="windows.comServer"><com:ComServer><com:SurrogateServer DisplayName="One 文件工具"><com:Class Id="49A8359C-85B9-4E7A-905E-6A724911750A" Path="One.Shell.dll" ThreadingModel="STA"/><com:Class Id="57ABA3E6-8D9A-4A16-A717-6541B2241A36" Path="One.Shell.dll" ThreadingModel="STA"/></com:SurrogateServer></com:ComServer></com:Extension>
+   <com:Extension Category="windows.comServer"><com:ComServer><com:SurrogateServer DisplayName="{{TITLE}}"><com:Class Id="{{CLSID}}" Path="One.Shell.dll" ThreadingModel="STA"/></com:SurrogateServer></com:ComServer></com:Extension>
    <desktop4:Extension Category="windows.fileExplorerContextMenus"><desktop4:FileExplorerContextMenus>
-    <desktop5:ItemType Type="*"><desktop5:Verb Id="OneLocks" Clsid="49A8359C-85B9-4E7A-905E-6A724911750A"/><desktop5:Verb Id="OneRename" Clsid="57ABA3E6-8D9A-4A16-A717-6541B2241A36"/></desktop5:ItemType>
-    <desktop5:ItemType Type="Directory"><desktop5:Verb Id="OneLocks" Clsid="49A8359C-85B9-4E7A-905E-6A724911750A"/><desktop5:Verb Id="OneRename" Clsid="57ABA3E6-8D9A-4A16-A717-6541B2241A36"/></desktop5:ItemType>
+    <desktop5:ItemType Type="*"><desktop5:Verb Id="{{VERB}}" Clsid="{{CLSID}}"/></desktop5:ItemType>
+    <desktop5:ItemType Type="Directory"><desktop5:Verb Id="{{VERB}}" Clsid="{{CLSID}}"/></desktop5:ItemType>
    </desktop4:FileExplorerContextMenus></desktop4:Extension>
   </Extensions>
  </Application></Applications>
