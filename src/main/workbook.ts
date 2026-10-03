@@ -1,14 +1,55 @@
-import JSZip from 'jszip';
 import {DOMParser,type Element,type Document} from '@xmldom/xmldom';
-import {readFile} from 'node:fs/promises';
 import {posix} from 'node:path';
+import {open,type Entry,type ZipFile} from 'yauzl';
 import type {WorkbookData,SheetData,SheetCell} from '../shared/workbook';
 const all=(node:Element|Document,name:string)=>Array.from(node.getElementsByTagNameNS('*',name));
 const first=(node:Element|Document,name:string)=>all(node,name)[0];
 const children=(node:Element)=>Array.from(node.childNodes).filter(n=>n.nodeType===1) as Element[];
 const xml=(text:string)=>{if(text.length>24*1024*1024||/<!DOCTYPE|<!ENTITY/i.test(text))throw new Error('工作表 XML 超出范围');return new DOMParser({onError:(level,message)=>{if(level!=='warning')throw new Error(message);}}).parseFromString(text,'text/xml');};
+const limit=24*1024*1024;
+async function catalog(path:string):Promise<{zip:ZipFile;entries:Map<string,Entry>}>{
+ const zip=await new Promise<ZipFile>((resolve,reject)=>open(path,{lazyEntries:true,autoClose:false,validateEntrySizes:true},(error,value)=>error||!value?reject(error||new Error('无法读取工作簿')):resolve(value)));
+ try{
+  const entries=await new Promise<Map<string,Entry>>((resolve,reject)=>{
+   const result=new Map<string,Entry>();let total=0,count=0;
+   const cleanup=()=>{zip.removeListener('error',fail);zip.removeListener('end',done);zip.removeListener('entry',onEntry);};
+   const fail=(error:Error)=>{cleanup();reject(error);};
+   const done=()=>{cleanup();resolve(result);};
+   const onEntry=(entry:Entry)=>{
+    if(++count>20000||entry.uncompressedSize>32*1024*1024||(total+=entry.uncompressedSize)>128*1024*1024){fail(new Error('工作簿解压后过大'));return;}
+    result.set(entry.fileName,entry);zip.readEntry();
+   };
+   zip.once('error',fail);zip.once('end',done);
+   zip.on('entry',onEntry);
+   zip.readEntry();
+  });
+  return {zip,entries};
+ }catch(error){zip.close();throw error;}
+}
+function readEntry(zip:ZipFile,entry:Entry):Promise<string>{
+ if(entry.uncompressedSize>limit)throw new Error('工作表 XML 超出范围');
+ return new Promise((resolve,reject)=>{
+  let active:{destroy():void}|undefined;
+  const cleanup=()=>zip.removeListener('error',onZipError);
+  const onZipError=(error:Error)=>{cleanup();active?.destroy();reject(error);};
+  zip.once('error',onZipError);
+  zip.openReadStream(entry,(error,source)=>{
+   if(error||!source){cleanup();reject(error||new Error('无法读取工作表'));return;}
+   const chunks:Buffer[]=[];let size=0;
+   active=source;
+   source.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>limit){source.destroy(new Error('工作表 XML 超出范围'));return;}chunks.push(chunk);});
+   source.once('error',error=>{cleanup();reject(error);});
+   source.once('end',()=>{cleanup();resolve(Buffer.concat(chunks,size).toString('utf8'));});
+   source.once('close',()=>{cleanup();reject(new Error('工作表读取中断'));});
+  });
+ });
+}
 export async function readWorkbook(path:string):Promise<WorkbookData>{
- const zip=await JSZip.loadAsync(await readFile(path));const read=async(name:string)=>{const file=zip.file(name);return file?xml(await file.async('string')):undefined;};
+ const {zip,entries}=await catalog(path);
+ try{return await parseWorkbook(path,async name=>{const entry=entries.get(name);return entry?xml(await readEntry(zip,entry)):undefined;});}
+ finally{zip.close();}
+}
+async function parseWorkbook(path:string,read:(name:string)=>Promise<Document|undefined>):Promise<WorkbookData>{
  const sheets:SheetData[]=[];let total=0,characters=0;
  const add=(sheet:SheetData,number:number,cells:SheetCell[])=>{if(!cells.length)return;if(sheet.rows.length>=20000||total+cells.length>100000||characters+cells.reduce((n,c)=>n+c.value.length+(c.formula?.length||0),0)>4_000_000){sheet.truncated=true;return;}total+=cells.length;characters+=cells.reduce((n,c)=>n+c.value.length+(c.formula?.length||0),0);sheet.columns=Math.max(sheet.columns,...cells.map(c=>c.column+1));sheet.rows.push({number,cells});};
  if(path.toLowerCase().endsWith('.ods')){
