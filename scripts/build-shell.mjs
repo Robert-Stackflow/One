@@ -1,0 +1,10 @@
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {mkdir,writeFile,copyFile,readFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+const run=promisify(execFile),vswhere=join(process.env['ProgramFiles(x86)']||'C:\\Program Files (x86)','Microsoft Visual Studio/Installer/vswhere.exe');
+const {stdout}=await run(vswhere,['-latest','-products','*','-requires','Microsoft.VisualStudio.Component.VC.Tools.x86.x64','-property','installationPath'],{windowsHide:true}),installation=stdout.trim();if(!installation)throw Error('需要 Visual Studio C++ x64 工具链');
+await mkdir('dist/native',{recursive:true});await mkdir('dist/main',{recursive:true});await mkdir('work',{recursive:true});
+const script=resolve('work/build-shell.cmd');await writeFile(script,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /LD /DUNICODE /D_UNICODE native\\explorer-menu.cpp /Fe:dist\\native\\One.Shell.dll /Fo:work\\shell.obj /link /IMPLIB:work\\One.Shell.lib /EXPORT:DllGetClassObject,PRIVATE /EXPORT:DllCanUnloadNow,PRIVATE ole32.lib shell32.lib shlwapi.lib advapi32.lib uuid.lib\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE /DONE_SHELL_LAUNCHER native\\explorer-menu.cpp /Fe:dist\\native\\One.Shell.exe /Fo:work\\shell-launcher.obj /link ole32.lib shell32.lib shlwapi.lib advapi32.lib uuid.lib\r\nif errorlevel 1 exit /b 1\r\n`);
+const result=await run('cmd.exe',['/d','/c',script],{cwd:resolve('.'),windowsHide:true});process.stdout.write(result.stdout);process.stderr.write(result.stderr);
+await copyFile('src/main/explorer-menu.xml','dist/main/explorer-menu.xml');await writeFile('dist/main/explorer-menu.ps1',Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),await readFile('src/main/explorer-menu.ps1')]));

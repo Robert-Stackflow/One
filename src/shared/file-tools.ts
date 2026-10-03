@@ -4,7 +4,7 @@ export const defaultRename=():RenameOptions=>({search:'',replace:'',regex:false,
 export type FileToolTask =
  |{kind:'duplicates';roots:string[];recursive:boolean;minBytes:number;extensions:string}
  |{kind:'diff';left:string;right:string;mode:'file'|'folder';ignoreWhitespace:boolean;encoding:string}
- |{kind:'rename-preview';paths:string[];recursive:boolean;files:boolean;folders:boolean;options:RenameOptions}
+ |{kind:'rename-preview';paths:string[];recursive:boolean;files:boolean;folders:boolean;selectedOnly?:boolean;options:RenameOptions}
  |{kind:'rename-apply';report:string;ids?:number[];excluded?:number[]}
  |{kind:'rename-undo';receipt:string}
  |{kind:'document-index';roots:string[];recursive:boolean;extensions:string}

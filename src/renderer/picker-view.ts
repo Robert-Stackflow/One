@@ -44,6 +44,7 @@ export function renderPicker() {
   const candidates=newlyPainted.splice(0),version=revision;if(candidates.length)hydrateIconRows(candidates,()=>!disposed&&version===revision);
  });
  function updateControls(){
+  path.disabled=loading;q<HTMLButtonElement>('picker-go').disabled=loading;
   q<HTMLButtonElement>('picker-confirm').disabled=loading||choosing||!data||(data.mode!=='directory'&&!name.value.trim());
   q<HTMLButtonElement>('picker-back').disabled=loading||historyIndex<=0;
   q<HTMLButtonElement>('picker-forward').disabled=loading||historyIndex>=history.length-1;

@@ -1,0 +1,9 @@
+#include <windows.h>
+#include <shobjidl.h>
+#include <shlobj.h>
+#include <iostream>
+#include <vector>
+int wmain(int argc,wchar_t**argv){
+ if(argc<2)return 1;CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);CLSID clsid;CLSIDFromString(wcscmp(argv[1],L"rename")==0?L"{57ABA3E6-8D9A-4A16-A717-6541B2241A36}":L"{49A8359C-85B9-4E7A-905E-6A724911750A}",&clsid);IExplorerCommand* command=nullptr;HRESULT hr;if(argc>3&&wcscmp(argv[2],L"--local")==0){HMODULE dll=LoadLibraryW(argv[3]);if(!dll)return 2;auto get=(HRESULT(__stdcall*)(REFCLSID,REFIID,void**))GetProcAddress(dll,"DllGetClassObject");if(!get)return 2;IClassFactory* factory=nullptr;hr=get(clsid,IID_PPV_ARGS(&factory));if(SUCCEEDED(hr)){hr=factory->CreateInstance(nullptr,IID_PPV_ARGS(&command));factory->Release();}argv+=2;argc-=2;}else hr=CoCreateInstance(clsid,nullptr,CLSCTX_LOCAL_SERVER,IID_PPV_ARGS(&command));if(FAILED(hr)){std::cout<<"COM "<<std::hex<<hr;return 2;}
+ std::vector<PIDLIST_ABSOLUTE> ids;for(int i=2;i<argc;i++){PIDLIST_ABSOLUTE id=nullptr;hr=SHParseDisplayName(argv[i],nullptr,&id,0,nullptr);if(FAILED(hr))return 3;ids.push_back(id);}IShellItemArray* items=nullptr;if(ids.empty())return 4;hr=SHCreateShellItemArrayFromIDLists((UINT)ids.size(),(PCIDLIST_ABSOLUTE*)ids.data(),&items);for(auto id:ids)CoTaskMemFree(id);if(FAILED(hr))return 5;PWSTR icon=nullptr;auto iconHR=command->GetIcon(items,&icon);std::cout<<"icon="<<std::hex<<iconHR<<" ";CoTaskMemFree(icon);DWORD count=0;items->GetCount(&count);std::cout<<"count="<<count<<" ";EXPCMDSTATE state;hr=command->GetState(items,FALSE,&state);std::cout<<"getstate="<<std::hex<<hr<<" state="<<state<<" ";if(SUCCEEDED(hr)&&state==ECS_ENABLED)hr=command->Invoke(items,nullptr);items->Release();command->Release();CoUninitialize();std::cout<<"invoke="<<std::hex<<hr;return FAILED(hr)||state!=ECS_ENABLED?6:0;
+}

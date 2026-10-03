@@ -85,3 +85,9 @@ html.transparent-root,html.transparent-root body,html.transparent-root #app{back
 .window-controls button[id$=-close]:hover{background:#c42b1c;color:#fff}
 .window-controls button:focus-visible{outline:1px solid var(--accent);outline-offset:-2px}
 .workspace-header .window-controls{margin-right:10px}.picker-heading .window-controls,.search-title .window-controls{margin-right:10px}
+.lock-targets>div>span.lock-target-icon{display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px;overflow:visible}
+.lock-target-icon img{max-height:22px;max-width:22px}
+.lock-targets strong{font-weight:500}
+.lock-targets small{display:block;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.lock-process-icon{width:28px;height:28px;display:grid;place-items:center;flex:none}
+.lock-process-icon img{max-width:24px;max-height:24px}

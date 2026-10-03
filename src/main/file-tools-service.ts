@@ -68,7 +68,7 @@ export class FileToolsService{
   if(!task||!taskKinds.includes(task.kind))throw Error('文件任务无效');
   if('roots'in task)task={...task,roots:paths(task.roots)};
   if('recursive'in task&&typeof task.recursive!=='boolean')throw Error('扫描范围无效');
-  if(task.kind==='rename-preview'){task={...task,paths:paths(task.paths)};if(typeof task.files!=='boolean'||typeof task.folders!=='boolean')throw Error('项目类型无效');}
+  if(task.kind==='rename-preview'){task={...task,paths:paths(task.paths)};if(typeof task.files!=='boolean'||typeof task.folders!=='boolean'||task.selectedOnly!==undefined&&typeof task.selectedOnly!=='boolean')throw Error('项目类型无效');}
   if(task.kind==='diff'){task={...task,left:paths([task.left])[0],right:paths([task.right])[0]};if(!['file','folder'].includes(task.mode)||typeof task.ignoreWhitespace!=='boolean')throw Error('比较模式无效');if(!['自动','UTF-8','UTF-16','GBK','Big5'].includes(task.encoding))throw Error('文本编码无效');}
   if(task.kind==='duplicates'&&(!Number.isFinite(task.minBytes)||task.minBytes<0||typeof task.extensions!=='string'))throw Error('扫描条件无效');
   if(task.kind==='document-index'&&typeof task.extensions!=='string')throw Error('文档类型无效');

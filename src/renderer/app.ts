@@ -20,7 +20,7 @@ import {setupSegments} from './segments';
 import {setupWindowVisibility} from './window-visibility';
 setupAppearance();setupTextSelection();setupTooltips();setupSegments();
 const view=new URLSearchParams(location.search).get('view')||'main';
-if(['main','preview','picker','search','color-editor','dialog-bar'].includes(view))setupWindowVisibility();
+if(['main','file-action','preview','picker','search','color-editor','dialog-bar'].includes(view))setupWindowVisibility();
 const render=async()=>{
  if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
@@ -28,6 +28,7 @@ const render=async()=>{
  else if(view==='command-confirm')await (await import('./menu-confirmation-view')).renderMenuConfirmation();
  else if(view==='preview')await (await import('./preview-view')).renderPreview();
  else if(view==='picker')(await import('./picker-view')).renderPicker();
+ else if(view==='file-action')await (await import('./file-action-view')).renderFileAction();
  else if(view==='search-menu')await (await import('./search-menu')).renderSearchMenu();
  else if(view==='file-context')await (await import('./file-context-view')).renderFileContextMenu();
  else if(view==='dialog-bar')await (await import('./dialog-bar-view')).renderDialogBar();

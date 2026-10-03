@@ -8,6 +8,18 @@ export function dialogMarkup(options:DialogOptions){
 }
 interface DialogState {focus?:HTMLElement;timer?:ReturnType<typeof setTimeout>;resolve?: (closed:boolean)=>void;pending?:Promise<boolean>;backdropDown:boolean}
 const states=new WeakMap<HTMLDialogElement,DialogState>();
+const motionProperties=['opacity','transform','backdrop','filter'];
+function continueMotion(dialog:HTMLDialogElement,phase:'enter'|'exit'){
+ const style=getComputedStyle(dialog),backdrop=getComputedStyle(dialog,'::backdrop'),values=[style.opacity,style.transform,backdrop.backgroundColor,backdrop.backdropFilter];
+ motionProperties.forEach((property,index)=>dialog.style.setProperty(`--dialog-${phase}-${property}`,values[index]));
+}
+function focusField(dialog:HTMLDialogElement){
+ const available=(element:HTMLElement)=>!element.matches(':disabled')&&!element.closest('[hidden],[inert]')&&element.getClientRects().length>0&&getComputedStyle(element).visibility==='visible';
+ if(Array.from(dialog.querySelectorAll<HTMLElement>('[autofocus]')).some(available))return;
+ const active=document.activeElement;if(active!==dialog&&!(active instanceof Element&&active.closest('[data-dialog-dismiss]')))return;
+ const field=Array.from(dialog.querySelectorAll<HTMLElement>('.one-dialog-body input:not([readonly]),.one-dialog-body textarea:not([readonly]),.one-dialog-body [contenteditable="true"]')).find(element=>(!(element instanceof HTMLInputElement)||!['hidden','checkbox','radio','range','color','file','button','submit','reset'].includes(element.type))&&available(element));
+ field?.focus({preventScroll:true});
+}
 function stateFor(dialog:HTMLDialogElement){
  let state=states.get(dialog);if(state)return state;
  state={backdropDown:false};states.set(dialog,state);
@@ -19,14 +31,14 @@ function stateFor(dialog:HTMLDialogElement){
 }
 export function openDialog(dialog:HTMLDialogElement){
  const state=stateFor(dialog);
- if(state.pending){clearTimeout(state.timer);state.resolve?.(false);state.pending=undefined;state.resolve=undefined;state.timer=undefined;}
+ if(state.pending){if(dialog.open)continueMotion(dialog,'enter');clearTimeout(state.timer);state.resolve?.(false);state.pending=undefined;state.resolve=undefined;state.timer=undefined;}
  dialog.classList.remove('closing');state.backdropDown=false;
- if(!dialog.open){state.focus=document.activeElement instanceof HTMLElement?document.activeElement:undefined;dialog.showModal();}
+ if(!dialog.open){for(const property of motionProperties)dialog.style.removeProperty('--dialog-enter-'+property);state.focus=document.activeElement instanceof HTMLElement?document.activeElement:undefined;dialog.showModal();focusField(dialog);}
 }
 /** Returns false if a newer open request superseded this close. */
 export function closeDialog(dialog:HTMLDialogElement):Promise<boolean>{
  const state=stateFor(dialog);if(state.pending)return state.pending;if(!dialog.open)return Promise.resolve(true);
- dialog.classList.add('closing');
+ continueMotion(dialog,'exit');dialog.classList.add('closing');
  state.pending=new Promise(resolve=>{state.resolve=resolve;state.timer=setTimeout(()=>{
   state.timer=undefined;state.pending=undefined;state.resolve=undefined;
   if(dialog.open)dialog.close();dialog.classList.remove('closing');

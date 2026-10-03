@@ -1,0 +1,105 @@
+.file-action-shell{height:100%;display:flex;flex-direction:column;background:var(--surface)}
+.file-action-header{height:48px;flex:none;display:flex;align-items:center;padding-left:22px;border-bottom:1px solid var(--line)}
+.file-action-brand{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.file-action-brand>svg{width:18px;height:18px;color:var(--muted)}
+.file-action-brand small{font-size:11px;color:var(--muted);font-weight:400;border-left:1px solid var(--line);padding-left:10px}
+.file-action-content{flex:1;min-height:0;overflow:auto;padding:26px 30px 30px}
+.file-action-content .page-heading{margin:0 0 24px}
+.file-action-content .page-heading h1{font-size:26px}
+.file-action-content .page-heading p{margin:7px 0 0;color:var(--muted);font-size:13px}
+.file-action-window .file-tools-toolbar [role=tablist]{display:none}
+.file-action-window .file-tools-toolbar{justify-content:flex-end}
+.file-action-window .lock-target-input{margin-top:12px}
+@media(max-width:800px){.file-action-content{padding:22px}}
+.file-action-rename .file-action-content{padding:0;overflow:hidden;display:flex}
+.file-action-rename .page-heading{display:none}
+.file-action-rename #page-tools{flex:1;min-width:0;min-height:0;display:grid;grid-template-columns:324px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:0}
+.file-action-rename #tool-pane-rename{min-height:0;overflow:auto;background:var(--soft);border-right:1px solid var(--line)}
+.file-action-rename .rename-config{display:flex;flex-direction:column;border:0;border-radius:0;background:transparent;overflow:visible}
+.file-action-rename .rename-rules{padding:24px 22px;gap:16px}
+.file-action-rename .rename-section-title>span{display:none}
+.file-action-rename .rename-rules .tool-field-pair{grid-template-columns:1fr;gap:14px}
+.file-action-rename .rename-match-options{display:grid;grid-template-columns:1fr 1fr;gap:11px 8px}
+.file-action-rename .rename-match-options>label:last-child{grid-column:1/-1}
+.file-action-rename .rename-target-field{max-width:none}
+.file-action-rename .rename-format{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.file-action-rename .rename-format>summary{padding:16px 22px;gap:8px}
+.file-action-rename .rename-format-caption{display:none}
+.file-action-rename .rename-format>summary>.icon{margin-left:auto}
+.file-action-rename .rename-format-body{padding:8px 22px 20px;display:flex;flex-direction:column;align-items:stretch;gap:16px}
+.file-action-rename .rename-format-body>.tool-field,.file-action-rename .rename-number-fields>.tool-field{flex-direction:row;align-items:center;justify-content:space-between;gap:12px}
+.file-action-rename .rename-format-body>.tool-field>.custom-select{width:154px}
+.file-action-rename .rename-number-fields{display:flex;flex-direction:column;gap:12px}
+.file-action-rename .rename-number-fields .number-control{width:128px;flex:none}
+.file-action-rename .rename-number-fields input{width:100%;min-width:0}
+.file-action-variable-help{font-size:11px;color:var(--muted)}
+.file-action-variable-help>summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;width:fit-content}
+.file-action-variable-help>summary>.icon{width:14px;height:14px}
+.file-action-variable-help dl{display:grid;grid-template-columns:1fr auto;gap:10px;margin:14px 0 0;font-size:11px}
+.file-action-variable-help dd{margin:0;color:var(--fg)}
+.file-action-rename .file-action-scope>summary{display:flex;align-items:center;gap:8px;padding:16px 22px;cursor:pointer;list-style:none;font-size:13px;font-weight:550}
+.file-action-scope>summary small{margin-left:auto;font-weight:400;color:var(--muted);font-size:11px}
+.file-action-scope>summary>.icon{width:15px;height:15px;color:var(--muted);transition:transform .16s var(--ease)}
+.file-action-scope[open]>summary>.icon{transform:rotate(180deg)}
+.file-action-rename .rename-scope{padding:0 22px 22px;border:0;gap:12px}
+.file-action-rename .rename-scope>h2{display:none}
+.file-action-rename .rename-scope-options{display:grid;grid-template-columns:1fr 1fr;gap:12px 8px}
+.file-action-rename .rename-scope-options>label:has(#rename-recursive){grid-column:1/-1}
+.file-action-rename .rename-add-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.file-action-rename .rename-add-actions button{padding:7px 10px;font-size:12px}
+.file-action-rename .rename-config textarea{resize:vertical}
+.file-action-scope-mode{margin:2px 0}
+.file-action-rename .rename-config textarea{min-height:90px;height:90px;max-height:200px;background:var(--surface)}
+.file-action-results{min-height:0;min-width:0;overflow:auto;padding:22px 22px 14px}
+.file-action-preview-caption{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.file-action-preview-caption h2{font-size:15px;margin:0;font-weight:600}
+.file-action-rename .tool-result-heading{margin:0 0 16px;min-height:0}
+.file-action-rename .tool-result-heading h2{font-size:12px;font-weight:400;color:var(--muted)}
+.file-action-rename #tool-result-detail{display:none}
+.file-action-rename .tool-progress{margin:0 0 10px}
+.file-action-columns{display:grid;grid-template-columns:18px minmax(0,1fr) 18px minmax(0,1fr);gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px}
+.file-action-rename .tool-results{border:0;border-radius:0}
+.file-action-rename .rename-result-row{border-radius:0;border:0;border-bottom:1px solid var(--line);background:transparent;margin:0;padding:14px 16px;grid-template-columns:18px minmax(0,1fr) 18px minmax(0,1fr);gap:14px;min-height:78px}
+.file-action-rename .rename-result-row:hover{background:var(--hover)}
+.file-action-rename .rename-result-row>span{min-width:0}
+.file-action-rename .rename-result-row strong,.file-action-rename .rename-result-row small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-action-rename .rename-valid>span:last-child strong{color:var(--accent)}
+.file-action-footer{grid-column:1/-1;border-top:1px solid var(--line);padding:14px 22px;background:var(--surface)}
+.file-action-footer .rename-actions{margin:0;gap:12px;flex-wrap:nowrap}
+.file-action-footer .rename-actions>label{font-size:12px}
+.file-action-footer .file-tools-toolbar{margin:0;flex:none}
+.file-action-footer .file-tools-toolbar .toolbar{gap:8px}
+.file-action-footer .toolbar button{font-size:12px}
+.file-action-footer #rename-apply{order:2}
+.file-action-footer .rename-actions{padding-top:0}
+.file-action-rename .toast{left:50%}
+.file-action-locksmith .file-action-content{padding:0;display:flex;overflow:hidden}
+.file-action-locksmith #page-locksmith{flex:1;min-height:0;display:grid;grid-template-columns:270px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+.file-action-lock-targets{min-width:0;overflow:auto;padding:22px 16px;background:var(--soft);border-right:1px solid var(--line)}
+.file-action-lock-targets .file-action-preview-caption{gap:10px;margin:0 4px 16px}
+#lock-target-actions{display:flex;gap:4px}
+.file-action-locksmith .lock-targets{gap:6px}
+.file-action-locksmith .lock-targets>div{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px;align-items:center;gap:8px}
+.file-action-locksmith .lock-targets>div>span:nth-child(2){flex:1;min-width:0}
+.file-action-locksmith .lock-targets strong{display:block;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-action-locksmith .lock-targets small{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;color:var(--muted)}
+.file-action-locksmith .lock-targets .icon-button{width:25px;height:25px;min-width:25px;min-height:25px;padding:5px;color:var(--muted);opacity:0}
+.file-action-locksmith .lock-targets>div:hover .icon-button,.file-action-locksmith .lock-targets .icon-button:focus-visible{opacity:1}
+.file-action-lock-path{font-size:11px;color:var(--muted);margin:0 4px 12px}
+.file-action-lock-path>summary{cursor:pointer;width:fit-content}
+.file-action-lock-path .lock-target-input{display:flex;flex-wrap:nowrap;gap:6px;margin:12px 0}
+.file-action-lock-path .lock-target-input>input{min-width:0!important;font-size:11px;min-height:34px}
+.file-action-lock-path .lock-target-input>button{padding:0 8px;min-height:34px;font-size:11px}
+.file-action-lock-results{padding:24px;min-width:0;min-height:0;overflow:auto}
+.file-action-lock-results .lock-process{border-radius:10px;padding:14px}
+.file-action-locksmith .lock-process-head button{font-size:11px;min-height:30px;padding:5px 9px;color:var(--muted);background:transparent}
+.file-action-locksmith .lock-process-head button:hover{color:var(--fg);background:var(--hover)}
+.file-action-locksmith .file-action-footer{display:flex;align-items:center;gap:10px}
+.file-action-lock-status{font-size:12px;color:var(--muted)}
+.file-action-locksmith .file-action-footer button{font-size:12px}
+.file-action-locksmith #lock-cancel:disabled{display:none}
+.file-action-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;gap:12px;text-align:center;color:var(--muted)}
+.file-action-empty>.icon{width:32px;height:32px;stroke-width:1.25}
+.file-action-empty h3{font-size:14px;font-weight:500;color:var(--fg);margin:0}
+.file-action-locksmith .toast{left:50%}
+@media(prefers-reduced-motion:reduce){.file-action-scope>summary>.icon{transition:none}}

@@ -1,4 +1,7 @@
 import {FileContextMenu} from './file-menu';
+import {explorerMenuState,setExplorerMenu} from './explorer-menu';
+import {readShellRequest} from './shell-request';
+import type {FileActionTarget} from '../shared/explorer-menu';
 import {PopupLifecycle,PopupReadiness,deferPopupBlur} from './popup-lifecycle';
 import {FileToolsService} from './file-tools-service';
 import {LauncherService} from './launcher-service';
@@ -175,12 +178,25 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   return window;
 }
 function showMain() { if (!main || main.isDestroyed()) return; if (main.isMinimized()) main.restore(); main.show(); main.focus(); }
-async function pickPath(mode: 'file'|'directory'|'save', title: string, name = '', initialPath?: string) { const bounds=await pickerWindowBounds();if(quitting||finishingQuit||!main||main.isDestroyed())throw new Error('应用正在退出');const area=screen.getDisplayMatching(bounds||main.getBounds()).workArea;const window = windowFor('picker', { width:Math.min(860,area.width),height:Math.min(640,area.height),...bounds,minWidth:Math.min(620,area.width),minHeight:Math.min(500,area.height),parent: main, modal: true, skipTaskbar: true });if(bounds)restorePickerBounds(window,bounds);trackPickerWindow(window); const result = pick(window, mode, title, name, initialPath); window.once('ready-to-show', () => { if (!window.isDestroyed()){if(bounds)restorePickerBounds(window,bounds);window.show();} }); return result; }
+const fileActions=new Map<number,FileActionTarget>();
+const fileLocks=new Map<number,LocksmithService>();
+const locksFor=(id:number)=>fileLocks.get(id)||locksmith;
+function openFileAction(target:FileActionTarget){
+ if(quitting||finishingQuit)throw Error('应用正在退出');
+ const title=target.tool==='rename'?'批量重命名':'文件占用';
+ const window=windowFor('file-action',{width:target.tool==='rename'?1000:840,height:720,minWidth:780,minHeight:560,title:title+' · One',frame:true,titleBarStyle:'hidden',hasShadow:true},'&tool='+target.tool);
+ const id=window.webContents.id;fileActions.set(id,target);
+ if(target.tool==='locksmith')fileLocks.set(id,new LocksmithService(state=>{if(!window.isDestroyed()&&!window.webContents.isDestroyed())window.webContents.send('one:locks',state);}));
+ window.once('ready-to-show',()=>{if(!window.isDestroyed()){window.show();window.focus();}});window.on('closed',()=>{fileActions.delete(id);fileLocks.get(id)?.stop();fileLocks.delete(id);});
+}
+async function shellInvocation(args:string[]){try{if(starting)await starting;const target=await readShellRequest(args,app.getPath('userData'));if(target)openFileAction(target);else showMain();}catch(error){console.error('右键菜单启动失败',error);showMain();}}
+async function pickPath(mode: 'file'|'directory'|'save', title: string, name = '', initialPath?: string,owner=main) { const bounds=await pickerWindowBounds();if(quitting||finishingQuit||!owner||owner.isDestroyed())throw new Error('应用正在退出');const area=screen.getDisplayMatching(bounds||owner.getBounds()).workArea;const window = windowFor('picker', { width:Math.min(860,area.width),height:Math.min(640,area.height),...bounds,minWidth:Math.min(620,area.width),minHeight:Math.min(500,area.height),parent: owner, modal: true, skipTaskbar: true });if(bounds)restorePickerBounds(window,bounds);trackPickerWindow(window); const result = pick(window, mode, title, name, initialPath); window.once('ready-to-show', () => { if (!window.isDestroyed()){if(bounds)restorePickerBounds(window,bounds);window.show();} }); return result; }
 function echo(text:string,channel?:import('../shared/echo').EchoChannel){echoes?.show(text,channel);}
 function textValue(value: unknown, limit = 10_000_000): string { if (typeof value !== 'string' || value.length > limit) throw new Error('文本参数无效或超过长度上限'); return value; }
 function filePath(value: unknown): string { if (typeof value !== 'string' || value.length > 32768 || !isAbsolute(value) || value.includes('\0')) throw new Error('文件路径无效'); return resolve(value); }
+const fileActionIPC=new Set(['file-action-data','window-action','window-state','settings','app-info','file-icons','file-icon','shell-icons','file-tools-run','file-tools-cancel','file-tools-page','file-tools-history','lock-state','lock-scan','lock-cancel','lock-end','pick-file','pick-directory','open-file','reveal-file','native-context-menu','preview','copy-text','file-tools-overview','appearance']);
 function handle(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown, allowed = ['main']) {
-  ipcMain.handle(`one:${name}`, (event, ...args) => { const role = roles.get(event.sender.id); if (!role || !allowed.includes(role) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效'); return handler(event, ...args); });
+  ipcMain.handle(`one:${name}`, (event, ...args) => { const role = roles.get(event.sender.id); if (!role || !(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效'); return handler(event, ...args); });
 }
 async function runMaintenance(mode: 'startup' | 'registry' | 'selection') {
   if(mode==='registry')return nativeMaintenance(mode);
@@ -260,6 +276,10 @@ function colorShortcut(value:string){
   if(value){const normalized=value.replace(/\b(Ctrl)\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');if(!globalShortcut.register(normalized,()=>void pickColor().catch(error=>echo(error.message))))throw new Error('取色快捷键已被占用，请更换组合键');registeredColorShortcut=normalized;}
 }
 function registerIPC() {
+  handle('explorer-menu-state',()=>explorerMenuState());
+  handle('explorer-menu-set',(_event,value)=>setExplorerMenu(value));
+  handle('file-action-data',event=>{const target=fileActions.get(event.sender.id);if(!target)throw Error('文件操作窗口无效');return target;});
+  handle('file-action-open',(_event,tool,paths)=>{if(!['rename','locksmith'].includes(tool)||!Array.isArray(paths)||paths.length>(tool==='locksmith'?32:4096))throw Error('文件操作请求无效');openFileAction({tool,paths:paths.map(filePath)});});
   handle('file-tools-run',(event,task)=>fileTools.run(event.sender.id,task));
   handle('file-tools-cancel',(event,kind)=>fileTools.cancel(event.sender.id,kind));
   handle('file-tools-page',(_event,id,page,group)=>fileTools.page(id,page,group));
@@ -314,7 +334,7 @@ function registerIPC() {
   handle('search-context',()=>searchContext,['search']);handle('search-ready',(event)=>{const window=BrowserWindow.fromWebContents(event.sender);if(window){searchReadyWindows.add(event.sender.id);if(window===searchWindow)replaySearchInput(window,searchRevision);}},['search']);
   handle('search-choose',(_e,value)=>chooseSearch(value),['search']);
   handle('inspect-locks',(_event,value)=>{const path=filePath(value);showMain();main.webContents.send('one:lock-target',path);},['main','preview','search']);
-  handle('lock-state',()=>locksmith.state());handle('lock-scan',(_event,paths)=>locksmith.scan(paths));handle('lock-cancel',()=>locksmith.cancel());handle('lock-end',(_event,token)=>locksmith.end(token));
+  handle('lock-state',event=>locksFor(event.sender.id).state());handle('lock-scan',(event,paths)=>locksFor(event.sender.id).scan(paths));handle('lock-cancel',event=>locksFor(event.sender.id).cancel());handle('lock-end',(event,token)=>locksFor(event.sender.id).end(token));
   handle('utility-state',()=>utilityState());handle('topmost-windows',()=>topmost.list());handle('topmost-toggle',(_event,id)=>topmost.toggle(id));handle('topmost-clear',()=>topmost.clear());
   handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar']);
   handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar']);
@@ -358,7 +378,7 @@ function registerIPC() {
   handle('send-workbench', (_event, text) => { showMain(); main.webContents.send('one:receive-text', textValue(text)); }, ['copy']);
   handle('open-text', async (_event, encoding) => { const path = await pickPath('file','打开文本文件'); if (!path) return null; return { path, text: await readText(path, textValue(encoding, 20)) }; });
   handle('save-text', async (_event, text, encoding) => { textValue(text); const path = await pickPath('save','保存处理结果','处理结果.txt'); if (!path) return null; await saveText(path, text, textValue(encoding, 20)); return path; });
-  handle('pick-file', (_event,path) => pickPath('file','选择文件','',path === undefined ? undefined : filePath(path)));
+  handle('pick-file', (event,path) => pickPath('file','选择文件','',path === undefined ? undefined : filePath(path),BrowserWindow.fromWebContents(event.sender)||main));
   handle('picker-data', (event, path) => pickerData(event.sender.id, path === undefined ? undefined : filePath(path)), ['picker']);
   handle('picker-places', event => pickerPlaces(event.sender.id), ['picker']);
   handle('picker-opened', event => pickerOpened(event.sender.id), ['picker']);
@@ -390,7 +410,7 @@ function registerIPC() {
     finally{nativeMenus.delete(id);}
   },['search']);
   handle('search-text', async (_event, text) => { const query = textValue(text, 5000); await shell.openExternal(`https://www.bing.com/search?q=${encodeURIComponent(query)}`); }, ['copy']);
-  handle('pick-directory', (_event,path) => pickPath('directory','选择文件夹','',path === undefined ? undefined : filePath(path)));
+  handle('pick-directory', (event,path) => pickPath('directory','选择文件夹','',path === undefined ? undefined : filePath(path),BrowserWindow.fromWebContents(event.sender)||main));
   handle('scan',(event,path,id)=>{const target=filePath(path);if(typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id))throw new Error('扫描标识无效');diskService.start(target,(result,error)=>{if(!event.sender.isDestroyed())event.sender.send('one:scan-complete',{id,result,error});});});
   handle('cancel-scan',()=>diskService.stop());
   handle('maintenance', (_event, kind) => { if (kind !== 'startup' && kind !== 'registry') throw new Error('检查类型无效'); return runMaintenance(kind); });
@@ -425,7 +445,7 @@ async function start() {
   colorEditor=new ColorEditor(()=>windowFor('color-editor',{width:420,height:360,minWidth:320,minHeight:200,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,title:'颜色 · One'}),()=>({history:settings.colorHistory,formats:settings.colorVisibleFormats,format:settings.colorFormat,showEditor:settings.colorShowEditor}));
   dialogBar=new DialogBar(()=>windowFor('dialog-bar',{width:700,height:60,minWidth:240,minHeight:60,frame:false,transparent:true,backgroundColor:'#00000000',roundedCorners:false,hasShadow:false,thickFrame:false,resizable:false,skipTaskbar:true}),searchBridge,()=>settings.search,menuService);
   searchBridge.update(settings.search);
-  registerIPC(); main = windowFor('main'); main.once('ready-to-show', () => {main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
+  registerIPC(); main = windowFor('main'); main.once('ready-to-show', () => {if(!process.argv.some(a=>a.startsWith('--one-shell-request=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
   nativeTheme.on('updated',refreshWindowAppearance);
   main.on('blur',()=>{if(recordingShortcut){recordingShortcut=false;input.setModalActive(!!colorWorker);topmost.record(false);searchBridge.record(false);try{colorShortcut(settings.colorShortcut);}catch{}}});
   main.on('close', event => { if(!quitting&&!testMode){event.preventDefault();if(settings.general.closeToTray)main.hide();else app.quit();} });
@@ -438,6 +458,6 @@ async function start() {
     input.update(settings);
   }
 }
-if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else { app.on('second-instance', showMain); app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;starting=start();return starting.finally(()=>{starting=undefined;});}).catch(error => { console.error(error); app.quit(); }); }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);maintenance?.stop();systemInformation?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();awake?.stop();topmost?.stop();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else { app.on('second-instance',(_event,args)=>{void shellInvocation(args);}); app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;starting=start();return starting.finally(()=>{starting=undefined;});}).then(()=>{if(process.argv.some(a=>a.startsWith('--one-shell-request=')))return shellInvocation(process.argv);}).catch(error => { console.error(error); app.quit(); }); }
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);maintenance?.stop();systemInformation?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });
