@@ -110,6 +110,31 @@ async function scenario(kind,expectedErrors=0){
    await expect.poll(()=>app.windows().some(p=>p.url().includes('view=search-menu')&&p.url().includes('depth=0'))).toBe(true);const popup=app.windows().find(p=>p.url().includes('view=search-menu')&&p.url().includes('depth=0'));
    await popup.getByRole('menuitem',{name:'关机',exact:true}).click();await expect.poll(()=>app.windows().some(p=>p.url().includes('view=command-confirm'))).toBe(true);await app.windows().find(p=>p.url().includes('view=command-confirm')).waitForSelector('#command-confirm-cancel');
   }
+  if(kind==='search-helper-exit'){
+   await main.evaluate(()=>window.one.showSearch());
+   const search=app.windows().find(p=>p.url().includes('view=search')&&!p.url().includes('embedded=1')&&!p.url().includes('menu'));
+   await search.waitForSelector('#file-query');await search.locator('#file-query').fill('preview');
+   await expect(search.locator('.search-result').filter({hasText:'preview.txt'})).toHaveCount(1);
+   // Force the helper pipe to become unwritable after the availability check.
+   // Window cleanup must stay best effort and must not reach Electron's error box.
+   await app.evaluate(({BrowserWindow})=>{
+    const helper=process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile));
+    if(!helper||helper.exitCode!==null)throw Error('Own index helper missing');
+    const original=helper.stdin.write;helper.stdin.write=()=>{throw Error('搜索服务不可用');};
+    try{const embedded=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=search')&&w.webContents.getURL().includes('embedded=1'));if(!embedded)throw Error('Embedded search window missing');embedded.close();}
+    finally{helper.stdin.write=original;}
+   });
+   await expect.poll(async()=>(await searchWindows()).length).toBe(1);
+   // Kill only the isolated app's own index helper to reproduce a lost service.
+   await app.evaluate(()=>{const helper=process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile));if(!helper||helper.exitCode!==null)throw Error('Own index helper missing');helper.kill();});
+   await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).error)).toContain('搜索服务已退出');
+   await search.locator('#file-query').fill('preview missing');
+   await expect(search.locator('.search-empty')).toHaveText('搜索服务不可用');
+   const geometry=await search.locator('.search-empty').evaluate(e=>{const row=e.getBoundingClientRect(),list=e.parentElement.getBoundingClientRect();return{offset:Math.abs((row.top+row.bottom)-(list.top+list.bottom))/2,toastVisible:!document.querySelector('#toast').hidden};});
+   assert.ok(geometry.offset<5,JSON.stringify(geometry));assert.equal(geometry.toastVisible,false);
+   await app.evaluate(({BrowserWindow})=>{for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed()&&new URL(window.webContents.getURL()||'about:blank').searchParams.get('view')==='search')window.close();});
+   await expect.poll(async()=>(await searchWindows()).length).toBe(0);
+  }
   await main.evaluate(()=>new Promise(resolve=>setTimeout(resolve,250)));
   const start=Date.now();
   // Disconnect the test's Node debugger before quit so it cannot hold native shutdown open.
@@ -145,7 +170,7 @@ async function scenario(kind,expectedErrors=0){
 async function run(){
  await fs.mkdir(path.join(path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/graceful-exit-smoke'),'logs'),{recursive:true});
  const oldErrors=Number(process.env.ONE_EXPECT_EXIT_ERRORS||0),results=[];
- for(const kind of process.env.ONE_EXIT_SCENARIO?[process.env.ONE_EXIT_SCENARIO]:oldErrors?['quit']:['quit','recreate','menus','picker','command-confirm'])results.push(await scenario(kind,oldErrors));
+ for(const kind of process.env.ONE_EXIT_SCENARIO?[process.env.ONE_EXIT_SCENARIO]:oldErrors?['quit']:['quit','recreate','menus','picker','command-confirm','search-helper-exit'])results.push(await scenario(kind,oldErrors));
  console.log(JSON.stringify({result:'PASS',results},null,2));
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

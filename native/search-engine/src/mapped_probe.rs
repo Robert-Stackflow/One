@@ -31,6 +31,7 @@ pub fn command(args: &[String]) -> Option<io::Result<()>> {
         "mapped-build" => build(args),
         "mapped-query" => serve(args),
         "mapped-store" => store::serve(args),
+        "mapped-service" => store::service(args),
         "mapped-import" => import::command(args),
         "mapped-scan" => scan::command(args),
         _ => return None,
@@ -627,9 +628,9 @@ impl SearchRow for MappedRow<'_> {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Source<'a> { Base(usize), Extra(&'a PathKey) }
+enum Source<'a> { Base(usize), Extra(&'a PathKey), Launcher(&'a PathKey) }
 type Matches<'a> = BinaryHeap<Reverse<(bool, i8, i32, Fragments<'a>, Source<'a>, &'static str)>>;
-fn items(heap: &Matches<'_>, view: &View<'_>, overlay: &Overlay) -> io::Result<Vec<Value>> {
+fn items(heap: &Matches<'_>, view: &View<'_>, overlay: &Overlay, launchers: &Index) -> io::Result<Vec<Value>> {
     let mut best = heap.iter().map(|r| &r.0).collect::<Vec<_>>();
     best.sort_by(|a, b| {
         b.0.cmp(&a.0)
@@ -646,6 +647,12 @@ fn items(heap: &Matches<'_>, view: &View<'_>, overlay: &Overlay) -> io::Result<V
             }
             Source::Extra(path) => {
                 let row = overlay.get(path);
+                let mut item = serde_json::to_value(&row.item).map_err(|_| bad())?;
+                if row.item.directory() { item["modified"] = json!(row.item.modified()/1_000_000); }
+                item
+            }
+            Source::Launcher(path) => {
+                let row = launchers.rows.get(path).ok_or_else(bad)?;
                 let mut item = serde_json::to_value(&row.item).map_err(|_| bad())?;
                 if row.item.directory() { item["modified"] = json!(row.item.modified()/1_000_000); }
                 item
@@ -728,16 +735,16 @@ impl Gate {
 fn cancelled() -> Value {
     json!({"items":[],"total":0,"elapsed":0,"cancelled":true})
 }
-fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay) -> io::Result<Value> {
+fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, launchers: &Index) -> io::Result<Value> {
     if !gate.current(v, ticket) { return Ok(cancelled()); }
     if v["query"].as_str().unwrap_or("").len() > 4000 {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "搜索条件过长"));
     }
     let start = Instant::now();
     let map = Mapping::open(path)?;
-    query_mapping(&map, v, gate, ticket, overlay, start)
+    query_mapping(&map, v, gate, ticket, overlay, launchers, start)
 }
-fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, start: Instant) -> io::Result<Value> {
+fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, launchers: &Index, start: Instant) -> io::Result<Value> {
     if !gate.current(v, ticket) { return Ok(cancelled()); }
     if v["query"].as_str().unwrap_or("").len() > 4000 {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "搜索条件过长"));
@@ -775,7 +782,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
             }
         }
         if !gate.current(v, ticket) { return Ok(cancelled()); }
-        output(json!({"id":v["id"],"result":{"items":items(&pass.heap,&view,overlay)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));
+        output(json!({"id":v["id"],"result":{"items":items(&pass.heap,&view,overlay,launchers)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));
     }
     if !matches!(kind.as_str(), "app" | "setting") {
         // App/settings queries do not consume file rows or their text. Keep
@@ -796,8 +803,17 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
             }
         }
     }
+    // Preserve the ordinary backend's visitation order: filesystem rows first,
+    // then the sorted, ephemeral launcher index. Equal-score top-100 retention
+    // and directory priorities therefore use exactly the same heap semantics.
+    if v["includeLaunchers"].as_bool().unwrap_or(false) {
+        for (n, (path, row)) in launchers.rows.iter().enumerate() {
+            if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
+            pass.visit(row, Fragments::from_key(path), Source::Launcher(path), progressive);
+        }
+    }
     if !gate.current(v, ticket) { return Ok(cancelled()); }
-    let result = json!({"items":items(&pass.heap,&view,overlay)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0});
+    let result = json!({"items":items(&pass.heap,&view,overlay,launchers)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0});
     drop(pass);
     Ok(result)
 }
@@ -816,6 +832,8 @@ pub fn serve(args: &[String]) -> io::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<(Value, u64)>();
     let worker_gate = gate.clone();
     let worker_path = path.to_path_buf();
+    let launchers = Arc::new(RwLock::new(Arc::new(Index::default())));
+    let reader_launchers = launchers.clone();
     // Stdin stays responsive while the worker maps or searches. The mapping is
     // constructed and dropped in this worker; raw mapping handles never cross
     // threads. Tickets isolate independent search windows.
@@ -836,7 +854,10 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                 })()
             } else if matches!(v["type"].as_str(), Some("metadata" | "directories" | "children")) {
                 catalog::request(&worker_path, &overlay, &v)
-            } else { query_image(&worker_path, &v, &worker_gate, ticket, &overlay) };
+            } else {
+                let snapshot = reader_launchers.read().unwrap().clone();
+                query_image(&worker_path, &v, &worker_gate, ticket, &overlay, &snapshot)
+            };
             match result {
                 Ok(result) => output(json!({"id":v["id"],"result":result})),
                 Err(e) => output(json!({"id":v["id"],"error":e.to_string()})),
@@ -852,6 +873,12 @@ pub fn serve(args: &[String]) -> io::Result<()> {
             continue;
         };
         match v["type"].as_str().unwrap_or("") {
+            "launchers" => {
+                if let Some(index) = crate::launchers::index(&v["items"]) {
+                    let previous = std::mem::replace(&mut *launchers.write().unwrap(), Arc::new(index));
+                    drop(previous);
+                }
+            }
             "query" => {
                 let ticket = gate.enqueue(&v);
                 let _ = tx.send((v, ticket));

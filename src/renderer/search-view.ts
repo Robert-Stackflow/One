@@ -1,7 +1,7 @@
 import {indexPrioritySections,setupIndexPriorities} from './index-priorities';
 import {menuEditorCard,setupMenuEditor} from './menu-editor';
 import {subscribeSnapshot} from './event-snapshot';
-import {api,q,icon,iconButton,button,esc,switchControl,toast,action} from './ui';
+import {api,q,icon,iconButton,button,esc,switchControl,toast,action,errorMessage} from './ui';
 import {bindPreference} from './preferences';
 import {setupShortcut} from './shortcut';
 import {SearchResults} from './search-results';
@@ -90,7 +90,7 @@ export async function renderSearch(){
    if(result.cancelled){if(embedded)q('search-inline-summary').textContent=lastInlineSummary;return;}
    update(result.items);
    summary(`${result.total.toLocaleString()} 项${result.total>100?' · 显示前 100 项':''} · ${Math.round(result.elapsed)} ms`,result.total?`${result.total.toLocaleString()} 项`:'无结果');
-  }catch(e){if(current()){if(embedded)q('search-inline-summary').textContent='';toast(e);}}
+  }catch(e){if(current()){results.update([],false,errorMessage(e));shownKey=request.key;summary('');layout();}}
   finally{
    if(running===request){running=undefined;progressive=undefined;if(current())list.setAttribute('aria-busy','false');if(backgroundPending)refresh();}
   }

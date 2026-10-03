@@ -104,7 +104,6 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
     }
     thread::spawn(move || {
         let _writer = s.writer.lock().unwrap();
-        let _working = Working::start(&s.working);
         if s.generation.load(Ordering::Relaxed) != generation {
             return;
         }
@@ -171,7 +170,6 @@ pub fn refresh(s: Arc<Shared>, paths: Vec<String>, offline: bool) {
         drop(state);
         // Every completed mutation has already queued its cache change. Mark
         // the work finished before observers can immediately request a stop.
-        drop(_working);
         send(&s);
     });
 }

@@ -12,6 +12,7 @@ mod stored_path;
 mod priority;
 mod search_access;
 mod mapped_probe;
+mod launchers;
 use search_access::{QueryMatcher, SearchPath, SearchRow};
 use path_key::{PathKey, PathPool};
 use pinyin::ToPinyinMulti;
@@ -412,19 +413,6 @@ struct Shared {
     writer: Mutex<()>,
     cache: String,
     persistence: cache::Persistence,
-    working: AtomicBool,
-}
-struct Working<'a>(&'a AtomicBool);
-impl<'a> Working<'a> {
-    fn start(flag: &'a AtomicBool) -> Self {
-        flag.store(true, Ordering::SeqCst);
-        Self(flag)
-    }
-}
-impl Drop for Working<'_> {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::SeqCst);
-    }
 }
 fn send(s: &Shared) {
     let mut state = s.state.lock().unwrap();
@@ -503,7 +491,6 @@ fn rebuild(s: Arc<Shared>, config: Config) {
     send(&s);
     thread::spawn(move || {
         let _writer = s.writer.lock().unwrap();
-        let _working = Working::start(&s.working);
         if s.generation.load(Ordering::Relaxed) != generation {
             return;
         }
@@ -558,7 +545,6 @@ fn rebuild(s: Arc<Shared>, config: Config) {
                 state.error = format!("索引已达到 {} 项上限", config.max_entries);
             }
         }
-        drop(_working);
         send(&s);
     });
 }
@@ -992,7 +978,6 @@ fn main() {
         writer: Mutex::new(()),
         cache,
         persistence: cache::Persistence::default(),
-        working: AtomicBool::new(false),
     });
     let saver = cache::start(s.clone());
     let (tx, rx) = std::sync::mpsc::channel::<(Value, u64)>();
@@ -1077,18 +1062,7 @@ fn main() {
                 let _ = tx.send((v, ticket));
             }
             "launchers" => {
-                if let Ok(entries) = serde_json::from_value::<Vec<Entry>>(v["items"].clone()) {
-                    let mut index = Index::default();
-                    for entry in entries
-                        .into_iter()
-                        .filter(|e| e.path.starts_with("one-launcher:"))
-                        .take(3000)
-                    {
-                        let mut row = Record::new(entry.name.clone(), false, 0);
-                        row.set_lower(entry.name.to_lowercase());
-                        row.set_launcher(entry);
-                        index.put(row);
-                    }
+                if let Some(index) = launchers::index(&v["items"]) {
                     *s.launchers.write().unwrap() = index;
                 }
             }
@@ -1103,10 +1077,12 @@ fn main() {
         }
     }
     s.generation.fetch_add(1, Ordering::SeqCst);
-    let interrupted = s.working.load(Ordering::SeqCst);
     {
         let mut index = s.index.write().unwrap();
-        if index.tracking || interrupted {
+        // Only a full scan can leave every directory signature unconfirmed.
+        // A concurrent local refresh keeps unchanged directory signatures;
+        // each reconciled directory publishes its own stamp only on completion.
+        if index.tracking {
             for row in index.rows.values_mut() {
                 if row.item.directory() {
                     row.item.set_modified(0);
@@ -1295,7 +1271,6 @@ mod scale_benchmark {
             writer: Mutex::new(()),
             cache: String::new(),
             persistence: cache::Persistence::default(),
-            working: AtomicBool::new(false),
         };
         for (i, q) in [
             "report-099999",

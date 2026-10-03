@@ -3,6 +3,8 @@
 use super::*;
 use overlay::Mutation;
 use std::{path::PathBuf, sync::{mpsc, Weak}};
+mod service;
+use service::Service;
 
 const OWNER: &str = "One mapped generation store 1\n";
 const CURRENT: &str = ".one-mapped-current.json";
@@ -10,6 +12,8 @@ const CURRENT: &str = ".one-mapped-current.json";
 struct Manifest {
     version: u32,
     id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    config: Option<Config>,
 }
 pub(super) fn id() -> io::Result<String> {
     Ok(generation()?.iter().map(|b| format!("{b:02x}")).collect())
@@ -26,7 +30,7 @@ pub(super) fn paths(dir: &Path, value: &str) -> (PathBuf, PathBuf) {
         dir.join(format!(".one-mapped-{value}.delta")),
     )
 }
-fn publish(dir: &Path, value: &str) -> io::Result<()> {
+fn publish(dir: &Path, value: &str, config: Option<&Config>) -> io::Result<()> {
     let temporary = dir.join(format!(".one-mapped-current.{}.tmp", std::process::id()));
     let mut file = OpenOptions::new()
         .write(true)
@@ -38,6 +42,7 @@ fn publish(dir: &Path, value: &str) -> io::Result<()> {
         &Manifest {
             version: 1,
             id: value.into(),
+            config: config.cloned(),
         },
     )
     .map_err(|_| bad())?;
@@ -48,6 +53,18 @@ fn publish(dir: &Path, value: &str) -> io::Result<()> {
     Ok(())
 }
 fn owns(name: &str) -> bool {
+    if name == "build.base" { return true; }
+    if let Some(tail)=name.strip_prefix("build.") {
+        let parts:Vec<_>=tail.split('.').collect();
+        if parts.len()==3 && !parts[0].is_empty() && parts[0].bytes().all(|b|b.is_ascii_digit()) {
+            return parts[2]=="base" && parts[1].strip_prefix("import-").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit()))
+                || parts[2]=="tmp" && (matches!(parts[1],"parents"|"rows"|"phonetics"|"data"|"image") || parts[1].strip_prefix("sort-").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())));
+        }
+        if parts.len()==5 && !parts[0].is_empty() && parts[0].bytes().all(|b|b.is_ascii_digit()) && parts[2]==parts[0] {
+            return parts[1].strip_prefix("import-").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit()))
+                && matches!(parts[3],"parents"|"rows"|"phonetics"|"data"|"image") && parts[4]=="tmp";
+        }
+    }
     if let Some(pid) = name
         .strip_prefix(".one-mapped-current.")
         .and_then(|s| s.strip_suffix(".tmp"))
@@ -137,7 +154,7 @@ impl ReadSnapshot {
     fn from_state(state: &State) -> Arc<Self> {
         Arc::new(Self { base: state.lease.clone(), overlay: state.overlay.clone() })
     }
-    fn request(&self, request: &Value, gate: &Gate, ticket: u64) -> io::Result<Value> {
+    fn request(&self, request: &Value, gate: &Gate, ticket: u64, launchers: &Index) -> io::Result<Value> {
         if matches!(request["type"].as_str(), Some("metadata" | "directories" | "children")) {
             if gate.stopped.load(Ordering::Relaxed) {
                 return Err(io::Error::new(io::ErrorKind::Interrupted, "索引读取已停止"));
@@ -149,7 +166,7 @@ impl ReadSnapshot {
             if !gate.current(request, ticket) { return Ok(cancelled()); }
             let start = Instant::now();
             let mapping = self.base.mapping()?;
-            query_mapping(&mapping, request, gate, ticket, &self.overlay, start)
+            query_mapping(&mapping, request, gate, ticket, &self.overlay, launchers, start)
         }
     }
 }
@@ -167,13 +184,18 @@ struct State {
     delta: PathBuf,
     overlay: Arc<Overlay>,
     lease: Arc<BaseLease>,
+    config: Option<Config>,
 }
 impl State {
     fn open(seed: &Path, dir: &Path) -> io::Result<(Self, File)> {
+        Self::open_with(Some(seed),dir)
+    }
+    fn open_with(seed: Option<&Path>, dir: &Path) -> io::Result<(Self, File)> {
         fs::create_dir_all(dir)?;
         let lock = cache::acquire(&dir.join("writer").to_string_lossy())?;
         let marker = dir.join(".one-mapped-owner");
-        if marker.exists() {
+        let previously_owned=marker.exists();
+        if previously_owned {
             if fs::read_to_string(&marker)? != OWNER {
                 return Err(bad());
             }
@@ -191,39 +213,45 @@ impl State {
             file.sync_all()?;
         }
         let manifest = dir.join(CURRENT);
-        let current = match File::open(&manifest) {
+        let (current, config) = match File::open(&manifest) {
             Ok(file) => {
-                if file.metadata()?.len() > 1024 {
+                if file.metadata()?.len() > 1_000_000 {
                     return Err(bad());
                 }
                 let m: Manifest = serde_json::from_reader(file).map_err(|_| bad())?;
                 if m.version != 1 || !valid_id(&m.id) {
                     return Err(bad());
                 }
-                m.id
+                (m.id, m.config)
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                // A missing manifest beside published generations is damage,
+                // not a new store. Keep every byte for recovery and reimport.
+                if previously_owned && fs::read_dir(dir)?.any(|entry|entry.is_ok_and(|entry| {
+                    let name=entry.file_name();let name=name.to_string_lossy();
+                    owns(&name) && (name.ends_with(".base") || name.ends_with(".delta"))
+                })) {return Err(bad());}
                 let current = id()?;
                 let (base, delta) = paths(dir, &current);
                 let mut owned = Temps(Vec::new());
-                let input = Mapping::open(seed)?;
-                let view = View::new(input.bytes())?;
-                let mut file = OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&base)?;
-                owned.0.push(base.clone());
-                // The seed is already built; copying bytes does not materialize
-                // millions of heap records. Ownership prevents live cache use.
-                file.write_all(input.bytes())?;
-                file.sync_all()?;
-                drop(file);
+                if let Some(seed)=seed {
+                    let input = Mapping::open(seed)?;
+                    let mut file = OpenOptions::new().write(true).create_new(true).open(&base)?;
+                    owned.0.push(base.clone());
+                    // Copy immutable bytes, never millions of heap records.
+                    file.write_all(input.bytes())?;file.sync_all()?;drop(file);
+                } else {
+                    if base.exists() {return Err(io::Error::new(io::ErrorKind::AlreadyExists,"索引主体已存在"));}
+                    image(&Index::default(),&base)?;owned.0.push(base.clone());
+                }
+                let input=Mapping::open(&base)?;
+                let view=View::new(input.bytes())?;
                 let overlay = Overlay::load(&view, None)?;
                 overlay.save(&delta)?;
                 owned.0.push(delta);
-                publish(dir, &current)?;
+                publish(dir, &current, None)?;
                 owned.0.clear();
-                current
+                (current, None)
             }
             Err(e) => return Err(e),
         };
@@ -243,6 +271,7 @@ impl State {
                 delta,
                 overlay: Arc::new(overlay),
                 lease,
+                config,
             },
             lock,
         ))
@@ -312,7 +341,8 @@ impl State {
             self.publish_version(&stage.id,changes.overlay)?;
             stage.keep();
         } else if !changes.batches.is_empty() {self.overlay=Arc::new(changes.overlay);}
-        Ok((json!({"stats":stats,"scanned":changes.scanned,"issues":changes.issues,"stagedFolds":changes.folds,"replacedBase":replaced}),changes.batches,config.max_entries,replaced))
+        let changed=replaced||!changes.batches.is_empty();
+        Ok((json!({"stats":stats,"scanned":changes.scanned,"issues":changes.issues,"stagedFolds":changes.folds,"replacedBase":replaced,"changed":changed}),changes.batches,config.max_entries,replaced))
     }
     fn install(&mut self, new_id: &str, tail: Vec<(Vec<Mutation>, usize)>) -> io::Result<Value> {
         let (base, _) = paths(&self.dir, new_id);
@@ -336,7 +366,7 @@ impl State {
         // Prepare the next read lease before the manifest commit. Publication
         // after it is infallible and cannot acknowledge an unreadable version.
         let lease = BaseLease::open(&base, &delta)?;
-        publish(&self.dir, new_id)?;
+        publish(&self.dir, new_id, self.config.as_ref())?;
         // Publication is the commit point. Every earlier failure leaves the
         // old manifest and its acknowledged delta untouched.
         self.id = new_id.into();
@@ -352,7 +382,8 @@ impl State {
 }
 enum Message {
     Request(Value, u64),
-    Finished(io::Result<usize>),
+    Build(Value, Arc<AtomicBool>, u64),
+    Finished(String, io::Result<usize>),
     Stop,
 }
 struct Merge {
@@ -378,9 +409,10 @@ impl Merge {
         let overlay = state.overlay.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
+        let finished_id = id.clone();
         let thread = thread::spawn(move || {
             let result = base.mapping().and_then(|mapping|compact::run_mapping(&mapping, &overlay, &target, &flag));
-            let _ = sender.send(Message::Finished(result));
+            let _ = sender.send(Message::Finished(finished_id, result));
         });
         Ok(Self {
             id,
@@ -421,23 +453,70 @@ impl Merge {
 pub fn serve(args: &[String]) -> io::Result<()> {
     let seed = Path::new(args.get(2).ok_or_else(bad)?);
     let dir = Path::new(args.get(3).ok_or_else(bad)?);
-    let (mut state, lock) = State::open(seed, dir)?;
+    let (state, lock) = State::open(seed, dir)?;
+    run(state, lock, None)
+}
+/// The application protocol shares the same reader/writer and generation
+/// lifecycle as the verification store. Legacy bytes are read only while
+/// holding their writer lock; the complete mutable Index is never restored.
+pub fn service(args: &[String]) -> io::Result<()> {
+    let cache = PathBuf::from(args.get(2).ok_or_else(bad)?);
+    let _cache_lock = cache::acquire(&cache.to_string_lossy())?;
+    let dir = PathBuf::from(format!("{}.mapped", cache.display()));
+    let (state, lock) = match State::open_with(None, &dir) {
+        Ok(value)=>value,
+        Err(error) if matches!(error.kind(),io::ErrorKind::InvalidData|io::ErrorKind::NotFound)=>recover_store(&dir,error)?,
+        Err(error)=>return Err(error),
+    };
+    run(state, lock, Some(Service::new(cache)))
+}
+fn recover_store(dir:&Path,original:io::Error)->io::Result<(State,File)> {
+    let marker=dir.join(".one-mapped-owner");
+    if fs::symlink_metadata(dir)?.file_type().is_symlink()
+        || fs::symlink_metadata(&marker)?.file_type().is_symlink()
+        || fs::read_to_string(&marker)?!=OWNER {return Err(original);}
+    // Quarantine damaged generations below the excluded store directory. A
+    // sibling backup could itself be indexed during the next full scan.
+    let guard=cache::acquire(&dir.join("writer").to_string_lossy())?;
+    let mut damaged=Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let entry=entry?;let name=entry.file_name();let name=name.to_string_lossy();
+        if name.strip_prefix("recovery-").is_some_and(valid_id) && entry.file_type()?.is_dir() {continue;}
+        if !entry.file_type()?.is_file() || !matches!(name.as_ref(),".one-mapped-owner"|CURRENT|"writer.lock")&&!owns(&name) {return Err(original);}
+        if !matches!(name.as_ref(),".one-mapped-owner"|"writer.lock") {damaged.push(entry.path());}
+    }
+    let backup=dir.join(format!("recovery-{}",id()?));
+    fs::create_dir(&backup)?;
+    for path in damaged {
+        let name=path.file_name().ok_or_else(bad)?;
+        fs::rename(&path,backup.join(name))?;
+    }
+    drop(guard);
+    State::open_with(None,dir)
+}
+fn run(mut state: State, lock: File, mut service: Option<Service>) -> io::Result<()> {
     let map = Mapping::open(&state.base)?;
     let view = View::new(map.bytes())?;
-    output(json!({"ready":true,"count":state.overlay.count(&view),"generation":state.id}));
+    if service.is_none() { output(json!({"ready":true,"count":state.overlay.count(&view),"generation":state.id})); }
     drop(map);
     let gate = Arc::new(Gate::default());
     let worker_gate = gate.clone();
     let refreshes=Arc::new(AtomicU64::new(0));
     let worker_refreshes=refreshes.clone();
+    let builds = Arc::new(Mutex::new(None::<Arc<AtomicBool>>));
+    let input_builds = builds.clone();
+    let service_protocol = service.is_some();
     let published = Arc::new(RwLock::new(ReadSnapshot::from_state(&state)));
     let reader_published = published.clone();
     let reader_gate = gate.clone();
+    let launchers = Arc::new(RwLock::new(Arc::new(Index::default())));
+    let reader_launchers = launchers.clone();
     let (read_tx, read_rx) = mpsc::channel::<(Value, u64)>();
     let reader = thread::spawn(move || {
         for (request, ticket) in read_rx {
             let snapshot = reader_published.read().unwrap().clone();
-            reply(&request, snapshot.request(&request, &reader_gate, ticket));
+            let launcher_snapshot = reader_launchers.read().unwrap().clone();
+            reply(&request, snapshot.request(&request, &reader_gate, ticket, &launcher_snapshot));
         }
     });
     let (tx, rx) = mpsc::channel();
@@ -457,7 +536,8 @@ pub fn serve(args: &[String]) -> io::Result<()> {
         for message in rx {
             match message {
                 Message::Stop => break,
-                Message::Finished(result) => {
+                Message::Finished(id, result) => {
+                    if active.as_ref().is_none_or(|job|job.id != id) { continue; }
                     let Some(job) = active.take() else {
                         continue;
                     };
@@ -471,6 +551,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                     };
                     let success = result.is_ok();
                     if success { publish_readers(&published, &state); }
+                    if let Some(service)=&mut service {service.merge_finished(&result);}
                     let retry = job.invalid;
                     if let Some(request) = job.request {
                         reply(&request,result.map(|stats|json!({"stats":stats,"generation":state.id,"mergeMs":job.start.elapsed().as_secs_f64()*1000.0})));
@@ -500,6 +581,23 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                     // Replay overflow retries from the latest acknowledged
                     // snapshot; I/O failures await a later explicit retry.
                 }
+                Message::Build(v, stop, ticket) => {
+                    let Some(service) = &mut service else { continue; };
+                    if let Some(job) = active.take() {
+                        job.stop.store(true,Ordering::Relaxed);
+                        let _ = job.thread.join();
+                        cleanup(&state.dir,&state.id);
+                    }
+                    let result = service.build(&mut state,&v,&stop,||worker_gate.stopped.load(Ordering::Relaxed)||worker_refreshes.load(Ordering::Relaxed)!=ticket);
+                    publish_readers(&published,&state);
+                    service.finish(&state,result,true);
+                    if !worker_gate.stopped.load(Ordering::Relaxed) && state.needs_merge() {
+                        match Merge::start(&state,None,worker_tx.clone()) {
+                            Ok(job)=>{active=Some(job);output(json!({"merge":{"state":"running"}}));}
+                            Err(error)=>service.merge_finished(&Err(error)),
+                        }
+                    }
+                }
                 Message::Request(v, ticket) => match v["type"].as_str().unwrap_or("") {
                     "compact" => {
                         if active.is_some() {
@@ -518,9 +616,12 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                         }
                     }
                     "apply" | "refresh" => {
+                        let foreground=v["type"]!="refresh"||v["offline"].as_bool().unwrap_or(false);
+                        if foreground { if let Some(service) = &mut service { service.begin(&state); } }
                         let result = (|| {
                             if v["type"]=="refresh" {
-                                let (result,batches,limit,replaced)=state.refresh(&v,||worker_gate.stopped.load(Ordering::Relaxed)||worker_refreshes.load(Ordering::Relaxed)!=ticket)?;
+                                let request = if let Some(service)=&service {service.refresh_request(&v,&state.dir)?} else {v.clone()};
+                                let (result,batches,limit,replaced)=state.refresh(&request,||worker_gate.stopped.load(Ordering::Relaxed)||worker_refreshes.load(Ordering::Relaxed)!=ticket)?;
                                 if let Some(job)=&mut active {
                                     if replaced {job.invalid=true;job.stop.store(true,Ordering::Relaxed);job.tail.clear();}
                                     else {for batch in batches {job.record(batch,limit);}}
@@ -541,7 +642,9 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                         })();
                         let success = result.is_ok();
                         if success { publish_readers(&published, &state); }
-                        reply(&v, result);
+                        if let Some(service) = &mut service {
+                            service.finish(&state,result,foreground);
+                        } else { reply(&v, result); }
                         if success
                             && active.is_none()
                             && !worker_gate.stopped.load(Ordering::Relaxed)
@@ -578,6 +681,30 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                 continue;
             };
             match v["type"].as_str().unwrap_or("") {
+                "init" | "rebuild" if service_protocol => {
+                    let stop = Arc::new(AtomicBool::new(false));
+                    if let Some(previous)=input_builds.lock().unwrap().replace(stop.clone()) { previous.store(true,Ordering::Relaxed); }
+                    let ticket=refreshes.fetch_add(1,Ordering::SeqCst)+1;
+                    let _=tx.send(Message::Build(v,stop,ticket));
+                }
+                "changes" | "resync" if service_protocol => {
+                    let ticket = if v["type"]=="resync" {refreshes.fetch_add(1,Ordering::SeqCst)+1} else {refreshes.load(Ordering::SeqCst)};
+                    let mut request=v;
+                    request["offline"]=json!(request["type"]=="resync");
+                    request["type"]=json!("refresh");
+                    if request["paths"].is_null() {request["paths"]=json!([]);}
+                    let _=tx.send(Message::Request(request,ticket));
+                }
+                "cancel" if service_protocol => {
+                    refreshes.fetch_add(1,Ordering::SeqCst);
+                    if let Some(stop)=&*input_builds.lock().unwrap() {stop.store(true,Ordering::Relaxed);}
+                }
+                "launchers" => {
+                    if let Some(index) = crate::launchers::index(&v["items"]) {
+                        let previous = std::mem::replace(&mut *launchers.write().unwrap(), Arc::new(index));
+                        drop(previous);
+                    }
+                }
                 "query" => {
                     let ticket = gate.enqueue(&v);
                     let _ = read_tx.send((v, ticket));
@@ -609,6 +736,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
         Ok(())
     })();
     gate.stopped.store(true, Ordering::Relaxed);
+    if let Some(stop)=&*builds.lock().unwrap() {stop.store(true,Ordering::Relaxed);}
     let _ = tx.send(Message::Stop);
     drop(tx);
     drop(read_tx);
@@ -628,6 +756,54 @@ fn reply(request: &Value, result: io::Result<Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn damaged_store_is_quarantined_without_touching_legacy_or_unowned_files() {
+        let root=std::env::temp_dir().join(format!("one-map-recovery-{}-{}",std::process::id(),id().unwrap()));
+        fs::create_dir(&root).unwrap();
+        let legacy=root.join("legacy.bin");fs::write(&legacy,b"legacy snapshot stays intact").unwrap();
+        for failure in ["manifest","missing-manifest","base"] {
+            let dir=root.join(failure);
+            let (state,lock)=State::open_with(None,&dir).unwrap();
+            let base=state.base.clone();let manifest=dir.join(CURRENT);
+            drop(state);drop(lock);
+            let original_base=fs::read(&base).unwrap();
+            let original_manifest=fs::read(&manifest).unwrap();
+            match failure {
+                "manifest"=>fs::write(&manifest,b"not json").unwrap(),
+                "missing-manifest"=>fs::remove_file(&manifest).unwrap(),
+                _=>fs::write(&base,b"not an index image").unwrap(),
+            }
+            let damaged_base=fs::read(&base).unwrap();
+            let damaged_manifest=fs::read(&manifest).ok();
+            let error=State::open_with(None,&dir).err().unwrap();
+            assert!(matches!(error.kind(),io::ErrorKind::InvalidData|io::ErrorKind::NotFound));
+            let (restored,lock)=recover_store(&dir,error).unwrap();
+            let backups:Vec<_>=fs::read_dir(&dir).unwrap().map(Result::unwrap)
+                .filter(|entry|entry.file_name().to_string_lossy().starts_with("recovery-"))
+                .collect();
+            assert_eq!(backups.len(),1);
+            assert_eq!(fs::read(backups[0].path().join(base.file_name().unwrap())).unwrap(),damaged_base);
+            assert_eq!(fs::read(backups[0].path().join(CURRENT)).ok(),damaged_manifest);
+            assert_eq!(fs::read(&legacy).unwrap(),b"legacy snapshot stays intact");
+            assert_ne!(fs::read(&restored.base).unwrap(),b"not an index image");
+            if failure=="base" {assert_eq!(fs::read(backups[0].path().join(CURRENT)).unwrap(),original_manifest);}
+            if failure=="missing-manifest" {assert_eq!(damaged_base,original_base);}
+            drop(restored);drop(lock);
+        }
+        let dir=root.join("foreign");let (state,lock)=State::open_with(None,&dir).unwrap();
+        drop(state);drop(lock);
+        fs::write(dir.join(CURRENT),b"not json").unwrap();
+        let extra=dir.join("unrelated.txt");fs::write(&extra,b"keep me").unwrap();
+        let error=State::open_with(None,&dir).err().unwrap();
+        assert!(recover_store(&dir,error).is_err());
+        assert_eq!(fs::read(&extra).unwrap(),b"keep me");
+        assert!(!fs::read_dir(&dir).unwrap().any(|entry|entry.unwrap().file_name().to_string_lossy().starts_with("recovery-")));
+        fs::remove_file(extra).unwrap();
+        let busy=cache::acquire(&dir.join("writer").to_string_lossy()).unwrap();
+        assert!(recover_store(&dir,bad()).is_err());
+        drop(busy);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn generation_publication_and_orphan_recovery_preserve_confirmed_changes() {
         let dir = std::env::temp_dir().join(format!("one-map-store-{}", std::process::id()));
@@ -747,8 +923,9 @@ mod tests {
             modified: 0, size: 0,
         })], 100).unwrap();
         publish_readers(&published, &state);
-        assert_eq!(old.request(&metadata, &gate, 0).unwrap(), Value::Null);
-        assert_eq!(published.read().unwrap().request(&metadata, &gate, 0).unwrap()["path"], "D:\\New.txt");
+        let launchers = Index::default();
+        assert_eq!(old.request(&metadata, &gate, 0, &launchers).unwrap(), Value::Null);
+        assert_eq!(published.read().unwrap().request(&metadata, &gate, 0, &launchers).unwrap()["path"], "D:\\New.txt");
         let next = id().unwrap();
         compact::run(&state.base, &state.overlay, &paths(&store, &next).0, &AtomicBool::new(false)).unwrap();
         state.install(&next, Vec::new()).unwrap();
@@ -756,8 +933,8 @@ mod tests {
         assert!(old_base.exists(), "A pinned query must retain the retired base");
         let query = json!({"type":"query","scope":71,"query":""});
         let ticket = gate.enqueue(&query);
-        assert_eq!(old.request(&query, &gate, ticket).unwrap()["total"], 1);
-        assert_eq!(published.read().unwrap().request(&query, &gate, ticket).unwrap()["total"], 2);
+        assert_eq!(old.request(&query, &gate, ticket, &launchers).unwrap()["total"], 1);
+        assert_eq!(published.read().unwrap().request(&query, &gate, ticket, &launchers).unwrap()["total"], 2);
         drop(old);
         assert!(!old_base.exists(), "Retired generation is reclaimed after its last reader");
         drop(published);

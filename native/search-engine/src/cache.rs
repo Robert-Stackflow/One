@@ -763,7 +763,6 @@ mod tests {
             writer: Mutex::new(()),
             cache: cache.clone(),
             persistence: Persistence::default(),
-            working: AtomicBool::new(false),
         };
         let original = save(&s, true, 0, &[]).unwrap();
         let mut base = original;

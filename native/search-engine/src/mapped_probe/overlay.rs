@@ -315,7 +315,7 @@ mod tests {
                 for current in ["","D:\\Folder","D:\\目录"] {
                     let v=json!({"query":query,"scope":1,"currentFolder":current,"priorities":[{"path":"D:\\Folder-adjacent","priority":"uncommon"},{"path":"D:\\目录","priority":"high"}]});
                     let gate=Gate::default();let ticket=gate.enqueue(&v);
-                    let mut found=query_image(&file,&v,&gate,ticket,&overlay).unwrap();found.as_object_mut().unwrap().remove("elapsed");
+                    let mut found=query_image(&file,&v,&gate,ticket,&overlay,&Index::default()).unwrap();found.as_object_mut().unwrap().remove("elapsed");
                     assert_eq!(found,expected(&index,&v),"{query} / {current}");
                 }
             }
