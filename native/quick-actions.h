@@ -82,17 +82,29 @@ void work(){while(!ending){Job job;{std::unique_lock lock(jobsMutex);jobsWake.wa
  else if(job.kind==DoPaste&&!modifiers())chord('V');
  }}
 bool validSelection(const Job& job){auto c=config.load();return !ending&&job.revision==c->revision&&job.gesture==gesture&&allowed(*c,job.window)&&GetForegroundWindow()==job.window&&!pressed(VK_CONTROL)&&GetClipboardSequenceNumber()==job.clipboard;}
-std::wstring selectedText(IUIAutomationElement* element){BOOL secret=FALSE;if(FAILED(element->get_CurrentIsPassword(&secret))||secret)return L"";ComPtr<IUIAutomationTextPattern> pattern;if(FAILED(element->GetCurrentPatternAs(UIA_TextPatternId,IID_PPV_ARGS(&pattern)))||!pattern)return L"";ComPtr<IUIAutomationTextRangeArray> ranges;if(FAILED(pattern->GetSelection(&ranges))||!ranges)return L"";int count=0;ranges->get_Length(&count);std::wstring text;for(int i=0;i<std::min(count,32);i++){ComPtr<IUIAutomationTextRange> range;BSTR value=nullptr;if(SUCCEEDED(ranges->GetElement(i,&range))&&range&&SUCCEEDED(range->GetText(1024*1024,&value))&&value){if(!text.empty())text+=L"\r\n";text.append(value,SysStringLen(value));SysFreeString(value);if(text.size()>1024*1024)return L"";}}return text;}
+std::wstring selectedText(IUIAutomationElement* element){ComPtr<IUIAutomationTextPattern> pattern;if(FAILED(element->GetCurrentPatternAs(UIA_TextPatternId,IID_PPV_ARGS(&pattern)))||!pattern)return L"";ComPtr<IUIAutomationTextRangeArray> ranges;if(FAILED(pattern->GetSelection(&ranges))||!ranges)return L"";int count=0;ranges->get_Length(&count);std::wstring text;for(int i=0;i<std::min(count,32);i++){ComPtr<IUIAutomationTextRange> range;BSTR value=nullptr;if(SUCCEEDED(ranges->GetElement(i,&range))&&range&&SUCCEEDED(range->GetText(1024*1024,&value))&&value){if(!text.empty())text+=L"\r\n";text.append(value,SysStringLen(value));SysFreeString(value);if(text.size()>1024*1024)return L"";}}return text;}
+bool nonTextControl(IUIAutomationElement* element,CONTROLTYPEID type){
+ if(type==UIA_ListItemControlTypeId||type==UIA_TreeItemControlTypeId||type==UIA_DataItemControlTypeId){
+  // A visual list item can also contain selectable prose. Only treat it as an
+  // object selection when it exposes the selection-item contract.
+  ComPtr<IUIAutomationSelectionItemPattern> item;
+  return SUCCEEDED(element->GetCurrentPatternAs(UIA_SelectionItemPatternId,IID_PPV_ARGS(&item)))&&item;
+ }
+ return type==UIA_ButtonControlTypeId||type==UIA_ListControlTypeId||type==UIA_TreeControlTypeId||type==UIA_ScrollBarControlTypeId||type==UIA_SliderControlTypeId||type==UIA_ImageControlTypeId||type==UIA_MenuItemControlTypeId||type==UIA_TabItemControlTypeId||type==UIA_HeaderControlTypeId;
+}
 void copyWorker(){HRESULT hr=CoInitializeEx(nullptr,COINIT_MULTITHREADED);HWND clipboardOwner=CreateWindowW(L"STATIC",L"One clipboard",0,0,0,0,0,HWND_MESSAGE,nullptr,GetModuleHandleW(nullptr),nullptr);ComPtr<IUIAutomation> automation;/* Initialized lazily on the first text-selection gesture. */
  auto initialize=[&]{CoCreateInstance(CLSID_CUIAutomation8,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&automation));if(automation){ComPtr<IUIAutomation2> limits;if(SUCCEEDED(automation.As(&limits))){limits->put_ConnectionTimeout(200);limits->put_TransactionTimeout(300);}}};
  while(!ending){Job job;{std::unique_lock lock(copyMutex);copyWake.wait(lock,[]{return ending||selection.has_value();});if(ending)break;job=*selection;selection.reset();}
   std::this_thread::sleep_for(std::chrono::milliseconds(85));if(!validSelection(job)||password(job.window))continue;if(!automation)initialize();if(!automation)continue;
   ComPtr<IUIAutomationTreeWalker> walker;automation->get_ControlViewWalker(&walker);std::wstring text;bool secretSelection=false,nonText=false;
+  // Accessibility providers can be transient while a selection is changing.
+  // Keep the mouse-up to copy latency bounded even if several providers time out.
+  const auto selectionDeadline=GetTickCount64()+450;
   // A drag can end outside the text or can itself focus the window. Prefer
   // its starting element, then the end point and the final focused control.
-  for(int candidate=0;candidate<3&&text.empty()&&!secretSelection;candidate++){
+  for(int candidate=0;candidate<3&&text.empty()&&!secretSelection&&GetTickCount64()<selectionDeadline;candidate++){
    ComPtr<IUIAutomationElement> element;if(candidate==0)automation->ElementFromPoint(job.start,&element);else if(candidate==1)automation->ElementFromPoint(job.point,&element);else automation->GetFocusedElement(&element);
-   for(int depth=0;element&&depth<8;depth++){BOOL secret=FALSE;if(FAILED(element->get_CurrentIsPassword(&secret))){secretSelection=true;break;}if(secret){secretSelection=true;break;}DWORD pid=0;GetWindowThreadProcessId(job.window,&pid);int actual=0;auto processResult=element->get_CurrentProcessId(&actual);CONTROLTYPEID type=0;element->get_CurrentControlType(&type);if(candidate==0&&depth==0)nonText=type==UIA_ButtonControlTypeId||type==UIA_ListItemControlTypeId||type==UIA_ListControlTypeId||type==UIA_TreeItemControlTypeId||type==UIA_TreeControlTypeId||type==UIA_ScrollBarControlTypeId||type==UIA_SliderControlTypeId||type==UIA_ImageControlTypeId||type==UIA_MenuItemControlTypeId||type==UIA_TabItemControlTypeId||type==UIA_HeaderControlTypeId;if(FAILED(processResult)||actual!=(int)pid)break;text=selectedText(element.Get());if(!text.empty())break;ComPtr<IUIAutomationElement> parent;if(!walker||FAILED(walker->GetParentElement(element.Get(),&parent)))break;element=parent;}
+   for(int depth=0;element&&depth<8&&GetTickCount64()<selectionDeadline;depth++){BOOL secret=FALSE;const auto passwordResult=element->get_CurrentIsPassword(&secret);if(SUCCEEDED(passwordResult)&&secret){secretSelection=true;break;}DWORD pid=0;GetWindowThreadProcessId(job.window,&pid);int actual=0;auto processResult=element->get_CurrentProcessId(&actual);if(FAILED(processResult)||actual!=(int)pid)break;CONTROLTYPEID type=0;element->get_CurrentControlType(&type);if(candidate==0&&depth==0)nonText=nonTextControl(element.Get(),type);text=selectedText(element.Get());if(!text.empty())break;ComPtr<IUIAutomationElement> parent;if(!walker||FAILED(walker->GetParentElement(element.Get(),&parent)))break;element=parent;}
   }
   if(secretSelection||!validSelection(job)||modifiers())continue;
   // Copy through the application so its final selection, line endings and rich
