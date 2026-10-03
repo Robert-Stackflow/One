@@ -58,13 +58,19 @@ app.setName('One');
 app.setAppUserModelId('local.one.desktop');
 const testMode = process.env.ONE_TEST_MODE === '1';
 const developmentMode = !app.isPackaged && process.env.ONE_DEVELOPMENT === '1';
+let starting:Promise<void>|undefined;let developmentQuitRequested=false;
 if (process.env.ONE_DATA_DIR && (testMode || developmentMode)) app.setPath('userData', resolve(process.env.ONE_DATA_DIR));
 if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string }>();
 if(developmentMode)process.on('message',(message:any)=>{
  if(message?.type==='one:dev-reload'){for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed())window.webContents.reload();}
- else if(message?.type==='one:dev-quit')app.quit();
+ else if(message?.type==='one:dev-quit'&&!developmentQuitRequested){
+  developmentQuitRequested=true;
+  // A rebuild can arrive before Electron is ready or while services are still
+  // starting. Finish that lifecycle stage before running normal shutdown.
+  void app.whenReady().then(()=>starting).then(()=>app.quit()).catch(error=>{console.error(error);app.quit();});
+ }
 });
 // The development IPC listener keeps Node's event loop alive after Chromium quits.
 // Disconnect only after normal shutdown has flushed application state.
@@ -432,6 +438,6 @@ async function start() {
     input.update(settings);
   }
 }
-if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else { app.on('second-instance', showMain); app.whenReady().then(start).catch(error => { console.error(error); app.quit(); }); }
+if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else { app.on('second-instance', showMain); app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;starting=start();return starting.finally(()=>{starting=undefined;});}).catch(error => { console.error(error); app.quit(); }); }
 app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);maintenance?.stop();systemInformation?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();awake?.stop();topmost?.stop();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });
