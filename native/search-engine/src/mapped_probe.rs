@@ -1,6 +1,8 @@
 //! Diagnostic immutable disk-index experiment. Not used by the live index,
 //! which still owns mutable rows, directory tracking and persistence.
 use super::*;
+mod overlay;
+use overlay::{Candidate, Overlay};
 use std::{
     cmp::Ordering as Order,
     collections::HashMap,
@@ -9,8 +11,10 @@ use std::{
     ptr::NonNull,
 };
 
-const MAGIC: &[u8; 8] = b"ONEMAP02";
-const HEADER: usize = 64;
+const MAGIC: &[u8; 8] = b"ONEMAP03";
+// Keep section alignment unchanged from the 64-byte header. A bare 16-byte
+// generation extension made mask reads cross cache lines on every row.
+const HEADER: usize = 128;
 const PARENT: usize = 32;
 const ROW: usize = 64;
 const MAX_BYTES: u64 = 1024 * 1024 * 1024;
@@ -181,6 +185,10 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
     let mut out = BufWriter::new(final_file);
     let mut header = [0; HEADER];
     header[..8].copy_from_slice(MAGIC);
+    // A generation identity prevents row-ID deltas from attaching to another
+    // base with the same length/count. No full image scan is needed at startup.
+    let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), header[64..].as_mut_ptr(), 16, 2) };
+    if status < 0 { return Err(io::Error::other(format!("索引版本标识生成失败: {status}"))); }
     for (at, value) in [
         (8, intern.len() as u64),
         (16, index.rows.len() as u64),
@@ -215,6 +223,11 @@ pub fn build(args: &[String]) -> io::Result<()> {
         json!({"count":index.rows.len(),"bytes":fs::metadata(target)?.len(),"buildMs":start.elapsed().as_secs_f64()*1000.0}),
     );
     Ok(())
+}
+
+#[link(name = "bcrypt")]
+unsafe extern "system" {
+    fn BCryptGenRandom(algorithm: *mut std::ffi::c_void, buffer: *mut u8, bytes: u32, flags: u32) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -293,6 +306,7 @@ impl Drop for Mapping {
     }
 }
 struct View<'a> {
+    generation: [u8; 16],
     parents: &'a [u8],
     rows: &'a [u8],
     phonetics: &'a [u8],
@@ -340,6 +354,7 @@ impl<'a> View<'a> {
             return Err(bad());
         }
         Ok(Self {
+            generation: bytes.get(64..80).ok_or_else(bad)?.try_into().map_err(|_| bad())?,
             parents: &bytes[HEADER..row_at as usize],
             rows: &bytes[row_at as usize..data_at as usize],
             phonetics: &bytes[data_at as usize..text_at as usize],
@@ -404,6 +419,13 @@ impl<'a> View<'a> {
             flags,
         })
     }
+    fn path(&self, id: usize) -> io::Result<Fragments<'a>> {
+        let start = id.checked_mul(ROW).ok_or_else(bad)?;
+        let bytes = self.rows.get(start..start + ROW).ok_or_else(bad)?;
+        let start = (uint(bytes, 0)? as usize).checked_mul(PARENT).ok_or_else(bad)?;
+        let parent = self.parents.get(start..start + PARENT).ok_or_else(bad)?;
+        Ok(Fragments { prefix:self.text(parent, 0)?, name:self.text(bytes, 4)?, bits:wide(parent, 16)? as u128 | ((wide(parent, 24)? as u128) << 64) })
+    }
     fn count(&self) -> usize {
         self.rows.len() / ROW
     }
@@ -437,10 +459,13 @@ impl<'a> View<'a> {
             name: text,
             bits: 0,
         };
+        self.lower_bound_path(key)
+    }
+    fn lower_bound_path(&self, key: Fragments<'_>) -> io::Result<usize> {
         let (mut low, mut high) = (0, self.count());
         while low < high {
             let mid = low + (high - low) / 2;
-            if self.row(mid)?.path < key {
+            if self.path(mid)? < key {
                 low = mid + 1
             } else {
                 high = mid
@@ -454,6 +479,10 @@ struct Fragments<'a> {
     prefix: &'a str,
     name: &'a str,
     bits: u128,
+}
+impl<'a> Fragments<'a> {
+    fn from_key(path: &'a PathKey) -> Self { Self { prefix:path.prefix(), name:path.name(), bits:path.prefix_bits() } }
+    fn equal_text(&self, text: &str) -> bool { self.prefix.len() + self.name.len() == text.len() && self.starts_with(text) }
 }
 impl SearchPath for Fragments<'_> {
     fn prefix(&self) -> &str {
@@ -560,8 +589,10 @@ impl SearchRow for MappedRow<'_> {
         None
     }
 }
-type Matches<'a> = BinaryHeap<Reverse<(bool, i8, i32, Fragments<'a>, usize, &'static str)>>;
-fn items(heap: &Matches<'_>, view: &View<'_>) -> io::Result<Vec<Value>> {
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Source<'a> { Base(usize), Extra(&'a PathKey) }
+type Matches<'a> = BinaryHeap<Reverse<(bool, i8, i32, Fragments<'a>, Source<'a>, &'static str)>>;
+fn items(heap: &Matches<'_>, view: &View<'_>, overlay: &Overlay) -> io::Result<Vec<Value>> {
     let mut best = heap.iter().map(|r| &r.0).collect::<Vec<_>>();
     best.sort_by(|a, b| {
         b.0.cmp(&a.0)
@@ -570,10 +601,66 @@ fn items(heap: &Matches<'_>, view: &View<'_>) -> io::Result<Vec<Value>> {
             .then(a.3.cmp(&b.3))
     });
     best.iter().map(|r|{
-        let row=view.row(r.4)?;let path=format!("{}{}",row.exact_prefix,row.exact_name);
-        let name=Path::new(&path).file_name().and_then(|s|s.to_str()).unwrap_or(&path);
-        Ok(json!({"path":path,"name":name,"directory":row.directory(),"modified":if row.directory(){row.modified/1_000_000}else{0},"size":0,"matchKind":r.5}))
+        let mut item = match r.4 {
+            Source::Base(id) => {
+                let row=view.row(id)?;let path=format!("{}{}",row.exact_prefix,row.exact_name);
+                let name=Path::new(&path).file_name().and_then(|s|s.to_str()).unwrap_or(&path);
+                json!({"path":path,"name":name,"directory":row.directory(),"modified":if row.directory(){row.modified/1_000_000}else{0},"size":0})
+            }
+            Source::Extra(path) => {
+                let row = overlay.get(path);
+                let mut item = serde_json::to_value(&row.item).map_err(|_| bad())?;
+                if row.item.directory() { item["modified"] = json!(row.item.modified()/1_000_000); }
+                item
+            }
+        };
+        item["matchKind"] = json!(r.5);
+        Ok(item)
     }).collect()
+}
+struct SearchPass<'a, 'q> {
+    heap: Matches<'a>,
+    total: usize,
+    local_total: usize,
+    prefix: &'q str,
+    kind: &'q str,
+    exts: &'q [String],
+    matcher: QueryMatcher<'q>,
+    rules: priority::Rules,
+}
+impl<'a> SearchPass<'a, '_> {
+    #[inline(always)]
+    fn visit(&mut self, row: &impl SearchRow, path: Fragments<'a>, source: Source<'a>, skip_local: bool) {
+        if !accepts(row, self.kind, self.exts) { return; }
+        let Some((points, mode)) = self.matcher.score(row, &path) else { return; };
+        let local = !self.prefix.is_empty() && path.starts_with(self.prefix);
+        if skip_local && local { return; }
+        self.total += 1;
+        if local { self.local_total += 1; }
+        let rank = self.rules.rank(&path);
+        if self.heap.len() < 100 || self.heap.peek().is_some_and(|r| (local, rank, points) > (r.0.0, r.0.1, r.0.2)) {
+            self.heap.push(Reverse((local, rank, points, path, source, mode)));
+            if self.heap.len() > 100 { self.heap.pop(); }
+        }
+    }
+    #[inline(always)]
+    fn candidate(&mut self, view: &View<'a>, candidate: Candidate<'a>, skip_local: bool) -> io::Result<()> {
+        match candidate {
+            Candidate::Base(id) => {
+                let row = view.row(id)?;
+                self.visit(&row, row.path, Source::Base(id), skip_local);
+            }
+            Candidate::Extra(path, row) => self.visit(row, Fragments::from_key(path), Source::Extra(path), skip_local),
+        }
+        Ok(())
+    }
+}
+#[inline(always)]
+fn possible_candidate(view: &View<'_>, candidate: &Candidate<'_>, kind: &str, terms: &[Term], fuzzy: bool) -> io::Result<bool> {
+    match candidate {
+        Candidate::Base(id) => view.possible(*id,kind,terms,fuzzy),
+        Candidate::Extra(_,_) => Ok(true),
+    }
 }
 #[derive(Default)]
 struct Gate {
@@ -604,141 +691,82 @@ impl Gate {
 fn cancelled() -> Value {
     json!({"items":[],"total":0,"elapsed":0,"cancelled":true})
 }
-fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64) -> io::Result<Value> {
-    if !gate.current(v, ticket) {
-        return Ok(cancelled());
-    }
+fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay) -> io::Result<Value> {
+    if !gate.current(v, ticket) { return Ok(cancelled()); }
     if v["query"].as_str().unwrap_or("").len() > 4000 {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "搜索条件过长"));
     }
     let start = Instant::now();
     let map = Mapping::open(path)?;
     let mut view = View::new(map.bytes())?;
-    let (kind, exts, terms) = parse(
-        v["query"].as_str().unwrap_or(""),
-        v["foldersOnly"].as_bool().unwrap_or(false),
-    );
+    overlay.check(&view)?;
+    let (kind, exts, terms) = parse(v["query"].as_str().unwrap_or(""), v["foldersOnly"].as_bool().unwrap_or(false));
     let fuzzy = v["fuzzy"].as_bool().unwrap_or(true);
     let pinyin = v["pinyin"].as_bool().unwrap_or(true);
-    let mut matcher = QueryMatcher::new(&terms, fuzzy, pinyin);
-    let rules = priority::Rules::new(
-        &serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default(),
-    );
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
-    let prefix = if current.is_empty() {
-        String::new()
-    } else {
-        format!("{current}\\")
+    let prefix = if current.is_empty() { String::new() } else { format!("{current}\\") };
+    let upper = format!("{current}]");
+    let progressive = v["progressive"].as_bool().unwrap_or(false) && !prefix.is_empty() && !matches!(kind.as_str(), "app" | "setting");
+    let mut pass = SearchPass {
+        heap:Matches::new(), total:0, local_total:0, prefix:&prefix, kind:&kind, exts:&exts,
+        matcher:QueryMatcher::new(&terms, fuzzy, pinyin),
+        rules:priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default()),
     };
-    let progressive = v["progressive"].as_bool().unwrap_or(false)
-        && !prefix.is_empty()
-        && !matches!(kind.as_str(), "app" | "setting");
-    let mut heap = Matches::new();
-    let (mut total, mut local_total) = (0, 0);
-    let mut visit = |id: usize, skip_local: bool| -> io::Result<()> {
-        if !view.possible(id, &kind, &terms, fuzzy)? {
-            return Ok(());
-        }
-        let row = view.row(id)?;
-        if accepts(&row, &kind, &exts) {
-            if let Some((points, mode)) = matcher.score(&row, &row.path) {
-                let local = !prefix.is_empty() && row.path.starts_with(&prefix);
-                if skip_local && local {
-                    return Ok(());
-                }
-                total += 1;
-                if local {
-                    local_total += 1;
-                }
-                let priority = rules.rank(&row.path);
-                if heap.len() < 100
-                    || heap
-                        .peek()
-                        .is_some_and(|r| (local, priority, points) > (r.0.0, r.0.1, r.0.2))
-                {
-                    heap.push(Reverse((local, priority, points, row.path, id, mode)));
-                    if heap.len() > 100 {
-                        heap.pop();
-                    }
-                }
+    // Merge the same ordered stream for local and global passes. Appending
+    // changes after the base would alter which equal-score rows reach top 100.
+    if progressive {
+        let range = view.lower_bound(&prefix)?..view.lower_bound(&upper)?;
+        if overlay.is_empty() {
+            for (n,id) in range.enumerate() {
+                if n % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
+                if !view.possible(id,&kind,&terms,fuzzy)? { continue; }
+                pass.candidate(&view,Candidate::Base(id),false)?;
+            }
+        } else {
+            for (n, candidate) in overlay.iter(&view, range, Some((&prefix, &upper))).enumerate() {
+                if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
+                let candidate=candidate?;
+                if !possible_candidate(&view,&candidate,&kind,&terms,fuzzy)? { continue; }
+                pass.candidate(&view, candidate, false)?;
             }
         }
-        Ok(())
-    };
-    // Local range is found directly in the sorted disk table, before global scan.
-    if progressive {
-        for (n, id) in
-            (view.lower_bound(&prefix)?..view.lower_bound(&format!("{current}]"))?).enumerate()
-        {
-            if n % 1024 == 0 && !gate.current(v, ticket) {
-                return Ok(cancelled());
-            }
-            visit(id, false)?;
-        }
-    }
-    // End the mutable borrows before publishing local results.
-    drop(visit);
-    if progressive {
-        if !gate.current(v, ticket) {
-            return Ok(cancelled());
-        }
-        output(
-            json!({"id":v["id"],"result":{"items":items(&heap,&view)?,"total":total,"localTotal":local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}),
-        );
+        if !gate.current(v, ticket) { return Ok(cancelled()); }
+        output(json!({"id":v["id"],"result":{"items":items(&pass.heap,&view,overlay)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));
     }
     view.validate()?;
-    for id in 0..if matches!(kind.as_str(), "app" | "setting") {
-        0
-    } else {
-        view.count()
-    } {
-        if id % 1024 == 0 && !gate.current(v, ticket) {
-            return Ok(cancelled());
-        }
-        if !view.possible(id, &kind, &terms, fuzzy)? {
-            continue;
-        }
-        let row = view.row(id)?;
-        if !accepts(&row, &kind, &exts) {
-            continue;
-        }
-        if let Some((points, mode)) = matcher.score(&row, &row.path) {
-            let local = !prefix.is_empty() && row.path.starts_with(&prefix);
-            if progressive && local {
-                continue;
+    if !matches!(kind.as_str(), "app" | "setting") {
+        if overlay.is_empty() {
+            for id in 0..view.count() {
+                if id % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
+                if !view.possible(id,&kind,&terms,fuzzy)? { continue; }
+                pass.candidate(&view,Candidate::Base(id),progressive)?;
             }
-            total += 1;
-            if local {
-                local_total += 1;
-            }
-            let priority = rules.rank(&row.path);
-            if heap.len() < 100
-                || heap
-                    .peek()
-                    .is_some_and(|r| (local, priority, points) > (r.0.0, r.0.1, r.0.2))
-            {
-                heap.push(Reverse((local, priority, points, row.path, id, mode)));
-                if heap.len() > 100 {
-                    heap.pop();
-                }
+        } else {
+            for (n, candidate) in overlay.iter(&view, 0..view.count(), None).enumerate() {
+                if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
+                let candidate=candidate?;
+                if !possible_candidate(&view,&candidate,&kind,&terms,fuzzy)? { continue; }
+                pass.candidate(&view, candidate, progressive)?;
             }
         }
     }
-    if !gate.current(v, ticket) {
-        return Ok(cancelled());
-    }
-    let result = json!({"items":items(&heap,&view)?,"total":total,"localTotal":local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0});
-    drop(heap);
+    if !gate.current(v, ticket) { return Ok(cancelled()); }
+    let result = json!({"items":items(&pass.heap,&view,overlay)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0});
+    drop(pass);
     drop(map);
     Ok(result)
 }
 pub fn serve(args: &[String]) -> io::Result<()> {
     let path = Path::new(args.get(2).ok_or_else(bad)?);
-    {
+    let journal = args.get(3).map(std::path::PathBuf::from);
+    let journal_lock = journal.as_ref().map(|path| cache::acquire(&path.to_string_lossy())).transpose()?;
+    let initial_overlay = {
         let map = Mapping::open(path)?;
         let view = View::new(map.bytes())?;
-        output(json!({"ready":true,"count":view.count()}));
-    }
+        let overlay = Overlay::load(&view, journal.as_deref())?;
+        output(json!({"ready":true,"count":overlay.count(&view)}));
+        overlay
+    };
     let gate = Arc::new(Gate::default());
     let (tx, rx) = std::sync::mpsc::channel::<(Value, u64)>();
     let worker_gate = gate.clone();
@@ -747,8 +775,22 @@ pub fn serve(args: &[String]) -> io::Result<()> {
     // constructed and dropped in this worker; raw mapping handles never cross
     // threads. Tickets isolate independent search windows.
     let worker = thread::spawn(move || {
+        let _journal_lock = journal_lock;
+        let mut overlay = initial_overlay;
         for (v, ticket) in rx {
-            match query_image(&worker_path, &v, &worker_gate, ticket) {
+            let result = if v["type"] == "apply" {
+                (|| {
+                    let changes = serde_json::from_value(v["changes"].clone()).map_err(|_| bad())?;
+                    let map = Mapping::open(&worker_path)?;
+                    let view = View::new(map.bytes())?;
+                    let limit = v["maxEntries"].as_u64().unwrap_or(10_000_000).min(10_000_000) as usize;
+                    let next = overlay.stage(&view, changes, limit)?;
+                    if let Some(path) = &journal { next.save(path)?; }
+                    overlay = next;
+                    Ok(overlay.stats(&view))
+                })()
+            } else { query_image(&worker_path, &v, &worker_gate, ticket, &overlay) };
+            match result {
                 Ok(result) => output(json!({"id":v["id"],"result":result})),
                 Err(e) => output(json!({"id":v["id"],"error":e.to_string()})),
             }
@@ -767,6 +809,7 @@ pub fn serve(args: &[String]) -> io::Result<()> {
                 let ticket = gate.enqueue(&v);
                 let _ = tx.send((v, ticket));
             }
+            "apply" => { let _ = tx.send((v, 0)); }
             "release-query" => {
                 gate.scopes
                     .lock()

@@ -9,7 +9,9 @@ async function main(){
   const cache=path.join(profile,side+'.bin');await fs.writeFile(cache,source.bytes);if(source.delta)await fs.writeFile(cache+'.delta',source.delta);
   images[side]=path.join(profile,side+'-map.bin');const result=await execute(executables[side],['mapped-build',cache,images[side],config],{windowsHide:true,timeout:60000,maxBuffer:1024*1024});builds[side]=JSON.parse(result.stdout.trim());
  }
- assert.equal(builds.after.count,builds.before.count);assert.equal(builds.after.bytes,builds.before.bytes);
+ assert.equal(builds.after.count,builds.before.count);
+ // Format 03 adds a 16-byte identity with padding that preserves row alignment.
+ assert.equal(builds.after.bytes,builds.before.bytes+64);
  const rules=[{path:'D:\\Repositories',priority:'uncommon'},{path:'D:\\Repositories\\One',priority:'high'},{path:'C:\\Users',priority:'high'},{path:'D:\\Ruida',priority:'normal'},{path:'C:\\Windows',priority:'uncommon'}];
  const cases=[...queries.map(query=>({query})),{query:'ext:json package',priorities:rules},{query:'folder: downloads',priorities:rules},{query:'ext:json package',fuzzy:false,pinyin:false},{query:'jdbg',fuzzy:false,pinyin:true},{query:'ext:json package',progressive:true}];
  const report={date:new Date().toISOString(),note:'Immutable diagnostic image, not live app integration. Same full snapshot and delta, interleaved fresh processes, OS file cache warm. Cold-storage performance not measured.',hashes,builds,rounds:[]};

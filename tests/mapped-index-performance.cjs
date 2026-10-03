@@ -3,11 +3,13 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const {frozen,run,queries}=require('./index-load-memory.cjs'),execute=promisify(execFile),delay=ms=>new Promise(r=>setTimeout(r,ms));
 const Memory=koffi.struct('OneMappedMemory',{cb:'uint32',PageFaultCount:'uint32',PeakWorkingSetSize:'size_t',WorkingSetSize:'size_t',QuotaPeakPagedPoolUsage:'size_t',QuotaPagedPoolUsage:'size_t',QuotaPeakNonPagedPoolUsage:'size_t',QuotaNonPagedPoolUsage:'size_t',PagefileUsage:'size_t',PeakPagefileUsage:'size_t',PrivateUsage:'size_t'});
 const kernel=koffi.load('kernel32.dll'),psapi=koffi.load('psapi.dll'),open=kernel.func('void * __stdcall OpenProcess(uint32,int,uint32)'),close=kernel.func('int __stdcall CloseHandle(void *)'),getMemory=psapi.func('int __stdcall GetProcessMemoryInfo(void *, _Out_ OneMappedMemory *, uint32)');
+const setAffinity=kernel.func('int __stdcall SetProcessAffinityMask(void *,size_t)');
 function memory(handle){const value={cb:koffi.sizeof(Memory)};assert.ok(getMemory(handle,value,value.cb));return{resident:value.WorkingSetSize,private:value.PrivateUsage,peakResident:value.PeakWorkingSetSize,peakPrivate:value.PeakPagefileUsage};}
 const FileTime=koffi.struct('OneMappedTime',{low:'uint32',high:'uint32'}),getTimes=kernel.func('int __stdcall GetProcessTimes(void *, _Out_ OneMappedTime *, _Out_ OneMappedTime *, _Out_ OneMappedTime *, _Out_ OneMappedTime *)');
 function cpuTime(handle){const c={},e={},s={},u={};assert.ok(getTimes(handle,c,e,s,u));return(s.high*2**32+s.low+u.high*2**32+u.low)/10000;}
 async function mapped(exe,image,cases,verifyConcurrency=false){
- const start=performance.now(),child=spawn(exe,['mapped-query',image],{windowsHide:true}),handle=open(0x410,0,child.pid);assert.ok(handle);
+ const affinity=Number(process.env.ONE_INDEX_AFFINITY||0);assert.ok(Number.isSafeInteger(affinity)&&affinity>=0);
+ const start=performance.now(),child=spawn(exe,['mapped-query',image],{windowsHide:true}),handle=open(affinity?0x610:0x410,0,child.pid);assert.ok(handle);
  let buffer='',ready,count,serial=0;const pending=new Map(),errors=[];
  const send=value=>child.stdin.write(JSON.stringify(value)+'\n');
  const exited=new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('Probe exit '+code)));});exited.catch(()=>{});
@@ -20,6 +22,7 @@ async function mapped(exe,image,cases,verifyConcurrency=false){
  }});
  const query=options=>new Promise((resolve,reject)=>{const id=++serial,start=performance.now(),cpu=cpuTime(handle);pending.set(id,{resolve,reject,start,cpu,timer:setTimeout(()=>{pending.delete(id);reject(Error('Probe timeout '+options.query));},30000)});send({type:'query',id,fuzzy:true,pinyin:true,currentFolder:'D:\\Repositories\\One',...options});});
  try{
+  if(affinity)assert.ok(setAffinity(handle,affinity),'Unable to pin this diagnostic helper');
   const until=performance.now()+10000;while(ready===undefined&&performance.now()<until){assert.equal(child.exitCode,null);await delay(20);}assert.ok(ready!==undefined);
   await delay(100);const loaded=memory(handle),results=[];
   for(const options of cases){const timings=[];let value;for(let n=0;n<2;n++){value=await query(options);assert.ok(!value.result.cancelled);timings.push({wallMs:value.wallMs,nativeMs:value.result.elapsed,partialMs:value.partial?.wallMs,cpuMs:value.cpuMs});}results.push({query:options.query,options,total:value.result.total,items:value.result.items,timings,partial:value.partial});}
@@ -39,7 +42,7 @@ async function mapped(exe,image,cases,verifyConcurrency=false){
   }
   // Remapping never keeps the large index resident between requests.
   await delay(200);const settled=memory(handle);assert.deepEqual(errors,[]);send({type:'stop'});child.stdin.end();await exited;
-  return{count,readyMs:ready,loaded,settled,queries:results,concurrency};
+  return{count,affinity,readyMs:ready,loaded,settled,queries:results,concurrency};
  }finally{for(const item of pending.values())clearTimeout(item.timer);close(handle);if(child.exitCode===null){child.kill();await exited.catch(()=>{});}}
 }
 async function main(){
