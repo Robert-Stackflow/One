@@ -54,7 +54,7 @@ fn under(path: &str, root: &str) -> bool {
 fn erase(index: &mut Index, path: &str) -> bool {
     let k = key(path);
     let removed = index.rows.remove(&PathKey::lookup(&k));
-    if removed.as_ref().is_some_and(|r| r.item.directory) {
+    if removed.as_ref().is_some_and(|r| r.item.directory()) {
         let prefix = format!("{k}\\");
         let keys: Vec<_> = index
             .rows
@@ -92,31 +92,110 @@ struct Entry {
 #[derive(Clone)]
 struct StoredEntry {
     path: stored_path::StoredPath,
-    display_name: Option<Box<DisplayName>>,
+    metadata: Metadata,
+}
+#[derive(Clone)]
+enum Metadata {
+    File,
+    FileText(Box<SearchText>),
+    Directory(u64),
+    DirectoryText(Box<DirectoryText>),
+    Launcher(Box<LauncherMetadata>),
+}
+#[derive(Clone)]
+struct DirectoryText {
+    modified: u64,
+    text: SearchText,
+}
+#[derive(Clone)]
+struct LauncherMetadata {
+    name: Box<str>,
     directory: bool,
     modified: u64,
     size: u64,
-}
-#[derive(Clone)]
-struct DisplayName {
-    name: Box<str>,
+    text: Option<Box<SearchText>>,
 }
 impl StoredEntry {
     fn new(path: String, directory: bool) -> Self {
         let path = stored_path::StoredPath::new(path);
         Self {
             path,
-            display_name: None,
-            directory,
-            modified: 0,
-            size: 0,
+            metadata: if directory { Metadata::Directory(0) } else { Metadata::File },
+        }
+    }
+    fn directory(&self) -> bool {
+        match &self.metadata {
+            Metadata::File | Metadata::FileText(_) => false,
+            Metadata::Directory(_) | Metadata::DirectoryText(_) => true,
+            Metadata::Launcher(value) => value.directory,
+        }
+    }
+    fn modified(&self) -> u64 {
+        match &self.metadata {
+            Metadata::File | Metadata::FileText(_) => 0,
+            Metadata::Directory(value) => *value,
+            Metadata::DirectoryText(value) => value.modified,
+            Metadata::Launcher(value) => value.modified,
+        }
+    }
+    fn set_modified(&mut self, modified: u64) {
+        match &mut self.metadata {
+            Metadata::File | Metadata::FileText(_) => debug_assert_eq!(modified, 0),
+            Metadata::Directory(value) => *value = modified,
+            Metadata::DirectoryText(value) => value.modified = modified,
+            Metadata::Launcher(value) => value.modified = modified,
+        }
+    }
+    fn size(&self) -> u64 {
+        match &self.metadata {
+            Metadata::Launcher(value) => value.size,
+            _ => 0,
+        }
+    }
+    fn text(&self) -> Option<&SearchText> {
+        match &self.metadata {
+            Metadata::FileText(value) => Some(value),
+            Metadata::DirectoryText(value) => Some(&value.text),
+            Metadata::Launcher(value) => value.text.as_deref(),
+            _ => None,
+        }
+    }
+    fn set_text(&mut self, text: Box<SearchText>) {
+        self.metadata = match std::mem::replace(&mut self.metadata, Metadata::File) {
+            Metadata::File => Metadata::FileText(text),
+            Metadata::Directory(modified) => Metadata::DirectoryText(Box::new(DirectoryText {
+                modified,
+                text: *text,
+            })),
+            Metadata::Launcher(mut value) => { value.text = Some(text); Metadata::Launcher(value) },
+            _ => unreachable!("search text already stored"),
+        };
+    }
+    fn set_lower(&mut self, lower: String) {
+        match &mut self.metadata {
+            Metadata::FileText(value) => value.lower = Some(lower.into_boxed_str()),
+            Metadata::DirectoryText(value) => value.text.lower = Some(lower.into_boxed_str()),
+            Metadata::Launcher(value) => value.text.get_or_insert_with(Default::default).lower = Some(lower.into_boxed_str()),
+            _ => self.set_text(Box::new(SearchText { lower: Some(lower.into_boxed_str()), phonetics: None })),
+        }
+    }
+    fn take_text(&mut self) -> Option<Box<SearchText>> {
+        let metadata = std::mem::replace(&mut self.metadata, Metadata::File);
+        match metadata {
+            Metadata::FileText(value) => Some(value),
+            Metadata::DirectoryText(value) => { self.metadata = Metadata::Directory(value.modified); Some(Box::new(value.text)) },
+            Metadata::Launcher(mut value) => { let text = value.text.take(); self.metadata = Metadata::Launcher(value); text },
+            other => { self.metadata = other; None },
         }
     }
     fn search_name(&self) -> &str {
         self.path.key().name()
     }
     fn display_name(&self) -> Option<&str> {
-        self.display_name.as_ref().map(|value| value.name.as_ref())
+        match &self.metadata {
+            Metadata::Launcher(value) => Some(value.name.as_ref()),
+            _ => None,
+        }
     }
     fn entry(&self) -> Entry {
         let path = self.path.display().into_owned();
@@ -132,18 +211,20 @@ impl StoredEntry {
         Entry {
             path,
             name,
-            directory: self.directory,
-            modified: self.modified,
-            size: self.size,
+            directory: self.directory(),
+            modified: self.modified(),
+            size: self.size(),
         }
     }
-    fn launcher(entry: Entry) -> Self {
+    fn launcher(entry: Entry, text: Option<Box<SearchText>>) -> Self {
         let mut item = Self::new(entry.path, entry.directory);
-        item.display_name = Some(Box::new(DisplayName {
+        item.metadata = Metadata::Launcher(Box::new(LauncherMetadata {
             name: entry.name.into_boxed_str(),
+            directory: entry.directory,
+            modified: entry.modified,
+            size: entry.size,
+            text,
         }));
-        item.modified = entry.modified;
-        item.size = entry.size;
         item
     }
 }
@@ -167,9 +248,9 @@ impl Serialize for StoredEntry {
         Display {
             path: &path,
             name,
-            directory: self.directory,
-            modified: self.modified,
-            size: self.size,
+            directory: self.directory(),
+            modified: self.modified(),
+            size: self.size(),
         }
         .serialize(serializer)
     }
@@ -182,11 +263,16 @@ struct Phonetics {
 #[derive(Clone, Serialize)]
 struct Record {
     item: StoredEntry,
-    text: Option<Box<SearchText>>,
-    bits: u128,
+    bits: MaskBits,
     seen: u64,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Copy, Serialize)]
+struct MaskBits([u64; 2]);
+impl MaskBits {
+    fn new(bits: u128) -> Self { Self([bits as u64, (bits >> 64) as u64]) }
+    fn value(self) -> u128 { self.0[0] as u128 | ((self.0[1] as u128) << 64) }
+}
+#[derive(Clone, Default, Serialize)]
 struct SearchText {
     lower: Option<Box<str>>,
     phonetics: Option<Box<Phonetics>>,
@@ -198,17 +284,15 @@ impl Record {
             .and_then(|s| s.to_str())
             .unwrap_or(&path)
             .to_lowercase();
-        let item = StoredEntry::new(path, directory);
+        let mut item = StoredEntry::new(path, directory);
         let name = item.search_name();
         if lower.is_ascii() {
+            let bits = MaskBits::new(mask(&lower));
+            if lower != name {
+                item.set_text(Box::new(SearchText { lower: Some(lower.into_boxed_str()), phonetics: None }));
+            }
             return Self {
-                bits: mask(&lower),
-                text: (lower != name).then(|| {
-                    Box::new(SearchText {
-                        lower: Some(lower.into_boxed_str()),
-                        phonetics: None,
-                    })
-                }),
+                bits,
                 seen,
                 item,
             };
@@ -259,35 +343,31 @@ impl Record {
                 }),
             })
         });
+        if let Some(text) = text { item.set_text(text); }
         Self {
             item,
-            text,
-            bits,
+            bits: MaskBits::new(bits),
             seen,
         }
     }
     fn lower(&self) -> &str {
-        self.text
-            .as_ref()
+        self.item.text()
             .and_then(|text| text.lower.as_deref())
             .unwrap_or_else(|| self.item.search_name())
     }
     fn phonetic(&self) -> impl Iterator<Item = &str> {
-        self.text
-            .iter()
+        self.item.text()
+            .into_iter()
             .filter_map(|text| text.phonetics.as_ref())
             .flat_map(|p| p.full.iter().chain(p.initials.iter()))
             .map(|s| s.as_ref())
     }
     fn set_lower(&mut self, lower: String) {
-        self.text
-            .get_or_insert_with(|| {
-                Box::new(SearchText {
-                    lower: None,
-                    phonetics: None,
-                })
-            })
-            .lower = Some(lower.into_boxed_str());
+        self.item.set_lower(lower);
+    }
+    fn set_launcher(&mut self, entry: Entry) {
+        let text = self.item.take_text();
+        self.item = StoredEntry::launcher(entry, text);
     }
 }
 #[derive(Default, Serialize)]
@@ -624,7 +704,7 @@ fn accepts(row: &Record, kind: &str, exts: &[String]) -> bool {
     if kind == "app" || kind == "setting" {
         return false;
     }
-    if kind == "folder" && !item.directory || !kind.is_empty() && kind != "folder" && item.directory
+    if kind == "folder" && !item.directory() || !kind.is_empty() && kind != "folder" && item.directory()
     {
         return false;
     }
@@ -651,9 +731,10 @@ fn score(
     fuzzy: bool,
     pinyin: bool,
 ) -> Option<(i32, &'static str)> {
-    let mut total = if row.item.directory { 3 } else { 0 };
+    let mut total = if row.item.directory() { 3 } else { 0 };
     let mut mode = "exact";
     let lower = row.lower();
+    let bits = row.bits.value();
     let file_name = std::ptr::eq(lower, path.name());
     for term in terms {
         let t = &term.text;
@@ -661,7 +742,7 @@ fn score(
         // name matches nor subsequences/pinyin can match path terms. One-edit
         // matching can remove a single separator, so retain that exception.
         if file_name && term.separators > 0 && (!fuzzy || !term.typo || term.separators > 1) {
-            if term.bits & (row.bits | path.prefix_bits()) == term.bits && path.contains_parent(t) {
+            if term.bits & (bits | path.prefix_bits()) == term.bits && path.contains_parent(t) {
                 total += 180;
                 continue;
             }
@@ -672,9 +753,9 @@ fn score(
         // Missing characters rule out all matches except eligible ASCII typos.
         // Launcher display names and exceptional spellings keep the full path check.
         if file_name
-            && term.bits & row.bits != term.bits
-            && !(fuzzy && term.typo && (term.bits & !row.bits).count_ones() <= 2)
-            && term.bits & (row.bits | path.prefix_bits()) != term.bits
+            && term.bits & bits != term.bits
+            && !(fuzzy && term.typo && (term.bits & !bits).count_ones() <= 2)
+            && term.bits & (bits | path.prefix_bits()) != term.bits
         {
             return None;
         }
@@ -691,13 +772,13 @@ fn score(
             value = 540;
             mode = "pinyin";
         } else if if file_name {
-            term.bits & (row.bits | path.prefix_bits()) == term.bits && path.contains_parent(t)
+            term.bits & (bits | path.prefix_bits()) == term.bits && path.contains_parent(t)
         } else {
             path.contains(t)
         } {
             value = 180;
         } else if fuzzy && term.fuzzy {
-            if term.bits & row.bits == term.bits {
+            if term.bits & bits == term.bits {
                 if let Some(s) = subsequence(lower, t) {
                     value = 250 + s.min(150);
                     mode = "fuzzy";
@@ -713,7 +794,7 @@ fn score(
                     }
                 }
             }
-            if value < 0 && term.typo && (term.bits & !row.bits).count_ones() <= 2 {
+            if value < 0 && term.typo && (term.bits & !bits).count_ones() <= 2 {
                 let stem = lower.rsplit_once('.').map(|(s, _)| s).unwrap_or(lower);
                 if one_edit(stem, t) || stem.split([' ', '-', '_']).any(|s| one_edit(s, t)) {
                     value = 160;
@@ -749,7 +830,7 @@ fn ranked_items(heap: &Ranked<'_>, index: &Index, extra: &rows::Rows) -> Vec<Val
     best.iter().map(|(_, _, path, mode)| {
         let item = &index.rows.get(path).or_else(|| extra.get(path)).unwrap().item;
         let mut value = serde_json::to_value(item).unwrap();
-        if item.directory { value["modified"] = json!(item.modified / 1_000_000); }
+        if item.directory() { value["modified"] = json!(item.modified() / 1_000_000); }
         value["matchKind"] = json!(mode);
         value
     }).collect()
@@ -936,8 +1017,8 @@ fn main() {
                     let mut index = s.index.write().unwrap();
                     index.tracking = false;
                     for row in index.rows.values_mut() {
-                        if row.item.directory {
-                            row.item.modified = 0;
+                        if row.item.directory() {
+                            row.item.set_modified(0);
                         }
                     }
                 }
@@ -973,7 +1054,7 @@ fn main() {
                     {
                         let mut row = Record::new(entry.name.clone(), false, 0);
                         row.set_lower(entry.name.to_lowercase());
-                        row.item = StoredEntry::launcher(entry);
+                        row.set_launcher(entry);
                         index.put(row);
                     }
                     *s.launchers.write().unwrap() = index;
@@ -995,8 +1076,8 @@ fn main() {
         let mut index = s.index.write().unwrap();
         if index.tracking || interrupted {
             for row in index.rows.values_mut() {
-                if row.item.directory {
-                    row.item.modified = 0;
+                if row.item.directory() {
+                    row.item.set_modified(0);
                 }
             }
             index.tracking = false;
@@ -1029,21 +1110,21 @@ mod tests {
             );
         }
         let ascii = Record::new("D:\\report.txt".into(), false, 0);
-        assert!(ascii.text.is_none());
+        assert!(ascii.item.text().is_none());
         assert_eq!(ascii.phonetic().count(), 0);
         let accented = Record::new("D:\\Résumé.txt".into(), false, 0);
         assert_eq!(accented.phonetic().count(), 0);
-        assert!(std::mem::size_of::<Record>() <= 96);
+        assert!(std::mem::size_of::<Record>() <= 72);
         let entry = Entry {
             path: "one-launcher:setting:display".into(),
             name: "显示器 分辨率 缩放".into(),
             directory: false,
-            size: 0,
-            modified: 0,
+            size: 42,
+            modified: 123456789,
         };
         let mut row = Record::new(entry.name.clone(), false, 0);
         row.set_lower(entry.name.to_lowercase());
-        row.item = StoredEntry::launcher(entry.clone());
+        row.set_launcher(entry.clone());
         assert_eq!(
             serde_json::to_value(&row.item).unwrap(),
             serde_json::to_value(entry).unwrap()
@@ -1136,7 +1217,7 @@ mod tests {
         };
         let mut row = Record::new(entry.name.clone(), false, 0);
         row.set_lower(entry.name.to_lowercase());
-        row.item = StoredEntry::launcher(entry);
+        row.set_launcher(entry);
         let (_, _, terms) = parse("\"specialfolder\\run.exe\"", false);
         assert!(
             score(&row, row.item.path.key(), &terms, false, false).is_some(),

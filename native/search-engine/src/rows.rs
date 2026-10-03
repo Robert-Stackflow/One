@@ -232,11 +232,11 @@ mod tests {
         );
         let key = PathKey::lookup("d:\\mixed\\file-04096.txt");
         let mut replacement = Record::new("d:\\MIXED\\FILE-04096.TXT".into(), true, 999);
-        replacement.item.modified = 12345;
-        assert!(!rows.put(replacement).unwrap().item.directory);
+        replacement.item.set_modified(12345);
+        assert!(!rows.put(replacement).unwrap().item.directory());
         assert_eq!(rows.len(), count);
         assert_eq!(rows[&key].item.path.display(), "d:\\MIXED\\FILE-04096.TXT");
-        assert_eq!(rows[&key].item.modified, 12345);
+        assert_eq!(rows[&key].item.modified(), 12345);
         rows.values_mut().for_each(|row| row.seen = 100);
         assert!(rows.values().all(|row| row.seen == 100));
         let keys = rows
@@ -245,7 +245,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(keys.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(rows.range(key.clone()..).next().unwrap().0 == &key);
-        assert!(rows.remove(&key).unwrap().item.directory);
+        assert!(rows.remove(&key).unwrap().item.directory());
         assert!(rows.get(&key).is_none());
         rows.clear();
         assert!(rows.is_empty());

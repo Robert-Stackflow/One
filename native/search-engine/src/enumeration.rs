@@ -32,7 +32,7 @@ impl<F: Fn(PathBuf, fs::Metadata) -> Option<Record> + Sync, C: Fn() -> bool + Sy
         if self.stopped() {
             return;
         }
-        if !row.item.directory {
+        if !row.item.directory() {
             let _ = self.tx.send(vec![row]);
             return;
         }
@@ -117,8 +117,8 @@ pub fn walk(
             return None;
         }
         let mut row = Record::new(path, meta.is_dir(), generation);
-        if row.item.directory {
-            row.item.modified = incremental::stamp(&meta);
+        if row.item.directory() {
+            row.item.set_modified(incremental::stamp(&meta));
         }
         Some(row)
     };

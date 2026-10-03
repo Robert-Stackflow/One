@@ -218,7 +218,7 @@ fn get_entry(r: &mut impl Read, path: String) -> io::Result<Entry> {
 }
 fn restore(item: Entry) -> Record {
     let mut row = Record::new(item.path, item.directory, 0);
-    row.item.modified = item.modified;
+    row.item.set_modified(item.modified);
     row
 }
 fn decode_batch(index: &mut Index, batch: &mut Vec<Entry>) -> io::Result<()> {
@@ -250,8 +250,8 @@ fn encoded_size(index: &Index, config: &[u8]) -> u64 {
             + var_size(tail as u64)
             + tail as u64
             + 1
-            + if row.item.directory {
-                var_size(row.item.modified)
+            + if row.item.directory() {
+                var_size(row.item.modified())
             } else {
                 0
             };
@@ -276,7 +276,7 @@ fn encode(
     for row in index.rows.values() {
         let path = row.item.path.display();
         put_path(w, &path, &previous)?;
-        put_meta(w, row.item.directory, row.item.modified)?;
+        put_meta(w, row.item.directory(), row.item.modified())?;
         previous = path;
     }
     Ok(())
@@ -665,9 +665,9 @@ mod tests {
                 row.item.path.display(),
                 format!("D:\\MixedCase\\文件夹\\Report-{n:06}.txt")
             );
-            assert_eq!(row.item.directory, n % 7 == 0);
+            assert_eq!(row.item.directory(), n % 7 == 0);
             assert_eq!(
-                row.item.modified,
+                row.item.modified(),
                 if n % 7 == 0 { 1234 + n as u64 } else { 0 }
             );
         }
@@ -797,7 +797,7 @@ mod tests {
         }
         for p in ["D:\\bench\\文件夹", "\\\\server\\share\\目录"] {
             let mut row = Record::new(p.into(), true, 1);
-            row.item.modified = 123456789;
+            row.item.set_modified(123456789);
             index.put(row);
         }
         let config = Config {

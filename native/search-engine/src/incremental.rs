@@ -49,8 +49,8 @@ fn verification_batch(
     let mut last = None;
     for (k, row) in index.rows.range((start, Bound::Unbounded)).take(ROWS) {
         last = Some(k);
-        if row.item.directory && scope.contains_path(k) {
-            directories.push((row.item.path.clone(), row.item.modified));
+        if row.item.directory() && scope.contains_path(k) {
+            directories.push((row.item.path.clone(), row.item.modified()));
         }
     }
     (directories, last.cloned())
@@ -73,8 +73,8 @@ fn update_dir(s: &Shared, path: &str, value: u64, generation: u64) {
         return;
     }
     if let Some(row) = index.rows.get_mut(&PathKey::lookup(key(path))) {
-        if row.item.modified != value {
-            row.item.modified = value;
+        if row.item.modified() != value {
+            row.item.set_modified(value);
             s.persistence
                 .changes(generation, vec![cache::Change::Put(row.item.entry())]);
         }
@@ -151,7 +151,7 @@ fn reconcile(
         .unwrap()
         .rows
         .get(&PathKey::lookup(key(path)))
-        .map(|r| (r.item.directory, r.item.path.display().replace('/', "\\")));
+        .map(|r| (r.item.directory(), r.item.path.display().replace('/', "\\")));
     if previous
         .as_ref()
         .is_some_and(|r| r.1 != path.replace('/', "\\"))
@@ -229,7 +229,7 @@ fn reconcile(
             .unwrap()
             .rows
             .get(&PathKey::lookup(&k))
-            .map(|r| (r.item.directory, r.item.path.to_string()));
+            .map(|r| (r.item.directory(), r.item.path.to_string()));
         if previous.as_ref().map(|r| r.0) != Some(kind.is_dir())
             || previous.as_ref().is_some_and(|r| r.1 != child)
         {
