@@ -733,8 +733,18 @@ impl Gate {
 fn cancelled() -> Value {
     json!({"items":[],"total":0,"elapsed":0,"cancelled":true})
 }
-fn global_partial(v:&Value,pass:&SearchPass<'_, '_>,view:&View<'_>,overlay:&Overlay,launchers:&Index,start:Instant)->io::Result<()> {
-    output(json!({"id":v["id"],"result":{"items":items(&pass.heap,view,overlay,launchers)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true,"partialScope":"global"}}));
+fn global_partial(v:&Value,pass:&SearchPass<'_, '_>,early_launchers:Option<&SearchPass<'_, '_>>,view:&View<'_>,overlay:&Overlay,launchers:&Index,start:Instant)->io::Result<()> {
+    let mut heap=pass.heap.clone();
+    if let Some(early)=early_launchers {
+        for candidate in &early.heap {
+            if heap.len()<100 || heap.peek().is_some_and(|worst| (candidate.0.0,candidate.0.1,candidate.0.2)>(worst.0.0,worst.0.1,worst.0.2)) {
+                heap.push(*candidate);
+                if heap.len()>100 {heap.pop();}
+            }
+        }
+    }
+    let total=pass.total+early_launchers.map_or(0,|early|early.total);
+    output(json!({"id":v["id"],"result":{"items":items(&heap,view,overlay,launchers)?,"total":total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true,"partialScope":"global"}}));
     Ok(())
 }
 fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, launchers: &Index) -> io::Result<Value> {
@@ -766,6 +776,26 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
         matcher:QueryMatcher::new(&terms, fuzzy, pinyin),
         rules:priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default()),
     };
+    // Program and settings matches are already in memory. Keep them in a
+    // separate preview so the final file-first top-100 tie behavior is intact.
+    let early_launchers=if progressive && !local_progressive && v["includeLaunchers"].as_bool().unwrap_or(false) {
+        let mut preview=SearchPass {
+            heap:Matches::new(),total:0,local_total:0,prefix:&prefix,kind:&kind,exts:&exts,
+            matcher:QueryMatcher::new(&terms,fuzzy,pinyin),rules:pass.rules.clone(),
+        };
+        for (path,row) in &launchers.rows {
+            preview.visit(row,Fragments::from_key(path),Source::Launcher(path),false);
+        }
+        Some(preview)
+    } else {None};
+    let mut partial_count=0;
+    let mut partial_at=Instant::now();
+    if early_launchers.as_ref().is_some_and(|early|early.total>0) {
+        if !gate.current(v,ticket) {return Ok(cancelled());}
+        global_partial(v,&pass,early_launchers.as_ref(),&view,overlay,launchers,start)?;
+        partial_count=1;
+        partial_at=Instant::now();
+    }
     // Merge the same ordered stream for local and global passes. Appending
     // changes after the base would alter which equal-score rows reach top 100.
     if local_progressive {
@@ -800,8 +830,6 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
             view.validate()?;
             if let Some(verified) = verified_text {verified.store(true,Ordering::Release);}
         }
-        let mut partial_at=Instant::now();
-        let mut partial_count=0;
         if overlay.is_empty() {
             for id in 0..view.count() {
                 if id % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
@@ -810,7 +838,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
                 }
                 if progressive && !local_progressive && id % 4096 == 0 && partial_count < 3 && pass.total > 0 && partial_at.elapsed().as_millis() >= if partial_count==0 {60} else {200} {
                     if !gate.current(v,ticket) { return Ok(cancelled()); }
-                    global_partial(v,&pass,&view,overlay,launchers,start)?;
+                    global_partial(v,&pass,early_launchers.as_ref(),&view,overlay,launchers,start)?;
                     partial_count+=1;partial_at=Instant::now();
                 }
             }
@@ -823,7 +851,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
                 }
                 if progressive && !local_progressive && n % 4096 == 0 && partial_count < 3 && pass.total > 0 && partial_at.elapsed().as_millis() >= if partial_count==0 {60} else {200} {
                     if !gate.current(v,ticket) { return Ok(cancelled()); }
-                    global_partial(v,&pass,&view,overlay,launchers,start)?;
+                    global_partial(v,&pass,early_launchers.as_ref(),&view,overlay,launchers,start)?;
                     partial_count+=1;partial_at=Instant::now();
                 }
             }

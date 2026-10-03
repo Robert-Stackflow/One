@@ -13,7 +13,9 @@ impl Level {
 }
 // Keep tiny rule sets as direct comparisons. Larger sets share their common
 // directory prefixes, so a matching row never checks every configured root.
+#[derive(Clone)]
 pub struct Rules { linear: Vec<(String, i8)>, tree: Option<Node> }
+#[derive(Clone)]
 struct Node { label: Box<[u8]>, rank: Option<i8>, children: Vec<Node> }
 impl Node {
     fn empty() -> Self { Self {label: Box::default(), rank: None, children: Vec::new()} }
