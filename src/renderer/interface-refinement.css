@@ -191,6 +191,9 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .confirmation-popover:before{content:"";position:absolute;left:var(--arrow-left);width:8px;height:8px;background:var(--surface);transform:rotate(45deg)}
 .confirmation-popover[data-side=above]:before{bottom:-5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 .confirmation-popover[data-side=below]:before{top:-5px;border-left:1px solid var(--line);border-top:1px solid var(--line)}
+.confirmation-popover:popover-open{animation:confirmation-enter 140ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes confirmation-enter{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.confirmation-popover:popover-open{animation:none}}
 .menu-confirm-window #app{height:100%;background:var(--surface);color:var(--fg)}
 .menu-confirm-window button{transition:opacity .12s,transform .12s var(--ease)}
 .menu-confirm-dialog{height:100%;display:flex;flex-direction:column}.menu-confirm-dialog header{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 18px;-webkit-app-region:drag;font-size:11px;color:var(--muted)}
