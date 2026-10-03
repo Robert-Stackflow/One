@@ -7,6 +7,7 @@ mod catalog;
 mod filesystem;
 mod store;
 mod import;
+mod scan;
 use overlay::{Candidate, Overlay};
 use std::{
     cmp::Ordering as Order,
@@ -31,6 +32,7 @@ pub fn command(args: &[String]) -> Option<io::Result<()>> {
         "mapped-query" => serve(args),
         "mapped-store" => store::serve(args),
         "mapped-import" => import::command(args),
+        "mapped-scan" => scan::command(args),
         _ => return None,
     })
 }

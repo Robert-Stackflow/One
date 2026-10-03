@@ -4,7 +4,7 @@
 use super::*;
 use cache::stream::{Journal, Snapshot, read_entry, write_entry};
 use overlay::Mutation;
-use std::{io::Read, path::PathBuf};
+use std::{io::{Read, Seek}, path::PathBuf};
 
 fn check(stop: &AtomicBool) -> io::Result<()> {
     if stop.load(Ordering::Relaxed) {
@@ -13,21 +13,21 @@ fn check(stop: &AtomicBool) -> io::Result<()> {
         Ok(())
     }
 }
-struct Run {
+pub(super) struct Run {
     path: PathBuf,
     count: u64,
 }
-struct Reader {
+pub(super) struct Reader {
     input: BufReader<File>,
     previous: String,
     remaining: u64,
 }
 impl Reader {
-    fn open(run: &Run) -> io::Result<Self> {
+    pub(super) fn open(run: &Run) -> io::Result<Self> {
         let mut input = BufReader::new(File::open(&run.path)?);
         let mut head = [0; 16];
         input.read_exact(&mut head)?;
-        if &head[..8] != b"ONERUN01"
+        if &head[..8] != b"ONERUN02"
             || u64::from_le_bytes(head[8..].try_into().unwrap()) != run.count
         {
             return Err(bad());
@@ -38,7 +38,10 @@ impl Reader {
             remaining: run.count,
         })
     }
-    fn next(&mut self) -> io::Result<Option<Entry>> {
+    pub(super) fn next(&mut self) -> io::Result<Option<Entry>> {
+        Ok(self.next_ordered()?.map(|(_, entry)| entry))
+    }
+    fn next_ordered(&mut self) -> io::Result<Option<(u64, Entry)>> {
         if self.remaining == 0 {
             let mut byte = [0];
             if self.input.read(&mut byte)? != 0 {
@@ -46,27 +49,36 @@ impl Reader {
             }
             return Ok(None);
         }
+        let mut order = [0; 8];
+        self.input.read_exact(&mut order)?;
         let entry = read_entry(&mut self.input, &mut self.previous)?;
         self.remaining -= 1;
-        Ok(Some(entry))
+        Ok(Some((u64::from_le_bytes(order), entry)))
     }
 }
-struct Sort {
+pub(super) struct Sort {
     target: PathBuf,
     temps: Temps,
     serial: usize,
     levels: Vec<Vec<Run>>,
-    runs: usize,
+    pub(super) runs: usize,
+    sequence: u64,
+    replace_duplicates: bool,
 }
 impl Sort {
-    fn new(target: &Path) -> Self {
+    pub(super) fn new(target: &Path) -> Self {
         Self {
             target: target.into(),
             temps: Temps(Vec::new()),
             serial: 0,
             levels: Vec::new(),
             runs: 0,
+            sequence: 0,
+            replace_duplicates: false,
         }
+    }
+    pub(super) fn scan(target: &Path) -> Self {
+        Self { replace_duplicates: true, ..Self::new(target) }
     }
     fn output(&mut self, count: u64) -> io::Result<(Run, BufWriter<File>)> {
         let path =
@@ -79,21 +91,32 @@ impl Sort {
             .open(&path)?;
         self.temps.0.push(path.clone());
         let mut out = BufWriter::new(file);
-        out.write_all(b"ONERUN01")?;
+        out.write_all(b"ONERUN02")?;
         out.write_all(&count.to_le_bytes())?;
         Ok((Run { path, count }, out))
     }
-    fn spill(&mut self, mut rows: Vec<(String, Entry)>, stop: &AtomicBool) -> io::Result<()> {
-        rows.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    pub(super) fn spill(&mut self, rows: Vec<(String, Entry)>, stop: &AtomicBool) -> io::Result<()> {
+        let mut rows: Vec<_> = rows.into_iter().map(|(path, entry)| {
+            let order = self.sequence;
+            self.sequence += 1;
+            (path, order, entry)
+        }).collect();
+        rows.sort_unstable_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+        if self.replace_duplicates {
+            // Mutable Index::put keeps the last enumerated spelling. Retain
+            // its ordinal through every merge level, independent of run order.
+            rows.dedup_by(|a, b| a.0 == b.0);
+        }
         let (run, mut out) = self.output(rows.len() as u64)?;
         let (mut previous, mut last) = (String::new(), None);
-        for (n, (path, item)) in rows.into_iter().enumerate() {
+        for (n, (path, order, item)) in rows.into_iter().enumerate() {
             if n % 1024 == 0 {
                 check(stop)?;
             }
             if last.as_ref().is_some_and(|s| s >= &path) {
                 return Err(bad());
             }
+            out.write_all(&order.to_le_bytes())?;
             write_entry(&mut out, &item, &previous)?;
             previous = item.path;
             last = Some(path);
@@ -117,40 +140,55 @@ impl Sort {
     }
     fn merge(&mut self, inputs: Vec<Run>, stop: &AtomicBool) -> io::Result<Run> {
         let count = inputs.iter().map(|r| r.count).sum();
-        let (result, mut out) = self.output(count)?;
+        let (mut result, mut out) = self.output(count)?;
         let mut readers = inputs
             .iter()
             .map(Reader::open)
             .collect::<io::Result<Vec<_>>>()?;
-        let mut items: Vec<Option<Entry>> = (0..readers.len()).map(|_| None).collect();
+        let mut items: Vec<Option<(u64, Entry)>> = (0..readers.len()).map(|_| None).collect();
         let mut heap = BinaryHeap::new();
         for (id, reader) in readers.iter_mut().enumerate() {
-            if let Some(item) = reader.next()? {
-                heap.push(Reverse((key(&item.path), id)));
+            if let Some(item) = reader.next_ordered()? {
+                heap.push(Reverse((key(&item.1.path), id)));
                 items[id] = Some(item);
             }
         }
-        let (mut last, mut previous, mut written) = (None, String::new(), 0);
+        let (mut previous, mut written, mut consumed) = (String::new(), 0, 0);
+        let mut pending: Option<(String, u64, Entry)> = None;
         while let Some(Reverse((path, id))) = heap.pop() {
-            if written % 1024 == 0 {
+            if consumed % 1024 == 0 {
                 check(stop)?;
             }
-            if last.as_ref().is_some_and(|s| s >= &path) {
-                return Err(bad());
+            consumed += 1;
+            let (order, item) = items[id].take().ok_or_else(bad)?;
+            if pending.as_ref().is_some_and(|p| p.0 == path) {
+                if !self.replace_duplicates { return Err(bad()); }
+                if order > pending.as_ref().unwrap().1 { pending = Some((path, order, item)); }
+            } else {
+                if let Some((_, order, item)) = pending.take() {
+                    out.write_all(&order.to_le_bytes())?;
+                    write_entry(&mut out, &item, &previous)?;
+                    previous = item.path;
+                    written += 1;
+                }
+                pending = Some((path, order, item));
             }
-            last = Some(path);
-            let item = items[id].take().ok_or_else(bad)?;
-            write_entry(&mut out, &item, &previous)?;
-            previous = item.path;
-            written += 1;
-            if let Some(item) = readers[id].next()? {
-                heap.push(Reverse((key(&item.path), id)));
+            if let Some(item) = readers[id].next_ordered()? {
+                heap.push(Reverse((key(&item.1.path), id)));
                 items[id] = Some(item);
             }
         }
-        if written != count {
+        if let Some((_, order, item)) = pending {
+            out.write_all(&order.to_le_bytes())?;
+            write_entry(&mut out, &item, &previous)?;
+            written += 1;
+        }
+        if consumed != count || (!self.replace_duplicates && written != count) {
             return Err(bad());
         }
+        result.count = written;
+        out.seek(io::SeekFrom::Start(8))?;
+        out.write_all(&written.to_le_bytes())?;
         out.flush()?;
         drop(out);
         drop(readers);
@@ -160,7 +198,7 @@ impl Sort {
         }
         Ok(result)
     }
-    fn finish(&mut self, stop: &AtomicBool) -> io::Result<Option<Run>> {
+    pub(super) fn finish(&mut self, stop: &AtomicBool) -> io::Result<Option<Run>> {
         let mut runs: Vec<_> = self.levels.drain(..).flatten().collect();
         while runs.len() > 1 {
             let mut next = Vec::new();
@@ -175,6 +213,14 @@ impl Sort {
             runs = next;
         }
         Ok(runs.pop())
+    }
+    pub(super) fn checkpoint(&mut self, stop: &AtomicBool) -> io::Result<usize> {
+        let Some(run) = self.finish(stop)? else { return Ok(0) };
+        let count = usize::try_from(run.count).map_err(|_|bad())?;
+        // Retain the sorted disk run, not its rows, when discovery must
+        // continue because duplicate keys did not consume the entry budget.
+        self.carry(run,0,stop)?;
+        Ok(count)
     }
 }
 fn batch(
@@ -194,7 +240,7 @@ fn batch(
     }
     Ok(())
 }
-fn image_from(
+pub(super) fn image_from(
     mut next: impl FnMut() -> io::Result<Option<Entry>>,
     target: &Path,
     stop: &AtomicBool,
@@ -397,6 +443,40 @@ mod tests {
                 disk.phonetic().collect::<Vec<_>>()
             );
         }
+    }
+    #[test]
+    fn scan_runs_keep_the_last_spelling_across_merge_levels() {
+        let dir = std::env::temp_dir().join(format!("one-scan-sort-{}-{}",std::process::id(),now()));
+        fs::create_dir(&dir).unwrap();
+        let stop = AtomicBool::new(false);
+        {
+            let mut sort = Sort::scan(&dir.join("rows.bin"));
+            let mut expected = BTreeMap::new();
+            // More than one complete 16-way level, duplicate paths within a
+            // packet and across runs, with the last spelling/type changing.
+            for round in 0..34 {
+                let mut rows = Vec::new();
+                for n in (0..64).rev() {
+                    for spelling in [format!("D:\\Mixed\\Report-{n:03}.TXT"),format!("d:\\mixed\\report-{n:03}.txt")] {
+                        let item = entry(spelling,n%3==round%3,(round+1)*1_000_000);
+                        let normalized = key(&item.path);
+                        expected.insert(normalized.clone(),item.clone());
+                        rows.push((normalized,item));
+                    }
+                }
+                sort.spill(rows,&stop).unwrap();
+                if round==16 {assert_eq!(sort.checkpoint(&stop).unwrap(),64);}
+            }
+            let run = sort.finish(&stop).unwrap().unwrap();
+            assert_eq!(run.count,64);
+            let mut reader = Reader::open(&run).unwrap();
+            for (_, item) in expected {
+                assert_eq!(serde_json::to_value(reader.next().unwrap().unwrap()).unwrap(),serde_json::to_value(item).unwrap());
+            }
+            assert!(reader.next().unwrap().is_none());
+        }
+        assert_eq!(fs::read_dir(&dir).unwrap().count(),0);
+        fs::remove_dir(dir).unwrap();
     }
     #[test]
     fn unordered_snapshot_and_nonadjacent_duplicates_use_bounded_external_merge() {
