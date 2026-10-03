@@ -117,6 +117,7 @@ struct BaseLease {
     base: PathBuf,
     delta: PathBuf,
     retired: AtomicBool,
+    verified_text: AtomicBool,
     mapping: Mutex<Weak<Mapping>>,
 }
 impl BaseLease {
@@ -125,6 +126,7 @@ impl BaseLease {
         Ok(Arc::new(Self {
             file: Some(file), base: base.into(), delta: delta.into(),
             retired: AtomicBool::new(false),
+            verified_text: AtomicBool::new(false),
             mapping: Mutex::new(Weak::new()),
         }))
     }
@@ -166,7 +168,7 @@ impl ReadSnapshot {
             if !gate.current(request, ticket) { return Ok(cancelled()); }
             let start = Instant::now();
             let mapping = self.base.mapping()?;
-            query_mapping(&mapping, request, gate, ticket, &self.overlay, launchers, start)
+            query_mapping(&mapping, request, gate, ticket, &self.overlay, launchers, start, Some(&self.base.verified_text))
         }
     }
 }
@@ -933,7 +935,13 @@ mod tests {
         assert!(old_base.exists(), "A pinned query must retain the retired base");
         let query = json!({"type":"query","scope":71,"query":""});
         let ticket = gate.enqueue(&query);
+        assert!(!old.base.verified_text.load(Ordering::Acquire));
         assert_eq!(old.request(&query, &gate, ticket, &launchers).unwrap()["total"], 1);
+        assert!(old.base.verified_text.load(Ordering::Acquire));
+        assert_eq!(old.request(&query, &gate, ticket, &launchers).unwrap()["total"], 1);
+        assert!(!published.read().unwrap().base.verified_text.load(Ordering::Acquire));
+        assert_eq!(published.read().unwrap().request(&query, &gate, ticket, &launchers).unwrap()["total"], 2);
+        assert!(published.read().unwrap().base.verified_text.load(Ordering::Acquire));
         assert_eq!(published.read().unwrap().request(&query, &gate, ticket, &launchers).unwrap()["total"], 2);
         drop(old);
         assert!(!old_base.exists(), "Retired generation is reclaimed after its last reader");

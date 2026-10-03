@@ -399,9 +399,9 @@ impl<'a> View<'a> {
         self.data.text(bytes, at)
     }
     fn validate(&mut self) -> io::Result<()> {
-        // Local results only decode their own strings. Validate the complete
-        // text pool once before global scan; str::get then checks each boundary
-        // without re-reading whole shared prefixes or pinyin strings.
+        // Local results only decode their own strings. A full text validation
+        // precedes the first global scan of each leased generation; str::get
+        // then checks each boundary without re-reading shared text.
         self.data.checked = Some(std::str::from_utf8(self.data.bytes).map_err(|_| bad())?);
         Ok(())
     }
@@ -742,9 +742,9 @@ fn query_image(path: &Path, v: &Value, gate: &Gate, ticket: u64, overlay: &Overl
     }
     let start = Instant::now();
     let map = Mapping::open(path)?;
-    query_mapping(&map, v, gate, ticket, overlay, launchers, start)
+    query_mapping(&map, v, gate, ticket, overlay, launchers, start, None)
 }
-fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, launchers: &Index, start: Instant) -> io::Result<Value> {
+fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &Overlay, launchers: &Index, start: Instant, verified_text: Option<&AtomicBool>) -> io::Result<Value> {
     if !gate.current(v, ticket) { return Ok(cancelled()); }
     if v["query"].as_str().unwrap_or("").len() > 4000 {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "搜索条件过长"));
@@ -787,7 +787,16 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
     if !matches!(kind.as_str(), "app" | "setting") {
         // App/settings queries do not consume file rows or their text. Keep
         // header/generation checks, but do not touch the entire text section.
-        view.validate()?;
+        if verified_text.is_some_and(|verified| verified.load(Ordering::Acquire)) {
+            // SAFETY: BaseLease holds a deny-write handle for this immutable
+            // generation from the first validation until the last reader exits.
+            // The mapped bytes and text-section bounds cannot change between
+            // queries. Diagnostic queries pass None and always validate.
+            view.data.checked = Some(unsafe {std::str::from_utf8_unchecked(view.data.bytes)});
+        } else {
+            view.validate()?;
+            if let Some(verified) = verified_text {verified.store(true,Ordering::Release);}
+        }
         if overlay.is_empty() {
             for id in 0..view.count() {
                 if id % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
