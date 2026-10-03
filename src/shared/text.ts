@@ -3,24 +3,40 @@ import type { TextRequest } from './types';
 const toSimple = OpenCC.Converter({ from: 'twp', to: 'cn' });
 const toTraditional = OpenCC.Converter({ from: 'cn', to: 'twp' });
 export const lines = (text: string) => text.replace(/\r\n?/g, '\n').split('\n');
+/** Keep only bounded output pieces instead of several arrays of every input line. */
+function mapLines(text:string,map:(line:string)=>string|undefined,separator='\r\n'){
+  const blocks:string[]=[],parts:string[]=[];let at=0,lf=text.indexOf('\n'),cr=text.indexOf('\r'),size=0,emitted=false;
+  while(true){
+    const end=lf<0?cr:cr<0?lf:Math.min(lf,cr),value=map(text.slice(at,end<0?text.length:end));
+    if(value!==undefined){
+      if(emitted){parts.push(separator);size+=separator.length;}emitted=true;parts.push(value);size+=value.length;
+      if(size>=65536||parts.length>=4096){blocks.push(parts.join(''));parts.length=0;size=0;}
+    }
+    if(end<0)break;
+    at=end+(end===cr&&lf===end+1?2:1);
+    if(lf>=0&&lf<at)lf=text.indexOf('\n',at);
+    if(cr>=0&&cr<at)cr=text.indexOf('\r',at);
+  }
+  if(parts.length)blocks.push(parts.join(''));return blocks.join('');
+}
 export function transform(request: TextRequest): string {
   const { text, operation } = request;
   if (typeof text !== 'string' || text.length > 10_000_000) throw new Error('文本超过本版处理限制');
   switch (operation) {
-    case 'clean': return lines(text).map(x => x.trim()).filter(Boolean).join('\r\n');
-    case 'unique': return [...new Set(lines(text))].join('\r\n');
+    case 'clean': return mapLines(text,line=>line.trim()||undefined);
+    case 'unique': {const seen=new Set<string>();return mapLines(text,line=>{if(seen.has(line))return;seen.add(line);return line;});}
     case 'sort': return lines(text).sort().join('\r\n');
     case 'simple': return toSimple(text);
     case 'traditional': return toTraditional(text);
     case 'half': return text.replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, ' ');
     case 'full': return text.replace(/[!-~]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0)).replace(/ /g, '\u3000');
-    case 'trim': return lines(text).map(x=>x.trim()).join('\r\n');
+    case 'trim': return mapLines(text,line=>line.trim());
     case 'trimEnd': return text.replace(/[^\S\r\n]+(?=\r?$)/gm,'');
-    case 'empty': return lines(text).filter(x=>x.trim()).join('\r\n');
-    case 'paragraphSpace': return lines(text).filter(x=>x.trim()).join('\r\n\r\n');
+    case 'empty': return mapLines(text,line=>line.trim()?line:undefined);
+    case 'paragraphSpace': return mapLines(text,line=>line.trim()?line:undefined,'\r\n\r\n');
     case 'joinParagraph': return text.replace(/\r\n?/g,'\n').replace(/([^\n])\n(?=[^\n \t\u3000])/g,'$1').replace(/\n/g,'\r\n');
-    case 'indent': return lines(text).map(x=>x.trim()?'\u3000\u3000'+x.trimStart():x).join('\r\n');
-    case 'layout': return lines(text).filter(x=>x.trim()).map(x=>'\u3000\u3000'+x.trim()).join('\r\n');
+    case 'indent': return mapLines(text,line=>line.trim()?'\u3000\u3000'+line.trimStart():line);
+    case 'layout': return mapLines(text,line=>{const value=line.trim();return value?'\u3000\u3000'+value:undefined;});
     case 'punctuation': {const map:Record<string,string>={',':'，',';':'；',':':'：','!':'！','?':'？','(':'（',')':'）'};return text.replace(/(?<!\d)[,;:!?()]|[,;:!?()](?!\d)/g,c=>map[c]).replace(/"([^"\r\n]*)"/g,'“$1”').replace(/'([^'\r\n]*)'/g,'‘$1’').replace(/\.{3,6}/g,'……');}
     case 'vertical': {const from='︐︑︒︓︔︕︖︵︶︷︸︹︺︻︼︽︾︿﹀﹁﹂﹃﹄',to='，、。：；！？（）{}〔〕【】《》〈〉「」『』';return text.replace(/[︐-﹄]/g,c=>from.includes(c)?to[from.indexOf(c)]:c);}
     case 'upper':return text.toLocaleUpperCase();case 'lower':return text.toLocaleLowerCase();
