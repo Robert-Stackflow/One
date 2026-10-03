@@ -731,6 +731,20 @@ fn score(
     fuzzy: bool,
     pinyin: bool,
 ) -> Option<(i32, &'static str)> {
+    // Plain file and directory names are identical to their normalized path
+    // keys. Their stored mask already covers the name and every pinyin form;
+    // the parent mask covers path matches. Reject impossible candidates before
+    // resolving the name or search metadata for millions of rows.
+    if matches!(row.item.metadata, Metadata::File | Metadata::Directory(_)) {
+        let bits = row.bits.value();
+        let all_bits = bits | path.prefix_bits();
+        if terms.iter().any(|term| {
+            term.bits & all_bits != term.bits
+                && !(fuzzy && term.typo && (term.bits & !bits).count_ones() <= 2)
+        }) {
+            return None;
+        }
+    }
     let mut total = if row.item.directory() { 3 } else { 0 };
     let mut mode = "exact";
     let lower = row.lower();
@@ -901,9 +915,11 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         if !accepts(row, &kind, &extensions) {
             continue;
         }
-        let local = !prefix.is_empty() && path.starts_with(&prefix);
-        if progressive && local { continue; }
         if let Some((points, mode)) = score(row, path, &terms, fuzzy, pinyin) {
+            // Most rows fail the text match. Resolve current-folder priority only
+            // for matches, where it can affect the count and ranking.
+            let local = !prefix.is_empty() && path.starts_with(&prefix);
+            if progressive && local { continue; }
             total += 1;
             if local { local_total += 1; }
             retain_match(&mut heap, path, points, mode, local);
