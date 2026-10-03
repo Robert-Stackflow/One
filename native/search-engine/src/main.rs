@@ -715,14 +715,13 @@ fn accepts(row: &Record, kind: &str, exts: &[String]) -> bool {
     if !exts.is_empty() && !exts.iter().any(|value| value == ext) {
         return false;
     }
-    let group = match kind {
-        "doc" => "txt md pdf doc docx ppt pptx xls xlsx csv rtf epub ods ipynb",
-        "pic" => "png jpg jpeg webp gif bmp tif tiff svg avif heic",
-        "video" => "mp4 mkv webm avi mov m4v",
-        "audio" => "mp3 flac wav m4a ogg aac opus",
-        _ => return true,
-    };
-    group.split(' ').any(|s| s == ext)
+    match kind {
+        "doc" => matches!(ext, "txt" | "md" | "pdf" | "doc" | "docx" | "ppt" | "pptx" | "xls" | "xlsx" | "csv" | "rtf" | "epub" | "ods" | "ipynb"),
+        "pic" => matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svg" | "avif" | "heic"),
+        "video" => matches!(ext, "mp4" | "mkv" | "webm" | "avi" | "mov" | "m4v"),
+        "audio" => matches!(ext, "mp3" | "flac" | "wav" | "m4a" | "ogg" | "aac" | "opus"),
+        _ => true,
+    }
 }
 fn score(
     row: &Record,

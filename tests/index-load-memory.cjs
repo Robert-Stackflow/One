@@ -4,6 +4,8 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const Memory=koffi.struct('OneRestoreMemory',{cb:'uint32',PageFaultCount:'uint32',PeakWorkingSetSize:'size_t',WorkingSetSize:'size_t',QuotaPeakPagedPoolUsage:'size_t',QuotaPagedPoolUsage:'size_t',QuotaPeakNonPagedPoolUsage:'size_t',QuotaNonPagedPoolUsage:'size_t',PagefileUsage:'size_t',PeakPagefileUsage:'size_t',PrivateUsage:'size_t'});
 const kernel=koffi.load('kernel32.dll'),psapi=koffi.load('psapi.dll'),open=kernel.func('void * __stdcall OpenProcess(uint32, int, uint32)'),close=kernel.func('int __stdcall CloseHandle(void *)'),getMemory=psapi.func('int __stdcall GetProcessMemoryInfo(void *, _Out_ OneRestoreMemory *, uint32)');
+const FileTime=koffi.struct('OneQueryFileTime',{low:'uint32',high:'uint32'}),getTimes=kernel.func('int __stdcall GetProcessTimes(void *, _Out_ OneQueryFileTime *, _Out_ OneQueryFileTime *, _Out_ OneQueryFileTime *, _Out_ OneQueryFileTime *)');
+function cpuTime(handle){const created={},exited={},system={},user={};assert.ok(getTimes(handle,created,exited,system,user));return(system.high*2**32+system.low+user.high*2**32+user.low)/10000;}
 const queries=['QQ','季度','jidubaogao','jdbg','ext:json package','folder: downloads','x beauty','reprot','无匹配_2049','"QQ"','"d:\\repositories\\one"','"repositories\\one\\package.json"','"D:/Repositories/One"'];
 function memory(handle){const m={cb:koffi.sizeof(Memory)};assert.ok(getMemory(handle,m,m.cb));return{resident:m.WorkingSetSize,private:m.PrivateUsage,peakResident:m.PeakWorkingSetSize,peakPrivate:m.PeakPagefileUsage};}
 async function frozen(source){
@@ -34,7 +36,7 @@ async function run(exe,cache,source,cases=queries,verifyConcurrency=false){
   send({type:'init',settings:source.config});const until=performance.now()+60000;
   while(!ready&&performance.now()<until){assert.equal(child.exitCode,null,'Index stopped while loading');await delay(20);}assert.ok(ready,'Cache restore timeout');assert.ok(state.count>0&&state.count<=source.config.maxEntries,JSON.stringify(state));
   await delay(250);const loaded=sample(),results=[];
-  for(const entry of cases){const text=typeof entry==='string'?entry:entry.query,options=typeof entry==='string'?{}:entry,timings=[];let result;for(let n=0;n<2;n++){const start=performance.now();result=await query(text,false,options);assert.ok(!result.cancelled);timings.push({wallMs:performance.now()-start,nativeMs:result.elapsed});}results.push({query:text,options,total:result.total,items:result.items,timings});}
+  for(const entry of cases){const text=typeof entry==='string'?entry:entry.query,options=typeof entry==='string'?{}:entry,timings=[];let result;for(let n=0;n<2;n++){const cpu=cpuTime(handle),start=performance.now();result=await query(text,false,options);assert.ok(!result.cancelled);timings.push({wallMs:performance.now()-start,nativeMs:result.elapsed,cpuMs:cpuTime(handle)-cpu});}results.push({query:text,options,total:result.total,items:result.items,timings});}
   let concurrency;
   if(verifyConcurrency){
    const qq=results.find(r=>r.query==='QQ'),quarter=results.find(r=>r.query==='季度');assert.ok(qq&&quarter);
