@@ -44,7 +44,7 @@ export class TextService {
    worker.on('exit',code=>{if(this.pool.get(owner)===current){this.pool.delete(owner);if(current.job){clearTimeout(current.job.timer);if(current.job.cache)void this.remove(current.job.cache);current.job.reject(new Error(`文本服务已退出 (${code})`));}}});
   }
   clearTimeout(slot.idle);const current=slot,cache:Cache|undefined=task.kind==='compare'?{id:randomUUID(),directory:''}:undefined;if(cache)cache.directory=join(this.root,cache.id);
-  return new Promise<T>((resolve,reject)=>{current.job={resolve,reject,cache,heavy:!!cache||(task.text?.length||0)>1_000_000,timer:setTimeout(()=>this.cancel(owner,'文本处理超时'),30000)};current.worker.postMessage({...task,...(cache?{cache}:{})});});
+  return new Promise<T>((resolve,reject)=>{current.job={resolve,reject,cache,heavy:!!cache||task.kind==='batch'||(task.text?.length||0)>1_000_000,timer:setTimeout(()=>this.cancel(owner,'文本处理超时'),30000)};current.worker.postMessage({...task,...(cache?{cache}:{})});});
  }
  async page(owner:number,id:unknown,page:unknown):Promise<TextDifference[]>{
   const cache=this.comparisons.get(owner);if(!cache||id!==cache.id||!Number.isSafeInteger(page)||(page as number)<0||(page as number)>=Math.ceil(cache.report!.count/cache.report!.pageSize))throw new Error('差异记录已关闭或页码无效');
