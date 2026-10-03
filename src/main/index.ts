@@ -109,7 +109,8 @@ const menuConfirmation=new MenuConfirmation(()=>windowFor('command-confirm',{wid
 type MenuPanel={window:BrowserWindow;readiness:PopupReadiness;depth:number;point:{x:number;y:number};items:import('../shared/search').MenuNode[];bar:import('../shared/search').MenuBar;source:string;revision:number;left:boolean};
 const menuPanels:MenuPanel[]=[];
 function menuFor(sender:number){return menuPanels.find(p=>!p.window.isDestroyed()&&p.window.webContents.id===sender);}
-function hideMenus(from=0){for(const p of menuPanels)if(p.depth>=from&&!p.window.isDestroyed())p.window.hide();if(!from)menuRevision++;}
+let menuIdleCleanup:NodeJS.Timeout|undefined;
+function hideMenus(from=0){for(const p of menuPanels)if(p.depth>=from&&!p.window.isDestroyed())p.window.hide();if(!from){menuRevision++;clearTimeout(menuIdleCleanup);if(menuPanels.some(p=>!p.window.isDestroyed())){menuIdleCleanup=setTimeout(()=>{for(const p of menuPanels)if(!p.window.isDestroyed()&&!p.window.isVisible())p.window.destroy();},60000);menuIdleCleanup.unref();}}}
 function popupFocus(w:BrowserWindow){if(w.isDestroyed())return;w.setAlwaysOnTop(true,'pop-up-menu');w.show();w.moveTop();w.focus();const hwnd=Number(w.getNativeWindowHandle().readBigUInt64LE());if(!searchBridge?.activate(hwnd))void activatePreviewWindow(hwnd).catch(()=>{});}
 function menuPanel(depth:number){let p=menuPanels[depth];if(p&&!p.window.isDestroyed())return p;
  const w=windowFor('search-menu',{width:286,height:100,minWidth:260,minHeight:40,frame:false,skipTaskbar:true,resizable:false,hasShadow:true},'&depth='+depth);
@@ -123,7 +124,7 @@ function positionMenu(p:MenuPanel,width:number,height:number){if(p.window.isDest
 }
 async function favoriteCurrentFolder(){await menuContextReady;const path=searchContext.currentFolder;if(!path)throw new Error('当前文件夹不可用');if(!settings.search.bookmarks.includes(path))await saveSettings(current=>{if(current.search.bookmarks.length>=64)throw new Error('收藏最多包含 64 个文件夹');return {...current,search:{...current.search,bookmarks:[...new Set([...current.search.bookmarks,path])]}};});}
 function sendMenu(p:MenuPanel){if(!p.depth)p.window.webContents.send('one:menu-bar',p.bar);p.window.webContents.send('one:menu-reset',p.items);}
-async function showMenu(hwnd:number){hideMenus();searchWindow?.hide();const revision=menuRevision,p=menuPanel(0);p.point=screen.getCursorScreenPoint();p.source='';positionMenu(p,286,250);
+async function showMenu(hwnd:number){hideMenus();clearTimeout(menuIdleCleanup);searchWindow?.hide();const revision=menuRevision,p=menuPanel(0);p.point=screen.getCursorScreenPoint();p.source='';positionMenu(p,286,250);
  searchContext={kind:'menu',hwnd,pid:0,created:'',folders:[]};
  menuContextReady=searchBridge.context(hwnd).then(c=>{if(revision===menuRevision){searchContext={...c,kind:'menu'};menuService.updateContext(searchContext);}}).catch(e=>{if(revision===menuRevision)echo(e.message);});
  menuNodes=await menuService.open(searchContext);if(revision!==menuRevision)return;p.items=menuNodes;p.bar=menuService.toolbar();menuService.updateContext(searchContext);positionMenu(p,286,Math.max(40,menuNodes.reduce((n,i)=>n+(i.kind==='separator'?13:35),16+(p.bar.top.length?40:0)+(p.bar.bottom.length?40:0))));sendMenu(p);
@@ -133,9 +134,12 @@ async function showMenu(hwnd:number){hideMenus();searchWindow?.hide();const revi
 }
 function searchPopup(embedded:boolean){let w=cachedSearch.get(embedded);if(w&&!w.isDestroyed())return w;
  w=windowFor('search',{width:embedded?520:740,height:embedded?inlineSearchBaseHeight:64,minWidth:embedded?240:520,minHeight:embedded?inlineSearchBaseHeight:64,frame:false,titleBarStyle:'default',titleBarOverlay:false,hasShadow:!embedded,thickFrame:!embedded,transparent:embedded,...(embedded?{backgroundColor:'#00000000',roundedCorners:false}:{}),resizable:false,skipTaskbar:true},embedded?'&embedded=1':'');cachedSearch.set(embedded,w);const own=w,windowId=w.webContents.id;
+ let idleCleanup:NodeJS.Timeout|undefined;
+ w.on('hide',()=>{if(embedded)return;clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},60000);idleCleanup.unref();});
+ w.on('show',()=>clearTimeout(idleCleanup));
  w.on('blur',()=>{setTimeout(()=>{if(!own.isDestroyed()&&!nativeMenus.has(windowId)&&!own.isFocused())own.hide();},150);});
  // The BrowserWindow and its webContents are already destroyed when 'closed' fires.
- w.on('close',e=>{if(!quitting&&!testMode){e.preventDefault();own.hide();}});w.on('closed',()=>{if(cachedSearch.get(embedded)===own)cachedSearch.delete(embedded);searchReadyWindows.delete(windowId);nativeMenus.delete(windowId);if(searchWindow===own){searchWindow=null;searchRevision++;searchTyping=false;overlay?.detach();overlay=undefined;}});return w;
+ w.on('close',e=>{if(!quitting&&!testMode){e.preventDefault();own.hide();}});w.on('closed',()=>{clearTimeout(idleCleanup);if(cachedSearch.get(embedded)===own)cachedSearch.delete(embedded);searchReadyWindows.delete(windowId);nativeMenus.delete(windowId);if(searchWindow===own){searchWindow=null;searchRevision++;searchTyping=false;overlay?.detach();overlay=undefined;}});return w;
 }
 function showSearch(kind:SearchContext['kind']='search',hwnd=foreground()?.hwnd||0,typing=false){
  if(kind==='dialog'){void dialogBar?.show(hwnd).catch(error=>echo(error.message));return;}
@@ -147,7 +151,7 @@ function showSearch(kind:SearchContext['kind']='search',hwnd=foreground()?.hwnd|
  setTimeout(()=>{if(!quitting&&searchWindow===w&&!w.isDestroyed()&&w.isVisible())fileMenu?.warm();},80).unref();
  void searchBridge.context(hwnd).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
-function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();searchPopup(false);if(settings.search.explorerTyping)searchPopup(true);if(settings.search.explorerMenu)menuPanel(0);dialogBar?.warm();}
+function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();if(settings.search.explorerTyping)searchPopup(true);dialogBar?.warm();}
 async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{await searchBridge.jump(searchContext,path);}catch(error){searchWindow?.show();searchWindow?.focus();throw error;}}else{const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
 function utilityState(){return {awake:awake.state(),pinned:topmost.count(),shortcutError:topmost.error};}
 function utilityChanged(){if(!awake||!topmost)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}

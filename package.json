@@ -20,7 +20,7 @@
     "test:experience": "npm run build && node tests/experience-smoke.cjs",
     "test:redesign": "npm run build && node tests/redesign-smoke.cjs",
     "test:utilities": "npm run build && node tests/utilities-smoke.cjs",
-    "test:search": "npm run build && node tests/search-smoke.cjs",
+    "test:search": "npm run build && node tests/search-smoke.cjs && node tests/popup-idle-reclaim.cjs",
     "test:text": "npm run build && node tests/text-tools-smoke.cjs",
     "test:preview": "npm run build && node tests/special-preview-smoke.cjs",
     "test:system": "npm run build && node tests/system-information-smoke.cjs",

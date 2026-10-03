@@ -44,7 +44,7 @@ async function scenario(kind,expectedErrors=0){
    await window.one.patchSettings({search:{explorerTyping:false,explorerMenu:false}});
   },files);
   const searchWindows=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(w=>!w.isDestroyed()&&!w.webContents.isDestroyed()&&new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')==='search').map(w=>({id:w.webContents.id,embedded:w.webContents.getURL().includes('embedded=1')})));
-  await expect.poll(async()=> (await searchWindows()).length).toBe(2);
+  await expect.poll(async()=> (await searchWindows()).length).toBe(1);
   for(const page of app.windows().filter(p=>/view=search(?:&|$)/.test(p.url())))await page.waitForSelector('#file-query');
   if(kind==='text'){
    const report=await main.evaluate(()=>window.one.textCompare('original🙂\n'.repeat(50000),'revised🙂\n'.repeat(50000),false));assert.ok(report.count>100);
@@ -75,6 +75,7 @@ async function scenario(kind,expectedErrors=0){
   if(kind==='menus'){
    await main.evaluate(file=>window.one.preview(file),file);
    await main.evaluate(()=>window.one.showSearch());
+   await expect.poll(async()=> (await searchWindows()).some(window=>!window.embedded)).toBe(true);
    const search=app.windows().find(p=>p.url().includes('view=search')&&!p.url().includes('embedded=1')&&!p.url().includes('menu'));
    await search.waitForSelector('#file-query');
    await search.evaluate(file=>window.one.searchContextMenu(file,{x:100,y:90}),file);
@@ -112,6 +113,7 @@ async function scenario(kind,expectedErrors=0){
   }
   if(kind==='search-helper-exit'){
    await main.evaluate(()=>window.one.showSearch());
+   await expect.poll(async()=> (await searchWindows()).some(window=>!window.embedded)).toBe(true);
    const search=app.windows().find(p=>p.url().includes('view=search')&&!p.url().includes('embedded=1')&&!p.url().includes('menu'));
    await search.waitForSelector('#file-query');await search.locator('#file-query').fill('preview');
    await expect(search.locator('.search-result').filter({hasText:'preview.txt'})).toHaveCount(1);
