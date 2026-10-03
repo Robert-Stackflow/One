@@ -2,6 +2,8 @@
 //! which still owns mutable rows, directory tracking and persistence.
 use super::*;
 mod overlay;
+mod compact;
+pub mod store;
 use overlay::{Candidate, Overlay};
 use std::{
     cmp::Ordering as Order,
@@ -18,6 +20,12 @@ const HEADER: usize = 128;
 const PARENT: usize = 32;
 const ROW: usize = 64;
 const MAX_BYTES: u64 = 1024 * 1024 * 1024;
+fn generation() -> io::Result<[u8; 16]> {
+    let mut value = [0; 16];
+    let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), value.as_mut_ptr(), 16, 2) };
+    if status < 0 { return Err(io::Error::other(format!("索引版本标识生成失败: {status}"))); }
+    Ok(value)
+}
 fn bad() -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, "Invalid mapped probe image")
 }
@@ -187,8 +195,7 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
     header[..8].copy_from_slice(MAGIC);
     // A generation identity prevents row-ID deltas from attaching to another
     // base with the same length/count. No full image scan is needed at startup.
-    let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), header[64..].as_mut_ptr(), 16, 2) };
-    if status < 0 { return Err(io::Error::other(format!("索引版本标识生成失败: {status}"))); }
+    header[64..80].copy_from_slice(&generation()?);
     for (at, value) in [
         (8, intern.len() as u64),
         (16, index.rows.len() as u64),

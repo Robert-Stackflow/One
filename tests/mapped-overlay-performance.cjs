@@ -40,4 +40,5 @@ async function main(){
  }finally{await probe.stop();}
  report.result='PASS';report.resultsIdentical=true;report.durableRestart=true;report.atomicRejection=true;await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({result:report.result,count:builds.after.count,applied:report.applied,idleMiB:report.withChanges.private/1024**2,limitMiB:report.atLimit.private/1024**2,restart:report.restart,resultsIdentical:true}));
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
+if(require.main===module)main().catch(error=>{console.error(error);process.exitCode=1;});
+module.exports={journal};
