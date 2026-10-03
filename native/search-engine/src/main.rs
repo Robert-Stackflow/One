@@ -864,7 +864,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let fuzzy = v["fuzzy"].as_bool().unwrap_or(true);
     let pinyin = v["pinyin"].as_bool().unwrap_or(true);
     let mut matcher = QueryMatcher::new(&terms, fuzzy, pinyin);
-    let path_only = matcher.path_only();
+    let shared_parent = matcher.shares_parent();
     let rules = priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default());
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
     let index = s.index.read().unwrap();
@@ -885,7 +885,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
                 return;
             }
             if accepts(row, &kind, &extensions) {
-                if let Some((points, mode)) = if path_only { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
+                if let Some((points, mode)) = if shared_parent { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
                     total += 1;retain_match(&mut heap, path, points, mode, true, rules.rank(path));
                 }
             }
@@ -917,7 +917,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         if !accepts(row, &kind, &extensions) {
             continue;
         }
-        if let Some((points, mode)) = if path_only { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
+        if let Some((points, mode)) = if shared_parent { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
             // Most rows fail the text match. Resolve current-folder priority only
             // for matches, where it can affect the count and ranking.
             let local = !prefix.is_empty() && path.starts_with(&prefix);

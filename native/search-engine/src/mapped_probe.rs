@@ -920,6 +920,11 @@ mod tests {
                 "🙂",
                 "\"D:\\\"",
                 "ext:pdf 季度",
+                "\"report\"",
+                "\"folder\" \"report\"",
+                "\"季度报告\"",
+                "\"İstanbul\"",
+                "\"absent\"",
             ] {
                 let (kind, exts, terms) = parse(query, false);
                 for (fuzzy, pinyin) in [(false, false), (true, false), (false, true), (true, true)]
@@ -929,6 +934,11 @@ mod tests {
                         score(&disk, &disk.path, &terms, fuzzy, pinyin),
                         score(row, path, &terms, fuzzy, pinyin),
                         "{path} / {query}"
+                    );
+                    assert_eq!(
+                        QueryMatcher::new(&terms, fuzzy, pinyin).score(&disk, &disk.path),
+                        score(row, path, &terms, fuzzy, pinyin),
+                        "cached mapped literal {path} / {query}"
                     );
                     if !view.possible(id, &kind, &terms, fuzzy).unwrap() {
                         assert!(

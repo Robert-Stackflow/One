@@ -68,17 +68,21 @@ enum ParentVerdict {
     Reject,
     Name,
 }
-/// One bounded parent decision per active query. Shared prefixes often cover
-/// many consecutive rows; no per-record cache or full path allocation is needed.
+/// Decisions for only the last parent in an active query. Shared prefixes cover
+/// consecutive rows; storage grows with query terms, never with index rows.
 pub struct QueryMatcher<'a> {
     terms: &'a [Term],
     fuzzy: bool,
     pinyin: bool,
     path_only: bool,
     parent: Option<(usize, usize, ParentVerdict)>,
+    exact_names: bool,
+    literal_parent: Option<(usize, usize)>,
+    parent_hits: Vec<bool>,
 }
 impl<'a> QueryMatcher<'a> {
     pub fn new(terms: &'a [Term], fuzzy: bool, pinyin: bool) -> Self {
+        let exact_names = !terms.is_empty() && terms.iter().all(|t| t.exact && t.separators == 0);
         Self {
             terms,
             fuzzy,
@@ -87,6 +91,13 @@ impl<'a> QueryMatcher<'a> {
                 .iter()
                 .all(|t| t.separators > 0 && (!fuzzy || !t.typo || t.separators > 1)),
             parent: None,
+            exact_names,
+            literal_parent: None,
+            parent_hits: if exact_names {
+                vec![false; terms.len()]
+            } else {
+                Vec::new()
+            },
         }
     }
     fn verdict(&mut self, path: &impl SearchPath) -> ParentVerdict {
@@ -119,12 +130,64 @@ impl<'a> QueryMatcher<'a> {
         self.parent = Some((identity.0, identity.1, verdict));
         verdict
     }
+    fn exact_score(
+        &mut self,
+        row: &impl SearchRow,
+        path: &impl SearchPath,
+    ) -> Option<(i32, &'static str)> {
+        let bits = row.bits();
+        // Most rows are impossible even after adding parent characters. Keep
+        // the original cheap rejection ahead of cached substring decisions.
+        if impossible_mask(bits, path.prefix_bits(), self.terms, false) {
+            return None;
+        }
+        let prefix = path.prefix();
+        let identity = (prefix.as_ptr() as usize, prefix.len());
+        let mut total = if row.directory() { 3 } else { 0 };
+        for (id, term) in self.terms.iter().enumerate() {
+            // Literal basename terms cannot cross a path separator. Missing
+            // name characters let us avoid reading/scanning the name at all.
+            let found = if term.bits & bits == term.bits {
+                row.lower().find(&term.text)
+            } else {
+                None
+            };
+            total += if let Some(at) = found {
+                if row.lower() == term.text {
+                    1000
+                } else if at == 0 {
+                    850
+                } else {
+                    650
+                }
+            } else {
+                // Names outrank paths. Do not scan or cache the parent when
+                // every term already matches the basename.
+                if self.literal_parent != Some(identity) {
+                    let parent_bits = path.prefix_bits();
+                    for (term, hit) in self.terms.iter().zip(&mut self.parent_hits) {
+                        *hit = term.bits & parent_bits == term.bits && prefix.contains(&term.text);
+                    }
+                    self.literal_parent = Some(identity);
+                }
+                if self.parent_hits[id] {
+                    180
+                } else {
+                    return None;
+                }
+            };
+        }
+        Some((total, "exact"))
+    }
     #[inline(always)]
     pub fn score(
         &mut self,
         row: &impl SearchRow,
         path: &impl SearchPath,
     ) -> Option<(i32, &'static str)> {
+        if self.exact_names && row.plain_name() {
+            return self.exact_score(row, path);
+        }
         // Plain metadata guarantees that the search name is the normalized
         // basename. Roots, launcher display names and exceptional spellings
         // continue through the original matcher.
@@ -142,8 +205,8 @@ impl<'a> QueryMatcher<'a> {
         }
         super::score(row, path, self.terms, self.fuzzy, self.pinyin)
     }
-    pub fn path_only(&self) -> bool {
-        self.path_only
+    pub fn shares_parent(&self) -> bool {
+        self.path_only || self.exact_names
     }
 }
 
@@ -164,6 +227,13 @@ mod tests {
             ("D:\\parent\\季度报告.txt", false),
             ("D:/Mixed/Folder/File.TXT", false),
             ("\\\\server\\share\\report.txt", false),
+            ("D:\\report\\without-name.txt", false),
+            ("D:\\REport\\REPORT", true),
+            ("D:\\different\\parent-report.txt", false),
+            ("D:\\目录\\季度报告", true),
+            ("D:\\目录\\İstanbul.txt", false),
+            ("D:\\目录\\Straße.txt", false),
+            ("D:\\目录\\report.txt\\", true),
         ];
         let mut index = Index::default();
         for (path, dir) in paths {
@@ -183,6 +253,18 @@ mod tests {
             "\"server/share\"",
             "\"D:/\"",
             "jdbg",
+            "\"report\"",
+            "\"parent\" \"report\"",
+            "\"parent\"",
+            "\"Report.TXT\"",
+            "\"季度报告\"",
+            "\"d:\"",
+            "\"parent\" \"absent\"",
+            "\"parent\" \"report\" \"txt\"",
+            "\"İstanbul\"",
+            "\"straße\"",
+            "\"parentreport\"",
+            "\"\"",
         ] {
             let (_, _, terms) = parse(query, false);
             for (fuzzy, pinyin) in [(false, false), (false, true), (true, false), (true, true)] {
