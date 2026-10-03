@@ -1,4 +1,4 @@
-import { readFile, writeFile, rename, unlink,stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, unlink,stat,open } from 'node:fs/promises';
 import iconv from 'iconv-lite';
 const encodings: Record<string,string> = { 'UTF-8':'utf8', 'UTF-16':'utf16le', 'GBK':'gbk', 'Big5':'big5' };
 export async function readText(path: string, encoding: string): Promise<string> {
@@ -18,4 +18,22 @@ export async function saveText(path: string, text: string, name: string,temporar
   temporary?.(temp);
   try { await writeFile(temp, output, { flag: 'wx' }); await rename(temp, path); }
   finally { await unlink(temp).catch(() => {});temporary?.(null); }
+}
+
+/** Write a merged batch without retaining or re-encoding the whole result. */
+export async function createTextWriter(path:string,name:string,temporary?:(path:string|null)=>void){
+ const encoding=encodings[name==='自动'?'UTF-8':name];if(!encoding)throw new Error('编码无效');
+ const temp=path+'.one-'+crypto.randomUUID()+'.tmp';temporary?.(temp);
+ let handle:Awaited<ReturnType<typeof open>>|undefined;
+ try{handle=await open(temp,'wx');if(encoding==='utf16le')await handle.writeFile(Buffer.from([0xff,0xfe]));}
+ catch(error){await handle?.close().catch(()=>{});await unlink(temp).catch(()=>{});temporary?.(null);throw error;}
+ const file=handle;
+ let active=true,handleOpen=true,carry='';
+ const write=async(value:string)=>{const bytes=iconv.encode(value,encoding);if(iconv.decode(bytes,encoding,{stripBOM:false})!==value)throw new Error('目标编码无法无损保存这些字符，请选择 UTF-8');await file.writeFile(bytes);};
+ const abort=async()=>{if(!active)return;active=false;if(handleOpen){handleOpen=false;await file.close().catch(()=>{});}await unlink(temp).catch(()=>{});temporary?.(null);};
+ return{
+  async append(value:string){if(!active)throw new Error('文本输出已关闭');let part=carry+value;carry='';if(part&&/^[\uD800-\uDBFF]$/.test(part.at(-1)!)){carry=part.at(-1)!;part=part.slice(0,-1);}if(part)await write(part);},
+  async finish(){if(!active)throw new Error('文本输出已关闭');try{if(carry)await write(carry);await file.close();handleOpen=false;await rename(temp,path);active=false;temporary?.(null);}catch(error){await abort();throw error;}},
+  abort
+ };
 }

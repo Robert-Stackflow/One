@@ -26,3 +26,13 @@ test('batch processing releases its worker after saving and can start another ta
   assert.equal(await service.run(1,{kind:'pipeline',text:'恢复',steps:[{operation:'upper'}]}),'恢复');
  }finally{await service.stop();}assert.equal(service.pendingTasks,0);
 });
+test('cancelling a merged batch removes its partial output',async()=>{
+ const base=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','text-service');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'batch-cancel-'));await build({entryPoints:['src/main/text-worker.ts','src/main/text-service.ts'],outdir:root,outExtension:{'.js':'.cjs'},bundle:true,platform:'node',external:['opencc-js','iconv-lite']});const {TextService}=require(path.join(root,'text-service.cjs'));
+ const files=path.join(root,'files');await fs.mkdir(files);for(let i=0;i<30;i++)await fs.writeFile(path.join(files,'part-'+String(i).padStart(2,'0')+'.txt'),' 文本内容 \n'.repeat(10000));
+ let reading;const started=new Promise(resolve=>reading=resolve),service=new TextService((_,value)=>{if(value.phase==='已处理'&&value.completed>=1)reading(value.output);});
+ try{
+  const pending=service.run(1,{kind:'batch',request:{paths:[files],steps:[{operation:'clean'}],inputEncoding:'自动',outputEncoding:'UTF-8',output:root,extensions:'txt',recursive:false,merge:true,separator:'\n'}}),rejected=assert.rejects(pending,/已停止/);
+  const output=await started;service.cancel(1);await rejected;while(service.pendingTasks)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal((await fs.readdir(output)).filter(name=>name.includes('.one-')||name==='合并结果.txt').length,0);
+ }finally{await service.stop();}assert.equal(service.pendingTasks,0);
+});
