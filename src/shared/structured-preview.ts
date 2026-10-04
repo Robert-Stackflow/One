@@ -32,7 +32,14 @@ export class StructureStore {
  text(id:number,index?:number){
   let value=this.value(id);
   if(index!==undefined){if(value===null||typeof value!=='object'||!Number.isSafeInteger(index)||index<0)throw new Error('结构范围无效');const key=Array.isArray(value)?String(index):this.keyList(value)[index];if(key===undefined||!Object.hasOwn(value,key))throw new Error('结构节点不存在');value=(value as Record<string,unknown>)[key];}
-  return typeof value==='string'?value:JSON.stringify(value,null,2)??String(value);
+  if(typeof value==='string')return value;
+  const ancestors:object[]=[];
+  return JSON.stringify(value,function(_key,next){
+   if(next===null||typeof next!=='object')return next;
+   while(ancestors.length&&ancestors[ancestors.length-1]!==this)ancestors.pop();
+   if(ancestors.includes(next))return '[循环引用]';
+   ancestors.push(next);return next;
+  },2)??String(value);
  }
 }
 
@@ -74,10 +81,3 @@ export class StructureTree {
  private update(branch:ExpandedBranch){for(let p:ExpandedBranch|null=branch;p;p=p.parent)p.size=1+(p.open?p.node.count+[...p.children.values()].reduce((sum,child)=>sum+child.size-1,0):0);}
  position(branch:ExpandedBranch){let position=0;for(let p=branch;p.parent;p=p.parent){position+=1+p.index;for(const sibling of p.parent.children.values())if(sibling.index<p.index)position+=sibling.size-1;}return position;}
 }
-
-export function structurePath(location:StructureLocation,key:string){
- const parts:string[]=[];if(location.parent)parts.push(propertyPart(key,location.parent.node.kind==='array'));
- for(let p=location.parent;p?.parent;p=p.parent)parts.push(propertyPart(p.key,p.parent.node.kind==='array'));
- return '$'+parts.reverse().join('');
-}
-function propertyPart(key:string,array:boolean){return array?'['+key+']':/^[A-Za-z_$][\w$]*$/.test(key)?'.'+key:'['+JSON.stringify(key)+']';}

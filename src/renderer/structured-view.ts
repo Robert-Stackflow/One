@@ -1,5 +1,5 @@
 import {PreviewWorkerClient} from './preview-worker-client';
-import {StructureTree,structurePath,type StructureNode,type StructureEntry,type StructureLocation} from '../shared/structured-preview';
+import {StructureTree,type StructureNode,type StructureEntry,type StructureLocation} from '../shared/structured-preview';
 import type {PreviewData} from '../shared/types';
 import {VirtualRows} from './virtual-rows';
 import {api,icon,iconButton,toast} from './ui';
@@ -32,9 +32,10 @@ export function renderStructured(host:HTMLElement,data:PreviewData,metadata:(val
  function toggle(location:StructureLocation,entry:StructureEntry){
   if(location.branch?.open)tree.collapse(location.branch);else tree.expand(location,entry);update();
  }
- async function copy(location:StructureLocation,entry:StructureEntry){await api.copyText(structurePath(location,entry.key));if(!disposed)toast('已复制路径');}
- async function showValue(location:StructureLocation,entry:StructureEntry){
-  const text=await client.request<string>({structureAction:'text',id:location.parent?.node.id??0,index:location.parent?location.index:undefined});if(disposed)return;
+ function valueText(location:StructureLocation){return client.request<string>({structureAction:'text',id:location.parent?.node.id??0,index:location.parent?location.index:undefined});}
+ async function copy(location:StructureLocation){const text=await valueText(location);if(disposed)return;await api.copyText(text);if(!disposed)toast('已复制内容');}
+ async function showValue(location:StructureLocation){
+  const text=await valueText(location);if(disposed)return;
   dialogDispose?.();dialogDispose=textValueDialog('structure-value','完整值',text,()=>{dialogDispose=undefined;});
  }
  function row(position:number,previous?:HTMLElement){
@@ -48,12 +49,12 @@ export function renderStructured(host:HTMLElement,data:PreviewData,metadata:(val
    element.dataset.signature=signature;element.replaceChildren();
    if(structured){const button=document.createElement('button');button.className='tree-toggle';button.tabIndex=-1;button.disabled=!expandable;button.innerHTML=expandable?icon('chevron'):'<span class="tree-spacer"></span>';const label=document.createElement('strong');label.textContent=entry.key;label.title=entry.key;const count=document.createElement('span');count.textContent=circular?'循环引用':node.kind==='array'?'['+node.count.toLocaleString()+']':'{'+node.count.toLocaleString()+'}';button.append(label,count);element.append(button);}
    else{const spacer=document.createElement('span');spacer.className='tree-spacer';const key=document.createElement('span');key.className='data-key';key.textContent=entry.key;key.title=entry.key;key.dataset.selectable='';const value=document.createElement('span');value.className='data-value '+node.kind;value.dataset.selectable='';value.textContent=node.preview+(node.truncated?'…':'');element.append(spacer,key,value);if(node.truncated){const more=document.createElement('button');more.className='icon-button quiet data-expand-value';more.tabIndex=-1;more.title='查看完整值';more.setAttribute('aria-label','查看完整值');more.innerHTML=icon('ellipsis');element.append(more);}}
-   const button=document.createElement('button');button.className='icon-button quiet data-copy';button.tabIndex=-1;button.title='复制路径';button.setAttribute('aria-label','复制路径');button.innerHTML=icon('copy');element.append(button);
+   const button=document.createElement('button');button.className='icon-button quiet data-copy';button.tabIndex=-1;button.title='复制内容';button.setAttribute('aria-label','复制内容');button.innerHTML=icon('copy');element.append(button);
   }
   const control=element.querySelector<HTMLButtonElement>('.tree-toggle');if(control){if(expandable)control.setAttribute('aria-expanded',String(open));else control.removeAttribute('aria-expanded');control.onclick=e=>{e.stopPropagation();resetKeyboard();choose(position);scroll.focus({preventScroll:true});toggle(location,entry);};}
   element.onclick=()=>{resetKeyboard();choose(position);if(!window.getSelection()?.toString())scroll.focus({preventScroll:true});};
-  element.querySelector<HTMLButtonElement>('.data-copy')!.onclick=e=>{e.stopPropagation();void copy(location,entry).catch(toast);};
-  const more=element.querySelector<HTMLButtonElement>('.data-expand-value');if(more)more.onclick=e=>{e.stopPropagation();void showValue(location,entry).catch(error=>{if(!disposed)toast(error);});};return element;
+  element.querySelector<HTMLButtonElement>('.data-copy')!.onclick=e=>{e.stopPropagation();void copy(location).catch(toast);};
+  const more=element.querySelector<HTMLButtonElement>('.data-expand-value');if(more)more.onclick=e=>{e.stopPropagation();void showValue(location).catch(error=>{if(!disposed)toast(error);});};return element;
  }
  function keyboard(event:KeyboardEvent){
   const modified=event.ctrlKey||event.metaKey,key=modified&&event.key.toLowerCase()==='c'&&!window.getSelection()?.toString()?'copy':event.key;
@@ -65,9 +66,9 @@ export function renderStructured(host:HTMLElement,data:PreviewData,metadata:(val
    if(disposed||version!==keyboardVersion)return;
    if(navigation){const step=Math.max(1,Math.floor(scroll.clientHeight/36)-1);choose(key==='Home'?0:key==='End'?tree.root.size-1:selected+(key==='ArrowDown'?1:key==='ArrowUp'?-1:key==='PageDown'?step:-step));return;}
    const {location,entry}=await resolveRow(selected);if(disposed||version!==keyboardVersion||!entry)return;
-   if(key==='copy')return copy(location,entry);
+   if(key==='copy')return copy(location);
    if(key==='ArrowLeft'){if(location.branch?.open)toggle(location,entry);else if(location.parent)choose(tree.position(location.parent));}
-   else if(key==='Enter'){if(entry.node.truncated)return showValue(location,entry);toggle(location,entry);}
+   else if(key==='Enter'){if(entry.node.truncated)return showValue(location);toggle(location,entry);}
    else if(location.branch?.open&&entry.node.count)choose(selected+1);else toggle(location,entry);
   }).catch(error=>{if(!disposed&&version===keyboardVersion)toast(error);});
  }
