@@ -9,6 +9,8 @@ pub(super) struct Writer {
     rows: BufWriter<File>,
     phonetics: Pool,
     text: Pool,
+    masks: BufWriter<File>,
+    block_mask: u128,
     intern: HashMap<String, u32>,
     intern_bytes: usize,
     parent_count: u32,
@@ -36,12 +38,15 @@ impl Writer {
             out: BufWriter::new(section("data")?),
             length: 0,
         };
+        let masks = BufWriter::new(section("masks")?);
         Ok(Self {
             temps,
             parents,
             rows,
             phonetics,
             text,
+            masks,
+            block_mask: 0,
             intern: HashMap::new(),
             intern_bytes: 0,
             parent_count: 0,
@@ -137,13 +142,20 @@ impl Writer {
             row.directory() as u32 | ((row.plain_name() as u32) << 1),
         );
         self.rows.write_all(&bytes)?;
+        self.block_mask |= row.bits() | path.bits | mask(path.name);
         self.count += 1;
+        if self.count % MASK_BLOCK == 0 {
+            self.masks.write_all(&self.block_mask.to_le_bytes())?;
+            self.block_mask = 0;
+        }
         // Enforce the file bound during streaming, before filling the disk.
         if HEADER as u64
             + self.parent_count as u64 * PARENT as u64
             + self.count as u64 * ROW as u64
             + self.phonetics.length as u64
             + self.text.length as u64
+            + self.count.div_ceil(MASK_BLOCK).min(MASK_SAMPLES) as u64 * 16
+            + self.count.div_ceil(MASK_BLOCK) as u64 * 16
             > MAX_BYTES
         {
             return Err(bad());
@@ -154,6 +166,9 @@ impl Writer {
         self.finish_cancel(target, &||stop.load(Ordering::Relaxed))
     }
     pub(super) fn finish_cancel(mut self, target: &Path, cancel: &impl Fn()->bool) -> io::Result<usize> {
+        if self.count % MASK_BLOCK != 0 {
+            self.masks.write_all(&self.block_mask.to_le_bytes())?;
+        }
         // Bounded interning can change parent-count parity. Keep every 64-byte
         // row within one cache line; an unused zero parent is valid padding.
         if self.parent_count % 2 != 0 {
@@ -164,14 +179,18 @@ impl Writer {
         self.rows.flush()?;
         self.phonetics.out.flush()?;
         self.text.out.flush()?;
+        self.masks.flush()?;
         drop(self.parents);
         drop(self.rows);
         drop(self.phonetics.out);
         drop(self.text.out);
+        drop(self.masks);
+        let samples = mask_samples(&self.temps.0[4], self.count)?;
         let row_at = HEADER as u64 + self.parent_count as u64 * PARENT as u64;
         let data_at = row_at + self.count as u64 * ROW as u64;
         let text_at = data_at + self.phonetics.length as u64;
-        let total = text_at + self.text.length as u64;
+        let mask_at = text_at + self.text.length as u64;
+        let total = mask_at + samples.len() as u64 + self.count.div_ceil(MASK_BLOCK) as u64 * 16;
         if total > MAX_BYTES {
             return Err(bad());
         }
@@ -193,6 +212,7 @@ impl Writer {
             (40, data_at),
             (48, total),
             (56, text_at),
+            (80, mask_at),
         ] {
             put64(&mut header, at, value);
         }
@@ -210,6 +230,16 @@ impl Writer {
                 }
                 out.write_all(&buffer[..n])?;
             }
+        }
+        out.write_all(&samples)?;
+        let mut input = File::open(&self.temps.0[4])?;
+        loop {
+            if cancel() {
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "索引合并已取消"));
+            }
+            let n = input.read(&mut buffer)?;
+            if n == 0 { break; }
+            out.write_all(&buffer[..n])?;
         }
         out.flush()?;
         out.get_ref().sync_all()?;

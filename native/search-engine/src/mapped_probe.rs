@@ -12,16 +12,20 @@ use std::{
     cmp::Ordering as Order,
     collections::HashMap,
     fs::OpenOptions,
+    io::{Read, Seek, SeekFrom},
     os::windows::{fs::OpenOptionsExt, io::AsRawHandle},
     ptr::NonNull,
 };
 
-const MAGIC: &[u8; 8] = b"ONEMAP03";
+const MAGIC: &[u8; 8] = b"ONEMAP04";
+const LEGACY_MAGIC: &[u8; 8] = b"ONEMAP03";
 // Keep section alignment unchanged from the 64-byte header. A bare 16-byte
 // generation extension made mask reads cross cache lines on every row.
 const HEADER: usize = 128;
 const PARENT: usize = 32;
 const ROW: usize = 64;
+const MASK_BLOCK: usize = 16;
+const MASK_SAMPLES: usize = 128;
 const MAX_BYTES: u64 = 1024 * 1024 * 1024;
 /// Return None for the legacy in-memory service command path.
 pub fn command(args: &[String]) -> Option<io::Result<()>> {
@@ -95,6 +99,19 @@ impl Drop for Temps {
         }
     }
 }
+fn mask_samples(path: &Path, rows: usize) -> io::Result<Vec<u8>> {
+    let blocks = rows.div_ceil(MASK_BLOCK);
+    let stride = (blocks / MASK_SAMPLES).max(1);
+    let mut file = File::open(path)?;
+    let mut samples = Vec::with_capacity(blocks.min(MASK_SAMPLES) * 16);
+    for block in (0..blocks).step_by(stride).take(MASK_SAMPLES) {
+        file.seek(SeekFrom::Start(block as u64 * 16))?;
+        let mut bits = [0; 16];
+        file.read_exact(&mut bits)?;
+        samples.extend_from_slice(&bits);
+    }
+    Ok(samples)
+}
 fn image(index: &Index, target: &Path) -> io::Result<()> {
     // create_new and a PID suffix prevent overwriting unrelated temporary files.
     let mut temps = Temps(Vec::new());
@@ -117,7 +134,10 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
         out: BufWriter::new(section("data")?),
         length: 0,
     };
+    let mut masks = BufWriter::new(section("masks")?);
+    let mut block_mask = 0u128;
     let mut intern = HashMap::<String, u32>::new();
+    let mut written = 0usize;
     for row in index.rows.values() {
         let path = row.item.path.key();
         let display = row.item.path.display();
@@ -186,24 +206,36 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
             row.item.directory() as u32 | ((row.plain_name() as u32) << 1),
         );
         rows.write_all(&bytes)?;
+        block_mask |= row.bits.value() | path.prefix_bits() | mask(path.name());
+        written += 1;
+        if written % MASK_BLOCK == 0 {
+            masks.write_all(&block_mask.to_le_bytes())?;
+            block_mask = 0;
+        }
     }
+    if written % MASK_BLOCK != 0 { masks.write_all(&block_mask.to_le_bytes())?; }
     parents.flush()?;
     rows.flush()?;
     pool.out.flush()?;
     phonetic_pool.out.flush()?;
+    masks.flush()?;
     drop(parents);
     drop(rows);
     drop(pool.out);
     drop(phonetic_pool.out);
+    drop(masks);
     let parent_at = HEADER as u64;
     let row_at = parent_at + intern.len() as u64 * PARENT as u64;
     let data_at = row_at + index.rows.len() as u64 * ROW as u64;
     let text_at = data_at + phonetic_pool.length as u64;
-    let total = text_at + pool.length as u64;
+    let mask_at = text_at + pool.length as u64;
+    let blocks = index.rows.len().div_ceil(MASK_BLOCK);
+    let total = mask_at + blocks.min(MASK_SAMPLES) as u64 * 16 + blocks as u64 * 16;
     if total > MAX_BYTES {
         return Err(bad());
     }
     let final_file = section("image")?;
+    let samples = mask_samples(&temps.0[4], index.rows.len())?;
     let final_name = temps.0.last().unwrap().clone();
     let mut out = BufWriter::new(final_file);
     let mut header = [0; HEADER];
@@ -219,6 +251,7 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
         (40, data_at),
         (48, total),
         (56, text_at),
+        (80, mask_at),
     ] {
         put64(&mut header, at, value);
     }
@@ -226,6 +259,8 @@ fn image(index: &Index, target: &Path) -> io::Result<()> {
     for path in &temps.0[..4] {
         io::copy(&mut File::open(path)?, &mut out)?;
     }
+    out.write_all(&samples)?;
+    io::copy(&mut File::open(&temps.0[4])?, &mut out)?;
     out.flush()?;
     out.get_ref().sync_all()?;
     drop(out);
@@ -340,6 +375,8 @@ struct View<'a> {
     rows: &'a [u8],
     phonetics: &'a [u8],
     data: TextView<'a>,
+    samples: &'a [u8],
+    masks: &'a [u8],
 }
 #[derive(Clone, Copy)]
 struct TextView<'a> {
@@ -360,7 +397,8 @@ impl<'a> TextView<'a> {
 }
 impl<'a> View<'a> {
     fn new(bytes: &'a [u8]) -> io::Result<Self> {
-        if bytes.get(..8) != Some(MAGIC) {
+        let version = bytes.get(..8);
+        if version != Some(MAGIC) && version != Some(LEGACY_MAGIC) {
             return Err(bad());
         }
         let parents = wide(bytes, 8)?;
@@ -372,6 +410,10 @@ impl<'a> View<'a> {
             .checked_add(rows.checked_mul(ROW as u64).ok_or_else(bad)?)
             .ok_or_else(bad)?;
         let text_at = wide(bytes, 56)?;
+        let mask_at = wide(bytes, 80)?;
+        let blocks = rows.div_ceil(MASK_BLOCK as u64);
+        let sample_bytes = blocks.min(MASK_SAMPLES as u64).checked_mul(16).ok_or_else(bad)?;
+        let expected_masks = blocks.checked_mul(16).and_then(|size| size.checked_add(sample_bytes)).ok_or_else(bad)?;
         if wide(bytes, 24)? != HEADER as u64
             || wide(bytes, 32)? != row_at
             || wide(bytes, 40)? != data_at
@@ -379,18 +421,25 @@ impl<'a> View<'a> {
             || text_at < data_at
             || text_at > bytes.len() as u64
             || (text_at - data_at) % 8 != 0
+            || (version == Some(LEGACY_MAGIC) && mask_at != 0)
+            || (version == Some(MAGIC) && mask_at == 0)
+            || mask_at != 0 && (mask_at < text_at
+                || mask_at.checked_add(expected_masks) != Some(bytes.len() as u64))
         {
             return Err(bad());
         }
+        let text_end = if mask_at == 0 { bytes.len() } else { mask_at as usize };
         Ok(Self {
             generation: bytes.get(64..80).ok_or_else(bad)?.try_into().map_err(|_| bad())?,
             parents: &bytes[HEADER..row_at as usize],
             rows: &bytes[row_at as usize..data_at as usize],
             phonetics: &bytes[data_at as usize..text_at as usize],
             data: TextView {
-                bytes: &bytes[text_at as usize..],
+                bytes: &bytes[text_at as usize..text_end],
                 checked: None,
             },
+            samples: if mask_at == 0 { &[] } else { &bytes[text_end..text_end + sample_bytes as usize] },
+            masks: if mask_at == 0 { &[] } else { &bytes[text_end + sample_bytes as usize..] },
         })
     }
     fn text(&self, bytes: &[u8], at: usize) -> io::Result<&'a str> {
@@ -457,6 +506,25 @@ impl<'a> View<'a> {
     }
     fn count(&self) -> usize {
         self.rows.len() / ROW
+    }
+    fn has_masks(&self) -> bool { !self.masks.is_empty() }
+    fn block_possible(&self, id: usize, required: u128) -> io::Result<bool> {
+        if required == 0 || self.masks.is_empty() { return Ok(true); }
+        let at = (id / MASK_BLOCK).checked_mul(16).ok_or_else(bad)?;
+        let block = self.masks.get(at..at + 16).ok_or_else(bad)?;
+        let bits = wide(block, 0)? as u128 | ((wide(block, 8)? as u128) << 64);
+        Ok(required & bits == required)
+    }
+    fn worth_filtering(&self, required: u128) -> io::Result<bool> {
+        if required == 0 || self.masks.is_empty() { return Ok(false); }
+        let (mut sampled, mut possible) = (0usize, 0usize);
+        for block in self.samples.chunks_exact(16) {
+            let bits = wide(block, 0)? as u128 | ((wide(block, 8)? as u128) << 64);
+            sampled += 1;
+            possible += (required & bits == required) as usize;
+        }
+        // A low-selectivity mask costs more checks than the rows it avoids.
+        Ok(possible * 5 < sampled * 3)
     }
     fn directory(&self, id: usize) -> io::Result<bool> {
         let start = id.checked_mul(ROW).ok_or_else(bad)?;
@@ -810,6 +878,11 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
     let (kind, exts, terms) = parse(v["query"].as_str().unwrap_or(""), v["foldersOnly"].as_bool().unwrap_or(false));
     let fuzzy = v["fuzzy"].as_bool().unwrap_or(true);
     let pinyin = v["pinyin"].as_bool().unwrap_or(true);
+    // A typo may legitimately miss up to two filename characters. Only terms
+    // without that exception can reject an entire row block.
+    let required_mask = terms.iter().filter(|term| !fuzzy || !term.typo)
+        .fold(0u128, |bits, term| bits | term.bits);
+    let block_filter = view.worth_filtering(required_mask)?;
     let detailed = !terms.is_empty() && exts.is_empty()
         && matches!(kind.as_str(), "" | "file" | "folder")
         && terms.iter().all(|term|term.separators==0);
@@ -879,8 +952,13 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
             if let Some(verified) = verified_text {verified.store(true,Ordering::Release);}
         }
         if overlay.is_empty() {
+            let mut possible_block = true;
             for id in 0..view.count() {
                 if id % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
+                if block_filter {
+                    if id % MASK_BLOCK == 0 { possible_block = view.block_possible(id,required_mask)?; }
+                    if !possible_block { continue; }
+                }
                 if view.possible_cached(id,&kind,&terms,fuzzy,detailed,&mut parent_literals)? {
                     pass.candidate(&view,Candidate::Base(id),local_progressive)?;
                 }
@@ -891,7 +969,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
                 }
             }
         } else {
-            for (n, candidate) in overlay.iter(&view, 0..view.count(), None).enumerate() {
+            for (n, candidate) in overlay.iter_masked(&view, 0..view.count(), if block_filter { required_mask } else { 0 }).enumerate() {
                 if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
                 let candidate=candidate?;
                 if possible_candidate(&view,&candidate,&kind,&terms,fuzzy,detailed,&mut parent_literals)? {
@@ -1124,5 +1202,42 @@ mod tests {
         assert!(View::new(&corrupt).unwrap().validate().is_err());
         fs::remove_file(file).unwrap();
         fs::remove_dir(dir).unwrap();
+    }
+    #[test]
+    fn block_mask_preserves_overlay_and_legacy_results() {
+        let dir = std::env::temp_dir().join(format!("one-mask-test-{}-{}",std::process::id(),now()));
+        fs::create_dir(&dir).unwrap();
+        let file=dir.join("new.base");
+        let old=dir.join("old.base");
+        let mut index=Index::default();
+        for n in 0..48 {
+            index.put(Record::new(format!("D:\\scratch\\item-{n:03}.txt"),false,0));
+        }
+        index.put(Record::new("D:\\scratch\\zz-季度.txt".into(),false,0));
+        image(&index,&file).unwrap();
+        let map=Mapping::open(&file).unwrap();
+        let view=View::new(map.bytes()).unwrap();
+        let required=mask("季度");
+        assert!(view.has_masks());
+        assert!(!view.block_possible(0,required).unwrap());
+        assert!(view.worth_filtering(required).unwrap());
+        let mut overlay=Overlay::default();
+        overlay.apply(&view,vec![overlay::Mutation::Put(Entry {path:"D:\\scratch\\item-001-季度.txt".into(),name:String::new(),directory:false,modified:0,size:0})],100).unwrap();
+        let request=json!({"id":1,"type":"query","scope":1,"query":"季度","fuzzy":true,"pinyin":true});
+        let gate=Gate::default();let ticket=gate.enqueue(&request);
+        let mut filtered=query_mapping(&map,&request,&gate,ticket,&overlay,&Index::default(),Instant::now(),None).unwrap();
+        assert_eq!(filtered["total"],2);
+        let mut bytes=map.bytes().to_vec();
+        let mask_at=wide(&bytes,80).unwrap() as usize;
+        drop(map);
+        let mut corrupt=bytes.clone();put64(&mut corrupt,80,mask_at as u64+1);
+        assert!(View::new(&corrupt).is_err());
+        bytes.truncate(mask_at);bytes[..8].copy_from_slice(LEGACY_MAGIC);put64(&mut bytes,48,mask_at as u64);put64(&mut bytes,80,0);
+        fs::write(&old,bytes).unwrap();
+        let mut legacy=query_image(&old,&request,&gate,ticket,&overlay,&Index::default()).unwrap();
+        filtered.as_object_mut().unwrap().remove("elapsed");
+        legacy.as_object_mut().unwrap().remove("elapsed");
+        assert_eq!(filtered,legacy);
+        fs::remove_file(file).unwrap();fs::remove_file(old).unwrap();fs::remove_dir(dir).unwrap();
     }
 }

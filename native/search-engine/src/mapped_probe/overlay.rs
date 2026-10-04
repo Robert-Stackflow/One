@@ -161,15 +161,18 @@ impl Overlay {
     pub fn iter<'a, 'v>(&'a self, view: &'v View<'a>, range: Range<usize>, scope: Option<(&str, &str)>) -> Union<'a, 'v> {
         let bounds = scope.map(|(lower,upper)|(Bound::Included(PathKey::lookup(lower)),Bound::Excluded(PathKey::lookup(upper))))
             .unwrap_or((Bound::Unbounded,Bound::Unbounded));
-        self.range(view, range, bounds)
+        self.range(view, range, bounds, 0)
+    }
+    pub fn iter_masked<'a, 'v>(&'a self, view: &'v View<'a>, range: Range<usize>, required: u128) -> Union<'a, 'v> {
+        self.range(view, range, (Bound::Unbounded,Bound::Unbounded), if view.has_masks() { required } else { 0 })
     }
     pub fn iter_from<'a, 'v>(&'a self, view: &'v View<'a>, lower: &str) -> io::Result<Union<'a, 'v>> {
         Ok(self.range(view, view.lower_bound(lower)?..view.count(),
-            (Bound::Included(PathKey::lookup(lower)), Bound::Unbounded)))
+            (Bound::Included(PathKey::lookup(lower)), Bound::Unbounded), 0))
     }
-    fn range<'a, 'v>(&'a self, view: &'v View<'a>, range: Range<usize>, bounds: (Bound<PathKey>, Bound<PathKey>)) -> Union<'a, 'v> {
+    fn range<'a, 'v>(&'a self, view: &'v View<'a>, range: Range<usize>, bounds: (Bound<PathKey>, Bound<PathKey>), required: u128) -> Union<'a, 'v> {
         let extra = self.extra.range(bounds);
-        Union { view, at:range.start, end:range.end, spans:self.hidden.spans.range(..range.end).peekable(), extra:extra.peekable(), next_extra_at:None }
+        Union { view, at:range.start, end:range.end, spans:self.hidden.spans.range(..range.end).peekable(), extra:extra.peekable(), next_extra_at:None, required, block:usize::MAX, block_possible:true }
     }
 }
 
@@ -184,20 +187,25 @@ pub(super) struct Union<'a, 'v> {
     spans: Peekable<btree_map::Range<'a, usize, usize>>,
     extra: Peekable<btree_map::Range<'a, PathKey, Record>>,
     next_extra_at: Option<usize>,
+    required: u128,
+    block: usize,
+    block_possible: bool,
 }
 impl<'a> Iterator for Union<'a, '_> {
     type Item = io::Result<Candidate<'a>>;
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
+      loop {
         while let Some((&start, &end)) = self.spans.peek().copied() {
             if self.at < start { break; }
             self.at = self.at.max(end);
             self.spans.next();
         }
+        let mut boundary = self.end;
         if let Some((path, _)) = self.extra.peek() {
             // Locate an insertion boundary once per changed row. Comparing
             // paths for every base row would undo the mask's cheap rejection.
-            let boundary = if let Some(at) = self.next_extra_at { at } else {
+            boundary = if let Some(at) = self.next_extra_at { at } else {
                 match self.view.lower_bound_path(Fragments::from_key(path)) {
                     Ok(at) => { self.next_extra_at=Some(at);at },
                     Err(error) => return Some(Err(error)),
@@ -210,9 +218,24 @@ impl<'a> Iterator for Union<'a, '_> {
             }
         }
         if self.at >= self.end { return None; }
+        if self.required != 0 {
+            let block = self.at / MASK_BLOCK;
+            if self.block != block {
+                self.block_possible = match self.view.block_possible(self.at,self.required) {
+                    Ok(value) => value,
+                    Err(error) => return Some(Err(error)),
+                };
+                self.block = block;
+            }
+            if !self.block_possible {
+                self.at = ((block + 1) * MASK_BLOCK).min(self.end).min(boundary);
+                continue;
+            }
+        }
         let id = self.at;
         self.at += 1;
-        Some(Ok(Candidate::Base(id)))
+        return Some(Ok(Candidate::Base(id)));
+      }
     }
 }
 
