@@ -23,11 +23,11 @@ export class PopupLifecycle {
  private tracked=new Set<BrowserWindow>();
  private stopped=false;
  constructor(private idleMs=45_000){}
- track(window:BrowserWindow){
+ track(window:BrowserWindow,idleMs=this.idleMs){
   if(this.stopped||window.isDestroyed()||this.tracked.has(window))return;
   this.tracked.add(window);
   const clear=()=>{clearTimeout(this.timers.get(window));this.timers.delete(window);};
-  const idle=()=>{if(this.stopped||window.isDestroyed()||window.isVisible()||this.timers.has(window))return;const timer=setTimeout(()=>{this.timers.delete(window);if(!window.isDestroyed()&&!window.isVisible())window.destroy();},this.idleMs);timer.unref();this.timers.set(window,timer);};
+  const idle=()=>{if(this.stopped||window.isDestroyed()||window.isVisible()||this.timers.has(window))return;const timer=setTimeout(()=>{this.timers.delete(window);if(!window.isDestroyed()&&!window.isVisible())window.destroy();},idleMs);timer.unref();this.timers.set(window,timer);};
   window.on('show',clear);window.on('hide',idle);window.once('closed',()=>{clear();this.tracked.delete(window);});idle();
  }
  stop(){this.stopped=true;for(const timer of this.timers.values())clearTimeout(timer);this.timers.clear();this.tracked.clear();}

@@ -40,6 +40,7 @@ export async function renderDialogBar(){
   if(event.isComposing||composing)return;
   if(event.key==='Escape'){event.preventDefault();clear();void api.dialogBarCollapse();}
   else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();results.select(results.selected+(event.key==='ArrowDown'?1:-1),true);}
+  else if((event.key==='Home'||event.key==='End')&&!input.value.trim()&&results.count){event.preventDefault();results.select(event.key==='Home'?0:results.count-1,true);}
   else if(event.key==='Enter'&&event.target===input){event.preventDefault();const text=input.value.trim(),item=results.entry();if(/^[a-z]:[\\/]|^\\\\/i.test(text))void choose(text);else if(item)void choose(item.path);}
  });
  for(const key of ['bookmarks','recent'] as const)q('dialog-'+key).onclick=()=>{const next=group===key?'':key;clear();group=next;q('dialog-'+key).setAttribute('aria-pressed',String(!!group));input.focus();void api.dialogBarData().then(acceptData).catch(toast);};

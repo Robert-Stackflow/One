@@ -169,6 +169,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:true } });
   const windowId = window.webContents.id; roles.set(windowId, view);
   if(view==='file-context'||view==='search-menu')popupLifecycle.track(window);
+  else if(view==='dialog-bar')popupLifecycle.track(window,300_000);
   const sendWindowState = () => {
     if(window.isDestroyed()||window.webContents.isDestroyed())return;
     const visible=window.isVisible()&&!window.isMinimized();
