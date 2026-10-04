@@ -24,7 +24,8 @@ async function run(){
   await expect.poll(()=>preview.locator('#pdf-found').textContent(),{timeout:30000}).not.toMatch(/查找中|查找 \d/);const status=await preview.locator('#pdf-found').textContent(),search={status,elapsedMs:Date.now()-searchStart,page:await preview.locator('#pdf-page').inputValue()};
   if(process.env.ONE_EXPECT_PDF_SEARCH_LIMIT==='1'){assert.equal(status,'未找到');assert.equal(search.page,'1');}
   else{assert.match(status,/1\/1/);assert.equal(search.page,'2050');await expect(preview.locator('.pdf-sheet[data-page="2050"] .textLayer')).toContainText('PDF_MARKER_2050_END');}
-  assert.deepEqual(errors,[]);const result={result:process.env.ONE_EXPECT_PDF_SEARCH_LIMIT==='1'?'EXPECTED_BASELINE_LIMIT':'PASS',imageBytes:(await fs.stat(imageFile)).size,scroll:scrollResult,search,errors};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+  const afterLong=read();await preview.close();await main.waitForTimeout(2000);const afterClose=read();await main.waitForTimeout(8000);const afterIdle=read();
+  assert.deepEqual(errors,[]);const result={result:process.env.ONE_EXPECT_PDF_SEARCH_LIMIT==='1'?'EXPECTED_BASELINE_LIMIT':'PASS',imageBytes:(await fs.stat(imageFile)).size,scroll:scrollResult,search,lifecycle:{afterImage:after,afterLong,afterClose,afterIdle},errors};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
  }finally{await app.close();}
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

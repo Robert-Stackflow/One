@@ -35,8 +35,9 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
   }
  }
  function recycleCanvas(canvas:HTMLCanvasElement){
+  if(activeCanvases.has(canvas))return;
+  if(!disposed){if(canvasPool.includes(canvas))return;if(canvasPool.length<8){canvasPool.push(canvas);return;}}
   canvas.width=0;canvas.height=0;
-  if(!disposed&&!activeCanvases.has(canvas)&&canvasPool.length<8&&!canvasPool.includes(canvas))canvasPool.push(canvas);
  }
  function clearSheet(sheet:HTMLElement){
   for(const canvas of sheet.querySelectorAll('canvas'))recycleCanvas(canvas);
@@ -57,7 +58,7 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
    syncWidth();
    sheet.style.setProperty('--scale-factor',String(scale));sheet.style.setProperty('--total-scale-factor',String(scale));
    const pixelScale=Math.min(devicePixelRatio,2,Math.sqrt(4_000_000/(viewport.width*viewport.height))),canvas=canvasPool.pop()||document.createElement('canvas'),text=document.createElement('div');
-   text.className='textLayer';canvas.width=Math.ceil(viewport.width*pixelScale);canvas.height=Math.ceil(viewport.height*pixelScale);
+   text.className='textLayer';const width=Math.ceil(viewport.width*pixelScale),height=Math.ceil(viewport.height*pixelScale);if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}else canvas.getContext('2d')!.reset();
    canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
    clearSheet(sheet);sheet.append(canvas,text);populated.add(sheet);
    const task=p.render({canvas,canvasContext:canvas.getContext('2d')!,viewport,transform:pixelScale!==1?[pixelScale,0,0,pixelScale,0,0]:undefined});
@@ -145,5 +146,5 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
   if(disposed||!sizes.size)return;const body=[...sizes].sort((a,b)=>b[1]-a[1])[0][0],seen=new Set<string>(),levels=[...new Set(candidates.filter(c=>c.size>=body*1.2&&c.size>=body+2).map(c=>c.size))].sort((a,b)=>b-a);for(const c of candidates){if(c.size<body*1.2||c.size<body+2||seen.has(c.label)||/^\d+$/.test(c.label))continue;seen.add(c.label);entries.push({label:c.label,depth:levels.indexOf(c.size),activate:()=>jump(c.n)});if(entries.length>=1000)break;}if(entries.length)metadata({'目录来源':'文字字号识别','目录扫描范围':document.numPages>300?'前 300 页':'全部页面'});outline(entries);
  }
  void loading.promise.then(async pdfDoc=>{if(disposed)return;pdf=pdfDoc;const base=await withPage(1,first=>first.getViewport({scale:1}));if(disposed)return;dimensions.set(1,{width:base.width,height:base.height});const meta=await pdfDoc.getMetadata().catch(()=>null);if(disposed)return;metadata({'页数':String(pdf.numPages),...((meta?.info as any)?.Title?{'标题':String((meta!.info as any).Title)}:{})});layout();overview(Array.from({length:pdf.numPages},(_,i)=>({label:'第 '+(i+1)+' 页',activate:()=>jump(i+1),thumbnail:()=>thumbnail(i+1)})));void directory(pdfDoc).catch(()=>{});}).catch(error=>{if(!disposed)pages.innerHTML='<p class="render-error">'+esc(error.message||'PDF 无法读取')+'</p>';});
- return()=>{disposed=true;epoch++;searchRevision++;clearTimeout(resizeTimer);cancelAnimationFrame(frame);virtual?.dispose();resize.disconnect();scroll.removeEventListener('scroll',onScroll);scroll.removeEventListener('wheel',cancelJump);scroll.removeEventListener('pointerdown',cancelJump);scroll.removeEventListener('keydown',cancelJump);for(const task of tasks)task.cancel();for(const layer of layers)layer.cancel();rendered.clear();for(const sheet of [...populated])clearSheet(sheet);canvasPool.length=0;resources.clear();void loading.destroy();};
+ return()=>{disposed=true;epoch++;searchRevision++;clearTimeout(resizeTimer);cancelAnimationFrame(frame);virtual?.dispose();resize.disconnect();scroll.removeEventListener('scroll',onScroll);scroll.removeEventListener('wheel',cancelJump);scroll.removeEventListener('pointerdown',cancelJump);scroll.removeEventListener('keydown',cancelJump);for(const task of tasks)task.cancel();for(const layer of layers)layer.cancel();rendered.clear();for(const sheet of [...populated])clearSheet(sheet);for(const canvas of canvasPool){canvas.width=0;canvas.height=0;}canvasPool.length=0;resources.clear();void loading.destroy();};
 }
