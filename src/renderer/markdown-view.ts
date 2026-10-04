@@ -48,7 +48,7 @@ function lightboxStyles(){
 }
 
 function lightboxLayout(){
-  return `.markdown-lightbox{background:#1b1d21}.lightbox-footer{flex-direction:column;align-items:stretch;gap:8px;padding:9px 14px 11px}.lightbox-thumbs{width:100%;min-width:0;max-height:50px;flex:none;justify-content:safe center;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.lightbox-thumbs::-webkit-scrollbar{display:none}.lightbox-controls{justify-content:center;min-height:34px}.lightbox-thumb{height:46px}`;
+  return `.markdown-lightbox{background:#1b1d21}.lightbox-footer{flex-direction:column;align-items:stretch;gap:8px;padding:9px 14px 11px}.lightbox-thumbs{display:block;width:100%;min-width:0;max-height:50px;flex:none;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.lightbox-thumbs::-webkit-scrollbar{display:none}.lightbox-thumb-track{display:flex;align-items:center;justify-content:center;gap:7px;width:max-content;min-width:100%;height:50px}.lightbox-controls{justify-content:center;min-height:34px}.lightbox-thumb{height:46px}`;
 }
 
 function markdownStyles(){
@@ -81,9 +81,9 @@ async function rewriteImages(doc:Document){
 function installLightbox(content:Document){
   const images=Array.from(content.querySelectorAll<HTMLImageElement>('.markdown-content img'));
   const lightbox=content.createElement('div');lightbox.className='markdown-lightbox';lightbox.hidden=true;lightbox.setAttribute('role','dialog');lightbox.setAttribute('aria-label','图片预览');
-  lightbox.innerHTML=`<header class="lightbox-header"><span class="lightbox-title"></span><span class="lightbox-count"></span><button class="lightbox-button" type="button" data-gallery-action="close" aria-label="关闭图片预览">${icon('close')}</button></header><div class="lightbox-stage"><img alt=""></div><footer class="lightbox-footer"><div class="lightbox-thumbs"></div><div class="lightbox-controls"><button class="lightbox-button" type="button" data-gallery-action="zoom-out" aria-label="缩小">${icon('minus')}</button><button class="lightbox-button" type="button" data-gallery-action="zoom-in" aria-label="放大">${icon('plus')}</button><button class="lightbox-button" type="button" data-gallery-action="previous" aria-label="上一张">${icon('back')}</button><button class="lightbox-button" type="button" data-gallery-action="next" aria-label="下一张">${icon('arrow')}</button></div></footer>`;
+  lightbox.innerHTML=`<header class="lightbox-header"><span class="lightbox-title"></span><span class="lightbox-count"></span><button class="lightbox-button" type="button" data-gallery-action="close" aria-label="关闭图片预览">${icon('close')}</button></header><div class="lightbox-stage"><img alt=""></div><footer class="lightbox-footer"><div class="lightbox-thumbs"><div class="lightbox-thumb-track"></div></div><div class="lightbox-controls"><button class="lightbox-button" type="button" data-gallery-action="zoom-out" aria-label="缩小">${icon('minus')}</button><button class="lightbox-button" type="button" data-gallery-action="zoom-in" aria-label="放大">${icon('plus')}</button><button class="lightbox-button" type="button" data-gallery-action="previous" aria-label="上一张">${icon('back')}</button><button class="lightbox-button" type="button" data-gallery-action="next" aria-label="下一张">${icon('arrow')}</button></div></footer>`;
   content.body.append(lightbox);
-  const photo=lightbox.querySelector<HTMLImageElement>('.lightbox-stage img')!,title=lightbox.querySelector<HTMLElement>('.lightbox-title')!,count=lightbox.querySelector<HTMLElement>('.lightbox-count')!,thumbs=lightbox.querySelector<HTMLElement>('.lightbox-thumbs')!;
+  const photo=lightbox.querySelector<HTMLImageElement>('.lightbox-stage img')!,title=lightbox.querySelector<HTMLElement>('.lightbox-title')!,count=lightbox.querySelector<HTMLElement>('.lightbox-count')!,thumbs=lightbox.querySelector<HTMLElement>('.lightbox-thumbs')!,thumbTrack=thumbs.querySelector<HTMLElement>('.lightbox-thumb-track')!;
   let index=0,zoom=1,zoomBaseWidth=0,previousOverflow='',previousFocus:HTMLElement|null=null;
   let thumbnailCursor=0,thumbnailsRunning=false;
   const fillThumbnails=async()=>{
@@ -109,7 +109,7 @@ function installLightbox(content:Document){
   };
   const open=(image:HTMLImageElement)=>{
     if(!images.length)return;
-    if(!thumbs.childElementCount){for(const [i,item] of images.entries()){const button=content.createElement('button');button.type='button';button.className='lightbox-thumb';button.dataset.galleryIndex=String(i);button.setAttribute('aria-label',`${i+1}：${item.alt||'图片'}`);const thumb=content.createElement('img');thumb.alt='';button.append(thumb);thumbs.append(button);}}
+    if(!thumbTrack.childElementCount){for(const [i,item] of images.entries()){const button=content.createElement('button');button.type='button';button.className='lightbox-thumb';button.dataset.galleryIndex=String(i);button.setAttribute('aria-label',`${i+1}：${item.alt||'图片'}`);const thumb=content.createElement('img');thumb.alt='';button.append(thumb);thumbTrack.append(button);}}
     previousFocus=content.activeElement as HTMLElement|null;previousOverflow=content.documentElement.style.overflow;content.documentElement.style.overflow='hidden';lightbox.hidden=false;select(images.indexOf(image));lightbox.querySelector<HTMLButtonElement>('[data-gallery-action=close]')?.focus();
     void fillThumbnails();
   };
@@ -169,14 +169,35 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
   const onLoad=()=>{
     const content=frame.contentDocument;if(!content)return;
     const deferred=new Set(content.querySelectorAll<HTMLImageElement>('.markdown-content img[data-preview-src]'));
+    const loadedImages=new Set<HTMLImageElement>();
     const pendingMath=new Set(content.querySelectorAll<HTMLElement>('.markdown-content .math-pending[data-math]'));
+    const renderedMath=new Set<HTMLElement>();
     let frameId=0;
     const near=(element:Element,height:number)=>{const bounds=element.getBoundingClientRect();return bounds.top<=height+1000&&bounds.bottom>=-1000;};
     const loadNear=()=>{
       const height=content.documentElement.clientHeight||frame.clientHeight;
-      for(const image of deferred){if(!near(image,height))continue;const source=image.dataset.previewSrc;if(source){image.src=source;delete image.dataset.previewSrc;}deferred.delete(image);}
+      for(const image of loadedImages){
+        if(!image.isConnected){loadedImages.delete(image);continue;}
+        const bounds=image.getBoundingClientRect();
+        if(bounds.top<=height+4000&&bounds.bottom>=-4000)continue;
+        image.dataset.previewSrc=image.src;
+        image.removeAttribute('src');
+        loadedImages.delete(image);
+        deferred.add(image);
+      }
+      for(const image of deferred){if(!near(image,height))continue;const source=image.dataset.previewSrc;if(source){image.src=source;delete image.dataset.previewSrc;loadedImages.add(image);}deferred.delete(image);}
+      for(const node of renderedMath){
+        if(!node.isConnected){renderedMath.delete(node);continue;}
+        const bounds=node.getBoundingClientRect();
+        if(bounds.top<=height+4000&&bounds.bottom>=-4000)continue;
+        const source=node.dataset.math||'';
+        if(node.tagName==='SPAN'){node.style.display='inline-block';node.style.width=Math.max(1,Math.ceil(bounds.width))+'px';node.style.height=Math.max(1,Math.ceil(bounds.height))+'px';node.style.whiteSpace='nowrap';node.style.overflow='hidden';}
+        else node.style.height=Math.max(1,Math.ceil(bounds.height))+'px';
+        node.textContent=source;node.classList.add('math-pending');node.setAttribute('aria-label',source);
+        renderedMath.delete(node);pendingMath.add(node);
+      }
       let rendered=0;
-      for(const node of pendingMath){if(!near(node,height))continue;const source=node.dataset.math||'';try{node.innerHTML=katex.renderToString(source,{displayMode:node.dataset.display==='true',throwOnError:false,trust:false});}catch{node.textContent=source;}node.classList.remove('math-pending');delete node.dataset.math;pendingMath.delete(node);if(++rendered>=12){schedule();break;}}
+      for(const node of pendingMath){if(!near(node,height))continue;const source=node.dataset.math||'';node.style.removeProperty('display');node.style.removeProperty('width');node.style.removeProperty('height');node.style.removeProperty('white-space');node.style.removeProperty('overflow');node.removeAttribute('aria-label');try{node.innerHTML=katex.renderToString(source,{displayMode:node.dataset.display==='true',throwOnError:false,trust:false});}catch{node.textContent=source;}node.classList.remove('math-pending');pendingMath.delete(node);renderedMath.add(node);if(++rendered>=12){schedule();break;}}
     };
     const schedule=()=>{if(frameId)return;frameId=requestAnimationFrame(()=>{frameId=0;loadNear();});};
     content.defaultView?.addEventListener('scroll',schedule,{passive:true});

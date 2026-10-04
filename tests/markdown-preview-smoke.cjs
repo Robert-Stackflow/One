@@ -77,17 +77,31 @@ async function main(){
       await preview.screenshot({path:path.join(output,'math-deep.png')});
       const scroll=await preview.frameLocator('iframe').locator('body').evaluate(body=>{const scroller=body.ownerDocument.scrollingElement;scroller.scrollTop=scroller.scrollHeight;return {top:scroller.scrollTop,height:scroller.scrollHeight};});
       assert.ok(scroll.top>0,JSON.stringify(scroll));
+      await expect(document.locator('#one-math-probe')).toHaveClass(/math-pending/);
+      await document.locator('#one-math-probe').evaluate(node=>node.scrollIntoView({block:'center'}));
+      await expect.poll(()=>document.locator('#one-math-probe .katex').count()).toBeGreaterThan(0);
+      large.mathReturnOffset=Math.round(Math.abs(await document.locator('#one-math-probe').evaluate(node=>node.getBoundingClientRect().top-document.documentElement.clientHeight/2)));
+      assert.ok(large.mathReturnOffset<160,`公式重新进入视野时位置偏移：${large.mathReturnOffset}px`);
       const laterImage=document.locator('img[data-preview-src*="rlhf-vs.-rlvr.png"],img[src*="rlhf-vs.-rlvr.png"]');
       await laterImage.evaluate(image=>image.scrollIntoView({block:'center'}));
       await expect.poll(()=>laterImage.evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
       await preview.frameLocator('iframe').locator('.markdown-content img').last().evaluate(image=>image.click());
       await expect(preview.frameLocator('iframe').locator('.lightbox-count')).toHaveText(/\d+ \/ 27/);
+      const thumbOverflow=await document.locator('.lightbox-thumbs').evaluate(row=>row.scrollWidth-row.clientWidth);
+      assert.ok(thumbOverflow>0,`长缩略图列表应该能横向滚动：${thumbOverflow}`);
+      await document.locator('.lightbox-thumb').first().click();
+      await expect(document.locator('.lightbox-count')).toHaveText('1 / 27');
+      await document.locator('.lightbox-thumb').last().click();
+      await expect(document.locator('.lightbox-count')).toHaveText('27 / 27');
       await preview.frameLocator('iframe').locator('[data-gallery-action=close]').click();
+      const firstImage=document.locator('.markdown-content img').first();
+      await firstImage.evaluate(image=>image.scrollIntoView({block:'center'}));
+      await expect.poll(()=>firstImage.evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
       await preview.screenshot({path:path.join(output,'large-mdx.png')});
       await preview.close();
     }
     const galleryFile=process.env.ONE_GALLERY_MDX;
-    if(galleryFile){preview=await open(galleryFile);const picture=preview.frameLocator('iframe');const imageCount=await picture.locator('.markdown-content img').count();assert.ok(imageCount>1);await picture.locator('.markdown-content img').first().evaluate(image=>image.click());await expect(picture.locator('.lightbox-thumb')).toHaveCount(imageCount);await expect.poll(()=>picture.locator('.lightbox-thumb img').evaluateAll(items=>items.filter(item=>item.src.startsWith('data:image/')).length),{timeout:30000}).toBe(imageCount);const dimensions=await picture.locator('.lightbox-thumb img').evaluateAll(items=>items.map(item=>[item.naturalWidth,item.naturalHeight]));assert.ok(dimensions.every(([width,height])=>width>0&&height>0&&width<=96&&height<=84),JSON.stringify(dimensions));const centered=await picture.locator('.lightbox-thumbs').evaluate(row=>{const first=row.firstElementChild.getBoundingClientRect(),last=row.lastElementChild.getBoundingClientRect(),bounds=row.getBoundingClientRect();return Math.abs((first.left+last.right)/2-(bounds.left+bounds.right)/2);});assert.ok(centered<3,`缩略图没有居中：${centered}`);await preview.screenshot({path:path.join(output,'gallery-real.png')});await expect.poll(()=>picture.locator('.lightbox-stage img').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);await picture.locator('[data-gallery-action=zoom-in]').click();const zoom15=await picture.locator('.lightbox-stage img').evaluate(image=>parseFloat(image.style.width));await picture.locator('[data-gallery-action=zoom-in]').click();const zoom20=await picture.locator('.lightbox-stage img').evaluate(image=>parseFloat(image.style.width));assert.ok(Math.abs(zoom20/zoom15-4/3)<.01,`缩放比例异常：${zoom15} → ${zoom20}`);await preview.close();}
+    if(galleryFile){preview=await open(galleryFile);const picture=preview.frameLocator('iframe');const imageCount=await picture.locator('.markdown-content img').count();assert.ok(imageCount>1);await picture.locator('.markdown-content img').first().evaluate(image=>image.click());await expect(picture.locator('.lightbox-thumb')).toHaveCount(imageCount);await expect.poll(()=>picture.locator('.lightbox-thumb img').evaluateAll(items=>items.filter(item=>item.src.startsWith('data:image/')).length),{timeout:30000}).toBe(imageCount);const dimensions=await picture.locator('.lightbox-thumb img').evaluateAll(items=>items.map(item=>[item.naturalWidth,item.naturalHeight]));assert.ok(dimensions.every(([width,height])=>width>0&&height>0&&width<=96&&height<=84),JSON.stringify(dimensions));const layout=await picture.locator('.lightbox-thumbs').evaluate(row=>{const buttons=row.querySelectorAll('.lightbox-thumb'),first=buttons[0].getBoundingClientRect(),last=buttons[buttons.length-1].getBoundingClientRect(),bounds=row.getBoundingClientRect();return {offset:Math.abs((first.left+last.right)/2-(bounds.left+bounds.right)/2),overflow:row.scrollWidth-row.clientWidth};});if(layout.overflow<1)assert.ok(layout.offset<3,`缩略图没有居中：${JSON.stringify(layout)}`);await preview.screenshot({path:path.join(output,'gallery-real.png')});await expect.poll(()=>picture.locator('.lightbox-stage img').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);await picture.locator('[data-gallery-action=zoom-in]').click();const zoom15=await picture.locator('.lightbox-stage img').evaluate(image=>parseFloat(image.style.width));await picture.locator('[data-gallery-action=zoom-in]').click();const zoom20=await picture.locator('.lightbox-stage img').evaluate(image=>parseFloat(image.style.width));assert.ok(Math.abs(zoom20/zoom15-4/3)<.01,`缩放比例异常：${zoom15} → ${zoom20}`);await preview.close();}
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify({result:'PASS',math,linkMetadata:linkMetadata&&{domain:linkMetadata.domain,title:linkMetadata.title,description:linkMetadata.description,image:!!linkMetadata.image},large,output},null,2));
   }finally{await app.close();}

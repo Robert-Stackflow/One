@@ -43,10 +43,28 @@ async function main(){
     states.push(await stage('gallery'));
     const maxGalleryDelta=Number(process.env.ONE_MAX_GALLERY_DELTA_MB||0);
     if(maxGalleryDelta>0)assert.ok(states.at(-1).privateMB-states.at(-2).privateMB<maxGalleryDelta,`Gallery retained too much memory: ${states.at(-1).privateMB-states.at(-2).privateMB} MiB`);
+    let walk;
+    if(process.env.ONE_SCROLL_WALK==='1'){
+      await preview.frameLocator('iframe').locator('[data-gallery-action=close]').click();
+      await preview.evaluate(()=>{window.markdownGaps=[];let last=performance.now();window.markdownHeartbeat=setInterval(()=>{const now=performance.now();window.markdownGaps.push(now-last);last=now;},20);});
+      let offset=0,steps=0;
+      const body=preview.frameLocator('iframe').locator('body');
+      for(;steps<600;steps++){
+        const position=await body.evaluate((element,value)=>{const scroller=element.ownerDocument.scrollingElement;scroller.scrollTop=value;return {height:scroller.scrollHeight,viewport:scroller.clientHeight};},offset);
+        if(offset>=position.height-position.viewport)break;
+        offset+=Math.max(450,position.viewport*.75);
+        await pause(20);
+      }
+      await pause(500);
+      const elements=await body.evaluate(element=>({renderedMath:element.querySelectorAll('.katex').length,pendingMath:element.querySelectorAll('.math-pending').length,loadedImages:Array.from(element.querySelectorAll('.markdown-content img')).filter(image=>image.naturalWidth>0).length,elements:element.querySelectorAll('.markdown-content *').length}));
+      const gaps=await preview.evaluate(()=>{clearInterval(window.markdownHeartbeat);return window.markdownGaps;});
+      walk={steps,maxGapMs:Math.round(Math.max(...gaps)),...elements};
+      states.push(await stage('walked'));
+    }
     await preview.close();await pause(5000);states.push(await stage('closed'));
     const cooldown=Number(process.env.ONE_BENCH_COOLDOWN_MS||5000);
     if(cooldown>5000){await pause(cooldown-5000);states.push(await stage('closed-idle'));}
-    const report={file,size:(await fs.stat(file)).size,readyMs,thumbnailsMs,images:imageCount,dom,states};
+    const report={file,size:(await fs.stat(file)).size,readyMs,thumbnailsMs,images:imageCount,dom,walk,states};
     await fs.writeFile(path.join(output,'result.json'),JSON.stringify(report,null,2));
     console.log(JSON.stringify(report));
   }finally{await app.close();}
