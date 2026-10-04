@@ -8,7 +8,7 @@ import type {EchoChannel} from '../shared/echo';
 import {echoNames} from '../shared/echo';
 import {CapsDeadline} from '../shared/quick-actions';
 import type {LevelState} from '../shared/hud';
-type Callbacks = { echo(text: string,channel?:EchoChannel): void; level(value:LevelState):void;caps(active:boolean):void; show(): void; color():void; preview(hwnd: number): Promise<void> };
+type Callbacks = { echo(text: string,channel?:EchoChannel): void; level(value:LevelState):void;caps(active:boolean):void; show(): void; color():void; preview(hwnd: number,focus:number): Promise<void> };
 export class InputService {
   private modalActive=false;
   setModalActive(active:boolean){this.modalActive=active;this.configureNative();this.checkIndicators();}
@@ -35,9 +35,9 @@ export class InputService {
       this.callbacks.echo([...modifiers, name].join(' + '),'keys');
     }
     if (this.settings.explorerPreview && event.keycode === UiohookKey.Space && !modifiers.length && Date.now() - this.lastPreview > 400 && !this.previewBusy) {
-      const f = foreground(); if (!f?.fileView) return;
+      const f = foreground(true); if (!f?.fileView||!f.focus) return;
       this.lastPreview = Date.now(); this.previewBusy = true;
-      void this.callbacks.preview(f.hwnd).catch(error => { this.error = String(error); }).finally(() => { this.previewBusy = false; });
+      void this.callbacks.preview(f.hwnd,f.focus).catch(error => { this.error = String(error); }).finally(() => { this.previewBusy = false; });
     }
   }
   update(settings: Settings) {

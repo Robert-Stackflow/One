@@ -124,9 +124,9 @@ function positionMenu(p:MenuPanel,width:number,height:number){if(p.window.isDest
 }
 async function favoriteCurrentFolder(){await menuContextReady;const path=searchContext.currentFolder;if(!path)throw new Error('当前文件夹不可用');if(!settings.search.bookmarks.includes(path))await saveSettings(current=>{if(current.search.bookmarks.length>=64)throw new Error('收藏最多包含 64 个文件夹');return {...current,search:{...current.search,bookmarks:[...new Set([...current.search.bookmarks,path])]}};});}
 function sendMenu(p:MenuPanel){if(!p.depth)p.window.webContents.send('one:menu-bar',p.bar);p.window.webContents.send('one:menu-reset',p.items);}
-async function showMenu(hwnd:number){hideMenus();clearTimeout(menuIdleCleanup);searchWindow?.hide();const revision=menuRevision,p=menuPanel(0);p.point=screen.getCursorScreenPoint();p.source='';positionMenu(p,286,250);
+async function showMenu(hwnd:number,focus=0){hideMenus();clearTimeout(menuIdleCleanup);searchWindow?.hide();const revision=menuRevision,p=menuPanel(0);p.point=screen.getCursorScreenPoint();p.source='';positionMenu(p,286,250);
  searchContext={kind:'menu',hwnd,pid:0,created:'',folders:[]};
- menuContextReady=searchBridge.context(hwnd).then(c=>{if(revision===menuRevision){searchContext={...c,kind:'menu'};menuService.updateContext(searchContext);}}).catch(e=>{if(revision===menuRevision)echo(e.message);});
+ menuContextReady=searchBridge.context(hwnd,focus).then(c=>{if(revision===menuRevision){searchContext={...c,kind:'menu'};menuService.updateContext(searchContext);}}).catch(e=>{if(revision===menuRevision)echo(e.message);});
  menuNodes=await menuService.open(searchContext);if(revision!==menuRevision)return;p.items=menuNodes;p.bar=menuService.toolbar();menuService.updateContext(searchContext);positionMenu(p,286,Math.max(40,menuNodes.reduce((n,i)=>n+(i.kind==='separator'?13:35),16+(p.bar.top.length?40:0)+(p.bar.bottom.length?40:0))));sendMenu(p);
  p.readiness.run(()=>{if(revision===menuRevision){sendMenu(p);popupFocus(p.window);}});
  // First child is prepared while the user moves to a menu item.
@@ -145,15 +145,16 @@ function searchPopup(embedded:boolean){let w=cachedSearch.get(embedded);if(w&&!w
  // The BrowserWindow and its webContents are already destroyed when 'closed' fires.
  w.on('close',e=>{if(!quitting&&!testMode){e.preventDefault();own.hide();}});w.on('closed',()=>{clearTimeout(idleCleanup);if(cachedSearch.get(embedded)===own)cachedSearch.delete(embedded);searchReadyWindows.delete(windowId);nativeMenus.delete(windowId);if(searchWindow===own){searchWindow=null;searchRevision++;searchTyping=false;overlay?.detach();overlay=undefined;}});return w;
 }
-function showSearch(kind:SearchContext['kind']='search',hwnd=foreground()?.hwnd||0,typing=false){
+function showSearch(kind:SearchContext['kind']='search',hwnd=foreground(true)?.hwnd||0,typing=false,focus=0){
+ if(!focus){const source=foreground(true);if(source?.hwnd===hwnd)focus=source.focus;}
  if(kind==='dialog'){void dialogBar?.show(hwnd).catch(error=>echo(error.message));return;}
- fileMenu?.hide(false);launcher?.refresh();if(kind==='menu'){void showMenu(hwnd).catch(error=>echo(error.message));return;}hideMenus();searchWindow?.hide();overlay?.detach();overlay=undefined;
+ fileMenu?.hide(false);launcher?.refresh();if(kind==='menu'){void showMenu(hwnd,focus).catch(error=>echo(error.message));return;}hideMenus();searchWindow?.hide();overlay?.detach();overlay=undefined;
  const embedded=kind==='explorer',revision=++searchRevision;searchTyping=typing;inlineSearch=embedded;searchContext={kind,hwnd,pid:0,created:'',folders:[]};const w=searchPopup(embedded);searchWindow=w;
  const show=()=>{if(revision!==searchRevision||w.isDestroyed())return;if(embedded){overlay=new ExplorerOverlay(w);overlay.attach(hwnd);}else{const a=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea,width=Math.min(740,a.width-32);w.setBounds({x:Math.round(a.x+(a.width-width)/2),y:Math.round(a.y+a.height*.2),width,height:64},false);}w.webContents.send('one:search-reset');w.webContents.send('one:search-context',searchContext);popupFocus(w);replaySearchInput(w,revision);};
  if(w.webContents.isLoading())w.once('ready-to-show',show);else show();
  // Prepare the result menu after the search input has appeared, not at startup.
  setTimeout(()=>{if(!quitting&&searchWindow===w&&!w.isDestroyed()&&w.isVisible())fileMenu?.warm();},80).unref();
- void searchBridge.context(hwnd).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
+ void searchBridge.context(hwnd,focus).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
 function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();if(settings.search.explorerTyping)searchPopup(true);dialogBar?.warm();}
 async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{await searchBridge.jump(searchContext,path);}catch(error){searchWindow?.show();searchWindow?.focus();throw error;}}else{const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
@@ -212,12 +213,12 @@ const fileActionIPC=new Set(['file-action-data','window-action','window-state','
 function handle(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown, allowed = ['main']) {
   ipcMain.handle(`one:${name}`, (event, ...args) => { const role = roles.get(event.sender.id); if (!role || !(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效'); return handler(event, ...args); });
 }
-async function runMaintenance(mode: 'startup' | 'registry' | 'selection') {
+async function runMaintenance(mode: 'startup' | 'registry') {
   if(mode==='registry')return nativeMaintenance(mode);
   const exe = join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
   const script = join(__dirname, 'maintenance.ps1').replace('app.asar\\', 'app.asar.unpacked\\');
-  const result = await execute(exe, ['-NoProfile', '-NonInteractive', '-File', script, '-Mode', mode==='startup'?'tasks':mode], { windowsHide: true, timeout: 30000, maxBuffer: 10 * 1024 * 1024, encoding: 'utf8' });
-  const rows=JSON.parse(result.stdout.trim() || '[]');return mode==='startup'?[...await nativeMaintenance('startup'),...rows]:rows;
+  const result = await execute(exe, ['-NoProfile', '-NonInteractive', '-File', script, '-Mode', 'tasks'], { windowsHide: true, timeout: 30000, maxBuffer: 10 * 1024 * 1024, encoding: 'utf8' });
+  const rows=JSON.parse(result.stdout.trim() || '[]');return [...await nativeMaintenance('startup'),...rows];
 }
 async function preparePreview(path: string, owner: number): Promise<PreviewData> {
   for (const [key,value] of assets) if(value.owner===owner) assets.delete(key);
@@ -293,6 +294,11 @@ function colorShortcut(value:string){
     colorShortcutError='';
   }catch(error){colorShortcutError=String((error as Error).message||error);throw error;}
   finally{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:color-shortcut-status',colorShortcutStatus());}
+}
+async function previewExplorerSelection(hwnd:number,focus:number){
+ const context=await searchBridge.context(hwnd,focus),current=foreground(true);
+ if(current?.hwnd!==hwnd||current.focus!==focus||context.kind!=='explorer'||context.selected?.length!==1)return;
+ await preview(filePath(context.selected[0]));
 }
 function registerIPC() {
   handle('explorer-menu-state',()=>explorerMenuState());
@@ -455,14 +461,14 @@ async function start() {
   diskMonitor=new DiskMonitorService(value=>{if(main&&!main.isDestroyed()&&main.isVisible()&&!main.isMinimized())main.webContents.send('one:disk-monitor',value);},(drive,state)=>{const volume=state.volumes.find(v=>v.drive===drive);if(main&&!main.isDestroyed())main.webContents.send('one:disk-alert',{drive,free:volume?.free||0});if(!testMode&&Notification.isSupported()){const notice=new Notification({title:'One · 磁盘空间不足',body:drive+' 剩余 '+((volume?.free||0)/1024**3).toFixed(2)+' GB'});notice.on('click',()=>{showMain();main.webContents.send('one:disk-alert-open');});notice.show();}});
   diskMonitor.configure(settings.diskMonitor);
   echoes=new EchoService(windowFor,()=>settings,placement=>saveSettings(current=>({...current,echo:{...current.echo,keys:{...current.echo.keys,...placement}}})),()=>{if(main&&!main.isDestroyed())main.webContents.send('one:echo-position');});
-  initNative(); foreground(); input = new InputService(settings, { echo, level:value=>echoes.level(value),caps:active=>echoes.caps(active),show: showMain, color:()=>void pickColor().catch(error=>echo(error.message)), preview: async hwnd => { const selected: { hwnd: number; path: string }[] = await runMaintenance('selection'); if (foreground()?.hwnd !== hwnd) return; const item = selected.find(row => row.hwnd === hwnd); if (item) await preview(filePath(item.path)); } });
+  initNative(); foreground(); input = new InputService(settings, { echo, level:value=>echoes.level(value),caps:active=>echoes.caps(active),show: showMain, color:()=>void pickColor().catch(error=>echo(error.message)), preview:previewExplorerSelection });
   locksmith=new LocksmithService(state=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:locks',state);});
   awake=new AwakeService(utilityChanged);topmost=new TopmostService(utilityChanged,echo);awake.update(settings.utilities.awake);topmost.update(settings.utilities.topmost);
   search=new SearchService(join(app.getPath('userData'),'file-index.ndjson'),settings.search,searchChanged,process.env.ONE_SEARCH_BACKEND==='memory'?'memory':'disk');searchBridge=new SearchBridge(showSearch,searchChanged,echo);
   configurePicker(() => settings.search.bookmarks, async () => (await searchBridge.context(0)).folders);
   launcher=new LauncherService(items=>{search.launchers(items);searchChanged();});search.launchers(launcher.entries());launcher.refresh();
   fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}});
-  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch(),undefined,command=>menuConfirmation.request(command),favoriteCurrentFolder,async(command,context)=>{if(command.onePage){const target=await oneMenuTarget(command,context);showMain();main.webContents.send('one:navigate-page',target);}else if(command.oneAction==='pick-color')await pickColor();});
+  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch('search',searchContext.hwnd,false,searchContext.tab),undefined,command=>menuConfirmation.request(command),favoriteCurrentFolder,async(command,context)=>{if(command.onePage){const target=await oneMenuTarget(command,context);showMain();main.webContents.send('one:navigate-page',target);}else if(command.oneAction==='pick-color')await pickColor();});
   textService=new TextService((owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>w.webContents.id===owner);if(window&&!window.webContents.isDestroyed())window.webContents.send('one:text-progress',value);});
   fileTools=new FileToolsService(join(app.getPath('userData'),'file-tools'),(owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&w.webContents.id===owner);window?.webContents.send('one:file-tools-progress',value);});
   colorEditor=new ColorEditor(()=>windowFor('color-editor',{width:420,height:360,minWidth:320,minHeight:200,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,title:'颜色 · One'}),()=>({history:settings.colorHistory,formats:settings.colorVisibleFormats,format:settings.colorFormat,showEditor:settings.colorShowEditor}));

@@ -1,6 +1,6 @@
 import koffi from 'koffi';
 import { screen } from 'electron';
-export interface Foreground { hwnd: number; name: string; className: string; fileView: boolean; password: boolean; fullscreen: boolean }
+export interface Foreground { hwnd: number; focus: number; name: string; className: string; fileView: boolean; password: boolean; fullscreen: boolean }
 let native: any;
 export let nativeError = '';
 export function initNative() {
@@ -25,11 +25,11 @@ export function initNative() {
 }
 function classOf(hwnd: number) { const buffer = Buffer.alloc(512); native.className(hwnd, buffer, 256); return buffer.toString('utf16le').replace(/\0.*$/s, ''); }
 let cache: Foreground | null = null; let cacheTime = 0;
-export function foreground(): Foreground | null {
+export function foreground(fresh=false): Foreground | null {
   if (!native) return null;
   try {
     const hwnd = native.foreground();if(!hwnd)return null;
-    if(cache?.hwnd===hwnd&&Date.now()-cacheTime<80)return cache;
+    if(!fresh&&cache?.hwnd===hwnd&&Date.now()-cacheTime<80)return cache;
     const className = classOf(hwnd); const pid = [0]; native.pid(hwnd, pid);
     let name = ''; const process = native.open(0x1000, false, pid[0]);
     if (process) { try { const buffer = Buffer.alloc(65536); const count = [32768]; if (native.image(process, 0, buffer, count)) name = buffer.toString('utf16le', 0, count[0] * 2).split('\\').pop() || ''; } finally { native.close(process); } }
@@ -39,7 +39,7 @@ export function foreground(): Foreground | null {
     const display = screen.getDisplayNearestPoint(screen.screenToDipPoint({ x: bounds.left, y: bounds.top }));
     const a = screen.screenToDipPoint({ x: bounds.left, y: bounds.top }); const b = screen.screenToDipPoint({ x: bounds.right, y: bounds.bottom }); const d = display.bounds;
     const fullscreen = !/^(Progman|WorkerW|Shell_TrayWnd|Shell_SecondaryTrayWnd)$/.test(className) && pid[0] !== processPid() && Math.abs(a.x - d.x) <= 2 && Math.abs(a.y - d.y) <= 2 && Math.abs(b.x - d.x - d.width) <= 2 && Math.abs(b.y - d.y - d.height) <= 2;
-    cache = { hwnd, name, className, fullscreen, fileView: /^(CabinetWClass|ExploreWClass)$/.test(className) && /^(DirectUIHWND|SysListView32)$/.test(focusClass), password: focusClass === 'Edit' && !!(native.style(info.hwndFocus, -16) & 0x20) }; cacheTime = Date.now(); return cache;
+    cache = { hwnd, focus:info.hwndFocus||0, name, className, fullscreen, fileView: /^(CabinetWClass|ExploreWClass)$/.test(className) && /^(DirectUIHWND|SysListView32)$/.test(focusClass), password: focusClass === 'Edit' && !!(native.style(info.hwndFocus, -16) & 0x20) }; cacheTime = Date.now(); return cache;
   } catch (error) { nativeError = String(error); return null; }
 }
 const processPid = () => process.pid;

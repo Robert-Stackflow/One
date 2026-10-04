@@ -13,7 +13,7 @@ export interface SearchEntry {path:string;name:string;directory:boolean;modified
 export interface SearchState {running:boolean;count:number;scanned:number;issues:number;root:string;updated:number;error:string;watching:boolean}
 export interface SearchResult {items:SearchEntry[];total:number;elapsed:number;cancelled?:boolean;partial?:boolean;partialScope?:'global';localTotal?:number}
 export interface SearchProgress {token:string;result:SearchResult}
-export interface SearchContext {kind:'search'|'explorer'|'menu'|'dialog';hwnd:number;pid:number;created:string;currentFolder?:string;selected?:string[];folders:{path:string;hwnd:number;active:boolean}[]}
+export interface SearchContext {kind:'search'|'explorer'|'menu'|'dialog';hwnd:number;pid:number;created:string;tab?:number;currentFolder?:string;selected?:string[];folders:{path:string;hwnd:number;active:boolean}[]}
 export const defaultMenu=():SearchMenuItem[]=>[['opened','已打开的文件夹','folder'],['recent','最近访问','history'],['copy-path','复制当前路径','copy'],['terminal','在此打开 PowerShell','terminal'],['settings','自定义菜单','system']].map(([target,label,icon],i)=>({id:'default-'+i,parent:'',kind:'builtin',label,target,args:[],cwd:'',icon,enabled:true}));
 export const bookmarkMenuItem=(id='default-bookmarks'):SearchMenuItem=>({id,parent:'',kind:'builtin',label:'收藏文件夹',target:'bookmarks',args:[],cwd:'',icon:'star',enabled:true});
 export const defaultMenuBar=():MenuBarSettings=>({top:{actions:[],right:[]},bottom:{actions:['favorite','builtin:settings'],right:['builtin:settings']}});
