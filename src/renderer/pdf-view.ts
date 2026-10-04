@@ -9,9 +9,11 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
  host.innerHTML=`<div class="reader-toolbar">${iconButton('pdf-prev','上一页','back')}<input id="pdf-page" aria-label="PDF 页码" inputmode="numeric" value="1"><span id="pdf-total"></span>${iconButton('pdf-next','下一页','arrow')}<span class="toolbar-divider"></span>${iconButton('pdf-minus','缩小','minus')}<span id="pdf-scale"></span>${iconButton('pdf-plus','放大','plus')}${iconButton('pdf-fit','适应宽度','fit')}${iconButton('pdf-rotate','旋转页面','rotate')}<div class="spacer"></div><input id="pdf-search" aria-label="搜索 PDF" placeholder="查找文本"><button id="pdf-find">查找</button><span id="pdf-found" role="status"></span></div><div class="pdf-scroll"><div class="pdf-pages"></div></div>`;
  const get=<T extends HTMLElement>(id:string)=>host.querySelector<T>('#'+id)!,scroll=host.querySelector<HTMLElement>('.pdf-scroll')!,pages=host.querySelector<HTMLElement>('.pdf-pages')!;
  let pdf:PDFDocumentProxy|undefined,current=1,jumpTarget=0,scale=1,fit=true,rotation=0,epoch=0,disposed=false,query='',matches:number[]=[],matchIndex=-1,searchRevision=0,searching=false,searchComplete=false,frame=0,active=0,resizeTimer:ReturnType<typeof setTimeout>;
- const sheets=new Map<number,HTMLElement>(),dimensions=new Map<number,{width:number;height:number}>(),rendered=new Map<number,number>(),tasks=new Set<RenderTask>(),pageTasks=new Map<number,RenderTask>(),layers=new Set<TextLayer>(),queued=new Set<number>(),running=new Set<number>(),populated=new Set<HTMLElement>();let virtual:VirtualRows|undefined,heights:RowHeights|undefined;
+ const sheets=new Map<number,HTMLElement>(),dimensions=new Map<number,{width:number;height:number}>(),rendered=new Map<number,{at:number;pixels:number}>(),tasks=new Set<RenderTask>(),pageTasks=new Map<number,RenderTask>(),layers=new Set<TextLayer>(),queued=new Set<number>(),running=new Set<number>(),populated=new Set<HTMLElement>();let virtual:VirtualRows|undefined,heights:RowHeights|undefined;
  const loading=getDocument({url,cMapUrl:new URL('pdf/cmaps/',location.href).href,cMapPacked:true,standardFontDataUrl:new URL('pdf/standard_fonts/',location.href).href,wasmUrl:new URL('pdf/wasm/',location.href).href});
  const resources=new Map<number,PDFPageProxy>(),uses=new Map<number,number>(),canvasPool:HTMLCanvasElement[]=[],activeCanvases=new Set<HTMLCanvasElement>();
+ // Count backing pixels, not pages: six large pages can retain far more GPU memory than six text pages.
+ const cachedPixelLimit=12*1024*1024,poolPixelLimit=8*1024*1024;
  function syncWidth(){const space=pages.querySelector<HTMLElement>('.virtual-row-space');if(!space)return;let width=0;for(const n of sheets.keys())width=Math.max(width,(dimensions.get(n)||dimensions.get(1)!).width*scale);space.style.width=Math.ceil(width)+'px';}
  function releasePage(n:number){
   if(uses.has(n)||rendered.has(n))return;
@@ -36,7 +38,7 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
  }
  function recycleCanvas(canvas:HTMLCanvasElement){
   if(activeCanvases.has(canvas))return;
-  if(!disposed){if(canvasPool.includes(canvas))return;if(canvasPool.length<8){canvasPool.push(canvas);return;}}
+  if(!disposed){if(canvasPool.includes(canvas))return;if(canvasPool.length<8&&canvasPool.reduce((pixels,item)=>pixels+item.width*item.height,canvas.width*canvas.height)<=poolPixelLimit){canvasPool.push(canvas);return;}}
   canvas.width=0;canvas.height=0;
  }
  function clearSheet(sheet:HTMLElement){
@@ -45,7 +47,7 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
  }
  function controls(){get<HTMLInputElement>('pdf-page').value=String(current);get('pdf-total').textContent='/ '+(pdf?.numPages||'');get('pdf-scale').textContent=Math.round(scale*100)+'%';get<HTMLButtonElement>('pdf-prev').disabled=current<=1;get<HTMLButtonElement>('pdf-next').disabled=current>=(pdf?.numPages||1);host.dispatchEvent(new CustomEvent('preview-page',{bubbles:true,detail:{page:current}}));}
  const visible=(n:number)=>{const box=sheets.get(n)?.getBoundingClientRect(),root=scroll.getBoundingClientRect();return !!box&&box.bottom>root.top-600&&box.top<root.bottom+600;};
- function evict(){if(rendered.size<=6)return;for(const [n]of [...rendered].sort((a,b)=>a[1]-b[1])){if(rendered.size<=6)break;if(!visible(n)){const sheet=sheets.get(n);if(sheet)clearSheet(sheet);rendered.delete(n);releasePage(n);}}}
+ function evict(){let pixels=0;for(const item of rendered.values())pixels+=item.pixels;if(rendered.size<=6&&pixels<=cachedPixelLimit)return;for(const [n,item]of [...rendered].sort((a,b)=>a[1].at-b[1].at)){if(rendered.size<=6&&pixels<=cachedPixelLimit)break;if(!visible(n)){const sheet=sheets.get(n);if(sheet)clearSheet(sheet);rendered.delete(n);pixels-=item.pixels;releasePage(n);}}}
  async function render(n:number,version:number){
   if(!pdf||disposed)return;
   await withPage(n,async p=>{
@@ -71,7 +73,7 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
     const layer=new TextLayer({textContentSource:content,container:text,viewport});layers.add(layer);
     try{await layer.render();}finally{layers.delete(layer);}
     if(version!==epoch||disposed||!sheet.isConnected||sheets.get(n)!==sheet)return;
-    highlight(text);rendered.set(n,performance.now());sheet.classList.add('is-rendered');evict();
+    highlight(text);rendered.set(n,{at:performance.now(),pixels:canvas.width*canvas.height});sheet.classList.add('is-rendered');evict();
    }finally{tasks.delete(task);if(pageTasks.get(n)===task)pageTasks.delete(n);activeCanvases.delete(canvas);if(!canvas.isConnected)recycleCanvas(canvas);}
   });
  }

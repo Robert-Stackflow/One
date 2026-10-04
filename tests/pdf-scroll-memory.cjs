@@ -20,12 +20,23 @@ async function run(){
   await preview.waitForTimeout(1000);const after=read(),rendered=await preview.locator('.pdf-sheet canvas').count();assert.ok(rendered<=8,`Too many visible-page canvases: ${rendered}`);
   await preview.locator('#pdf-page').evaluate(input=>{input.value='1';input.dispatchEvent(new Event('change',{bubbles:true}));});await expect(preview.locator('.pdf-sheet[data-page="1"]')).toHaveClass(/is-rendered/);await expect(preview.locator('.pdf-sheet[data-page="1"] .textLayer')).toContainText('PDF_MARKER_1_END');
   const counters=await preview.evaluate(()=>{clearInterval(window.pdfHeartbeat);window.pdfCanvasObserver.disconnect();return{gaps:window.pdfGaps,canvasCount:window.pdfCanvasCount};}),gaps=counters.gaps;gaps.sort((a,b)=>a-b);const scrollResult={before,after,samples,rendered,canvasCount:counters.canvasCount,elapsedMs:Date.now()-started,p95:gaps[Math.floor(gaps.length*.95)],maxGap:gaps.at(-1)};
+  for(let i=0;i<7;i++)await preview.locator('#pdf-plus').click();
+  for(let page=1;page<=24;page++){
+   await preview.locator('#pdf-page').evaluate((input,n)=>{input.value=String(n);input.dispatchEvent(new Event('change',{bubbles:true}));},page);
+   await expect(preview.locator(`.pdf-sheet[data-page="${page}"]`)).toHaveClass(/is-rendered/,{timeout:15000});
+  }
+  const zoomed=await preview.evaluate(()=>{const canvases=[...document.querySelectorAll('.pdf-sheet.is-rendered canvas')];return{pages:canvases.map(canvas=>Number(canvas.closest('.pdf-sheet').dataset.page)),pixels:canvases.reduce((sum,canvas)=>sum+canvas.width*canvas.height,0)};});
+  assert.ok(zoomed.pages.includes(24),'The current page must remain rendered at high zoom');
+  assert.ok(zoomed.pixels<=12*1024*1024,`High-zoom cached canvases exceeded the pixel budget: ${JSON.stringify(zoomed)}`);
+  await preview.locator('#pdf-page').evaluate(input=>{input.value='22';input.dispatchEvent(new Event('change',{bubbles:true}));});
+  await expect(preview.locator('.pdf-sheet[data-page="22"] .textLayer')).toContainText('PDF_MARKER_22_END');
+  await preview.locator('#pdf-fit').click();
   await preview.evaluate(file=>window.one.selectPreview(file),longFile);await expect(preview.locator('#pdf-total')).toHaveText('/ 2050',{timeout:20000});await expect(preview.locator('.pdf-sheet[data-page="1"]')).toHaveClass(/is-rendered/);assert.ok(await preview.locator('.pdf-sheet').count()<30);await preview.locator('#pdf-search').fill('PDF_MARKER_2050_END');const searchStart=Date.now();await preview.locator('#pdf-find').click();
   await expect.poll(()=>preview.locator('#pdf-found').textContent(),{timeout:30000}).not.toMatch(/查找中|查找 \d/);const status=await preview.locator('#pdf-found').textContent(),search={status,elapsedMs:Date.now()-searchStart,page:await preview.locator('#pdf-page').inputValue()};
   if(process.env.ONE_EXPECT_PDF_SEARCH_LIMIT==='1'){assert.equal(status,'未找到');assert.equal(search.page,'1');}
   else{assert.match(status,/1\/1/);assert.equal(search.page,'2050');await expect(preview.locator('.pdf-sheet[data-page="2050"] .textLayer')).toContainText('PDF_MARKER_2050_END');}
   const afterLong=read();await preview.close();await main.waitForTimeout(2000);const afterClose=read();await main.waitForTimeout(8000);const afterIdle=read();
-  assert.deepEqual(errors,[]);const result={result:process.env.ONE_EXPECT_PDF_SEARCH_LIMIT==='1'?'EXPECTED_BASELINE_LIMIT':'PASS',imageBytes:(await fs.stat(imageFile)).size,scroll:scrollResult,search,lifecycle:{afterImage:after,afterLong,afterClose,afterIdle},errors};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+  assert.deepEqual(errors,[]);const result={result:process.env.ONE_EXPECT_PDF_SEARCH_LIMIT==='1'?'EXPECTED_BASELINE_LIMIT':'PASS',imageBytes:(await fs.stat(imageFile)).size,scroll:scrollResult,zoomed,search,lifecycle:{afterImage:after,afterLong,afterClose,afterIdle},errors};await fs.writeFile(path.join(out,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
  }finally{await app.close();}
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
