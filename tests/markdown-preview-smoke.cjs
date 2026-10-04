@@ -33,7 +33,7 @@ async function main(){
     assert.equal(await frame.locator('li .code-block code').evaluate(code=>getComputedStyle(code).borderTopWidth),'0px');
     await frame.locator('a[data-external-url]').evaluate(link=>link.scrollIntoView({block:'center'}));
     await preview.waitForTimeout(350);await preview.mouse.move(370,120);
-    await frame.locator('a[data-external-url]').hover({force:true});
+    await frame.locator('a[data-external-url]').hover();
     await preview.waitForTimeout(300);assert.equal(await frame.locator('.link-card').isVisible(),false);
     await expect(frame.locator('.link-card')).toBeVisible();
     await expect(frame.locator('.link-card')).toContainText(new URL(linkURL).hostname);
@@ -82,6 +82,17 @@ async function main(){
       await expect.poll(()=>document.locator('#one-math-probe .katex').count()).toBeGreaterThan(0);
       large.mathReturnOffset=Math.round(Math.abs(await document.locator('#one-math-probe').evaluate(node=>node.getBoundingClientRect().top-document.documentElement.clientHeight/2)));
       assert.ok(large.mathReturnOffset<160,`公式重新进入视野时位置偏移：${large.mathReturnOffset}px`);
+      const largeImage=document.locator('img[data-preview-src*="rlhf-tulu3.png"]');
+      await largeImage.evaluate(image=>image.scrollIntoView({block:'center'}));
+      await expect.poll(()=>largeImage.evaluate(image=>image.naturalWidth),{timeout:30000}).toBeGreaterThan(0);
+      large.displayWidth=await largeImage.evaluate(image=>image.naturalWidth);
+      assert.ok(large.displayWidth<=1280,`正文仍解码了全尺寸图片：${large.displayWidth}`);
+      const displayURL=await largeImage.evaluate(image=>image.src);
+      assert.ok(displayURL.startsWith('one-file://display/'),displayURL);
+      await preview.screenshot({path:path.join(output,'large-image-inline.png')});
+      await largeImage.evaluate(image=>image.click());
+      await expect.poll(()=>document.locator('.lightbox-stage img').evaluate(image=>image.naturalWidth)).toBe(10369);
+      await document.locator('[data-gallery-action=close]').click();
       const laterImage=document.locator('img[data-preview-src*="rlhf-vs.-rlvr.png"],img[src*="rlhf-vs.-rlvr.png"]');
       await laterImage.evaluate(image=>image.scrollIntoView({block:'center'}));
       await expect.poll(()=>laterImage.evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
@@ -99,6 +110,7 @@ async function main(){
       await expect.poll(()=>firstImage.evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
       await preview.screenshot({path:path.join(output,'large-mdx.png')});
       await preview.close();
+      assert.equal(await app.evaluate(({net},url)=>net.fetch(url).then(response=>response.status),displayURL),404);
     }
     const galleryFile=process.env.ONE_GALLERY_MDX;
     if(galleryFile){preview=await open(galleryFile);const picture=preview.frameLocator('iframe');const imageCount=await picture.locator('.markdown-content img').count();assert.ok(imageCount>1);await picture.locator('.markdown-content img').first().evaluate(image=>image.click());await expect(picture.locator('.lightbox-thumb')).toHaveCount(imageCount);await expect.poll(()=>picture.locator('.lightbox-thumb img').evaluateAll(items=>items.filter(item=>item.src.startsWith('data:image/')).length),{timeout:30000}).toBe(imageCount);const dimensions=await picture.locator('.lightbox-thumb img').evaluateAll(items=>items.map(item=>[item.naturalWidth,item.naturalHeight]));assert.ok(dimensions.every(([width,height])=>width>0&&height>0&&width<=96&&height<=84),JSON.stringify(dimensions));const layout=await picture.locator('.lightbox-thumbs').evaluate(row=>{const buttons=row.querySelectorAll('.lightbox-thumb'),first=buttons[0].getBoundingClientRect(),last=buttons[buttons.length-1].getBoundingClientRect(),bounds=row.getBoundingClientRect();return {offset:Math.abs((first.left+last.right)/2-(bounds.left+bounds.right)/2),overflow:row.scrollWidth-row.clientWidth};});if(layout.overflow<1)assert.ok(layout.offset<3,`缩略图没有居中：${JSON.stringify(layout)}`);await preview.screenshot({path:path.join(output,'gallery-real.png')});await expect.poll(()=>picture.locator('.lightbox-stage img').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);await picture.locator('[data-gallery-action=zoom-in]').click();const zoom15=await picture.locator('.lightbox-stage img').evaluate(image=>parseFloat(image.style.width));await picture.locator('[data-gallery-action=zoom-in]').click();const zoom20=await picture.locator('.lightbox-stage img').evaluate(image=>parseFloat(image.style.width));assert.ok(Math.abs(zoom20/zoom15-4/3)<.01,`缩放比例异常：${zoom15} → ${zoom20}`);await preview.close();}

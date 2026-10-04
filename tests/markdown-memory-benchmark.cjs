@@ -16,12 +16,16 @@ async function main(){
   const profile=await fs.mkdtemp(path.join(output,'profile-'));
   const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({args:[path.resolve('.')],env});
-  const stage=async name=>{const result=await snapshot(app);return {name,privateMB:mb(result.private),privateResidentMB:mb(result.privateResident),residentMB:mb(result.resident),processes:result.processes.length,byProcess:result.processes.map(item=>({name:item.name,privateMB:mb(item.private)})),windows:result.windows.map(({view,visible})=>({view,visible}))};};
+  const stage=async name=>{const result=await snapshot(app),metrics=await app.evaluate(({app})=>app.getAppMetrics().map(({pid,type,serviceName})=>({pid,type,serviceName}))),roles=new Map(metrics.map(item=>[item.pid,item]));return {name,privateMB:mb(result.private),privateResidentMB:mb(result.privateResident),residentMB:mb(result.resident),processes:result.processes.length,byProcess:result.processes.map(item=>({pid:item.pid,name:item.name,role:roles.get(item.pid)?.type,view:result.windows.find(window=>window.pid===item.pid)?.view,privateMB:mb(item.private)})),windows:result.windows.map(({view,visible})=>({view,visible}))};};
   try{
     const main=await app.firstWindow();await main.waitForSelector('#overview-index');await pause(1500);
     const states=[await stage('idle')];
     const start=performance.now(),opened=app.waitForEvent('window');await main.evaluate(value=>window.one.preview(value),file);const preview=await opened;
     await expect(preview.frameLocator('iframe').locator('.markdown-content')).toBeVisible();
+    const hold=preview.locator('#preview-hold');await expect(hold).toHaveAttribute('aria-pressed',/^(true|false)$/);
+    if(await hold.getAttribute('aria-pressed')!=='true')await hold.click();
+    await expect(hold).toHaveAttribute('aria-pressed','true');
+    assert.equal((await preview.evaluate(()=>window.one.previewFlags())).held,true);
     await expect(preview.frameLocator('iframe').locator('.math-pending,.katex').first()).toBeAttached();
     const readyMs=Math.round(performance.now()-start);
     states.push(await stage('rendered'));
@@ -36,16 +40,20 @@ async function main(){
     const image=preview.frameLocator('iframe').locator('.markdown-content img').first();
     if(process.env.ONE_DIAGNOSTIC_DOM==='1')console.error(JSON.stringify(await image.evaluate(value=>({src:value.getAttribute('src'),deferred:!!value.dataset.previewSrc,loading:value.loading,top:value.getBoundingClientRect().top,height:value.getBoundingClientRect().height,viewport:value.ownerDocument.documentElement.clientHeight,lightbox:!!value.ownerDocument.querySelector('.markdown-lightbox')}))));
     await expect.poll(()=>image.evaluate(value=>value.naturalWidth)).toBeGreaterThan(0);
-    const galleryStart=performance.now();await image.evaluate(value=>value.click());await expect(preview.frameLocator('iframe').locator('.markdown-lightbox')).toBeVisible();
-    const thumbs=preview.frameLocator('iframe').locator('.lightbox-thumb img'),imageCount=await preview.frameLocator('iframe').locator('.markdown-content img').count();
-    await expect.poll(()=>thumbs.evaluateAll(items=>items.filter(item=>item.src.startsWith('data:image/')).length),{timeout:30000}).toBe(imageCount);
-    const thumbnailsMs=Math.round(performance.now()-galleryStart);
-    states.push(await stage('gallery'));
-    const maxGalleryDelta=Number(process.env.ONE_MAX_GALLERY_DELTA_MB||0);
-    if(maxGalleryDelta>0)assert.ok(states.at(-1).privateMB-states.at(-2).privateMB<maxGalleryDelta,`Gallery retained too much memory: ${states.at(-1).privateMB-states.at(-2).privateMB} MiB`);
+    const imageCount=await preview.frameLocator('iframe').locator('.markdown-content img').count();
+    let thumbnailsMs=0;
+    if(process.env.ONE_SKIP_GALLERY!=='1'){
+      const galleryStart=performance.now();await image.evaluate(value=>value.click());await expect(preview.frameLocator('iframe').locator('.markdown-lightbox')).toBeVisible();
+      const thumbs=preview.frameLocator('iframe').locator('.lightbox-thumb img');
+      await expect.poll(()=>thumbs.evaluateAll(items=>items.filter(item=>item.src.startsWith('data:image/')).length),{timeout:30000}).toBe(imageCount);
+      thumbnailsMs=Math.round(performance.now()-galleryStart);
+      states.push(await stage('gallery'));
+      const maxGalleryDelta=Number(process.env.ONE_MAX_GALLERY_DELTA_MB||0);
+      if(maxGalleryDelta>0)assert.ok(states.at(-1).privateMB-states.at(-2).privateMB<maxGalleryDelta,`Gallery retained too much memory: ${states.at(-1).privateMB-states.at(-2).privateMB} MiB`);
+    }
     let walk;
     if(process.env.ONE_SCROLL_WALK==='1'){
-      await preview.frameLocator('iframe').locator('[data-gallery-action=close]').click();
+      if(process.env.ONE_SKIP_GALLERY!=='1')await preview.frameLocator('iframe').locator('[data-gallery-action=close]').click();
       await preview.evaluate(()=>{window.markdownGaps=[];let last=performance.now();window.markdownHeartbeat=setInterval(()=>{const now=performance.now();window.markdownGaps.push(now-last);last=now;},20);});
       let offset=0,steps=0;
       const body=preview.frameLocator('iframe').locator('body');
@@ -60,8 +68,15 @@ async function main(){
       const gaps=await preview.evaluate(()=>{clearInterval(window.markdownHeartbeat);return window.markdownGaps;});
       walk={steps,maxGapMs:Math.round(Math.max(...gaps)),...elements};
       states.push(await stage('walked'));
+      const walkSettle=Number(process.env.ONE_WALK_SETTLE_MS||0);
+      if(walkSettle>0){await pause(walkSettle);const settled=await stage('walked-idle');assert.ok(settled.windows.some(window=>window.view==='preview'),'Preview closed before the idle memory sample');states.push(settled);const maxWalkIdleDelta=Number(process.env.ONE_MAX_WALK_IDLE_DELTA_MB||0);if(maxWalkIdleDelta>0)assert.ok(settled.privateMB-states[0].privateMB<maxWalkIdleDelta,`Settled Markdown reading retained too much memory: ${settled.privateMB-states[0].privateMB} MiB`);}
     }
     await preview.close();await pause(5000);states.push(await stage('closed'));
+    if(process.env.ONE_CLEAR_CACHE_AFTER_CLOSE==='1'){
+      await app.evaluate(async({session})=>session.defaultSession.clearCache());
+      await pause(2000);
+      states.push(await stage('cleared-cache'));
+    }
     const cooldown=Number(process.env.ONE_BENCH_COOLDOWN_MS||5000);
     if(cooldown>5000){await pause(cooldown-5000);states.push(await stage('closed-idle'));}
     const report={file,size:(await fs.stat(file)).size,readyMs,thumbnailsMs,images:imageCount,dom,walk,states};

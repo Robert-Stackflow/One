@@ -170,9 +170,10 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
     const content=frame.contentDocument;if(!content)return;
     const deferred=new Set(content.querySelectorAll<HTMLImageElement>('.markdown-content img[data-preview-src]'));
     const loadedImages=new Set<HTMLImageElement>();
+    const imageDisplayCache=new Map<HTMLImageElement,string>(),loadingImages=new Set<HTMLImageElement>();
     const pendingMath=new Set(content.querySelectorAll<HTMLElement>('.markdown-content .math-pending[data-math]'));
     const renderedMath=new Set<HTMLElement>();
-    let frameId=0;
+    let frameId=0,previewAlive=true;
     const near=(element:Element,height:number)=>{const bounds=element.getBoundingClientRect();return bounds.top<=height+1000&&bounds.bottom>=-1000;};
     const loadNear=()=>{
       const height=content.documentElement.clientHeight||frame.clientHeight;
@@ -180,12 +181,26 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
         if(!image.isConnected){loadedImages.delete(image);continue;}
         const bounds=image.getBoundingClientRect();
         if(bounds.top<=height+4000&&bounds.bottom>=-4000)continue;
-        image.dataset.previewSrc=image.src;
         image.removeAttribute('src');
         loadedImages.delete(image);
         deferred.add(image);
       }
-      for(const image of deferred){if(!near(image,height))continue;const source=image.dataset.previewSrc;if(source){image.src=source;delete image.dataset.previewSrc;loadedImages.add(image);}deferred.delete(image);}
+      for(const image of deferred){
+        if(!near(image,height))continue;
+        const cached=imageDisplayCache.get(image);
+        if(cached){image.src=cached;deferred.delete(image);loadedImages.add(image);continue;}
+        if(loadingImages.size>=2)break;
+        if(loadingImages.has(image))continue;
+        const source=image.dataset.previewSrc;
+        if(!source){deferred.delete(image);continue;}
+        loadingImages.add(image);
+        void api.previewDisplayImage(source).catch(()=>null).then(display=>{
+          if(!previewAlive||!image.isConnected)return;
+          const shown=display||source;imageDisplayCache.set(image,shown);
+          if(!near(image,content.documentElement.clientHeight||frame.clientHeight))return;
+          image.src=shown;deferred.delete(image);loadedImages.add(image);
+        }).finally(()=>{loadingImages.delete(image);if(previewAlive)schedule();});
+      }
       for(const node of renderedMath){
         if(!node.isConnected){renderedMath.delete(node);continue;}
         const bounds=node.getBoundingClientRect();
@@ -202,7 +217,7 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
     const schedule=()=>{if(frameId)return;frameId=requestAnimationFrame(()=>{frameId=0;loadNear();});};
     content.defaultView?.addEventListener('scroll',schedule,{passive:true});
     content.defaultView?.addEventListener('resize',schedule);
-    releaseImages=()=>{cancelAnimationFrame(frameId);content.defaultView?.removeEventListener('scroll',schedule);content.defaultView?.removeEventListener('resize',schedule);};
+    releaseImages=()=>{previewAlive=false;cancelAnimationFrame(frameId);imageDisplayCache.clear();content.defaultView?.removeEventListener('scroll',schedule);content.defaultView?.removeEventListener('resize',schedule);};
     loadNear();
     const gallery=installLightbox(content);
     const card=content.createElement('aside');card.className='link-card';card.hidden=true;content.body.append(card);

@@ -69,6 +69,11 @@ if (process.env.ONE_DATA_DIR && (testMode || developmentMode)) app.setPath('user
 if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string }>();
+const displayAssets=new Map<string,{owner:number;bytes:Buffer}>();let displayAssetBytes=0;
+function releasePreviewAssets(owner:number){
+ for(const [token,asset] of assets)if(asset.owner===owner)assets.delete(token);
+ for(const [token,asset] of displayAssets)if(asset.owner===owner){displayAssetBytes-=asset.bytes.length;displayAssets.delete(token);}
+}
 if(developmentMode)process.on('message',(message:any)=>{
  if(message?.type==='one:dev-reload'){for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed())window.webContents.reload();}
  else if(message?.type==='one:dev-quit'&&!developmentQuitRequested){
@@ -190,7 +195,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.on('close',()=>{if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => { fileTools?.cancel(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId); for (const [key, value] of assets) if (value.owner === windowId) assets.delete(key); });
+  window.on('closed', () => { fileTools?.cancel(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -223,7 +228,7 @@ async function runMaintenance(mode: 'startup' | 'registry') {
   const rows=JSON.parse(result.stdout.trim() || '[]');return [...await nativeMaintenance('startup'),...rows];
 }
 async function preparePreview(path: string, owner: number): Promise<PreviewData> {
-  for (const [key,value] of assets) if(value.owner===owner) assets.delete(key);
+  releasePreviewAssets(owner);
   const held:string[]=[];try{const next=await loadPreview(path,(path,mime)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){for(const id of held)directories.release(owner,id);throw error;}
 }
 function foregroundPreview(window:BrowserWindow){
@@ -400,6 +405,25 @@ function registerIPC() {
   handle('directory-release',(event,id)=>directories.release(event.sender.id,textValue(id,100)),['preview']);
   handle('preview-resource',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const extension=extname(path).toLowerCase(),mime:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.css':'text/css'};if(!mime[extension]||(await stat(path)).size>10*1024*1024)return null;const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:mime[extension]});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;}catch{return null;}},['preview']);
   handle('preview-image',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const mime:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'},kind=mime[extname(path).toLowerCase()];if(!kind||(await stat(path)).size>10*1024*1024)return null;const dimensions=await previewImageDimensions(path);const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:kind});return {url:`one-file://asset/${token}/${encodeURIComponent(basename(path))}`,...(dimensions||{})};}catch{return null;}},['preview']);
+  handle('preview-display-image',async(event,value)=>{
+    if(typeof value!=='string'||value.length>4096)return null;
+    try{
+      const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='asset')return null;
+      const sourceToken=url.pathname.split('/')[1],asset=assets.get(sourceToken);
+      if(!asset||asset.owner!==event.sender.id||!asset.mime.startsWith('image/')||(await stat(asset.path)).size>10*1024*1024)return null;
+      // Leave GIF/WebP animation and SVG vectors at their original resolution.
+      if(!['image/png','image/jpeg'].includes(asset.mime))return value;
+      const dimensions=await previewImageDimensions(asset.path);if(!dimensions)return null;
+      const scale=Math.min(1280/dimensions.width,960/dimensions.height,1);if(scale>=1)return value;
+      const width=Math.max(1,Math.round(dimensions.width*scale)),height=Math.max(1,Math.round(dimensions.height*scale));
+      let image=await nativeImage.createThumbnailFromPath(asset.path,{width,height});if(image.isEmpty()||!assets.has(sourceToken))return null;
+      const actual=image.getSize(),limit=Math.min(1280/actual.width,960/actual.height,1);
+      if(limit<1)image=image.resize({width:Math.max(1,Math.round(actual.width*limit)),height:Math.max(1,Math.round(actual.height*limit)),quality:'good'});
+      const bytes=image.toPNG();if(bytes.length>8*1024*1024||displayAssetBytes+bytes.length>64*1024*1024||!roles.has(event.sender.id))return null;
+      const token=randomUUID();displayAssets.set(token,{owner:event.sender.id,bytes});displayAssetBytes+=bytes.length;
+      return `one-file://display/${token}/preview.png`;
+    }catch{return null;}
+  },['preview']);
   handle('preview-thumbnail',async(event,value)=>{if(typeof value!=='string'||value.length>4096)return null;try{const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='asset')return null;const token=url.pathname.split('/')[1],asset=assets.get(token);if(!asset||asset.owner!==event.sender.id||!asset.mime.startsWith('image/')||(await stat(asset.path)).size>10*1024*1024)return null;const image=nativeImage.createFromPath(asset.path);if(image.isEmpty())return null;const {width,height}=image.getSize();if(!width||!height)return null;const scale=Math.min(96/width,84/height,1);return image.resize({width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale)),quality:'good'}).toDataURL();}catch{return null;}},['preview']);
   handle('preview-link-card',(_event,value)=>linkCard(value),['preview']);
   handle('preview-open-link',async(_event,value)=>{await shell.openExternal(externalURL(value).href);},['preview']);
@@ -426,7 +450,7 @@ function registerIPC() {
       if (event.sender.isDestroyed()) return; const previous = previews.get(id); if (!previous) return;
       const directory=previous.navigation;if(!directory)return;const next=directory.position+step;if(next<0||next>=directory.count)return;const target=(await directories.page(id,directory.id,next,1)).entries[0];if(!target||event.sender.isDestroyed())return;
       event.sender.send('one:preview-loading');const data = await preparePreview(target.path,id);
-      if (event.sender.isDestroyed()) { for (const [token,asset] of assets) if (asset.owner === id) assets.delete(token); return; }
+      if (event.sender.isDestroyed()) { releasePreviewAssets(id); return; }
       previews.set(id,data); event.sender.send('one:preview-changed');
     });
     previewQueues.set(id,task); void task.finally(() => { if (previewQueues.get(id) === task) previewQueues.delete(id); }).catch(() => {}); return task;
@@ -459,7 +483,7 @@ async function start() {
   if(migratedSearch!==settings.search)await persistSettings({...settings,search:migratedSearch});
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); return net.fetch(pathToFileURL(path).toString()); });
-  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request); });
+  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request); });
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false)); session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*','https://*/*'] }, (_details, callback) => callback({ cancel: true }));
   diskService=new DiskService(p=>{if(main&&!main.isDestroyed())main.webContents.send('one:progress',p);});maintenance=new MaintenanceClient(join(app.getPath('userData'),'maintenance-backups'),value=>{if(main&&!main.isDestroyed())main.webContents.send('one:maintenance-progress',value);});
