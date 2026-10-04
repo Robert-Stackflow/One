@@ -188,6 +188,9 @@
 .preview-window .preview-details .detail-cover{background:var(--surface)}
 .preview-window .open-with-icon{width:20px;height:20px;object-fit:contain;flex:0 0 20px}
 .preview-overview{flex:1;min-height:0;overflow:auto;padding:8px 14px 20px}
+.preview-overview .virtual-row-items{width:100%}
+.preview-overview-row{padding-bottom:10px}
+.preview-overview-row .preview-overview-card{margin-bottom:0}
 .preview-window .preview-overview-card{width:100%;display:flex;flex-direction:column;align-items:center;gap:9px;padding:12px;border:1px solid transparent;border-radius:10px;box-shadow:none;margin-bottom:10px;background:none;min-height:0;color:var(--muted)}
 .preview-window .preview-overview-card:hover{background:var(--hover)}
 .preview-window .preview-overview-card.selected{background:var(--selected);border-color:var(--line);color:var(--fg)}
