@@ -14,12 +14,13 @@ async function run(){
   const initial=await page.evaluate(ids=>({nodes:document.querySelectorAll('*').length,empty:ids.map(id=>document.querySelector('#page-'+id).childElementCount)}),deferred);
   assert.deepEqual(initial.empty,deferred.map(()=>0),'unopened pages should not create hidden content');
   assert.ok(initial.nodes<450,'startup should keep only the overview and shared shell');
-  const mounted={};
+  const mounted={},mountMs={};
   for(const id of deferred){
-   await page.locator('[data-page='+id+']').click();
+   mountMs[id]=await page.evaluate(id=>{const start=performance.now();document.querySelector('[data-page='+id+']').click();return performance.now()-start;},id);
    await expect(page.locator('#page-'+id)).toBeVisible();
    mounted[id]=await page.locator('#page-'+id+' *').count();
    assert.ok(mounted[id]>0,id+' should mount on first visit');
+   assert.ok(mountMs[id]<100,`${id} first visit blocked the UI for ${mountMs[id].toFixed(1)} ms`);
   }
   await page.locator('[data-page=home]').click();
   await expect(page.locator('#page-home')).toBeVisible();
@@ -41,7 +42,7 @@ async function run(){
   await page.locator('#search-tab-index').focus();await page.keyboard.press('ArrowRight');
   await expect(page.locator('#search-tab-menu')).toHaveAttribute('aria-selected','true');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',initialNodes:initial.nodes,mounted,statePreserved:true,keyboardTabs:true,errors}));
+  console.log(JSON.stringify({result:'PASS',initialNodes:initial.nodes,mounted,mountMs,statePreserved:true,keyboardTabs:true,errors}));
  }finally{await app.close();}
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
