@@ -30,7 +30,7 @@ async function main(){
  const settings=mergeSettings(defaultSettings(),{search:searchSettings,diskMonitor:{enabled:true,notify:false},appearance:{mode:'light'}});
  await fs.writeFile(path.join(profile,'settings.json'),JSON.stringify(settings));
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
- const exe=process.env.ONE_PACKAGED_EXE,started=performance.now(),app=await electron.launch(exe?{executablePath:exe,args:[],env}:{args:[path.resolve('.')],env}),errors=[];
+ const exe=process.env.ONE_PACKAGED_EXE,appRoot=path.resolve(process.env.ONE_TEST_APP_ROOT||'.'),started=performance.now(),app=await electron.launch(exe?{executablePath:exe,args:[],env}:{args:[appRoot],env}),errors=[];
  app.on('window',page=>page.on('pageerror',e=>errors.push(String(e))));
  try{
   const main=await app.firstWindow();await main.waitForSelector('#overview-index');await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).count),{timeout:30000}).toBe(expectedCount);await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).running),{timeout:120000}).toBe(false);

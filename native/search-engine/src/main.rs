@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod cache;
 mod catalog;
 mod cleanup;
