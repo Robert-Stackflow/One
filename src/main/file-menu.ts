@@ -14,8 +14,12 @@ export class FileContextMenu{
  private applications=new Map<string,{time:number;items:OpenWithApp[]}>();private pendingApps=new Map<string,Promise<OpenWithApp[]>>();
  constructor(private callbacks:Callbacks){}
  warm(submenu=false){const existing=submenu?this.child:this.window;if(existing&&!existing.isDestroyed())return existing;const w=this.callbacks.create(submenu);this.readiness.set(w,new PopupReadiness(w));if(submenu)this.child=w;else this.window=w;
+  let idleCleanup:NodeJS.Timeout|undefined;
+  const clearIdle=()=>{clearTimeout(idleCleanup);idleCleanup=undefined;};
+  const scheduleIdle=()=>{clearIdle();idleCleanup=setTimeout(()=>{if(!w.isDestroyed()&&!w.isVisible())w.destroy();},5000);idleCleanup.unref();};
+  w.on('hide',scheduleIdle);w.on('show',clearIdle);
   w.on('blur',()=>{const session=this.target?.session;deferPopupBlur(w,()=>{if(session!==this.target?.session)return false;const focused=BrowserWindow.getFocusedWindow();return focused!==this.window&&focused!==this.child;},()=>this.hide(false),100);});
-  w.on('closed',()=>{if(submenu){if(this.child===w){this.child=undefined;this.hideChild(false);}}else if(this.window===w){this.window=undefined;this.hide(false);}});return w;
+  w.on('closed',()=>{clearIdle();if(submenu){if(this.child===w){this.child=undefined;this.hideChild(false);}}else if(this.window===w){this.window=undefined;this.hide(false);}});scheduleIdle();return w;
  }
  show(owner:BrowserWindow,path:string,point:{x:number;y:number},directory=false,launchKind?:'app'|'setting',name=basename(path)){
   if(this.owner!==owner)this.hide(false);this.hideChild(false);this.owner=owner;const session=randomUUID();this.target={session,path,name,directory,launchKind};this.callbacks.active(owner.webContents.id,true);

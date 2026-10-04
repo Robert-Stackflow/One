@@ -135,7 +135,7 @@ async function showMenu(hwnd:number,focus=0){hideMenus();clearTimeout(menuIdleCl
 function searchPopup(embedded:boolean){let w=cachedSearch.get(embedded);if(w&&!w.isDestroyed())return w;
  w=windowFor('search',{width:embedded?520:740,height:embedded?inlineSearchBaseHeight:64,minWidth:embedded?240:520,minHeight:embedded?inlineSearchBaseHeight:64,frame:false,titleBarStyle:'default',titleBarOverlay:false,hasShadow:!embedded,thickFrame:!embedded,transparent:embedded,...(embedded?{backgroundColor:'#00000000',roundedCorners:false}:{}),resizable:false,skipTaskbar:true},embedded?'&embedded=1':'');cachedSearch.set(embedded,w);const own=w,windowId=w.webContents.id;
  let idleCleanup:NodeJS.Timeout|undefined;
- const scheduleIdleCleanup=()=>{clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},embedded?300000:15000);idleCleanup.unref();};
+ const scheduleIdleCleanup=()=>{clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},embedded?300000:5000);idleCleanup.unref();};
  w.on('hide',scheduleIdleCleanup);
  w.on('show',()=>clearTimeout(idleCleanup));
  // Direct typing still gets a prewarmed popup after startup, but an unused

@@ -17,9 +17,10 @@ async function run(){
   const count=view=>app.evaluate(({BrowserWindow},view)=>BrowserWindow.getAllWindows().filter(w=>!w.isDestroyed()&&new URL(w.webContents.getURL()||'about:blank').searchParams.get('view')===view).length,view);
   await expect.poll(()=>count('search-menu')).toBeGreaterThan(0);
   // Shorten only the popup idle timers in this isolated main process.
-  await app.evaluate(()=>{const original=globalThis.setTimeout;globalThis.setTimeout=function(callback,delay,...args){return original(callback,delay===60000||delay===15000?80:delay===300000?500:delay,...args);};});
+  await app.evaluate(()=>{const original=globalThis.setTimeout;globalThis.setTimeout=function(callback,delay,...args){return original(callback,delay===60000||delay===5000?500:delay===300000?800:delay,...args);};});
   await main.evaluate(()=>window.one.showSearch());
   await expect.poll(()=>count('search')).toBeGreaterThan(0);
+  await expect.poll(()=>app.windows().some(page=>new URL(page.url()||'about:blank').searchParams.get('view')==='search')).toBe(true);
   const search=app.windows().find(page=>new URL(page.url()||'about:blank').searchParams.get('view')==='search');
   await search.waitForSelector('#file-query');await search.evaluate(()=>window.one.closeWindow());
   await expect.poll(()=>count('search-menu')).toBe(0);
