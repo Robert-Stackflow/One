@@ -18,7 +18,7 @@ async function run(){
   await main.evaluate(()=>window.one.patchSettings({preview:{held:true,files:true,leftTab:'overview'}}));
   const opening=app.waitForEvent('window',{predicate:page=>page.url().includes('view=preview')}),start=Date.now();
   await main.evaluate(file=>window.one.preview(file),pdf);const preview=await opening;
-  await expect(preview.locator('.pdf-sheet')).toHaveCount(2050,{timeout:20000});
+  await expect(preview.locator('#pdf-total')).toHaveText('/ 2050',{timeout:20000});assert.ok(await preview.locator('.pdf-sheet').count()<30);
   await expect(preview.locator('#preview-overview .virtual-row-space')).toBeVisible();
   await expect.poll(()=>preview.locator('.preview-overview-card').count()).toBeGreaterThan(0);
   const initial=await preview.evaluate(()=>({dom:document.querySelectorAll('*').length,cards:document.querySelectorAll('.preview-overview-card').length}));
