@@ -4,7 +4,7 @@ const path=require('node:path');
 const {build}=require('esbuild');
 
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-async function until(check,label){for(let i=0;i<300;i++){if(await check())return;await wait(50);}throw Error('Timeout: '+label);}
+async function until(check,label,attempts=300){for(let i=0;i<attempts;i++){if(await check())return;await wait(50);}throw Error('Timeout: '+label);}
 
 async function run(){
  const base=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/search-helper-recovery');
@@ -21,15 +21,16 @@ async function run(){
   service=new SearchService(path.join(profile,'index.bin'),{roots:[root],excluded:[],maxEntries:1000,fuzzy:true,pinyin:true,priorities:[]},state=>states.push({...state}));
   await until(()=>service.state().count>=1&&!service.state().running,'initial index');
   assert.equal((await service.query('recovery-fixture')).total,1);
-  const old=service.child,originalPid=old.pid;
+  const old=service.child,originalPid=old.pid,spawnHelper=service.spawnHelper.bind(service);let failures=0;
+  service.spawnHelper=()=>{const child=spawnHelper();if(failures++<3)setTimeout(()=>child.kill(),10);return child;};
   old.kill();
   await until(()=>old.exitCode!==null||old.signalCode!==null,'helper exit');
   assert.doesNotThrow(()=>service.releaseScope(42),'closing a window after helper exit must not throw');
   service.launchers([]);
-  await until(()=>service.child.pid!==originalPid&&service.state().count>=1&&!service.state().running&&!service.state().error,'automatic helper recovery');
+  await until(()=>failures>=4&&service.child.pid!==originalPid&&service.state().count>=1&&!service.state().running&&!service.state().error,'recovery after three failed relaunches',600);
   assert.equal((await service.query('recovery-fixture')).total,1);
   assert.ok(states.some(state=>state.error==='搜索服务正在恢复'));
-  console.log(JSON.stringify({result:'PASS',oldPid:originalPid,newPid:service.child.pid,states:states.length}));
+  console.log(JSON.stringify({result:'PASS',oldPid:originalPid,newPid:service.child.pid,failedRelaunches:failures-1,states:states.length}));
  }finally{
   if(service)await service.stop();
   const resolved=await fs.realpath(profile),parent=await fs.realpath(base);

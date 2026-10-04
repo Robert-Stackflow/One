@@ -22,8 +22,10 @@ export class SearchService {
   if(this.stopped||this.child!==child||this.restartTimer)return;
   clearTimeout(this.healthyTimer);if(child.exitCode===null&&child.signalCode===null)child.kill();
   this.failed(error);
-  if(this.restartAttempts>=3)return;
-  const delay=[250,1000,3000][this.restartAttempts++];
+  // Keep retrying after transient launch failures, with a bounded delay.
+  // Three failures used to leave search unavailable until One restarted.
+  const delay=[250,1000,3000,10000,30000][this.restartAttempts];
+  this.restartAttempts=Math.min(this.restartAttempts+1,4);
   this.value={...this.value,error:'搜索服务正在恢复'};this.changed(this.value);
   this.restartTimer=setTimeout(()=>{this.restartTimer=undefined;if(this.stopped)return;this.child=this.spawnHelper();this.healthyTimer=setTimeout(()=>{if(!this.stopped)this.restartAttempts=0;},30000);this.healthyTimer.unref();try{this.send({type:'init',settings:this.settings});if(this.launcherItems.length)this.send({type:'launchers',items:this.launcherItems});}catch(e){this.helperFailed(this.child,e as Error);}},delay);
  }
