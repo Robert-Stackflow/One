@@ -168,7 +168,10 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
     ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:true } });
   const windowId = window.webContents.id; roles.set(windowId, view);
-  if(view==='file-context'||view==='search-menu')popupLifecycle.track(window);
+  // The open-with submenu is cheap to recreate and rarely reopened after a pause.
+  // Keep the parent menu warm for repeated right-clicks, but release its extra renderer sooner.
+  if(view==='file-context'&&query.includes('submenu='))popupLifecycle.track(window,8_000);
+  else if(view==='file-context'||view==='search-menu')popupLifecycle.track(window);
   else if(view==='dialog-bar')popupLifecycle.track(window,300_000);
   const sendWindowState = () => {
     if(window.isDestroyed()||window.webContents.isDestroyed())return;
