@@ -1,4 +1,5 @@
 import {lstat,opendir,open,mkdir,writeFile,readFile} from 'node:fs/promises';
+import type {BigIntStats} from 'node:fs';
 import {isAbsolute,join,resolve,extname,parse,dirname} from 'node:path';
 import {createHash} from 'node:crypto';
 import type {FileStamp,FileToolReport,FileToolRow} from '../shared/file-tools';
@@ -10,6 +11,7 @@ export const unchanged=(a:FileStamp,b:FileStamp)=>a.identity===b.identity&&a.siz
 const hashBufferBytes=256*1024;
 export const partialHashBytes=hashBufferBytes*3;
 export const partialHashCoversFile=(size:number)=>size<=partialHashBytes;
+const sameStamp=(file:FileStamp,value:BigIntStats)=>identity(value,file.path)===file.identity&&value.mtimeNs.toString()===file.mtime&&Number(value.size)===file.size;
 function overlappingRoots(roots:string[]){
  if(roots.length<2)return false;
  const normalized=roots.map(root=>root.toLowerCase()),known=new Set(normalized);
@@ -27,6 +29,33 @@ export async function hashFile(file:FileStamp,partial=false,tick:(bytes:number)=
   else{while(true){const r=await handle.read(buffer,0,buffer.length,null);if(!r.bytesRead)break;hash.update(buffer.subarray(0,r.bytesRead));bytes+=r.bytesRead;tick(bytes);}}
   const after=await handle.stat({bigint:true});if(identity(after,file.path)!==file.identity||after.mtimeNs.toString()!==file.mtime||Number(after.size)!==file.size)throw Error('文件在校验过程中发生变化');return hash.digest('hex');
  }finally{await handle.close();}
+}
+/** Compare two files exactly and stop reading as soon as their contents differ. */
+export async function sameFileContent(left:FileStamp,right:FileStamp,tick:(bytes:number)=>void=()=>{}):Promise<boolean>{
+ if(left.directory||right.directory)throw Error('只能比较文件内容');
+ if(left.size!==right.size)return false;
+ let a:Awaited<ReturnType<typeof open>>|undefined,b:Awaited<ReturnType<typeof open>>|undefined;
+ try{
+  a=await open(left.path,'r');b=await open(right.path,'r');
+  const [beforeA,beforeB]=await Promise.all([a.stat({bigint:true}),b.stat({bigint:true})]);
+  if(!sameStamp(left,beforeA)||!sameStamp(right,beforeB))throw Error('文件在扫描后发生变化');
+  let equal=true,bytes=0;
+  if(left.identity!==right.identity){
+   const first=Buffer.allocUnsafe(hashBufferBytes),second=Buffer.allocUnsafe(hashBufferBytes);
+   const read=async(handle:Awaited<ReturnType<typeof open>>,buffer:Buffer,length:number,at:number)=>{
+    for(let filled=0;filled<length;){const {bytesRead}=await handle.read(buffer,filled,length-filled,at+filled);if(!bytesRead)throw Error('文件在比较过程中发生变化');filled+=bytesRead;}
+   };
+   for(let at=0;at<left.size;at+=first.length){
+    const length=Math.min(first.length,left.size-at);
+    await Promise.all([read(a,first,length,at),read(b,second,length,at)]);
+    bytes+=length*2;tick(bytes);
+    if(!first.subarray(0,length).equals(second.subarray(0,length))){equal=false;break;}
+   }
+  }
+  const [afterA,afterB]=await Promise.all([a.stat({bigint:true}),b.stat({bigint:true})]);
+  if(!sameStamp(left,afterA)||!sameStamp(right,afterB))throw Error('文件在比较过程中发生变化');
+  return equal;
+ }finally{await Promise.all([a?.close(),b?.close()]);}
 }
 export async function writeRows(dir:string,rows:FileToolRow[],group?:number){await mkdir(dir,{recursive:true});for(let offset=0;offset<rows.length;offset+=100)await writeFile(join(dir,(group===undefined?'page-':`group-${group}-page-`)+Math.floor(offset/100)+'.json'),JSON.stringify(rows.slice(offset,offset+100)));}
 export async function allRows(dir:string,report:FileToolReport):Promise<FileToolRow[]>{const result:FileToolRow[]=[];for(let page=0;page<Math.ceil(report.count/report.pageSize);page++)result.push(...JSON.parse(await readFile(join(dir,`page-${page}.json`),'utf8')));return result;}

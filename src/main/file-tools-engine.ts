@@ -3,7 +3,7 @@ import {basename,dirname,join,relative,extname} from 'node:path';
 import {compareTextLines} from './bounded-diff';
 import {textDiffRows} from './text-diff';
 import type {FileToolTask,FileToolReport,FileToolProgress,FileToolRow,FileStamp} from '../shared/file-tools';
-import {walk,hashFile,extensions,fileExtension,writeRows,unchanged,partialHashBytes,partialHashCoversFile} from './file-tool-fs';
+import {walk,hashFile,sameFileContent,extensions,fileExtension,writeRows,unchanged,partialHashBytes,partialHashCoversFile} from './file-tool-fs';
 import {readText} from './text-files';
 export interface ToolContext {id:string;dir:string;root:string;database:string;progress:(value:FileToolProgress)=>void}
 export async function runFileTool(task:FileToolTask,context:ToolContext):Promise<FileToolReport>{
@@ -27,7 +27,7 @@ export async function runFileTool(task:FileToolTask,context:ToolContext):Promise
  }else if(task.kind==='diff'){
   if(task.mode==='folder'){
    const left=new Map<string,FileStamp>(),right=new Map<string,FileStamp>();for(const [root,map]of [[task.left,left],[task.right,right]] as const)for await(const file of walk([root],true,issue,true)){const name=relative(root,file.path);if(!name)continue;map.set(name.toLowerCase(),file);progress('扫描目录',left.size+right.size,0,file.path);}
-   let same=0,added=0,removed=0,modified=0,checked=0;const keys=new Set([...left.keys(),...right.keys()]);for(const key of keys){const a=left.get(key),b=right.get(key);let status='相同';try{if(!a){status='新增';added++;}else if(!b){status='删除';removed++;}else if(a.directory!==b.directory||!a.directory&&(a.size!==b.size||await hashFile(a,false,()=>progress('比较内容',checked,keys.size,a.path))!==await hashFile(b,false,()=>progress('比较内容',checked,keys.size,b.path)))){status='修改';modified++;}else same++;}catch(e){issue(a?.path||b!.path,e);status='未完成校验';}
+   let same=0,added=0,removed=0,modified=0,checked=0;const keys=new Set([...left.keys(),...right.keys()]);for(const key of keys){const a=left.get(key),b=right.get(key);let status='相同';try{if(!a){status='新增';added++;}else if(!b){status='删除';removed++;}else if(a.directory!==b.directory||!a.directory&&(a.size!==b.size||!(await sameFileContent(a,b,()=>progress('比较内容',checked,keys.size,a.path))))){status='修改';modified++;}else same++;}catch(e){issue(a?.path||b!.path,e);status='未完成校验';}
     if(status!=='相同')rows.push({id:rows.length,status,name:relative(a?task.left:task.right,(a||b)!.path),left:a?.path,right:b?.path,leftSize:a?.size,rightSize:b?.size,directory:(a||b)!.directory});checked++;progress('比较内容',checked,keys.size,(a||b)!.path);
    }report.stats={same,added,removed,modified};report.summary=rows.length?`${rows.length} 项差异`:'两个目录内容相同';
   }else{
