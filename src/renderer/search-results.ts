@@ -10,6 +10,7 @@ export class SearchResults {
  private rows=new Map<string,Row>();
  private entries:SearchEntry[]=[];
  private index=0;
+ private paintedRow:HTMLElement|null=null;
  private serial=0;
  private empty:HTMLElement|null=null;
  constructor(private root:HTMLElement,private input:HTMLInputElement,private embedded:boolean,private nameMarkup:(item:SearchEntry)=>string,options:{selectOnPointer?:boolean}={}){
@@ -28,12 +29,12 @@ export class SearchResults {
  entry(index=this.index){return this.entries[index];}
  select(index:number,scroll=false){
   this.index=Math.max(0,Math.min(this.count-1,index));
-  for(let i=0;i<this.count;i++){
-   const row=this.rows.get(identity(this.entries[i]))!.element,selected=i===this.index;
-   row.classList.toggle('selected',selected);
-   if(row.getAttribute('aria-selected')!==String(selected))row.setAttribute('aria-selected',String(selected));
-  }
   const row=this.entry()&&this.rows.get(identity(this.entry()!))!.element;
+  if(this.paintedRow!==row){
+   if(this.paintedRow){this.paintedRow.classList.remove('selected');this.paintedRow.setAttribute('aria-selected','false');}
+   if(row){row.classList.add('selected');row.setAttribute('aria-selected','true');}
+   this.paintedRow=row||null;
+  }
   if(row){this.input.setAttribute('aria-activedescendant',row.id);if(scroll)row.scrollIntoView({block:'nearest'});}
   else this.input.removeAttribute('aria-activedescendant');
  }
@@ -58,7 +59,7 @@ export class SearchResults {
   for(let i=0;i<next.length;i++){
    const item=next[i],key=identity(item);let row=this.rows.get(key);
    if(!row){
-    const element=document.createElement('div');element.className='search-result';element.role='option';element.id='search-result-'+ ++this.serial;element.draggable=!item.launchKind;
+    const element=document.createElement('div');element.className='search-result';element.role='option';element.setAttribute('aria-selected','false');element.id='search-result-'+ ++this.serial;element.draggable=!item.launchKind;
     if(!item.launchKind)element.dataset.dragPath=item.path;
     element.innerHTML=`<span class="result-icon" data-file-icon="${esc(item.path)}">${icon(item.launchKind==='setting'?'settings':item.launchKind==='app'?'window':item.directory?'folder':'file')}</span><div class="result-name"><strong></strong><span></span></div>${this.embedded?'<kbd class="result-shortcut"></kbd>':''}${!item.launchKind?`<div class="search-row-actions"><button class="icon-button quiet" data-preview data-tooltip="预览">${icon('preview')}</button><button class="icon-button quiet" data-reveal data-tooltip="在资源管理器中显示">${icon('folder')}</button></div>`:''}`;
     row={element,symbol:element.querySelector('.result-icon')!,name:element.querySelector('strong')!,path:element.querySelector('.result-name>span')!,shortcut:element.querySelector('kbd'),markup:'',preview:element.querySelector('[data-preview]'),reveal:element.querySelector('[data-reveal]')};

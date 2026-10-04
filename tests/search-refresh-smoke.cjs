@@ -52,8 +52,11 @@ async function run(){
    const ready=()=>expect(page.locator('#search-results')).toHaveAttribute('aria-busy','false');
    const selected=()=>page.locator('.search-result.selected [data-file-icon]').getAttribute('data-file-icon');
    await page.locator('#file-query').fill('x_bea');await expect(page.locator('.search-result')).toHaveCount(100);await ready();
+   await expect(page.locator('.search-result[aria-selected]')).toHaveCount(100);
+   await expect(page.locator('.search-result[aria-selected=true]')).toHaveCount(1);
    await expect(page.locator('.windows-file-icon')).toHaveCount(100);
    for(let i=0;i<5;i++)await page.keyboard.press('ArrowDown');assert.equal(await selected(),'D:\\fixture\\Entry_5.txt');
+   await expect(page.locator('.search-result[aria-selected=true]')).toHaveCount(1);
    if(!embedded){await page.locator('.search-result.selected [data-preview]').hover();await expect(page.locator('#one-tooltip.visible')).toHaveText('预览');}
    await page.evaluate(()=>{
     window.savedRows=new Map([...document.querySelectorAll('.search-result')].map(row=>[row.querySelector('[data-file-icon]').dataset.fileIcon,{row,icon:row.querySelector('img'),preview:row.querySelector('[data-preview]')} ]));
