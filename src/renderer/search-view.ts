@@ -83,7 +83,9 @@ export async function renderSearch(){
     const seen=new Set<string>(),entries=[...(prefs?.bookmarks||[]),...context.folders.map(f=>f.path)].filter(p=>{const k=p.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;}).map(path=>({path,name:path.split(/[\\/]/).filter(Boolean).pop()||path,directory:true,size:0,modified:0}));
     update(entries);const s=await api.searchState();if(current())summary(results.count?'收藏与已打开的文件夹':s.count?'输入名称开始搜索':'请先在 One 中添加索引目录');return;
    }
-   list.setAttribute('aria-busy','true');if(embedded&&shownKey!==request.key)q('search-inline-summary').textContent='搜索中';
+   list.setAttribute('aria-busy','true');
+   if(!results.count)results.update([],false,'正在搜索…');
+   summary('正在搜索…', '搜索中');
    const token=shownKey!==request.key||!results.count?crypto.randomUUID():undefined;
    if(token)progressive={token,accept:result=>{if(!current()||result.cancelled)return;update(result.items);summary(result.partialScope==='global'?`已找到 ${result.total.toLocaleString()} 项 · 搜索中`:`本文件夹 · ${result.total.toLocaleString()} 项 · 正在搜索其他位置`,`${result.total.toLocaleString()} 项 · 搜索中`);}};
    const result=await api.searchFiles(filter+' '+text,context.kind==='dialog',token);
