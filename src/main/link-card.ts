@@ -5,8 +5,6 @@ import {request as httpsRequest} from 'node:https';
 import type {LookupFunction} from 'node:net';
 import type {LinkCard} from '../shared/types';
 
-const cache=new Map<string,Promise<LinkCard>>();
-
 export function externalURL(value:unknown){
   if(typeof value!=='string'||value.length>4096)throw new Error('链接无效');
   const url=new URL(value);
@@ -74,8 +72,43 @@ async function describe(url:URL):Promise<LinkCard>{
   return fallback;
 }
 
-export function linkCard(value:unknown){
-  const url=externalURL(value),key=url.href;
-  let pending=cache.get(key);if(!pending){pending=describe(url).catch(()=>({domain:url.hostname,title:'',description:''}));cache.set(key,pending);if(cache.size>100)cache.delete(cache.keys().next().value!);}
-  return pending;
+type CacheEntry={promise:Promise<LinkCard>;bytes:number;expires:number};
+
+export class LinkCardCache {
+  private entries=new Map<string,CacheEntry>();
+  private bytes=0;
+  constructor(private readonly loader:(url:URL)=>Promise<LinkCard>,private readonly maxBytes=6*1024*1024,private readonly maxEntries=64,private readonly ttlMs=10*60*1000,private readonly now=Date.now){}
+  get retainedBytes(){return this.bytes;}
+  get size(){return this.entries.size;}
+  private remove(key:string,entry:CacheEntry){this.entries.delete(key);this.bytes-=entry.bytes;}
+  private trim(){
+    while(this.entries.size>this.maxEntries||this.bytes>this.maxBytes){
+      const first=this.entries.entries().next().value as [string,CacheEntry]|undefined;
+      if(!first)break;
+      this.remove(first[0],first[1]);
+    }
+  }
+  get(value:unknown){
+    const url=externalURL(value),key=url.href,now=this.now();
+    const existing=this.entries.get(key);
+    if(existing){
+      if(existing.expires>now){this.entries.delete(key);this.entries.set(key,existing);return existing.promise;}
+      this.remove(key,existing);
+    }
+    const entry:CacheEntry={promise:Promise.resolve({domain:'',title:'',description:''}),bytes:0,expires:now+this.ttlMs};
+    entry.promise=this.loader(url).catch(():LinkCard=>({domain:url.hostname,title:'',description:''})).then(result=>{
+      if(this.entries.get(key)===entry){
+        entry.bytes=2*(result.domain.length+result.title.length+result.description.length+(result.image?.length||0));
+        this.bytes+=entry.bytes;
+        this.trim();
+      }
+      return result;
+    });
+    this.entries.set(key,entry);
+    this.trim();
+    return entry.promise;
+  }
 }
+
+const cache=new LinkCardCache(describe);
+export function linkCard(value:unknown){return cache.get(value);}
