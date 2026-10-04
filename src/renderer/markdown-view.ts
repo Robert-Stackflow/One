@@ -84,6 +84,22 @@ function installLightbox(content:Document){
   content.body.append(lightbox);
   const photo=lightbox.querySelector<HTMLImageElement>('.lightbox-stage img')!,title=lightbox.querySelector<HTMLElement>('.lightbox-title')!,count=lightbox.querySelector<HTMLElement>('.lightbox-count')!,thumbs=lightbox.querySelector<HTMLElement>('.lightbox-thumbs')!;
   let index=0,zoom=1,zoomBaseWidth=0,previousOverflow='',previousFocus:HTMLElement|null=null;
+  let thumbnailCursor=0,thumbnailsRunning=false;
+  const fillThumbnails=async()=>{
+    if(thumbnailsRunning)return;
+    thumbnailsRunning=true;
+    try{while(thumbnailCursor<images.length&&!lightbox.hidden&&lightbox.isConnected){
+      const i=thumbnailCursor++,item=images[i];
+      let source=await api.previewThumbnail(item.src).catch(()=>null);
+      if(!source&&item.complete&&item.naturalWidth){
+        const canvas=content.createElement('canvas'),scale=Math.min(96/item.naturalWidth,84/item.naturalHeight,1);
+        canvas.width=Math.max(1,Math.round(item.naturalWidth*scale));canvas.height=Math.max(1,Math.round(item.naturalHeight*scale));
+        try{canvas.getContext('2d')?.drawImage(item,0,0,canvas.width,canvas.height);source=canvas.toDataURL('image/png');}catch{/* Keep the empty thumbnail if this image cannot be sampled. */}
+      }
+      const thumb=thumbs.querySelector<HTMLImageElement>(`[data-gallery-index="${i}"] img`);
+      if(source&&thumb)thumb.src=source;
+    }}finally{thumbnailsRunning=false;}
+  };
   const setZoom=(value:number)=>{zoom=Math.min(4,Math.max(1,value));if(zoom>1&&!zoomBaseWidth)zoomBaseWidth=Math.max(photo.naturalWidth,photo.clientWidth);photo.dataset.zoomed=String(zoom>1);photo.style.width=zoom>1&&zoomBaseWidth?Math.round(zoomBaseWidth*zoom)+'px':'';photo.style.height='';if(zoom===1)zoomBaseWidth=0;};
   const select=(value:number)=>{
     index=(value+images.length)%images.length;const image=images[index];photo.src=image.src;photo.alt=image.alt||'图片';title.textContent=image.alt||image.src.split('/').pop()||'图片';count.textContent=`${index+1} / ${images.length}`;setZoom(1);
@@ -92,8 +108,9 @@ function installLightbox(content:Document){
   };
   const open=(image:HTMLImageElement)=>{
     if(!images.length)return;
-    if(!thumbs.childElementCount){for(const [i,item] of images.entries()){const button=content.createElement('button');button.type='button';button.className='lightbox-thumb';button.dataset.galleryIndex=String(i);button.setAttribute('aria-label',`${i+1}：${item.alt||'图片'}`);const thumb=content.createElement('img');thumb.src=item.src;thumb.alt='';thumb.loading='lazy';button.append(thumb);thumbs.append(button);}}
+    if(!thumbs.childElementCount){for(const [i,item] of images.entries()){const button=content.createElement('button');button.type='button';button.className='lightbox-thumb';button.dataset.galleryIndex=String(i);button.setAttribute('aria-label',`${i+1}：${item.alt||'图片'}`);const thumb=content.createElement('img');thumb.alt='';button.append(thumb);thumbs.append(button);}}
     previousFocus=content.activeElement as HTMLElement|null;previousOverflow=content.documentElement.style.overflow;content.documentElement.style.overflow='hidden';lightbox.hidden=false;select(images.indexOf(image));lightbox.querySelector<HTMLButtonElement>('[data-gallery-action=close]')?.focus();
+    void fillThumbnails();
   };
   const close=()=>{lightbox.hidden=true;content.documentElement.style.overflow=previousOverflow;previousFocus?.focus();};
   const handleClick=(event:MouseEvent)=>{
