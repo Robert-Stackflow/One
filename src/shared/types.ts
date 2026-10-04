@@ -83,6 +83,7 @@ export interface OneAPI {
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;
   pickColor(): Promise<void>; colorCapture(): Promise<ScreenCapture|null>; chooseColor(hex: string): Promise<void>; onColor(callback: (value:string) => void): () => void;
   showColorEditor(hex?:string):Promise<void>;colorState():Promise<import('./colors').ColorState>;onColorSettings(callback:()=>void):()=>void;onColorEditorOpen(callback:(hex:string)=>void):()=>void;colorEditorSize(height:number):Promise<void>;clearColorHistory():Promise<void>;
+  colorShortcutStatus():Promise<{active:boolean;error:string}>;retryColorShortcut():Promise<{active:boolean;error:string}>;onColorShortcutStatus(callback:(status:{active:boolean;error:string})=>void):()=>void;
   onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean):Promise<void>; onPreviewClosing(callback:()=>void):()=>void;
   openFile(path: string): Promise<void>; revealFile(path: string): Promise<void>; startFileDrag(path:string):Promise<void>; searchText(text: string): Promise<void>;
   sendToWorkbench(text: string): Promise<void>; inputStatus(): Promise<{ hook: boolean; native: boolean; error: string }>;

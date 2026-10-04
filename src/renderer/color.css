@@ -29,12 +29,20 @@
 .color-page .color-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;border-top:1px solid var(--line);padding-top:16px;margin-top:24px}
 .color-page .color-settings .preference-row{min-width:0;min-height:32px;padding:0;gap:12px;border:0}
 .color-page .color-settings .preference-row>label{font-size:12px;color:var(--muted);flex-shrink:0}
-.color-page .color-settings .shortcut-control,.color-page .color-settings .custom-select{width:200px;max-width:65%;min-width:0;margin:0}
+.color-page .color-settings .color-shortcut-field,.color-page .color-settings .custom-select{width:200px;max-width:65%;min-width:0;margin:0}
+.color-shortcut-field .shortcut-control{width:100%;max-width:none}
+.color-shortcut-notice{display:flex;align-items:center;gap:6px;width:100%;font-size:11px;line-height:1.4;color:#9a3412;animation:color-shortcut-in .16s var(--ease)}
+.color-shortcut-notice[hidden]{display:none}
+.color-shortcut-notice span{flex:1;min-width:0}
+.color-shortcut-notice button{border:0;background:transparent;color:inherit;flex:none;min-height:24px;padding:2px 4px;font-size:11px;text-decoration:underline;text-underline-offset:2px}
+.color-shortcut-notice button:hover{background:var(--hover)}
+html[data-theme=dark] .color-shortcut-notice{color:#fbbf24}
+@keyframes color-shortcut-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:1050px){
  .color-page .color-workbench{grid-template-columns:200px minmax(0,1fr);gap:20px}
  .color-page .color-values>button{grid-template-columns:48px minmax(0,1fr) 16px;gap:10px;padding-inline:12px}
  .color-page .color-settings{grid-template-columns:minmax(0,1fr);gap:14px}
- .color-page .color-settings .shortcut-control,.color-page .color-settings .custom-select{width:240px;max-width:65%}
+ .color-page .color-settings .color-shortcut-field,.color-page .color-settings .custom-select{width:240px;max-width:65%}
 }
 @media(max-width:650px){.color-page .color-workbench{grid-template-columns:minmax(0,1fr)}.color-page .color-sample{height:140px}}
 .color-main-variants>span{font-size:11px;color:var(--muted)}
@@ -79,4 +87,4 @@
 .color-editor-more>.icon{width:14px;height:14px;transition:transform .16s var(--ease)}
 .color-editor-more[aria-expanded=true]>.icon{transform:rotate(180deg)}
 .color-editor-window .toast{left:50%;max-width:calc(100vw - 36px);bottom:16px;font-size:12px;z-index:10}
-@media(prefers-reduced-motion:reduce){.color-variant-list>button,.color-editor-sample,.color-editor-more>.icon{transition:none}.color-variant-list>button:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.color-variant-list>button,.color-editor-sample,.color-editor-more>.icon{transition:none}.color-variant-list>button:hover{transform:none}.color-shortcut-notice{animation:none}}

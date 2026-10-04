@@ -83,7 +83,7 @@ const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
-let colorWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false;let registeredColorShortcut='';let colorEditor:ColorEditor;
+let colorWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
 const workers = new Set<Worker>();let diskService:DiskService;let maintenance:MaintenanceClient;let systemInformation:SystemInformationService;let diskMonitor:DiskMonitorService;let echoes:EchoService;
 let main: BrowserWindow; let tray: Tray;
 let textService:TextService;let fileTools:FileToolsService;let locksmith:LocksmithService;let awake:AwakeService;let topmost:TopmostService;
@@ -281,9 +281,14 @@ async function pickColor(){
   });worker.once('error',error=>{if(colorWorker===worker){closeColors();echo(error.message);}});worker.once('exit',()=>{if(colorWorker===worker)closeColors();});
 }
 function refreshWindowAppearance(){const a=settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
+function colorShortcutStatus(){return {active:!!registeredColorShortcut,error:colorShortcutError};}
 function colorShortcut(value:string){
-  if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
-  if(value){const normalized=value.replace(/\b(Ctrl)\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');if(!globalShortcut.register(normalized,()=>void pickColor().catch(error=>echo(error.message))))throw new Error('取色快捷键已被占用，请更换组合键');registeredColorShortcut=normalized;}
+  try{
+    if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
+    if(value){const normalized=value.replace(/\b(Ctrl)\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');if(!globalShortcut.register(normalized,()=>void pickColor().catch(error=>echo(error.message))))throw new Error('取色快捷键已被占用，请更换组合键');registeredColorShortcut=normalized;}
+    colorShortcutError='';
+  }catch(error){colorShortcutError=String((error as Error).message||error);throw error;}
+  finally{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:color-shortcut-status',colorShortcutStatus());}
 }
 function registerIPC() {
   handle('explorer-menu-state',()=>explorerMenuState());
@@ -366,11 +371,13 @@ function registerIPC() {
   handle('color-editor-show',(_event,hex)=>{if(hex!==undefined&&(typeof hex!=='string'||!/^#[0-9a-f]{6}$/i.test(hex)))throw new Error('颜色无效');colorEditor.show(hex?.toUpperCase());});
   handle('color-state',()=>colorEditor.snapshot(),['main','color-editor']);
   handle('color-editor-size',(_event,height)=>{if(typeof height!=='number'||!Number.isFinite(height)||height<200||height>1800)throw new Error('窗口尺寸无效');colorEditor.resize(height);},['color-editor']);
+  handle('color-shortcut-status',()=>colorShortcutStatus(),['main']);
+  handle('color-shortcut-retry',()=>{try{colorShortcut(settings.colorShortcut);}catch{}return colorShortcutStatus();},['main']);
   handle('color-history-clear',()=>saveSettings(current=>({...current,colorHistory:[]})).then(()=>{}),['main','color-editor']);
   handle('color-capture',()=>colorSample||null,['color-picker']);
   handle('color-frame',()=>{colorFramePending=false;sendColorFrame();},['color-picker']);
   handle('choose-color',async(event,value)=>{if(typeof value!=='string'||!/^#[0-9a-f]{6}$/i.test(value))throw new Error('颜色无效');await acceptColor(value.toUpperCase(),roles.get(event.sender.id)==='color-picker');},['color-picker','color-editor','main']);
-    handle('record-shortcut',(_event,active)=>{if(typeof active!=='boolean')throw new Error('参数无效');recordingShortcut=active;input.setModalActive(active||!!colorWorker);topmost.record(active);searchBridge.record(active);if(active){if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);}else colorShortcut(settings.colorShortcut);});
+    handle('record-shortcut',(_event,active)=>{if(typeof active!=='boolean')throw new Error('参数无效');recordingShortcut=active;input.setModalActive(active||!!colorWorker);topmost.record(active);searchBridge.record(active);if(active){if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';}else colorShortcut(settings.colorShortcut);});
   // The default floating level reorders behind the taskbar, which can clear WS_EX_TOPMOST on Windows.
   handle('preview-preferences',async(_event,value)=>{if(value===undefined)return settings.preview;return (await saveSettings(current=>mergeSettings(current,{preview:value}))).preview;},['preview']);
   handle('preview-open-with',event=>{const data=previews.get(event.sender.id);if(!data)throw new Error('预览尚未准备');return openWithApplications(data.path);},['preview']);
