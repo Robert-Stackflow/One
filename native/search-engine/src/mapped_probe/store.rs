@@ -152,6 +152,34 @@ struct ReadSnapshot {
     base: Arc<BaseLease>,
     overlay: Arc<Overlay>,
 }
+// Retain only the last completed result. Weak references prevent a cached
+// answer from keeping a retired index generation or launcher list alive.
+struct RecentQuery {
+    base: Weak<BaseLease>,
+    overlay: Weak<Overlay>,
+    launchers: Option<Weak<Index>>,
+    key: Value,
+    result: Value,
+}
+impl RecentQuery {
+    fn key(request: &Value) -> Option<Value> {
+        if request["type"] != "query" { return None; }
+        let mut key = request.clone();
+        let fields = key.as_object_mut()?;
+        fields.remove("id");
+        fields.remove("scope");
+        Some(key)
+    }
+    fn get(&self, snapshot: &Arc<ReadSnapshot>, launchers: &Arc<Index>, key: &Value) -> Option<Value> {
+        if self.key != *key
+            || !self.base.upgrade().is_some_and(|previous| Arc::ptr_eq(&previous, &snapshot.base))
+            || !self.overlay.upgrade().is_some_and(|previous| Arc::ptr_eq(&previous, &snapshot.overlay))
+            || self.launchers.as_ref().is_some_and(|cached| !cached.upgrade().is_some_and(|previous| Arc::ptr_eq(&previous, launchers))) {
+            return None;
+        }
+        Some(self.result.clone())
+    }
+}
 impl ReadSnapshot {
     fn from_state(state: &State) -> Arc<Self> {
         Arc::new(Self { base: state.lease.clone(), overlay: state.overlay.clone() })
@@ -515,10 +543,31 @@ fn run(mut state: State, lock: File, mut service: Option<Service>) -> io::Result
     let reader_launchers = launchers.clone();
     let (read_tx, read_rx) = mpsc::channel::<(Value, u64)>();
     let reader = thread::spawn(move || {
+        let mut recent: Option<RecentQuery> = None;
         for (request, ticket) in read_rx {
             let snapshot = reader_published.read().unwrap().clone();
             let launcher_snapshot = reader_launchers.read().unwrap().clone();
-            reply(&request, snapshot.request(&request, &reader_gate, ticket, &launcher_snapshot));
+            let key = RecentQuery::key(&request);
+            let started = Instant::now();
+            let result = if let Some(cached) = key.as_ref().and_then(|key| recent.as_ref()?.get(&snapshot, &launcher_snapshot, key)) {
+                if reader_gate.current(&request, ticket) {
+                    let mut value = cached;
+                    value["elapsed"] = json!(started.elapsed().as_secs_f64() * 1000.0);
+                    Ok(value)
+                } else { Ok(cancelled()) }
+            } else { snapshot.request(&request, &reader_gate, ticket, &launcher_snapshot) };
+            if let (Some(key), Ok(value)) = (key, &result) {
+                if !value["cancelled"].as_bool().unwrap_or(false)
+                    && value.to_string().len() <= 256 * 1024
+                    && reader_gate.current(&request, ticket) {
+                    recent = Some(RecentQuery {
+                        base: Arc::downgrade(&snapshot.base), overlay: Arc::downgrade(&snapshot.overlay),
+                        launchers: request["includeLaunchers"].as_bool().unwrap_or(false).then(||Arc::downgrade(&launcher_snapshot)),
+                        key, result: value.clone(),
+                    });
+                } else { recent = None; }
+            }
+            reply(&request, result);
         }
     });
     let (tx, rx) = mpsc::channel();
