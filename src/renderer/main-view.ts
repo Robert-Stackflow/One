@@ -2,13 +2,10 @@ import {dialogMarkup,openDialog,closeDialog} from './dialog';
 import {systemInformationPage,setupSystemInformation} from './system-info-view';
 import {overviewPage,setupOverview} from './overview-view';
 import {fileToolsPage,setupFileTools} from './file-tools-view';
-import {locksmithCard,setupLocksmith} from './locksmith-view';
 import './system-information.css';
 import {maintenancePage,setupMaintenance} from './maintenance-view';
-import {renderSearchMenu} from './search-menu';
 import {textPage,setupText,receiveText} from './text-view';
 import './text.css';
-import {searchPage,setupSearchPage,renderSearch} from './search-view';
 import './search.css';
 
 import './styles.css';
@@ -27,8 +24,7 @@ import {setupTextSelection} from './selection';
 import {setupAppearance} from './appearance';
 import {settingsPage,setupSettingsPage} from './settings-view';
 import {bindPreference} from './preferences';
-import {colorPage,setupColorPage,renderColorPicker} from './color-view';
-import {renderHUD} from './hud';
+import {colorPage,setupColorPage} from './color-view';
 import appIconURL from '../../assets/icons/one-small.svg?url';
 import { windowControls, setupChrome } from './chrome';
 import { diskPage, setupDisk } from './disk-view';
@@ -54,10 +50,12 @@ export function renderMain() {
   const content=document.querySelector<HTMLElement>('.content')!;
   let toolsController:ReturnType<typeof setupFileTools>|undefined,textController:ReturnType<typeof setupText>|undefined,diskController:ReturnType<typeof setupDisk>|undefined;
   let maintenanceController:ReturnType<typeof setupMaintenance>|undefined,informationController:ReturnType<typeof setupSystemInformation>|undefined;
-  let locksmithController:ReturnType<typeof setupLocksmith>|undefined,settingsController:ReturnType<typeof setupSettingsPage>|undefined;
-  const mounted=new Set(['home']);
-  const mount=(id:string)=>{
-    if(mounted.has(id))return;
+  let locksmithController:ReturnType<typeof import('./locksmith-view').setupLocksmith>|undefined,settingsController:ReturnType<typeof setupSettingsPage>|undefined;
+  const mounted=new Set(['home']),mounting=new Map<string,Promise<void>>();
+  const mount=(id:string):Promise<void>=>{
+    if(mounted.has(id))return Promise.resolve();
+    const pending=mounting.get(id);if(pending)return pending;
+    const work=(async()=>{
     const page=q<HTMLElement>('page-'+id);
     if(id==='tools'){page.innerHTML=fileToolsPage();toolsController=setupFileTools();}
     else if(id==='text'){page.innerHTML=textPage();customControls(page);textController=setupText();}
@@ -65,31 +63,54 @@ export function renderMain() {
     else if(id==='system'){page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
     else if(id==='hardware'){page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='input'){page.innerHTML=inputPage();customControls(page);setupInput();}
-    else if(id==='locksmith'){page.innerHTML=locksmithCard();locksmithController=setupLocksmith();}
+    else if(id==='locksmith'){const {locksmithCard,setupLocksmith}=await import('./locksmith-view');page.innerHTML=locksmithCard();locksmithController=setupLocksmith();}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
     else if(id==='color'){page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
-    else if(id==='search'){page.innerHTML=searchPage();customControls(page);setupSearchPage();}
+    else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
     else if(id==='settings'){page.innerHTML=settingsPage();customControls(page);settingsController=setupSettingsPage();}
     else return;
     mounted.add(id);
+    })().finally(()=>mounting.delete(id));
+    mounting.set(id,work);return work;
   };
-  const navigate = (id: string) => { mount(id);overviewController.activate(id==='home');toolsController?.activate(id==='tools');textController?.activate(id==='text');diskController?.activate(id==='disk'); maintenanceController?.activate(id==='system');informationController?.activate(id==='hardware');locksmithController?.activate(id==='locksmith');settingsController?.activate(id==='settings');closeControls();content.scrollTop=0;content.dataset.currentPage=id;document.querySelectorAll<HTMLElement>('[data-heading-for]').forEach(actions=>actions.hidden=actions.dataset.headingFor!==id); document.querySelectorAll<HTMLElement>('.page').forEach(page => page.hidden = page.id !== 'page-' + id); document.querySelectorAll('.nav').forEach(node => {const active=node.getAttribute('data-page')===id;node.classList.toggle('active',active);if(active)node.setAttribute('aria-current','page');else node.removeAttribute('aria-current');}); q('page-name').textContent = modules.find(item => item[0] === id)?.[1] || 'One'; };
-  document.querySelectorAll<HTMLButtonElement>('.nav[data-page]').forEach(node => node.addEventListener('click', () => navigate(node.dataset.page!)));
+  let navigationRevision=0;
+  const activate=(id:string,value:boolean)=>{
+    if(id==='home')overviewController.activate(value);
+    else if(id==='tools')toolsController?.activate(value);
+    else if(id==='text')textController?.activate(value);
+    else if(id==='disk')diskController?.activate(value);
+    else if(id==='system')maintenanceController?.activate(value);
+    else if(id==='hardware')informationController?.activate(value);
+    else if(id==='locksmith')locksmithController?.activate(value);
+    else if(id==='settings')settingsController?.activate(value);
+  };
+  const navigate=async(id:string)=>{
+    const revision=++navigationRevision,current=content.dataset.currentPage||'home';
+    if(id!==current)activate(current,false);
+    await mount(id);
+    if(revision!==navigationRevision)return false;
+    activate(id,true);closeControls();content.scrollTop=0;content.dataset.currentPage=id;
+    document.querySelectorAll<HTMLElement>('[data-heading-for]').forEach(actions=>actions.hidden=actions.dataset.headingFor!==id);
+    document.querySelectorAll<HTMLElement>('.page').forEach(page=>page.hidden=page.id!=='page-'+id);
+    document.querySelectorAll('.nav').forEach(node=>{const active=node.getAttribute('data-page')===id;node.classList.toggle('active',active);if(active)node.setAttribute('aria-current','page');else node.removeAttribute('aria-current');});
+    q('page-name').textContent=modules.find(item=>item[0]===id)?.[1]||'One';return true;
+  };
+  document.querySelectorAll<HTMLButtonElement>('.nav[data-page]').forEach(node => node.addEventListener('click', () => void navigate(node.dataset.page!).catch(toast)));
   const collapse=(collapsed:boolean)=>{document.querySelector('.shell')!.classList.toggle('sidebar-collapsed',collapsed);const toggle=q('sidebar-toggle');toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'展开侧边栏':'收起侧边栏');toggle.title=toggle.getAttribute('aria-label')!;};
   collapse(localStorage.getItem('sidebar-collapsed')==='true');
   action('sidebar-toggle',()=>{const collapsed=q('sidebar-toggle').getAttribute('aria-expanded')==='true';collapse(collapsed);localStorage.setItem('sidebar-collapsed',String(collapsed));});
-  const overviewController=setupOverview((id,report)=>{if(['duplicates','diff','rename','documents'].includes(id)){navigate('tools');void toolsController!.select(id as any,report).catch(toast);}else{navigate(id);if(id==='system')q('alerts-tab').click();if(id==='disk'&&report)void diskController!.openFolder(report).catch(toast);}});overviewController.activate(true);
+  const overviewController=setupOverview((id,report)=>{void (async()=>{if(['duplicates','diff','rename','documents'].includes(id)){if(await navigate('tools'))await toolsController!.select(id as any,report);}else if(await navigate(id)){if(id==='system')q('alerts-tab').click();if(id==='disk'&&report)await diskController!.openFolder(report);}})().catch(toast);});overviewController.activate(true);
   api.onDiskAlert(value=>toast(value.drive+' 剩余 '+(value.free/1024**3).toFixed(2)+' GB'));
-  api.onDiskAlertOpen(()=>{navigate('system');q('alerts-tab').click();});
-  api.onSearchSettings(tab=>{navigate('search');q(tab==='entry'?'search-tab-entry':'search-tab-menu').click();});
-  api.onNavigatePage(target=>{
-    if(!modules.some(item=>item[0]===target.page))return;navigate(target.page);
-    if(target.page==='disk'&&target.folder)void diskController!.openFolder(target.folder).catch(toast);
-    else if(target.page==='tools'&&target.folder)void toolsController!.openFolder(target.folder).catch(toast);
-    else if(target.page==='locksmith'&&target.paths?.length)void locksmithController!.inspect(target.paths).catch(toast);
-  });
-  api.onLockTarget(()=>navigate('locksmith'));
-  api.onReceiveText(text => { navigate('text'); receiveText(text); });
+  api.onDiskAlertOpen(()=>{void navigate('system').then(active=>{if(active)q('alerts-tab').click();}).catch(toast);});
+  api.onSearchSettings(tab=>{void navigate('search').then(active=>{if(active)q(tab==='entry'?'search-tab-entry':'search-tab-menu').click();}).catch(toast);});
+  api.onNavigatePage(target=>{void (async()=>{
+    if(!modules.some(item=>item[0]===target.page)||!await navigate(target.page))return;
+    if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
+    else if(target.page==='tools'&&target.folder)await toolsController!.openFolder(target.folder);
+    else if(target.page==='locksmith'&&target.paths?.length)await locksmithController!.inspect(target.paths);
+  })().catch(toast);});
+  api.onLockTarget(path=>{void navigate('locksmith').then(active=>{if(active)return locksmithController!.inspect([path]);}).catch(toast);});
+  api.onReceiveText(text => {void navigate('text').then(active=>{if(active)receiveText(text);}).catch(toast);});
 }
 function previewPage() {
   return `<div class="empty" id="dropzone"><div class="big-icon">${icon('preview')}</div><h2>拖入文件或文件夹</h2><div class="toolbar">${button('pick-preview','选择文件','file',true)}${button('pick-preview-folder','选择文件夹','folder')}</div></div><div class="settings-card">${settingRow('用空格快速预览','资源管理器文件列表中选中文件后，按空格查看。',switchControl('preview-enabled','开启空格预览'))}</div>`;

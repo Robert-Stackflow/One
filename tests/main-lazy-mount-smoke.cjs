@@ -10,18 +10,23 @@ async function run(){
  app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
  try{
   const page=await app.firstWindow();await page.waitForSelector('#overview-index');
+  const scriptRequests=[];page.on('request',request=>{if(request.url().endsWith('.js'))scriptRequests.push(request.url());});
+  await page.reload();await page.waitForSelector('#overview-index');
+  assert.ok(!scriptRequests.some(url=>/\/(search-view|locksmith-view)-[^/]+\.js$/.test(url)),'search and file-lock scripts should load only when opened');
   const deferred=['tools','text','disk','system','hardware','input','locksmith','preview','color','search','settings'];
   const initial=await page.evaluate(ids=>({nodes:document.querySelectorAll('*').length,empty:ids.map(id=>document.querySelector('#page-'+id).childElementCount)}),deferred);
   assert.deepEqual(initial.empty,deferred.map(()=>0),'unopened pages should not create hidden content');
   assert.ok(initial.nodes<450,'startup should keep only the overview and shared shell');
   const mounted={},mountMs={};
   for(const id of deferred){
-   mountMs[id]=await page.evaluate(id=>{const start=performance.now();document.querySelector('[data-page='+id+']').click();return performance.now()-start;},id);
+   mountMs[id]=await page.evaluate(async id=>{const start=performance.now();document.querySelector('[data-page='+id+']').click();while(document.querySelector('#page-'+id).hidden){if(performance.now()-start>3000)throw Error(id+' page did not open');await new Promise(requestAnimationFrame);}return performance.now()-start;},id);
    await expect(page.locator('#page-'+id)).toBeVisible();
    mounted[id]=await page.locator('#page-'+id+' *').count();
    assert.ok(mounted[id]>0,id+' should mount on first visit');
-   assert.ok(mountMs[id]<100,`${id} first visit blocked the UI for ${mountMs[id].toFixed(1)} ms`);
+   assert.ok(mountMs[id]<200,`${id} first visit took ${mountMs[id].toFixed(1)} ms`);
   }
+  assert.ok(scriptRequests.some(url=>/\/search-view-[^/]+\.js$/.test(url)),'opening search should load its script');
+  assert.ok(scriptRequests.some(url=>/\/locksmith-view-[^/]+\.js$/.test(url)),'opening file locks should load its script');
   await page.locator('[data-page=home]').click();
   await expect(page.locator('#page-home')).toBeVisible();
   assert.equal(await page.locator('#page-tools *').count(),mounted.tools,'mounted page should retain its state');
@@ -41,6 +46,9 @@ async function run(){
   await expect(page.locator('#search-tab-index')).toHaveAttribute('aria-selected','true');
   await page.locator('#search-tab-index').focus();await page.keyboard.press('ArrowRight');
   await expect(page.locator('#search-tab-menu')).toHaveAttribute('aria-selected','true');
+  await page.evaluate(()=>{document.querySelector('[data-page=locksmith]').click();document.querySelector('[data-page=input]').click();});
+  await expect(page.locator('#page-input')).toBeVisible();
+  await expect(page.locator('#page-locksmith')).toBeHidden();
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({result:'PASS',initialNodes:initial.nodes,mounted,mountMs,statePreserved:true,keyboardTabs:true,errors}));
  }finally{await app.close();}

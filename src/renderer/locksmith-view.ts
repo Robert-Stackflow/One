@@ -25,7 +25,6 @@ export function setupLocksmith(){
     });
   };
   const autoScan=()=>{clearTimeout(scanTimer);const revision=++targetRevision;scanTimer=setTimeout(()=>{scanTimer=undefined;if(revision===targetRevision)void inspect([...paths]).catch(toast);},120);};
-  api.onLockTarget(path=>{void inspect([path]).catch(toast);});
   api.onLocks(render);void api.lockState().then(s=>{if(!targetsTouched)render(s);}).catch(toast);
   const drop=q('lock-targets');drop.addEventListener('dragover',e=>e.preventDefault());drop.addEventListener('drop',e=>{e.preventDefault();for(const file of e.dataTransfer?.files||[]){const path=api.droppedFile(file);if(path)add(path);}});
   const resume=()=>{if(showing()){targets();if(state)render(state);}};
