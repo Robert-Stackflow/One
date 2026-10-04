@@ -41,11 +41,11 @@ async function main(){
   do {await delay(Math.min(5000,Math.max(0,idleUntil-performance.now())));idleSamples.push(await snapshot(app));} while(performance.now()<idleUntil);
   const idle=idleSamples.at(-1);
   await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=main'));w.show();w.focus();});
-  await app.evaluate(({BrowserWindow})=>{globalThis.benchSearchShownAt=0;for(const w of BrowserWindow.getAllWindows())if(new URL(w.webContents.getURL()).searchParams.get('view')==='search')w.on('show',()=>{globalThis.benchSearchShownAt=Date.now();});});
+  await app.evaluate(({app,BrowserWindow})=>{globalThis.benchSearchShownAt=0;const watch=w=>w.on('show',()=>{const url=w.webContents.getURL();if(url&&new URL(url).searchParams.get('view')==='search'&&!url.includes('embedded'))globalThis.benchSearchShownAt=Date.now();});for(const w of BrowserWindow.getAllWindows())watch(w);app.on('browser-window-created',(_event,w)=>watch(w));});
   let at=performance.now();const calledAt=await main.evaluate(async()=>{const calledAt=Date.now();await window.one.showSearch();return calledAt;});
   await expect.poll(()=>app.windows().some(p=>p.url().includes('view=search')&&!p.url().includes('menu'))).toBe(true);
-  const search=app.windows().find(p=>p.url().includes('view=search')&&!p.url().includes('menu'));
-  await expect(search.locator('#file-query')).toBeVisible();const searchOpenMs=performance.now()-at,nativeSearchShowMs=await app.evaluate(()=>globalThis.benchSearchShownAt)-calledAt;
+  let search=app.windows().find(p=>p.url().includes('view=search')&&!p.url().includes('menu'));
+  await expect(search.locator('#file-query')).toBeVisible();await expect.poll(()=>app.evaluate(()=>globalThis.benchSearchShownAt)).toBeGreaterThan(0);const searchOpenMs=performance.now()-at,nativeSearchShowMs=await app.evaluate(()=>globalThis.benchSearchShownAt)-calledAt;
   await search.locator('#file-query').fill(query);await expect(search.locator('.search-result').first()).toBeVisible();
   // Give predictive prewarming the same amount of human think time in both builds.
   await delay(300);at=performance.now();await search.locator('.search-result').first().click({button:'right'});
@@ -57,8 +57,8 @@ async function main(){
   const used=await snapshot(app);await menu.evaluate(()=>window.one.fileMenuClose(false));await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(w=>w.hide()));
   await delay(Number(process.env.ONE_BENCH_IDLE_MS||6000));const afterUse=await snapshot(app);
   const cpuPercentOneCore=(idle.cpuSeconds-idleStart.cpuSeconds)/(idle.at-idleStart.at)*100000;
-  if(process.env.ONE_EXPECT_RECLAIM==='1')assert.ok(afterUse.windows.every(w=>w.view!=='file-context'&&w.view!=='search-menu'),'hidden menu renderers must be reclaimed');
-  await main.evaluate(()=>window.one.showSearch());await search.locator('#file-query').fill(query);await expect(search.locator('.search-result').first()).toBeVisible();
+  if(process.env.ONE_EXPECT_RECLAIM==='1')assert.ok(afterUse.windows.every(w=>w.view!=='file-context'&&w.view!=='search'),'hidden search and menu renderers must be reclaimed');
+  await main.evaluate(()=>window.one.showSearch());await expect.poll(()=>app.windows().some(p=>p.url().includes('view=search')&&!p.url().includes('menu'))).toBe(true);search=app.windows().find(p=>p.url().includes('view=search')&&!p.url().includes('menu'));await search.locator('#file-query').fill(query);await expect(search.locator('.search-result').first()).toBeVisible();
   at=performance.now();await search.locator('.search-result').first().click({button:'right'});await expect.poll(()=>app.windows().some(p=>p.url().includes('view=file-context')&&!p.url().includes('submenu'))).toBe(true);
   const reopened=app.windows().find(p=>p.url().includes('view=file-context')&&!p.url().includes('submenu'));await expect(reopened.locator('[data-file-action=rename]')).toBeVisible();const reopenContextMs=performance.now()-at;
   await reopened.locator('[data-file-action=apps]').hover();await expect.poll(()=>app.windows().some(p=>p.url().includes('submenu=apps'))).toBe(true);await expect(app.windows().find(p=>p.url().includes('submenu=apps')).locator('[data-file-action=choose]')).toBeVisible();
