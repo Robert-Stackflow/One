@@ -1,10 +1,6 @@
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
-import {systemInformationPage,setupSystemInformation} from './system-info-view';
 import {overviewPage,setupOverview} from './overview-view';
-import {fileToolsPage,setupFileTools} from './file-tools-view';
 import './system-information.css';
-import {maintenancePage,setupMaintenance} from './maintenance-view';
-import {textPage,setupText,receiveText} from './text-view';
 import './text.css';
 import './search.css';
 
@@ -22,13 +18,9 @@ import './interface-refinement.css';
 import {setupTooltips} from './tooltip';
 import {setupTextSelection} from './selection';
 import {setupAppearance} from './appearance';
-import {settingsPage,setupSettingsPage} from './settings-view';
 import {bindPreference} from './preferences';
-import {colorPage,setupColorPage} from './color-view';
 import appIconURL from '../../assets/icons/one-small.svg?url';
 import { windowControls, setupChrome } from './chrome';
-import { diskPage, setupDisk } from './disk-view';
-import { inputPage, setupInput } from './enhancement-view';
 import type { MaintenanceRow, Operation, PickerData } from '../shared/types';
 import { customControls, closeControls } from './controls';
 import { api, q, esc, icon, button, switchControl, toast, action } from './ui';
@@ -48,26 +40,26 @@ export function renderMain() {
   </div><div class="toast-layer"><div class="toast" id="toast" hidden role="status"></div></div></main></div>${dialogMarkup({id:"issues-dialog",title:"未完成的扫描项目",closeId:"issues-dismiss",className:"dialog-wide",body:`<pre id="issues-text"></pre>`,actions:`${button('close-issues','关闭')}`})}`;
   setupChrome(); customControls(app);
   const content=document.querySelector<HTMLElement>('.content')!;
-  let toolsController:ReturnType<typeof setupFileTools>|undefined,textController:ReturnType<typeof setupText>|undefined,diskController:ReturnType<typeof setupDisk>|undefined;
-  let maintenanceController:ReturnType<typeof setupMaintenance>|undefined,informationController:ReturnType<typeof setupSystemInformation>|undefined;
-  let locksmithController:ReturnType<typeof import('./locksmith-view').setupLocksmith>|undefined,settingsController:ReturnType<typeof setupSettingsPage>|undefined;
+  let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
+  let maintenanceController:ReturnType<typeof import('./maintenance-view').setupMaintenance>|undefined,informationController:ReturnType<typeof import('./system-info-view').setupSystemInformation>|undefined;
+  let locksmithController:ReturnType<typeof import('./locksmith-view').setupLocksmith>|undefined,settingsController:ReturnType<typeof import('./settings-view').setupSettingsPage>|undefined;
   const mounted=new Set(['home']),mounting=new Map<string,Promise<void>>();
   const mount=(id:string):Promise<void>=>{
     if(mounted.has(id))return Promise.resolve();
     const pending=mounting.get(id);if(pending)return pending;
     const work=(async()=>{
     const page=q<HTMLElement>('page-'+id);
-    if(id==='tools'){page.innerHTML=fileToolsPage();toolsController=setupFileTools();}
-    else if(id==='text'){page.innerHTML=textPage();customControls(page);textController=setupText();}
-    else if(id==='disk'){page.innerHTML=diskPage();customControls(page);q('disk-heading-actions').append(q('disk-actions'));diskController=setupDisk();}
-    else if(id==='system'){page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
-    else if(id==='hardware'){page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
-    else if(id==='input'){page.innerHTML=inputPage();customControls(page);setupInput();}
+    if(id==='tools'){const {fileToolsPage,setupFileTools}=await import('./file-tools-view');page.innerHTML=fileToolsPage();toolsController=setupFileTools();}
+    else if(id==='text'){const {textPage,setupText}=await import('./text-view');page.innerHTML=textPage();customControls(page);textController=setupText();}
+    else if(id==='disk'){const {diskPage,setupDisk}=await import('./disk-view');page.innerHTML=diskPage();customControls(page);q('disk-heading-actions').append(q('disk-actions'));diskController=setupDisk();}
+    else if(id==='system'){const {maintenancePage,setupMaintenance}=await import('./maintenance-view');page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
+    else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
+    else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);setupInput();}
     else if(id==='locksmith'){const {locksmithCard,setupLocksmith}=await import('./locksmith-view');page.innerHTML=locksmithCard();locksmithController=setupLocksmith();}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
-    else if(id==='color'){page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
+    else if(id==='color'){const {colorPage,setupColorPage}=await import('./color-view');page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
     else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
-    else if(id==='settings'){page.innerHTML=settingsPage();customControls(page);settingsController=setupSettingsPage();}
+    else if(id==='settings'){const {settingsPage,setupSettingsPage}=await import('./settings-view');page.innerHTML=settingsPage();customControls(page);settingsController=setupSettingsPage();}
     else return;
     mounted.add(id);
     })().finally(()=>mounting.delete(id));
@@ -110,7 +102,7 @@ export function renderMain() {
     else if(target.page==='locksmith'&&target.paths?.length)await locksmithController!.inspect(target.paths);
   })().catch(toast);});
   api.onLockTarget(path=>{void navigate('locksmith').then(active=>{if(active)return locksmithController!.inspect([path]);}).catch(toast);});
-  api.onReceiveText(text => {void navigate('text').then(active=>{if(active)receiveText(text);}).catch(toast);});
+  api.onReceiveText(text => {void navigate('text').then(async active=>{if(active)(await import('./text-view')).receiveText(text);}).catch(toast);});
 }
 function previewPage() {
   return `<div class="empty" id="dropzone"><div class="big-icon">${icon('preview')}</div><h2>拖入文件或文件夹</h2><div class="toolbar">${button('pick-preview','选择文件','file',true)}${button('pick-preview-folder','选择文件夹','folder')}</div></div><div class="settings-card">${settingRow('用空格快速预览','资源管理器文件列表中选中文件后，按空格查看。',switchControl('preview-enabled','开启空格预览'))}</div>`;
