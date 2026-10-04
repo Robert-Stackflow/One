@@ -52,7 +52,7 @@ import {ColorEditor} from './color-editor';
 import {fileResponse} from './file-response';
 import type {ScreenCapture} from '../shared/types';
 import {preparePreview as loadPreview} from './preview-service';
-import {previewResourcePath} from './preview-resource';
+import {previewImageDimensions,previewResourcePath} from './preview-resource';
 import {externalURL,linkCard} from './link-card';
 import {DirectoryService} from './directory-service';
 const directories=new DirectoryService();
@@ -399,6 +399,7 @@ function registerIPC() {
   handle('directory-page',(event,id,offset,limit,query='')=>directories.page(event.sender.id,textValue(id,100),offset,limit,textValue(query,1000)),['preview']);
   handle('directory-release',(event,id)=>directories.release(event.sender.id,textValue(id,100)),['preview']);
   handle('preview-resource',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const extension=extname(path).toLowerCase(),mime:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.css':'text/css'};if(!mime[extension]||(await stat(path)).size>10*1024*1024)return null;const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:mime[extension]});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;}catch{return null;}},['preview']);
+  handle('preview-image',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const mime:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'},kind=mime[extname(path).toLowerCase()];if(!kind||(await stat(path)).size>10*1024*1024)return null;const dimensions=await previewImageDimensions(path);const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:kind});return {url:`one-file://asset/${token}/${encodeURIComponent(basename(path))}`,...(dimensions||{})};}catch{return null;}},['preview']);
   handle('preview-thumbnail',async(event,value)=>{if(typeof value!=='string'||value.length>4096)return null;try{const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='asset')return null;const token=url.pathname.split('/')[1],asset=assets.get(token);if(!asset||asset.owner!==event.sender.id||!asset.mime.startsWith('image/')||(await stat(asset.path)).size>10*1024*1024)return null;const image=nativeImage.createFromPath(asset.path);if(image.isEmpty())return null;const {width,height}=image.getSize();if(!width||!height)return null;const scale=Math.min(96/width,84/height,1);return image.resize({width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale)),quality:'good'}).toDataURL();}catch{return null;}},['preview']);
   handle('preview-link-card',(_event,value)=>linkCard(value),['preview']);
   handle('preview-open-link',async(_event,value)=>{await shell.openExternal(externalURL(value).href);},['preview']);

@@ -68,11 +68,18 @@ async function main(){
     const largeFile=process.env.ONE_LARGE_MDX;
     let large;
     if(largeFile){
-      const start=Date.now();preview=await open(largeFile);large={size:(await fs.stat(largeFile)).size,readyMs:Date.now()-start,math:await preview.frameLocator('iframe').locator('.katex').count(),headings:await preview.frameLocator('iframe').locator('h1,h2,h3').count()};
-      assert.ok(large.math>0&&large.headings>0,JSON.stringify(large));
+      const start=Date.now();preview=await open(largeFile);const document=preview.frameLocator('iframe');large={size:(await fs.stat(largeFile)).size,readyMs:Date.now()-start,pendingMath:await document.locator('.math-pending').count(),loadedImages:await document.locator('.markdown-content img').evaluateAll(items=>items.filter(item=>item.naturalWidth>0).length),headings:await document.locator('h1,h2,h3').count()};
+      assert.ok(large.pendingMath>100&&large.loadedImages<27&&large.headings>0,JSON.stringify(large));
+      const beforeMath=await document.locator('.math-pending').last().evaluate(node=>{node.id='one-math-probe';node.scrollIntoView({block:'center'});return node.getBoundingClientRect().top;});
+      await expect.poll(()=>document.locator('#one-math-probe .katex').count()).toBeGreaterThan(0);
+      large.mathScrollShift=Math.round(Math.abs((await document.locator('#one-math-probe').evaluate(node=>node.getBoundingClientRect().top))-beforeMath));
+      assert.ok(large.mathScrollShift<160,`公式延迟渲染造成明显跳动：${large.mathScrollShift}px`);
+      await preview.screenshot({path:path.join(output,'math-deep.png')});
       const scroll=await preview.frameLocator('iframe').locator('body').evaluate(body=>{const scroller=body.ownerDocument.scrollingElement;scroller.scrollTop=scroller.scrollHeight;return {top:scroller.scrollTop,height:scroller.scrollHeight};});
       assert.ok(scroll.top>0,JSON.stringify(scroll));
-      await expect.poll(()=>preview.frameLocator('iframe').locator('img[src*="rlhf-vs.-rlvr.png"]').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
+      const laterImage=document.locator('img[data-preview-src*="rlhf-vs.-rlvr.png"],img[src*="rlhf-vs.-rlvr.png"]');
+      await laterImage.evaluate(image=>image.scrollIntoView({block:'center'}));
+      await expect.poll(()=>laterImage.evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
       await preview.frameLocator('iframe').locator('.markdown-content img').last().evaluate(image=>image.click());
       await expect(preview.frameLocator('iframe').locator('.lightbox-count')).toHaveText(/\d+ \/ 27/);
       await preview.frameLocator('iframe').locator('[data-gallery-action=close]').click();

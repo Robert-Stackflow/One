@@ -22,10 +22,20 @@ async function main(){
     const states=[await stage('idle')];
     const start=performance.now(),opened=app.waitForEvent('window');await main.evaluate(value=>window.one.preview(value),file);const preview=await opened;
     await expect(preview.frameLocator('iframe').locator('.markdown-content')).toBeVisible();
-    await expect(preview.frameLocator('iframe').locator('.katex').first()).toBeVisible();
+    await expect(preview.frameLocator('iframe').locator('.math-pending,.katex').first()).toBeAttached();
     const readyMs=Math.round(performance.now()-start);
     states.push(await stage('rendered'));
-    const image=preview.frameLocator('iframe').locator('.markdown-content img').first();await expect.poll(()=>image.evaluate(value=>value.naturalWidth)).toBeGreaterThan(0);
+    const maxRenderedDelta=Number(process.env.ONE_MAX_RENDERED_DELTA_MB||0),maxReadyMs=Number(process.env.ONE_MAX_READY_MS||0);
+    if(maxRenderedDelta>0)assert.ok(states[1].privateMB-states[0].privateMB<maxRenderedDelta,`Initial Markdown render retained too much memory: ${states[1].privateMB-states[0].privateMB} MiB`);
+    if(maxReadyMs>0)assert.ok(readyMs<maxReadyMs,`Initial Markdown render took ${readyMs} ms`);
+    const dom=process.env.ONE_DIAGNOSTIC_DOM==='1'?await preview.frameLocator('iframe').locator('.markdown-content').evaluate(root=>{
+      const math=Array.from(root.querySelectorAll('.katex'));
+      const images=Array.from(root.querySelectorAll('img'));
+      return {elements:root.querySelectorAll('*').length,math:math.length,pendingMath:root.querySelectorAll('.math-pending').length,mathElements:math.reduce((sum,node)=>sum+node.querySelectorAll('*').length,0),images:images.map(image=>({loaded:image.complete&&image.naturalWidth>0,width:image.naturalWidth,height:image.naturalHeight,top:Math.round(image.getBoundingClientRect().top)}))};
+    }):undefined;
+    const image=preview.frameLocator('iframe').locator('.markdown-content img').first();
+    if(process.env.ONE_DIAGNOSTIC_DOM==='1')console.error(JSON.stringify(await image.evaluate(value=>({src:value.getAttribute('src'),deferred:!!value.dataset.previewSrc,loading:value.loading,top:value.getBoundingClientRect().top,height:value.getBoundingClientRect().height,viewport:value.ownerDocument.documentElement.clientHeight,lightbox:!!value.ownerDocument.querySelector('.markdown-lightbox')}))));
+    await expect.poll(()=>image.evaluate(value=>value.naturalWidth)).toBeGreaterThan(0);
     const galleryStart=performance.now();await image.evaluate(value=>value.click());await expect(preview.frameLocator('iframe').locator('.markdown-lightbox')).toBeVisible();
     const thumbs=preview.frameLocator('iframe').locator('.lightbox-thumb img'),imageCount=await preview.frameLocator('iframe').locator('.markdown-content img').count();
     await expect.poll(()=>thumbs.evaluateAll(items=>items.filter(item=>item.src.startsWith('data:image/')).length),{timeout:30000}).toBe(imageCount);
@@ -36,7 +46,7 @@ async function main(){
     await preview.close();await pause(5000);states.push(await stage('closed'));
     const cooldown=Number(process.env.ONE_BENCH_COOLDOWN_MS||5000);
     if(cooldown>5000){await pause(cooldown-5000);states.push(await stage('closed-idle'));}
-    const report={file,size:(await fs.stat(file)).size,readyMs,thumbnailsMs,images:imageCount,states};
+    const report={file,size:(await fs.stat(file)).size,readyMs,thumbnailsMs,images:imageCount,dom,states};
     await fs.writeFile(path.join(output,'result.json'),JSON.stringify(report,null,2));
     console.log(JSON.stringify(report));
   }finally{await app.close();}
