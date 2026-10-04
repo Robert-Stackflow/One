@@ -135,7 +135,7 @@ async function showMenu(hwnd:number){hideMenus();clearTimeout(menuIdleCleanup);s
 function searchPopup(embedded:boolean){let w=cachedSearch.get(embedded);if(w&&!w.isDestroyed())return w;
  w=windowFor('search',{width:embedded?520:740,height:embedded?inlineSearchBaseHeight:64,minWidth:embedded?240:520,minHeight:embedded?inlineSearchBaseHeight:64,frame:false,titleBarStyle:'default',titleBarOverlay:false,hasShadow:!embedded,thickFrame:!embedded,transparent:embedded,...(embedded?{backgroundColor:'#00000000',roundedCorners:false}:{}),resizable:false,skipTaskbar:true},embedded?'&embedded=1':'');cachedSearch.set(embedded,w);const own=w,windowId=w.webContents.id;
  let idleCleanup:NodeJS.Timeout|undefined;
- const scheduleIdleCleanup=()=>{clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},embedded?300000:60000);idleCleanup.unref();};
+ const scheduleIdleCleanup=()=>{clearTimeout(idleCleanup);idleCleanup=setTimeout(()=>{if(!own.isDestroyed()&&!own.isVisible())own.destroy();},embedded?300000:15000);idleCleanup.unref();};
  w.on('hide',scheduleIdleCleanup);
  w.on('show',()=>clearTimeout(idleCleanup));
  // Direct typing still gets a prewarmed popup after startup, but an unused
@@ -171,7 +171,8 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   // The open-with submenu is cheap to recreate and rarely reopened after a pause.
   // Keep the parent menu warm for repeated right-clicks, but release its extra renderer sooner.
   if(view==='file-context'&&query.includes('submenu='))popupLifecycle.track(window,8_000);
-  else if(view==='file-context'||view==='search-menu')popupLifecycle.track(window);
+  else if(view==='file-context')popupLifecycle.track(window,12_000);
+  else if(view==='search-menu')popupLifecycle.track(window);
   else if(view==='dialog-bar')popupLifecycle.track(window,300_000);
   const sendWindowState = () => {
     if(window.isDestroyed()||window.webContents.isDestroyed())return;
