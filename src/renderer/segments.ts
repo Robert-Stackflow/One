@@ -28,7 +28,7 @@ export function setupSegments(){
   dirty.clear();
   for(const {group,items,button,geometry}of updates){
    for(const item of items)item.tabIndex=item===button?0:-1;
-   if(!geometry)continue;
+   if(!geometry){group.classList.remove('segment-ready');continue;}
    ['x','y','width','height'].forEach((name,index)=>{const property='--segment-'+name,value=geometry[index]+'px';if(group.style.getPropertyValue(property)!==value)group.style.setProperty(property,value);});
    if(!group.classList.contains('segment-ready'))group.classList.add('segment-ready');
   }

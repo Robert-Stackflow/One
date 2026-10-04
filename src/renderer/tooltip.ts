@@ -13,12 +13,19 @@ export function setupTooltips() {
  document.querySelectorAll('[title]').forEach(convert);
  new MutationObserver(records => {
   for (const record of records) {
-   if (record.type === 'attributes') convert(record.target as Element);
+   if (record.type === 'attributes') {
+    if (record.attributeName === 'title') convert(record.target as Element);
+    else if (record.target === target) {
+     const label = target.dataset.tooltip || '';
+     if (!label) hide(); else if (tip.classList.contains('visible')) {tip.textContent = label; position(target);}
+    }
+   }
    else for (const node of record.addedNodes) if (node instanceof Element) {
     convert(node); node.querySelectorAll('[title]').forEach(convert);
    }
   }
- }).observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ['title']});
+  if (target && !target.isConnected) hide();
+ }).observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ['title', 'data-tooltip']});
 
  const hide = () => {
   clearTimeout(timer);

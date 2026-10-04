@@ -1,24 +1,20 @@
-import DOMPurify from 'dompurify';
-import {marked} from 'marked';
-import {isolatedFrame} from './office-view';
+import {isolatedFrame} from './document-frame';
 import {api,esc,icon,iconButton,toast} from './ui';
-import {renderCode} from './code-view';
-import {renderStructured} from './structured-view';
-import {renderTable} from './table-view';
 import {fileIcon} from './file-icons';
 import type {SetOutline} from './preview-outline';
 import {decodePreviewText} from '../shared/preview';
 export async function previewText(url:string){const response=await fetch(url);if(!response.ok)throw new Error('无法读取文件');const bytes=await response.arrayBuffer();return decodePreviewText(new Uint8Array(bytes));}
 import type {PreviewData,FileEntry} from '../shared/types';
-export function plainText(host:HTMLElement,text:string,wrap=true){return renderCode(host,{name:'text.txt',path:'',size:text.length,type:'text',text,siblings:[]},wrap);}
 export async function renderDocument(host:HTMLElement,data:PreviewData,source=false,wrap=true,outline:SetOutline=()=>{},metadata:(v:Record<string,string>)=>void=()=>{},format=false){
-  if(source||data.type==='text')return renderCode(host,data,wrap,metadata,format);
+  if(source||data.type==='text'){const {renderCode}=await import('./code-view');return renderCode(host,data,wrap,metadata,format);}
   if(data.type==='json'||data.type==='yaml'||data.type==='csv'){
     if(data.textURL&&data.size>5*1024*1024)throw new Error('结构化视图上限为 5 MB，请使用源码视图');
-    return data.type==='csv'?renderTable(host,data,metadata):renderStructured(host,data,metadata);
+    if(data.type==='csv'){const {renderTable}=await import('./table-view');return renderTable(host,data,metadata);}
+    const {renderStructured}=await import('./structured-view');return renderStructured(host,data,metadata);
   }
   if(data.textURL){if(data.size>5*1024*1024)throw new Error('渲染视图上限为 5 MB，请使用源码视图');data={...data,text:await previewText(data.textURL)};}
   if(data.type==='markdown'||data.type==='html'){
+    const [{default:DOMPurify},{marked}]=await Promise.all([import('dompurify'),import('marked')]);
     const html=data.type==='markdown'?await marked.parse(data.text||'',{gfm:true}):data.text||'';
     const safe=DOMPurify.sanitize(html,{WHOLE_DOCUMENT:true,FORBID_TAGS:['script','iframe','object','embed','form','input','button','textarea','select','base','meta'],FORBID_ATTR:['srcset','action','formaction'],ADD_TAGS:['style','link']});
     const doc=new DOMParser().parseFromString(safe,'text/html');doc.querySelectorAll('a').forEach(a=>a.removeAttribute('href'));

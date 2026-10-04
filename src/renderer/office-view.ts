@@ -2,13 +2,10 @@ import JSZip from 'jszip';
 import {renderAsync} from 'docx-preview';
 import {esc,iconButton} from './ui';
 import type {SetOutline,SetOverview} from './preview-outline';
+import {isolatedFrame} from './document-frame';
 const all=(node:ParentNode,name:string)=>Array.from((node as Element).getElementsByTagNameNS('*',name));
 const first=(node:ParentNode,name:string)=>all(node,name)[0];
 const xml=(text:string)=>{const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('文档 XML 无法读取');return doc;};
-const framePolicy="default-src 'none'; img-src data: blob: one-file:; style-src 'unsafe-inline' one-file:; font-src data: blob:; base-uri 'none'; form-action 'none'";
-export function isolatedFrame(host:HTMLElement,html:string,styles=''){
-  const frame=document.createElement('iframe');frame.className='document-frame';frame.setAttribute('sandbox','allow-same-origin');frame.setAttribute('title','文档内容');frame.srcdoc=`<!doctype html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="${framePolicy}"><style>html,body{margin:0;min-height:100%;font-family:Segoe UI,Microsoft YaHei,sans-serif;color:#252525;background:#fff}*{box-sizing:border-box}body{overflow-wrap:anywhere}img,video,svg{max-width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}table{max-width:100%;border-collapse:collapse}a{color:inherit}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#9997;border:2px solid transparent;background-clip:padding-box;border-radius:8px}::-webkit-scrollbar-button{display:none} ${styles}</style></head><body>${html}</body></html>`;host.append(frame);return frame;
-}
 export async function renderDocx(host:HTMLElement,url:string,metadata:(v:Record<string,string>)=>void,outline:SetOutline=()=>{},overview:SetOverview=()=>{}){
  const soft=getComputedStyle(document.documentElement).getPropertyValue('--soft'),frame=isolatedFrame(host,'',`body{background:${soft}}.docx-wrapper{background:transparent!important;padding:28px!important}.docx-wrapper>section.docx{box-shadow:0 1px 8px #0001;margin-bottom:28px!important}section.docx{overflow:hidden}`);
  const controller=new AbortController();let cancelled=false,observer:ResizeObserver|undefined,removeScroll:(()=>void)|undefined;

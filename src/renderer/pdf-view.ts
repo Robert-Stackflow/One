@@ -101,7 +101,7 @@ export async function renderPDF(host:HTMLElement,url:string,metadata:(values:Rec
   for(const n of resources.keys())releasePage(n);jump(current);
  }
  get('pdf-prev').onclick=()=>jump(current-1);get('pdf-next').onclick=()=>jump(current+1);get('pdf-page').onchange=()=>jump(parseInt(get<HTMLInputElement>('pdf-page').value)||1);get('pdf-plus').onclick=()=>{fit=false;scale=Math.min(4,scale*1.2);layout();};get('pdf-minus').onclick=()=>{fit=false;scale=Math.max(.15,scale/1.2);layout();};get('pdf-fit').onclick=()=>{fit=true;layout();};get('pdf-rotate').onclick=()=>{rotation=(rotation+90)%360;for(const [n,d]of dimensions)dimensions.set(n,{width:d.height,height:d.width});layout();};
- const onScroll=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(pageAtScroll);},cancelJump=()=>{jumpTarget=0;};scroll.addEventListener('scroll',onScroll,{passive:true});scroll.addEventListener('wheel',cancelJump,{passive:true});scroll.addEventListener('pointerdown',cancelJump,{passive:true});scroll.addEventListener('keydown',cancelJump);
+ const onScroll=()=>{if(jumpTarget&&virtual?.location().position!==jumpTarget-1)jumpTarget=0;cancelAnimationFrame(frame);frame=requestAnimationFrame(pageAtScroll);},cancelJump=()=>{jumpTarget=0;};scroll.addEventListener('scroll',onScroll,{passive:true});scroll.addEventListener('wheel',cancelJump,{passive:true});scroll.addEventListener('pointerdown',cancelJump,{passive:true});scroll.addEventListener('keydown',cancelJump);
  const refreshHighlights=()=>{for(const text of pages.querySelectorAll<HTMLElement>('.textLayer'))highlight(text);};
  function resetSearch(status=''){
   searchRevision++;searching=false;searchComplete=false;query='';matches=[];matchIndex=-1;

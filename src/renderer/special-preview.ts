@@ -4,7 +4,7 @@ import {marked} from 'marked';
 import {columnName,type WorkbookData} from '../shared/workbook';
 import {iconButton,esc,api,toast} from './ui';
 import {customControls,closeControls} from './controls';
-import {isolatedFrame} from './office-view';
+import {isolatedFrame} from './document-frame';
 import type {SetOutline} from './preview-outline';
 const safeHTML=(html:string)=>DOMPurify.sanitize(html,{FORBID_TAGS:['script','iframe','object','embed','form','input','button','textarea','select','base','meta','link'],FORBID_ATTR:['srcset','action','formaction']});
 const all=(node:Document|Element,name:string)=>Array.from(node.getElementsByTagNameNS('*',name));
