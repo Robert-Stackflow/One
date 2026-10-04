@@ -26,10 +26,45 @@ export async function runFileTool(task:FileToolTask,context:ToolContext):Promise
   }await flushWrites();report.stats={scanned:files,groups:rows.length,duplicateFiles:duplicates,wasted,bytesRead:bytes};report.summary=`发现 ${rows.length} 组重复文件`;
  }else if(task.kind==='diff'){
   if(task.mode==='folder'){
-   const left=new Map<string,FileStamp>(),right=new Map<string,FileStamp>();for(const [root,map]of [[task.left,left],[task.right,right]] as const)for await(const file of walk([root],true,issue,true)){const name=relative(root,file.path);if(!name)continue;map.set(name.toLowerCase(),file);progress('扫描目录',left.size+right.size,0,file.path);}
-   let same=0,added=0,removed=0,modified=0,checked=0;const keys=new Set([...left.keys(),...right.keys()]);for(const key of keys){const a=left.get(key),b=right.get(key);let status='相同';try{if(!a){status='新增';added++;}else if(!b){status='删除';removed++;}else if(a.directory!==b.directory||!a.directory&&(a.size!==b.size||!(await sameFileContent(a,b,()=>progress('比较内容',checked,keys.size,a.path))))){status='修改';modified++;}else same++;}catch(e){issue(a?.path||b!.path,e);status='未完成校验';}
-    if(status!=='相同')rows.push({id:rows.length,status,name:relative(a?task.left:task.right,(a||b)!.path),left:a?.path,right:b?.path,leftSize:a?.size,rightSize:b?.size,directory:(a||b)!.directory});checked++;progress('比较内容',checked,keys.size,(a||b)!.path);
-   }report.stats={same,added,removed,modified};report.summary=rows.length?`${rows.length} 项差异`:'两个目录内容相同';
+   // Keep only the right-hand inventory. Comparing left entries as they are
+   // discovered avoids retaining a second map and a union of both key sets.
+   const right=new Map<string,FileStamp>();
+   for await(const file of walk([task.right],true,issue,true)){
+    const name=relative(task.right,file.path);if(!name)continue;
+    right.set(name.toLowerCase(),file);progress('扫描目录',right.size,0,file.path);
+   }
+   let same=0,added=0,removed=0,modified=0,checked=0;
+   type Compared={a?:FileStamp;b?:FileStamp;status:'相同'|'新增'|'删除'|'修改'|'未完成校验';error?:unknown};
+   const compare=async(a?:FileStamp,b?:FileStamp):Promise<Compared>=>{
+    let status:Compared['status']='相同';
+    try{
+     if(!a)status='新增';
+     else if(!b)status='删除';
+     else if(a.directory!==b.directory||!a.directory&&(a.size!==b.size||!(await sameFileContent(a,b,()=>progress('比较内容',checked,0,a.path)))))status='修改';
+    }catch(error){return{a,b,status:'未完成校验',error};}
+    return{a,b,status};
+   };
+   const finish=({a,b,status,error}:Compared)=>{
+    if(error)issue(a?.path||b!.path,error);
+    if(status==='相同')same++;
+    else if(status==='新增')added++;
+    else if(status==='删除')removed++;
+    else if(status==='修改')modified++;
+    if(status!=='相同')rows.push({id:rows.length,status,name:relative(a?task.left:task.right,(a||b)!.path),left:a?.path,right:b?.path,leftSize:a?.size,rightSize:b?.size,directory:(a||b)!.directory});
+    checked++;progress('比较内容',checked,0,(a||b)!.path);
+   };
+   // Small-file comparisons mostly wait on Windows file handles and metadata.
+   // Bound concurrent work and drain before a large file to avoid excess I/O.
+   const pending:Promise<Compared>[]=[],flushOne=async()=>finish(await pending.shift()!);
+   const flushAll=async()=>{while(pending.length)await flushOne();};
+   for await(const file of walk([task.left],true,issue,true)){
+    const name=relative(task.left,file.path);if(!name)continue;
+    const key=name.toLowerCase(),match=right.get(key);right.delete(key);
+    if(file.size>1024*1024||match&&match.size>1024*1024){await flushAll();finish(await compare(file,match));}
+    else {pending.push(compare(file,match));if(pending.length>=8)await flushOne();}
+   }
+   await flushAll();for(const file of right.values())finish(await compare(undefined,file));
+   report.stats={same,added,removed,modified};report.summary=rows.length?`${rows.length} 项差异`:'两个目录内容相同';
   }else{
    const {stamp}=await import('./file-tool-fs'),a=await stamp(task.left),b=await stamp(task.right);if(a.directory||b.directory)throw Error('请选择两个文件');const textType=/^(txt|log|md|markdown|html?|css|scss|less|js|jsx|ts|tsx|json|jsonl|ya?ml|ini|toml|xml|csv|tsv|py|rs|go|java|c|cpp|h|sql|sh|bat|ps1|properties|conf|cfg)$/i;
    if((!fileExtension(a.path)||textType.test(fileExtension(a.path)))&&(!fileExtension(b.path)||textType.test(fileExtension(b.path)))&&a.size<=20*1024*1024&&b.size<=20*1024*1024){progress('比较文本',0,1,task.left,0,0,true);const [left,right]=await Promise.all([readText(a.path,task.encoding),readText(b.path,task.encoding)]);const comparison=compareTextLines(left,right,task.ignoreWhitespace);if(!unchanged(a,await stamp(a.path))||!unchanged(b,await stamp(b.path)))throw Error('文件在比较过程中发生变化，请重新比较');const compared=textDiffRows(comparison.changes);rows=compared.rows;report.stats={...compared.stats,grouped:comparison.grouped?1:0};report.summary=rows.length?`新增 ${compared.stats.addedLines} 行 · 删除 ${compared.stats.removedLines} 行`:'两个文件内容相同';
