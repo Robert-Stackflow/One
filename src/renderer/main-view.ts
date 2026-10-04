@@ -61,13 +61,13 @@ export function renderMain() {
     const page=q<HTMLElement>('page-'+id);
     if(id==='tools'){page.innerHTML=fileToolsPage();toolsController=setupFileTools();}
     else if(id==='text'){page.innerHTML=textPage();customControls(page);textController=setupText();}
-    else if(id==='disk'){page.innerHTML=diskPage();q('disk-heading-actions').append(q('disk-actions'));diskController=setupDisk();}
+    else if(id==='disk'){page.innerHTML=diskPage();customControls(page);q('disk-heading-actions').append(q('disk-actions'));diskController=setupDisk();}
     else if(id==='system'){page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
     else if(id==='hardware'){page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='input'){page.innerHTML=inputPage();customControls(page);setupInput();}
     else if(id==='locksmith'){page.innerHTML=locksmithCard();locksmithController=setupLocksmith();}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
-    else if(id==='color'){page.innerHTML=colorPage();q('color-heading-actions').append(q('color-actions'));setupColorPage();}
+    else if(id==='color'){page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
     else if(id==='search'){page.innerHTML=searchPage();customControls(page);setupSearchPage();}
     else if(id==='settings'){page.innerHTML=settingsPage();customControls(page);settingsController=setupSettingsPage();}
     else return;

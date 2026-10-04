@@ -25,6 +25,16 @@ async function run() {
         }
       }
     }
+    await page.locator('[data-page=disk]').click();
+    const scanFolder=path.join(output,'control-scan');await fs.mkdir(scanFolder,{recursive:true});await fs.writeFile(path.join(scanFolder,'sample.txt'),'test');
+    await page.locator('#disk-path').fill(scanFolder);await page.locator('#scan').click();await expect(page.locator('#disk-results')).toBeVisible();
+    await expect(page.locator('#map-depth')).toHaveAttribute('role','combobox');
+    await page.locator('#map-depth').click();await page.getByRole('option',{name:'3 层'}).click();
+    assert.equal(await page.locator('#map-depth').evaluate(control=>control.value),'3');
+    await page.locator('[data-page=color]').click();
+    await expect(page.locator('#color-default-format')).toHaveAttribute('role','combobox');
+    await page.locator('#color-default-format').click();await page.getByRole('option',{name:'RGB',exact:true}).click();
+    await expect.poll(()=>page.evaluate(async()=>(await window.one.settings()).colorFormat)).toBe('rgb');
     await page.locator('[data-page=input]').click();await page.locator('#enhancement-tab-topmost').click();
     await page.locator('#enhancement-tab-awake').click();await page.locator('#awake-mode').click(); await page.getByRole('option',{name:'持续一段时间',exact:true}).click();
     const sizes=await page.evaluate(()=>Object.fromEntries(['#awake-mode','#awake-minutes','#awake-start'].map(selector=>{let e=document.querySelector(selector);if(e.parentElement.matches('.number-control,.shortcut-control'))e=e.parentElement;const s=getComputedStyle(e);return[selector,{height:e.getBoundingClientRect().height,radius:s.borderRadius,border:s.borderWidth}];})));
