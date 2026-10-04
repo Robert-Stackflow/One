@@ -10,7 +10,20 @@ async function run(){
  app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
  try{
   const page=await app.firstWindow();await page.waitForSelector('#overview-index');
-  assert.deepEqual(await page.evaluate(()=>['input','search'].map(id=>document.querySelector('#page-'+id).childElementCount)),[0,0]);
+  const deferred=['tools','text','disk','system','hardware','input','locksmith','preview','color','search','settings'];
+  const initial=await page.evaluate(ids=>({nodes:document.querySelectorAll('*').length,empty:ids.map(id=>document.querySelector('#page-'+id).childElementCount)}),deferred);
+  assert.deepEqual(initial.empty,deferred.map(()=>0),'unopened pages should not create hidden content');
+  assert.ok(initial.nodes<450,'startup should keep only the overview and shared shell');
+  const mounted={};
+  for(const id of deferred){
+   await page.locator('[data-page='+id+']').click();
+   await expect(page.locator('#page-'+id)).toBeVisible();
+   mounted[id]=await page.locator('#page-'+id+' *').count();
+   assert.ok(mounted[id]>0,id+' should mount on first visit');
+  }
+  await page.locator('[data-page=home]').click();
+  await expect(page.locator('#page-home')).toBeVisible();
+  assert.equal(await page.locator('#page-tools *').count(),mounted.tools,'mounted page should retain its state');
   await page.locator('[data-page=input]').click();
   await expect(page.locator('#enhancement-tab-quick')).toBeVisible();
   await expect(page.locator('.enhancement-tabs')).toHaveClass(/segment-ready/);
@@ -28,7 +41,7 @@ async function run(){
   await page.locator('#search-tab-index').focus();await page.keyboard.press('ArrowRight');
   await expect(page.locator('#search-tab-menu')).toHaveAttribute('aria-selected','true');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',mountedOnFirstVisit:true,statePreserved:true,keyboardTabs:true,errors}));
+  console.log(JSON.stringify({result:'PASS',initialNodes:initial.nodes,mounted,statePreserved:true,keyboardTabs:true,errors}));
  }finally{await app.close();}
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
