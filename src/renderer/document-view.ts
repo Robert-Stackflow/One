@@ -13,14 +13,18 @@ export async function renderDocument(host:HTMLElement,data:PreviewData,source=fa
     const {renderStructured}=await import('./structured-view');return renderStructured(host,data,metadata);
   }
   if(data.textURL){if(data.size>5*1024*1024)throw new Error('渲染视图上限为 5 MB，请使用源码视图');data={...data,text:await previewText(data.textURL)};}
-  if(data.type==='markdown'||data.type==='html'){
-    const [{default:DOMPurify},{marked}]=await Promise.all([import('dompurify'),import('marked')]);
-    const html=data.type==='markdown'?await marked.parse(data.text||'',{gfm:true}):data.text||'';
+  if(data.type==='markdown'){
+    const {renderMarkdown}=await import('./markdown-view');
+    return renderMarkdown(host,data,outline);
+  }
+  if(data.type==='html'){
+    const {default:DOMPurify}=await import('dompurify');
+    const html=data.text||'';
     const safe=DOMPurify.sanitize(html,{WHOLE_DOCUMENT:true,FORBID_TAGS:['script','iframe','object','embed','form','input','button','textarea','select','base','meta'],FORBID_ATTR:['srcset','action','formaction'],ADD_TAGS:['style','link']});
     const doc=new DOMParser().parseFromString(safe,'text/html');doc.querySelectorAll('a').forEach(a=>a.removeAttribute('href'));
     for(const img of Array.from(doc.querySelectorAll('img')).slice(0,100)){const src=img.getAttribute('src')||'';if(!/^data:image\//i.test(src)){const local=await api.previewResource(src);if(local)img.src=local;else img.removeAttribute('src');}}
     for(const link of Array.from(doc.querySelectorAll('link'))){if(link.rel!=='stylesheet'){link.remove();continue;}const local=await api.previewResource(link.getAttribute('href')||'');if(local)link.href=local;else link.remove();}
-    const style=getComputedStyle(document.documentElement);const css=data.type==='markdown'?`body{max-width:900px;margin:auto;background:${style.getPropertyValue('--surface')};color:${style.getPropertyValue('--fg')};padding:30px 36px;font-size:14px;line-height:1.8}body> :first-child{margin-top:0}h1,h2,h3{line-height:1.35}h1{font-size:26px}h2{font-size:20px}pre{padding:16px;border-radius:8px;background:${style.getPropertyValue('--soft')};overflow-x:auto}code{font-family:Consolas,monospace;font-size:.92em}p,li,td{overflow-wrap:anywhere}table{width:100%;display:table;font-size:13px}th,td{padding:9px 13px;text-align:left;border:1px solid ${style.getPropertyValue('--line')}}blockquote{border-left:3px solid ${style.getPropertyValue('--line')};padding-left:16px;margin-left:0;color:${style.getPropertyValue('--muted')}}hr{border:0;border-top:1px solid ${style.getPropertyValue('--line')}}img{display:block;max-width:100%}`:'body{padding:20px}';
+    const css='body{padding:20px}';
     const headings=Array.from(doc.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')).slice(0,1000);headings.forEach((h,i)=>h.id='one-heading-'+i);
     const frame=isolatedFrame(host,doc.head.innerHTML+doc.body.innerHTML,css);
     outline(headings.map((h,i)=>({label:h.textContent||'标题',depth:Number(h.tagName[1])-1,activate:()=>frame.contentDocument?.getElementById('one-heading-'+i)?.scrollIntoView({behavior:'smooth',block:'start'})})));

@@ -32,6 +32,7 @@ export interface Settings {
 export interface MaintenanceRow { name: string; source: string; status: string; command: string; location: string }
 export interface FileEntry { name: string; path: string; directory: boolean; size?: number; packedSize?: number }
 export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
+export interface LinkCard {domain:string;title:string;description:string;image?:string}
 export type { PickerData } from './picker';
 export interface OneAPI {
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
@@ -77,7 +78,7 @@ export interface OneAPI {
   pickFile(initialPath?: string): Promise<string | null>; droppedFile(file: File): string;
   preview(path: string): Promise<void>; previewData(): Promise<PreviewData>; navigatePreview(step: number): Promise<void>;
   selectPreview(path: string): Promise<void>; directoryOpen(path:string):Promise<import('./directory').DirectoryInfo>;directoryPage(id:string,offset:number,limit:number,query?:string):Promise<import('./directory').DirectoryPage>;directoryRelease(id:string):Promise<void>;
-  previewResource(path:string):Promise<string|null>;
+  previewResource(path:string):Promise<string|null>;previewLinkCard(url:string):Promise<LinkCard>;previewOpenLink(url:string):Promise<void>;
   previewFlags(value?: {pinned?:boolean;held?:boolean}): Promise<{pinned:boolean;held:boolean}>;
   appearance(): Promise<Appearance>; installedFonts(refresh?:boolean):Promise<import('./fonts').InstalledFont[]>; onAppearance(callback: (value:Appearance) => void): () => void;
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;

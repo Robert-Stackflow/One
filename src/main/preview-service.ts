@@ -27,6 +27,6 @@ export async function preparePreview(path:string,register:(path:string,mime:stri
   }
   if(textExtensions.test(ext)||/^(readme|license|dockerfile|makefile|cmakelists.txt)$/i.test(data.name)||data.name.startsWith('.')){
     if(info.size>50*1024*1024){data.error='文本超过 50 MB，使用默认程序打开';return data;}
-    try{if(info.size>1024*1024)data.textURL=register(path,'application/octet-stream');else data.text=await readText(path,'自动');data.metadata!['编码']='UTF-8 / BOM 自动识别';data.type=/^(md|mdown|markdown)$/.test(ext)?'markdown':/^(html|htm)$/.test(ext)?'html':ext==='json'?'json':ext==='ipynb'?'notebook':/^(yaml|yml)$/.test(ext)?'yaml':/^(csv|tsv)$/.test(ext)?'csv':'text';}catch(error){data.error=(error as Error).message;}
+    try{if(info.size>1024*1024)data.textURL=register(path,'application/octet-stream');else data.text=await readText(path,'自动');data.metadata!['编码']='UTF-8 / BOM 自动识别';data.type=/^(md|mdx|mdown|markdown)$/.test(ext)?'markdown':/^(html|htm)$/.test(ext)?'html':ext==='json'?'json':ext==='ipynb'?'notebook':/^(yaml|yml)$/.test(ext)?'yaml':/^(csv|tsv)$/.test(ext)?'csv':'text';}catch(error){data.error=(error as Error).message;}
   }return data;
 }
