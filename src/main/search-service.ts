@@ -28,7 +28,15 @@ export class SearchService {
   this.restartTimer=setTimeout(()=>{this.restartTimer=undefined;if(this.stopped)return;this.child=this.spawnHelper();this.healthyTimer=setTimeout(()=>{if(!this.stopped)this.restartAttempts=0;},30000);this.healthyTimer.unref();try{this.send({type:'init',settings:this.settings});if(this.launcherItems.length)this.send({type:'launchers',items:this.launcherItems});}catch(e){this.helperFailed(this.child,e as Error);}},delay);
  }
  private available(){return !this.stopped&&this.child.exitCode===null&&this.child.signalCode===null&&this.child.stdin.writable&&!this.child.stdin.destroyed;}
- private send(value:unknown){if(!this.available())throw new Error('搜索服务不可用');this.child.stdin.write(JSON.stringify(value)+'\n');}
+ private send(value:unknown){
+  if(!this.available()){
+   const error=new Error('搜索服务不可用');
+   if(!this.stopped)this.helperFailed(this.child,error);
+   throw error;
+  }
+  try{this.child.stdin.write(JSON.stringify(value)+'\n');}
+  catch(error){this.helperFailed(this.child,error as Error);throw error;}
+ }
  private failed(error:Error){this.value={...this.value,running:false,error:error.message};this.changed(this.value);for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(error);}this.pending.clear();}
  private queueResync(urgent=false){
   this.resync=true;

@@ -119,14 +119,22 @@ async function scenario(kind,expectedErrors=0){
    await expect(search.locator('.search-result').filter({hasText:'preview.txt'})).toHaveCount(1);
    // Force the helper pipe to become unwritable after the availability check.
    // Window cleanup must stay best effort and must not reach Electron's error box.
-   await app.evaluate(({BrowserWindow})=>{
+   const failedHelperPid=await app.evaluate(({BrowserWindow})=>{
     const helper=process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile));
     if(!helper||helper.exitCode!==null)throw Error('Own index helper missing');
     const original=helper.stdin.write;helper.stdin.write=()=>{throw Error('搜索服务不可用');};
-    try{const embedded=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=search')&&w.webContents.getURL().includes('embedded=1'));if(!embedded)throw Error('Embedded search window missing');embedded.close();}
-    finally{helper.stdin.write=original;}
+    const embedded=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=search')&&w.webContents.getURL().includes('embedded=1'));
+    if(!embedded){helper.stdin.write=original;throw Error('Embedded search window missing');}
+    embedded.once('closed',()=>{helper.stdin.write=original;});
+    embedded.close();
+    return helper.pid;
    });
    await expect.poll(async()=>(await searchWindows()).length).toBe(1);
+   // A synchronous pipe write failure must recover the helper even before its exit event.
+   await expect.poll(()=>app.evaluate(()=>process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile)&&h.exitCode===null)?.pid||0)).not.toBe(failedHelperPid);
+   await expect.poll(()=>main.evaluate(async()=>{const state=await window.one.searchState();return !state.running&&!state.error&&state.count>0;})).toBe(true);
+   await search.locator('#file-query').fill('preview');
+   await expect(search.locator('.search-result').filter({hasText:'preview.txt'})).toHaveCount(1);
    // Kill only the isolated app's own index helper to reproduce a lost service.
    const oldHelperPid=await app.evaluate(()=>{const helper=process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile));if(!helper||helper.exitCode!==null)throw Error('Own index helper missing');helper.kill();return helper.pid;});
    await expect.poll(()=>app.evaluate(()=>process._getActiveHandles().find(h=>h.constructor.name==='ChildProcess'&&/[\\/]One\.Index\.exe$/i.test(h.spawnfile)&&h.exitCode===null)?.pid||0)).not.toBe(oldHelperPid);
