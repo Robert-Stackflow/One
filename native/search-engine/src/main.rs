@@ -795,7 +795,7 @@ fn score(
             }
             if value < 0 && term.typo && (term.bits & !bits).count_ones() <= 2 {
                 let stem = lower.rsplit_once('.').map(|(s, _)| s).unwrap_or(lower);
-                if one_edit(stem, t) || stem.split([' ', '-', '_']).any(|s| one_edit(s, t)) {
+                if one_edit(stem, t) || stem.split([' ', '-', '_']).any(|s| s.len() != stem.len() && one_edit(s, t)) {
                     value = 160;
                     mode = "typo";
                 }

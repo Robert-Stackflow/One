@@ -579,7 +579,7 @@ impl<'a> View<'a> {
                 None => {let name = self.text(bytes,12)?;lower=Some(name);name}
             };
             let stem=name.rsplit_once('.').map(|(s,_)|s).unwrap_or(name);
-            if !one_edit(stem,&term.text) && !stem.split([' ','-','_']).any(|part|one_edit(part,&term.text)) {
+            if !one_edit(stem,&term.text) && !stem.split([' ','-','_']).any(|part|part.len()!=stem.len() && one_edit(part,&term.text)) {
                 return Ok(false);
             }
         }
