@@ -28,7 +28,14 @@ export function customControls(root: HTMLElement) {
     };
     const move = (index:number,direction:1|-1) => {const next=enabledOption(options,index,direction);if(next>=0)activate(next);};
     const choose = (index: number) => { if(!options[index]||options[index].disabled)return; setValue(options[index].value); close(); button.focus(); button.dispatchEvent(new Event('change',{bubbles:true})); };
-    const position = () => { if(!menu)return;const rect=button.getBoundingClientRect(),width=Math.max(rect.width,120),height=Math.min(248,menu.scrollHeight);menu.style.minWidth=width+'px';menu.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-width-8))+'px';menu.style.top=(rect.bottom+height+5>window.innerHeight?Math.max(8,rect.top-height-5):rect.bottom+5)+'px'; };
+    const position = () => {
+      if(!menu)return;const rect=button.getBoundingClientRect(),edge=8,gap=5,maxWidth=Math.max(0,Math.min(480,innerWidth-edge*2));
+      menu.style.width='max-content';menu.style.minWidth=Math.min(Math.max(rect.width,120),maxWidth)+'px';menu.style.maxWidth=maxWidth+'px';
+      const below=Math.max(0,innerHeight-rect.bottom-gap-edge),above=Math.max(0,rect.top-gap-edge),opensAbove=below<Math.min(272,menu.scrollHeight)&&above>below;
+      menu.dataset.placement=opensAbove?'above':'below';menu.style.maxHeight=Math.min(272,opensAbove?above:below)+'px';
+      const size=menu.getBoundingClientRect();menu.style.left=Math.max(edge,Math.min(rect.left,innerWidth-edge-size.width))+'px';
+      menu.style.top=(opensAbove?Math.max(edge,rect.top-gap-size.height):Math.min(innerHeight-edge-size.height,rect.bottom+gap))+'px';
+    };
     const open = () => { if(menu)return; closeActive?.(); closeActive=close; menu=document.createElement('div'); menu.className='select-popup'; menu.setAttribute('role','listbox'); menu.id=button.id+'-options'; button.setAttribute('aria-controls',menu.id); button.setAttribute('aria-expanded','true');
       options.forEach((option,index)=>{const node=document.createElement('div');node.setAttribute('role','option');node.setAttribute('aria-label',option.label);node.id=menu!.id+'-'+index;node.textContent=option.label;node.insertAdjacentHTML('beforeend',icon('check'));node.setAttribute('aria-disabled',String(!!option.disabled));node.setAttribute('aria-selected',String(option.value===value));if(option.value===value)selected=node;node.addEventListener('pointerdown',event=>event.preventDefault());node.addEventListener('pointerenter',()=>{if(!option.disabled)activate(index);});node.addEventListener('click',()=>choose(index));menu!.append(node);});
       if(!options.length){const empty=document.createElement('div');empty.className='select-empty';empty.role='status';empty.textContent='没有可选项';menu.append(empty);}
