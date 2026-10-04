@@ -4,7 +4,9 @@ interface Span {index:number;branch:DirectoryBranch;start:number;end:number}
 export interface DirectoryNode {info:DirectoryInfo;children:Map<number,DirectoryBranch>;parent?:DirectoryNode;parentIndex?:number;layout?:{spans:Span[];count:number}}
 export interface DirectoryRow {node:DirectoryNode;index:number;depth:number;note?:string}
 function layout(node:DirectoryNode){if(node.layout)return node.layout;let extra=0;const spans:Span[]=[];for(const [index,branch]of [...node.children].sort((a,b)=>a[0]-b[0])){const count=branch.node?directoryRowCount(branch.node):1,start=index+extra;extra+=count;spans.push({index,branch,start,end:start+1+count});}return node.layout={spans,count:Math.max(1,node.info.count)+extra};}
-export const directoryRowCount=(node:DirectoryNode):number=>layout(node).count;
+// An empty root needs a visible state; an expanded empty child is described on
+// its parent row instead of adding a separate, button-like row to the tree.
+export const directoryRowCount=(node:DirectoryNode):number=>node.parent&&!node.info.count?0:layout(node).count;
 export function invalidateDirectory(node:DirectoryNode){for(let current:DirectoryNode|undefined=node;current;current=current.parent)current.layout=undefined;}
 function previous<T>(items:T[],matches:(item:T)=>boolean):T|undefined {let left=0,right=items.length;while(left<right){const middle=(left+right)>>>1;if(matches(items[middle]))left=middle+1;else right=middle;}return items[left-1];}
 export function directoryRowAt(node:DirectoryNode,position:number,depth=0):DirectoryRow {
