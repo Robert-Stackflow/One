@@ -6,10 +6,9 @@ async function run(){
  const app=await electron.launch(process.env.ONE_PACKAGED_EXE?{executablePath:process.env.ONE_PACKAGED_EXE,args:[],env}:{args:[path.resolve('.')],env}),errors=[];app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
  try{
   const main=await app.firstWindow();await main.waitForSelector('#overview-index');
-  await main.locator('[data-page=input]').click();
+  await main.locator('[data-page=input]').click();await main.locator('#enhancement-tab-quick').click();
   const numberControls=await main.evaluate(()=>[...document.querySelectorAll('#page-input input[type=number]')].map(input=>{let wrappers=0;for(let node=input.parentElement;node;node=node.parentElement)if(node.matches('.number-control'))wrappers++;return{id:input.id,wrappers};}));
   assert.ok(numberControls.length>0,'操作增强页应包含数字控件');
-  await main.locator('#enhancement-tab-quick').click();
   await expect(main.locator('#quick-volume-step-row')).toBeHidden();
   await main.locator('#quick-volume').check();await expect(main.locator('#quick-volume-step-row')).toBeVisible();
   await main.locator('#quick-volume').uncheck();await expect(main.locator('#quick-volume-step-row')).toBeHidden();

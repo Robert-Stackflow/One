@@ -2,6 +2,7 @@ import {api,icon,button,esc,toast} from './ui';
 import {customControls,closeControls} from './controls';
 import type {SearchSettings} from '../shared/search';
 import {indexPriorityKey,indexedUnder,type IndexPriority} from '../shared/search-priority';
+import {installFileDropOverlay} from './file-drop-overlay';
 import './index-priorities.css';
 const groups=[['high','高优先级','index-high-add','index-high'],['normal','正常','index-add','index-roots'],['uncommon','不常用','index-uncommon-add','index-uncommon'],['excluded','不索引','index-exclude','index-excluded']] as const;
 type Choice=IndexPriority|'excluded';
@@ -38,5 +39,6 @@ export function setupIndexPriorities(get:()=>SearchSettings,update:(patch:Partia
   lock(busy);
  };
  for(const [priority,,add] of groups)document.getElementById(add)!.onclick=()=>{if(busy)return;lock(true);void api.pickDirectory().then(path=>path&&save(path,priority)).catch(toast).finally(()=>{lock(false);draw();});};
+ for(const [priority,title] of groups)installFileDropOverlay(document.querySelector<HTMLElement>(`.index-priority-section[data-priority=${priority}]`)!,{placement:'host',title:`加入${title}`,detail:'松开以添加文件夹',onDrop:async paths=>{if(busy||!get())return;const items=await api.dropPathKinds(paths),folders=items.filter(item=>item.kind==='directory');if(!folders.length)return toast('索引优先级仅支持文件夹');lock(true);try{for(const folder of folders)await save(folder.path,priority);}finally{lock(false);draw();}}});
  return draw;
 }

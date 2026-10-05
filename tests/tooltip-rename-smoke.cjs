@@ -14,7 +14,7 @@ async function run() {
   await app.evaluate(({BrowserWindow})=>{BrowserWindow.prototype.focus=function(){};BrowserWindow.prototype.show=BrowserWindow.prototype.showInactive;});
   await win.evaluate(w => {w.setBounds({x:-10000,y:-10000,width:1250,height:900}); w.showInactive();});
   assert.deepEqual(await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>({caption:group.querySelector('h2').textContent,pages:[...group.querySelectorAll('[data-page]')].map(b=>b.dataset.page)}))),[
-   {caption:'文件',pages:['tools','text','search']},{caption:'工具',pages:['input','disk','preview','color']},{caption:'系统',pages:['system','hardware','locksmith']}
+   {caption:'文件',pages:['tools','text','search','disk','locksmith']},{caption:'工具',pages:['input','preview','color']},{caption:'系统',pages:['system','hardware','ports']}
   ]);
   assert.equal(await page.locator('.sidebar-navigation>[data-page]').getAttribute('data-page'),'home');
   assert.equal(await page.locator('.sidebar>[data-page]').getAttribute('data-page'),'settings');
@@ -47,7 +47,7 @@ async function run() {
     await expect.poll(() => page.locator('.sidebar').evaluate(e => Math.round(e.getBoundingClientRect().width))).toBe(collapsed ? 56 : 208);
     const captions=await page.locator('.sidebar-group-caption').evaluateAll(nodes=>nodes.map(e=>({height:e.getBoundingClientRect().height,opacity:Number(getComputedStyle(e).opacity),font:getComputedStyle(e).fontSize})));
     for(const caption of captions){assert.equal(caption.height,collapsed?0:16);assert.ok(collapsed?caption.opacity===0:caption.opacity>.8);assert.equal(caption.font,'11px');}
-    if(collapsed)for(const shape of await page.locator('.sidebar .nav').evaluateAll(nodes=>nodes.map(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height}))))assert.deepEqual(shape,{width:40,height:40});
+    if(collapsed){for(const shape of await page.locator('.sidebar .nav').evaluateAll(nodes=>nodes.map(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height}))))assert.deepEqual(shape,{width:40,height:40});const separators=await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>{const style=getComputedStyle(group,'::before');return {label:group.getAttribute('aria-label'),width:style.width,height:style.height,marginBottom:style.marginBottom};}));assert.deepEqual(separators,[{label:'文件',width:'28px',height:'1px',marginBottom:'7px'},{label:'工具',width:'24px',height:'1px',marginBottom:'7px'},{label:'系统',width:'28px',height:'1px',marginBottom:'7px'}]);}
     for (const button of await page.locator('.sidebar .nav').all()) await showTip(button, await button.getAttribute('aria-label'), 'right');
     await showTip(page.locator('[data-page=tools]'), '文件工具', 'right');
     await page.screenshot({path: path.join(out, `sidebar-${theme}-${collapsed ? 'collapsed' : 'expanded'}.png`)});
@@ -85,17 +85,17 @@ async function run() {
 
   await page.locator('[data-page=tools]').click(); await page.locator('#tool-tab-rename').click();
   await expect(page.locator('#tool-run')).toContainText('预览重命名');
-  const details = page.locator('#rename-format-options'); await expect(details).not.toHaveAttribute('open');
-  await expect(page.locator('#rename-case-mode')).not.toBeVisible();
-  await page.locator('#rename-paths').fill(files); await page.locator('#rename-search').fill('old'); await page.locator('#rename-replace').fill('new');
+  await expect(page.locator('#rename-settings-tab-scope')).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('#rename-settings-panel-format')).toBeHidden();
+  await page.locator('#rename-paths').fill(files); await page.locator('#rename-settings-tab-rules').click(); await page.locator('#rename-search').fill('old'); await page.locator('#rename-replace').fill('new');
   await page.locator('#tool-run').click(); await expect(page.locator('#rename-apply')).toBeEnabled();
   await expect(page.locator('.rename-result-row')).toContainText(['new-a.txt', 'new-b.md']);
-  await details.locator('summary').focus(); await page.keyboard.press('Enter'); await expect(details).toHaveAttribute('open');
+  await page.locator('#rename-settings-tab-format').click(); await expect(page.locator('#rename-settings-panel-format')).toBeVisible();
   await page.locator('#rename-start').fill('5'); await page.locator('#rename-increment').fill('2'); await page.locator('#rename-padding').fill('2');
-  await page.locator('#rename-replace').fill('new_${n}'); await expect(page.locator('.rename-result-row')).toContainText(['new_05-a.txt', 'new_07-b.md']);
+  await page.locator('#rename-settings-tab-rules').click(); await page.locator('#rename-replace').fill('new_${n}'); await expect(page.locator('.rename-result-row')).toContainText(['new_05-a.txt', 'new_07-b.md']);
+  await page.locator('#rename-settings-tab-format').click();
   await page.locator('#rename-case-mode').click(); await page.getByRole('option', {name: '全部大写', exact: true}).click();
   await expect(page.locator('.rename-result-row')).toContainText(['NEW_05-A.txt', 'NEW_07-B.md']);
-  await details.locator('summary').click(); await expect(details).not.toHaveAttribute('open');
   await expect(page.locator('#rename-apply')).toBeEnabled();
   assert.deepEqual(await fs.readdir(files), ['old-a.txt', 'old-b.md'], 'Preview and disclosure must not rename anything');
   for (const theme of ['light', 'dark']) {
@@ -104,7 +104,7 @@ async function run() {
    if (await page.locator('#sidebar-toggle').getAttribute('aria-expanded') !== 'true') await page.locator('#sidebar-toggle').click();
    for (const size of [[1250, 900], [950, 650], [840, 600]]) for (const open of [false, true]) {
     await win.evaluate((w, size) => w.setSize(...size), size);
-    if (await details.evaluate(e => e.open) !== open) await details.locator('summary').click();
+    await page.locator(open?'#rename-settings-tab-format':'#rename-settings-tab-scope').click();
     await page.locator('.content').evaluate(e => e.scrollTop = 0); await page.waitForTimeout(220);
     const layout = await page.evaluate(() => {const root = document.querySelector('.content'), form = document.querySelector('.rename-config');
      return {viewport: [innerWidth, innerHeight], form: form.getBoundingClientRect().toJSON(), overflow: root.scrollWidth > root.clientWidth + 1,
@@ -117,8 +117,8 @@ async function run() {
    }
   }
   await page.emulateMedia({reducedMotion: 'reduce'}); await page.locator('.content').evaluate(e => e.scrollTop = 0);
-  if (!await details.evaluate(e => e.open)) await details.locator('summary').click();
-  assert.equal(await page.locator('.rename-format-body').evaluate(e => getComputedStyle(e).animationName), 'none');
+  await page.locator('#rename-settings-tab-format').click();
+  assert.equal(await page.locator('#rename-settings-panel-format').evaluate(e => getComputedStyle(e).animationName), 'none');
   await showTip(page.locator('[data-page=tools]'), '文件工具', 'right');
   assert.equal(await page.locator('#one-tooltip').evaluate(e => getComputedStyle(e).transitionDuration), '0s');
   await page.mouse.down(); await page.mouse.up(); await expect(page.locator('#one-tooltip')).not.toHaveClass(/visible/);

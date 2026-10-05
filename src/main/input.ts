@@ -8,7 +8,7 @@ import type {EchoChannel} from '../shared/echo';
 import {echoNames} from '../shared/echo';
 import {CapsDeadline} from '../shared/quick-actions';
 import type {LevelState} from '../shared/hud';
-type Callbacks = { echo(text: string,channel?:EchoChannel): void; level(value:LevelState):void;caps(active:boolean):void; show(): void; color():void; preview(hwnd: number,focus:number): Promise<void> };
+type Callbacks = { echo(text: string,channel?:EchoChannel): void; level(value:LevelState):void;caps(active:boolean):void; show(): void; color():void; preview(hwnd: number,focus:number): Promise<void>; clicker():void };
 export class InputService {
   private modalActive=false;
   setModalActive(active:boolean){this.modalActive=active;this.configureNative();this.checkIndicators();}
@@ -27,6 +27,8 @@ export class InputService {
   private key(event: UiohookKeyboardEvent) {
     if (!this.running) return;
     if (this.held.has(event.keycode)) return; this.held.add(event.keycode);
+    const foregroundWindow=foreground(true);
+    if(this.matchesClickerShortcut(event)&&!foregroundWindow?.password){this.callbacks.clicker();return;}
     if (this.blocked()) return;
     const modifiers = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Win'].filter(Boolean);
     const modifierCodes: number[] = [UiohookKey.Ctrl, UiohookKey.CtrlRight, UiohookKey.Alt, UiohookKey.AltRight, UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Meta, UiohookKey.MetaRight];
@@ -40,9 +42,18 @@ export class InputService {
       void this.callbacks.preview(f.hwnd,f.focus).catch(error => { this.error = String(error); }).finally(() => { this.previewBusy = false; });
     }
   }
+  private matchesClickerShortcut(event:UiohookKeyboardEvent){
+    const setting=this.settings.utilities.clicker;if(!setting.enabled)return false;
+    const parts=setting.shortcut.split('+').filter(Boolean);const key=parts.pop();if(!key)return false;
+    const aliases:Record<string,string>={control:'Ctrl',ctrl:'Ctrl',alt:'Alt',shift:'Shift',win:'Meta',meta:'Meta'};
+    const expected=Object.keys(UiohookKey).find(name=>name.toLowerCase()===(aliases[key.toLowerCase()]||key).toLowerCase());
+    if(expected===undefined||event.keycode!==(UiohookKey as Record<string,number>)[expected])return false;
+    const wants=(name:string)=>parts.some(part=>(aliases[part.toLowerCase()]||part)===name);
+    return !!event.ctrlKey===wants('Ctrl')&&!!event.altKey===wants('Alt')&&!!event.shiftKey===wants('Shift')&&!!event.metaKey===wants('Meta');
+  }
   update(settings: Settings) {
     this.settings = settings;
-    const needed = settings.keyEcho || settings.explorerPreview;
+    const needed = settings.keyEcho || settings.explorerPreview || settings.utilities.clicker.enabled;
     try { if (needed && !this.running) { uIOhook.start(); this.running = true; this.error = ''; } else if (!needed && this.running) { uIOhook.stop(); this.running = false; this.held.clear(); } }
     catch (error) { this.error = String(error); }
     clearInterval(this.indicatorTimer);this.indicators=undefined;if(settings.keyEcho||settings.capsLock.persistent||settings.capsLock.autoOff){this.checkIndicators();this.indicatorTimer=setInterval(()=>this.checkIndicators(),160);}else {this.capsDeadline.reset();this.showCaps(false);}

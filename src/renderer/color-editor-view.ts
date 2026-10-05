@@ -1,4 +1,5 @@
 import {api,q,icon,iconButton,action} from './ui';
+import './color.css';
 import {ColorPalette} from './color-palette';
 export function renderColorEditor(){
  document.body.className='color-editor-window native-frame custom-window-frame';

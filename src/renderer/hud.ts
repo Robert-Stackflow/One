@@ -1,4 +1,6 @@
 import {api,q,esc,icon,iconButton} from './ui';
+import './hud.css';
+import './echo.css';
 import {hudContent,volumeBand,type EchoFrame} from '../shared/hud';
 const speaker='<svg class="hud-volume-icon" viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="speaker-body" d="M3 9h4l5-4v14l-5-4H3z"/><path class="sound-wave wave-one" d="M15 9a5 5 0 0 1 0 6"/><path class="sound-wave wave-two" d="M18 6a9 9 0 0 1 0 12"/><path class="sound-wave wave-three" d="M21 3a13 13 0 0 1 0 18"/><path class="sound-mute" d="M17 9l6 6M23 9l-6 6"/><path class="sound-zero" d="M17 12h5"/></svg>';
 export function renderHUD(){

@@ -1,4 +1,4 @@
-export type FileToolKind='duplicates'|'diff'|'rename-preview'|'rename-apply'|'rename-undo'|'document-index'|'document-search';
+export type FileToolKind='duplicates'|'diff'|'rename-preview'|'rename-apply'|'rename-undo'|'document-index'|'document-search'|'integrity-create'|'integrity-verify';
 export interface RenameOptions {search:string;replace:string;regex:boolean;caseSensitive:boolean;all:boolean;target:'name'|'stem'|'extension';caseMode:'keep'|'lower'|'upper'|'title';enumerate:boolean;start:number;increment:number;padding:number}
 export const defaultRename=():RenameOptions=>({search:'',replace:'',regex:false,caseSensitive:false,all:true,target:'stem',caseMode:'keep',enumerate:false,start:1,increment:1,padding:3});
 export type FileToolTask =
@@ -8,12 +8,16 @@ export type FileToolTask =
  |{kind:'rename-apply';report:string;ids?:number[];excluded?:number[]}
  |{kind:'rename-undo';receipt:string}
  |{kind:'document-index';roots:string[];recursive:boolean;extensions:string}
- |{kind:'document-search';roots:string[];query:string;recursive?:boolean};
+ |{kind:'document-search';roots:string[];query:string;recursive?:boolean}
+ |{kind:'integrity-create';roots:string[];recursive:boolean}
+ |{kind:'integrity-verify';manifest:string};
 export interface FileStamp {path:string;size:number;mtime:string;birthtime:number;identity:string;directory:boolean}
 export interface FileToolRow {id:number;[key:string]:unknown}
-export interface FileToolReport {id:string;kind:FileToolKind;created:number;count:number;pageSize:number;summary:string;stats:Record<string,number>;issues:{path:string;error:string}[];issueCount:number;receipt?:string;scope?:string[]}
+export interface FileToolReport {id:string;kind:FileToolKind;created:number;count:number;pageSize:number;summary:string;stats:Record<string,number>;issues:{path:string;error:string}[];issueCount:number;receipt?:string;scope?:string[];manifest?:string}
 export interface FileToolProgress {id:string;kind:FileToolKind;phase:string;completed:number;total:number;path?:string;bytes?:number;found?:number}
-export interface FileToolOverview {version:string;index:{count:number;running:boolean;error:string};volumes:import('./disk-monitor').VolumeStatus[];recent:FileToolReport[]}
+export interface FileToolActive {id:string;kind:FileToolKind;started:number;phase:string;completed:number;total:number;path:string}
+export interface FileToolFailure {kind:FileToolKind;at:number;message:string}
+export interface FileToolOverview {version:string;index:{count:number;running:boolean;error:string};disk:{running:boolean;root:string;files:number;directories:number};volumes:import('./disk-monitor').VolumeStatus[];active:FileToolActive[];failures:FileToolFailure[];recent:FileToolReport[]}
 export function renameName(name:string,options:RenameOptions,index:number,date:number,directory=false){
  const at=name.lastIndexOf('.'),hasExtension=!directory&&at>0,stem=hasExtension?name.slice(0,at):name,extension=hasExtension?name.slice(at+1):'';
  let value=options.target==='stem'?stem:options.target==='extension'?extension:name;

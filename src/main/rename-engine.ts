@@ -1,4 +1,4 @@
-import {lstat,readFile,writeFile,appendFile} from 'node:fs/promises';
+import {lstat,readFile,writeFile,open} from 'node:fs/promises';
 import {dirname,basename,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {FileToolTask,FileToolReport,FileToolRow,FileStamp,RenameOptions} from '../shared/file-tools';
@@ -34,9 +34,23 @@ export async function runRename(task:FileToolTask,context:ToolContext,report:Fil
  for(const row of plan){const current=await stamp(row.path);if(current.identity!==row.stamp.identity||!current.directory&&!unchanged(current,row.stamp))throw Error('预览后项目发生变化，请重新预览：'+row.path);}
  const sources=new Set(plan.map(r=>r.path.toLowerCase()));for(const row of plan)if(!sources.has(row.target.toLowerCase()))try{await lstat(row.target);throw Error('目标名称已存在：'+row.target);}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;}
  const groups=new Map<string,RenameRow[]>();for(const row of plan){const parent=dirname(row.path),group=groups.get(parent);if(group)group.push(row);else groups.set(parent,[row]);}const moves:Move[]=[];
- const perform=async(from:string,to:string,identity:string)=>{const move={from,to,identity};await appendFile(join(context.dir,'journal.ndjson'),JSON.stringify({intent:move})+'\n',{flush:true});moveNoReplace(from,to);moves.push(move);await appendFile(join(context.dir,'journal.ndjson'),JSON.stringify({done:move})+'\n',{flush:true});};
+ const journal=await open(join(context.dir,'journal.ndjson'),'a');
+ const record=async(value:unknown)=>{await journal.writeFile(JSON.stringify(value)+'\n');await journal.sync();};
+ const perform=async(from:string,to:string,identity:string)=>{const move={from,to,identity};await record({intent:move});moveNoReplace(from,to);moves.push(move);await record({done:move});};
  try{let completed=0;for(const [parent,group]of [...groups].sort((a,b)=>b[0].length-a[0].length)){const staged:{row:RenameRow;temporary:string}[]=[];for(const row of group){const temporary=join(parent,'.one-rename-'+randomUUID());await perform(row.path,temporary,row.stamp.identity);staged.push({row,temporary});}for(const {row,temporary}of staged){await perform(temporary,row.target,row.stamp.identity);completed++;progress('执行重命名',completed,plan.length,row.target);}}
- const folders=plan.filter(r=>r.stamp.directory).sort((a,b)=>b.path.length-a.path.length),finalPath=(path:string)=>{let result=path;for(const folder of folders)if(result.toLowerCase().startsWith(folder.path.toLowerCase()+'\\'))result=folder.target+result.slice(folder.path.length);return result;};
+ const folderTargets=new Map<string,string>();
+ for(const row of plan)if(row.stamp.directory)folderTargets.set(row.path.toLowerCase(),row.target);
+ const finalPath=(originalTarget:string)=>{
+  let result=originalTarget,parent=dirname(originalTarget);
+  // Match only ancestors from the original plan: a renamed sibling may now own the same path.
+  for(;;){
+   const target=folderTargets.get(parent.toLowerCase());
+   if(target)result=target+result.slice(parent.length);
+   const next=dirname(parent);if(next===parent)break;parent=next;
+  }
+  return result;
+ };
  const files=plan.map(r=>({path:finalPath(r.target),identity:r.stamp.identity}));await writeFile(join(context.dir,'receipt.json'),JSON.stringify({moves,files}));rows.push(...plan.map((r,id)=>({id,path:r.path,target:files[id].path,name:r.name,newName:r.newName,status:'已重命名'})));report.receipt=context.id;report.stats={renamed:plan.length};report.summary=`已重命名 ${plan.length} 项`;
  } catch(e){for(const move of [...moves].reverse())try{moveNoReplace(move.to,move.from);}catch(rollback){issue(move.to,rollback);}await writeFile(join(context.dir,'recovery.json'),JSON.stringify({moves,issues:report.issues,error:String(e)}));if(report.issueCount)throw Error('重命名中断，部分回滚未完成；恢复记录已保存：'+context.dir);throw e;}
+ finally{await journal.close();}
 }

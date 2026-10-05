@@ -60,3 +60,15 @@ test('Small probe reuse and streamed text preserve encoded Unicode, BOMs and fin
   const start=await hits(folder,'ENCODED_'+encoding+'_COMPLETE'),end=await hits(folder,'ENDING_'+encoding+'_COMPLETE');assert.equal(start.length,2);assert.ok(start.every(row=>row.line===1&&row.snippet.includes('中文')));assert.equal(end.length,2);assert.equal(end.find(row=>row.path.endsWith('-large.txt')).line,12002);assert.equal(end.find(row=>row.path.endsWith('-small.txt')).line,2);
  }
 });
+test('Repeated matches far apart stay distinct without retaining a global hit set',async()=>{
+ const folder=path.join(root,'repeated');await fs.mkdir(folder);
+ const marker='REPEATED_DOCUMENT_MATCH',occurrence='P'.repeat(100)+marker+'S'.repeat(300);
+ await fs.writeFile(path.join(folder,'repeated.txt'),occurrence+'F'.repeat(33000)+occurrence);
+ await index(folder);const rows=await hits(folder,marker);
+ assert.equal(rows.length,2);
+});
+test('The overlapping portion of adjacent chunks remains a single match',async()=>{
+ const folder=path.join(root,'overlap');await fs.mkdir(folder);
+ const marker='OVERLAP_DOCUMENT_MATCH';await fs.writeFile(path.join(folder,'overlap.txt'),'F'.repeat(15900)+marker+'S'.repeat(300));
+ await index(folder);assert.equal((await hits(folder,marker)).length,1);
+});

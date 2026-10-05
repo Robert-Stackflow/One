@@ -17,7 +17,9 @@ async function snapshot(app,rootOverride){
  const list=JSON.parse(stdout),owned=new Set([root]);let changed=true;while(changed){changed=false;for(const p of list)if(owned.has(p.ParentProcessId)&&!owned.has(p.ProcessId)){owned.add(p.ProcessId);changed=true;}}
  const raw=readProcessCounters(list.filter(p=>owned.has(p.ProcessId))),selected=processTree(raw.processes,root,created),counters=totals(selected,raw.at),selectedIds=new Set(selected.map(p=>p.pid));
  const windows=app?await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().map(w=>({view:new URL(w.webContents.getURL()).searchParams.get('view'),query:new URL(w.webContents.getURL()).search,visible:w.isVisible(),pid:w.webContents.getOSProcessId()}))):[];
- return {...counters,excludedProcesses:raw.processes.filter(p=>!selectedIds.has(p.pid)).map(p=>({pid:p.pid,name:p.name,parentPid:p.parentPid,created:p.created,reason:'parent PID reused; creation order cannot establish ancestry'})),windows};
+ const metrics=app?await app.evaluate(({app})=>app.getAppMetrics().map(({pid,type,serviceName})=>({pid,type,serviceName}))):[];
+ const roles=new Map(metrics.map(({pid,...role})=>[pid,role]));
+ return {...counters,processes:counters.processes.map(process=>({...process,...roles.get(process.pid)})),excludedProcesses:raw.processes.filter(p=>!selectedIds.has(p.pid)).map(p=>({pid:p.pid,name:p.name,parentPid:p.parentPid,created:p.created,reason:'parent PID reused; creation order cannot establish ancestry'})),windows};
 }
 async function main(){
  const out=path.resolve(process.env.ONE_APP_OUTPUT||'work/app-memory');await fs.mkdir(out,{recursive:true});const name=process.env.ONE_BENCH_NAME||'current',profile=await fs.mkdtemp(path.join(out,name+'-'));
@@ -33,13 +35,26 @@ async function main(){
  const exe=process.env.ONE_PACKAGED_EXE,appRoot=path.resolve(process.env.ONE_TEST_APP_ROOT||'.'),started=performance.now(),app=await electron.launch(exe?{executablePath:exe,args:[],env}:{args:[appRoot],env}),errors=[];
  app.on('window',page=>page.on('pageerror',e=>errors.push(String(e))));
  try{
-  const main=await app.firstWindow();await main.waitForSelector('#overview-index');await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).count),{timeout:30000}).toBe(expectedCount);await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).running),{timeout:120000}).toBe(false);
+  const main=await app.firstWindow();
+  // Keep benchmark windows inactive so the user's keyboard input cannot enter the test query.
+  await app.evaluate(({BrowserWindow})=>{BrowserWindow.prototype.focus=function(){};BrowserWindow.prototype.show=BrowserWindow.prototype.showInactive;});
+  await main.waitForSelector('#overview-index');await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).count),{timeout:30000}).toBe(expectedCount);await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).running),{timeout:120000}).toBe(false);
   let query='benchmark result';if(process.env.ONE_BENCH_BIG_CACHE){const results=await main.evaluate(()=>window.one.searchFiles('"package.json"'));for(const item of results.items){if(!item.path.startsWith('one-launcher:')&&(await fs.stat(item.path).catch(()=>null))?.isFile()){query='"'+item.path+'"';break;}}assert.notEqual(query,'benchmark result','Need an existing indexed file for a read-only menu test');}
   const readyMs=performance.now()-started;await delay(1500);const startup=await snapshot(app);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(w=>w.webContents.getURL().includes('view=main')).forEach(w=>w.hide()));
+  if(process.env.ONE_BENCH_BLANK_RENDERER==='1')await main.evaluate(()=>document.querySelector('#app')?.replaceChildren());
+  if(process.env.ONE_BENCH_CANCEL_ANIMATIONS==='1')await main.evaluate(()=>document.getAnimations({subtree:true}).forEach(animation=>animation.cancel()));
+  const diagnose=process.env.ONE_BENCH_DIAGNOSE==='1';
+  if(diagnose)await main.evaluate(()=>{window.benchMutationCount=0;window.benchMutationObserver=new MutationObserver(records=>window.benchMutationCount+=records.length);window.benchMutationObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});});
   await delay(2500);const idleStart=await snapshot(app),idleSamples=[],idleUntil=performance.now()+Number(process.env.ONE_BENCH_IDLE_WINDOW_MS||5000);
+  const profiler=process.env.ONE_BENCH_PROFILE_IDLE==='1'?await main.context().newCDPSession(main):null;
+  if(profiler){await profiler.send('Profiler.enable');await profiler.send('Profiler.start');}
   do {await delay(Math.min(5000,Math.max(0,idleUntil-performance.now())));idleSamples.push(await snapshot(app));} while(performance.now()<idleUntil);
   const idle=idleSamples.at(-1);
+  let idleProfile;
+  if(profiler){const {profile}=await profiler.send('Profiler.stop');const hits=new Map();for(const id of profile.samples||[])hits.set(id,(hits.get(id)||0)+1);idleProfile=profile.nodes.map(node=>({functionName:node.callFrame.functionName,url:node.callFrame.url,line:node.callFrame.lineNumber,samples:hits.get(node.id)||0})).filter(node=>node.samples).sort((a,b)=>b.samples-a.samples).slice(0,20);await profiler.detach();}
+  const idleRenderer=diagnose?await main.evaluate(()=>({documentHidden:document.hidden,mutationCount:window.benchMutationCount,runningAnimations:document.getAnimations({subtree:true}).filter(animation=>animation.playState==='running').map(animation=>{const target=animation.effect instanceof KeyframeEffect?animation.effect.target:null;return{name:animation.animationName||animation.effect?.constructor.name,target:target instanceof Element?{tag:target.tagName,id:target.id,className:target.className,parentClass:target.parentElement?.className,html:target.outerHTML.slice(0,240)}:String(target),duration:animation.effect?.getTiming().duration,iterations:animation.effect?.getTiming().iterations,currentTime:animation.currentTime};})})):undefined;
+  if(diagnose)await main.evaluate(()=>window.benchMutationObserver.disconnect());
   await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('view=main'));w.show();w.focus();});
   await app.evaluate(({app,BrowserWindow})=>{globalThis.benchSearchShownAt=0;const watch=w=>w.on('show',()=>{const url=w.webContents.getURL();if(url&&new URL(url).searchParams.get('view')==='search'&&!url.includes('embedded'))globalThis.benchSearchShownAt=Date.now();});for(const w of BrowserWindow.getAllWindows())watch(w);app.on('browser-window-created',(_event,w)=>watch(w));});
   let at=performance.now();const calledAt=await main.evaluate(async()=>{const calledAt=Date.now();await window.one.showSearch();return calledAt;});
@@ -62,9 +77,12 @@ async function main(){
   at=performance.now();await search.locator('.search-result').first().click({button:'right'});await expect.poll(()=>app.windows().some(p=>p.url().includes('view=file-context')&&!p.url().includes('submenu'))).toBe(true);
   const reopened=app.windows().find(p=>p.url().includes('view=file-context')&&!p.url().includes('submenu'));await expect(reopened.locator('[data-file-action=rename]')).toBeVisible();const reopenContextMs=performance.now()-at;
   await reopened.locator('[data-file-action=apps]').hover();await expect.poll(()=>app.windows().some(p=>p.url().includes('submenu=apps'))).toBe(true);await expect(app.windows().find(p=>p.url().includes('submenu=apps')).locator('[data-file-action=choose]')).toBeVisible();
-  const report={name,indexCount:expectedCount,readyMs,searchOpenMs,nativeSearchShowMs,contextOpenMs,reopenContextMs,cpuPercentOneCore,startup,idleStart,idleSamples,idle,used,afterUse,errors};
+  await reopened.evaluate(()=>window.one.fileMenuClose(false));await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(w=>w.hide()));
+  await delay(Number(process.env.ONE_BENCH_IDLE_MS||6000));const afterSecondUse=await snapshot(app);
+  if(process.env.ONE_EXPECT_RECLAIM==='1')assert.ok(afterSecondUse.windows.every(w=>w.view!=='file-context'&&w.view!=='search'),'reopened search and menu renderers must be reclaimed');
+  const report={name,indexCount:expectedCount,readyMs,searchOpenMs,nativeSearchShowMs,contextOpenMs,reopenContextMs,cpuPercentOneCore,startup,idleStart,idleSamples,idle,idleRenderer,idleProfile,used,afterUse,afterSecondUse,errors};
   assert.deepEqual(errors,[]);await fs.writeFile(path.join(out,name+'.json'),JSON.stringify(report,null,2));
-  console.log(JSON.stringify({name,readyMs,searchOpenMs,nativeSearchShowMs,contextOpenMs,reopenContextMs,cpuPercentOneCore,startupMB:startup.resident/1024**2,idleMB:idle.resident/1024**2,idlePrivateResidentMB:idle.privateResident/1024**2,afterUseMB:afterUse.resident/1024**2,afterUsePrivateResidentMB:afterUse.privateResident/1024**2,windows:startup.windows.map(w=>w.query),errors}));
+  console.log(JSON.stringify({name,readyMs,searchOpenMs,nativeSearchShowMs,contextOpenMs,reopenContextMs,cpuPercentOneCore,startupMB:startup.resident/1024**2,idleMB:idle.resident/1024**2,idlePrivateResidentMB:idle.privateResident/1024**2,afterUseMB:afterUse.resident/1024**2,afterUsePrivateResidentMB:afterUse.privateResident/1024**2,afterSecondUseMB:afterSecondUse.resident/1024**2,afterSecondUsePrivateResidentMB:afterSecondUse.privateResident/1024**2,windows:startup.windows.map(w=>w.query),errors}));
  }finally{await app.close();}
 }
 module.exports={snapshot,readProcessCounters};

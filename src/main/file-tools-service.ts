@@ -2,17 +2,20 @@ import {Worker} from 'node:worker_threads';
 import {readFile,writeFile,mkdir,readdir,rm,unlink,rmdir,lstat,realpath} from 'node:fs/promises';
 import {join,resolve,dirname} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import type {FileToolTask,FileToolReport,FileToolProgress,FileToolRow,FileToolKind} from '../shared/file-tools';
+import type {FileToolTask,FileToolReport,FileToolProgress,FileToolRow,FileToolKind,FileToolFailure,FileToolActive} from '../shared/file-tools';
 import {paths} from './file-tool-fs';
-type Job={id:string;owner:number;kind:FileToolKind;phase:'loading'|'directory'|'running';created:boolean;worker?:Worker;cancelled?:Error;finishing:boolean;finish:(error?:Error,report?:FileToolReport)=>Promise<void>;timer?:NodeJS.Timeout;done:Promise<void>;complete:()=>void};
+type Job={id:string;owner:number;kind:FileToolKind;phase:'loading'|'directory'|'running';created:boolean;started:number;progress?:FileToolProgress;worker?:Worker;cancelled?:Error;finishing:boolean;finish:(error?:Error,report?:FileToolReport)=>Promise<void>;timer?:NodeJS.Timeout;done:Promise<void>;complete:()=>void};
 const idPattern=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const mutation=(kind:FileToolKind)=>kind==='rename-apply'||kind==='rename-undo';
-const taskKinds:FileToolKind[]=['duplicates','diff','rename-preview','rename-apply','rename-undo','document-index','document-search'];
+const taskKinds:FileToolKind[]=['duplicates','diff','rename-preview','rename-apply','rename-undo','document-index','document-search','integrity-create','integrity-verify'];
 export class FileToolsService{
- private jobs=new Map<string,Job>();private closing=new Set<Job>();private mutationStarting=false;private stopped=false;private reports=new Map<string,FileToolReport>();private ready:Promise<void>;
+ private jobs=new Map<string,Job>();private closing=new Set<Job>();private failures:FileToolFailure[]=[];private mutationStarting=false;private stopped=false;private reports=new Map<string,FileToolReport>();private ready:Promise<void>;
  constructor(private root:string,private progress:(owner:number,value:FileToolProgress)=>void){this.ready=this.load();}
  get pendingTasks(){return this.jobs.size+this.closing.size;}
  get busyTransactions(){return [...this.jobs.values(),...this.closing].some(job=>mutation(job.kind));}
+ active():FileToolActive[]{return [...this.jobs.values()].filter(job=>!job.finishing).map(job=>({id:job.id,kind:job.kind,started:job.started,phase:job.progress?.phase||'准备中',completed:job.progress?.completed||0,total:job.progress?.total||0,path:job.progress?.path||''})).sort((a,b)=>a.started-b.started);}
+ recentFailures(){return [...this.failures];}
+ cancelId(id:string){const job=[...this.jobs.values()].find(job=>job.id===id);if(!job)throw Error('任务已结束');return this.cancel(job.owner,job.kind);}
  private async load(){await mkdir(this.root,{recursive:true});for(const item of await readdir(this.root,{withFileTypes:true})){const id=item.name;if(!idPattern.test(id)||!item.isDirectory()||item.isSymbolicLink())continue;try{const report=JSON.parse(await readFile(join(this.root,id,'report.json'),'utf8'));if(report.id===id){this.reports.set(id,report);continue;}}catch{}await this.removeTransient(id).catch(()=>{});}}
  /** Reap only marked read-only work, after its worker has closed all file handles. */
  private async removePages(target:string,files:{name:string}[]){
@@ -40,11 +43,11 @@ export class FileToolsService{
   if(!value||!taskKinds.includes(value.kind))throw Error('文件任务无效');let task=value;const key=owner+':'+task.kind;if(this.jobs.has(key))throw Error('请先停止当前任务');if(this.stopped)throw Error('文件服务正在关闭');if(mutation(task.kind)&&this.mutationStarting)throw Error('请等待当前重命名操作完成');if(mutation(task.kind))this.mutationStarting=true;
   try{return await new Promise<FileToolReport>((resolveResult,reject)=>{
    const id=randomUUID(),dir=join(this.root,id);let complete!:()=>void;const done=new Promise<void>(resolve=>complete=resolve);
-   const job:Job={id,owner,kind:task.kind,phase:'loading',created:false,finishing:false,done,complete,finish:async(error,report)=>{
+   const job:Job={id,owner,kind:task.kind,phase:'loading',created:false,started:Date.now(),finishing:false,done,complete,finish:async(error,report)=>{
     if(job.finishing)return job.done;job.finishing=true;clearTimeout(job.timer);if(this.jobs.get(key)===job)this.jobs.delete(key);this.closing.add(job);
     try{await job.worker?.terminate();if(error&&job.created&&!mutation(task.kind))await this.removeTransient(id,job.phase==='directory');}catch{error=Error((error?.message||'任务退出失败')+'；临时结果未能清理，重启后重试');}
     finally{this.closing.delete(job);job.complete();}
-    if(error)reject(error);else if(report)resolveResult(report);
+    if(error){if(!job.cancelled){this.failures.unshift({kind:job.kind,at:Date.now(),message:error.message});this.failures.length=Math.min(this.failures.length,20);}reject(error);}else if(report)resolveResult(report);
    }};
    // Reserve before initial history loading and directory creation, covering cold-start cancel/quit.
    this.jobs.set(key,job);
@@ -54,7 +57,7 @@ export class FileToolsService{
     await mkdir(dir);job.created=true;await writeFile(join(dir,'.one-task.json'),JSON.stringify({version:1,id,kind:task.kind,created:Date.now()}));if(job.cancelled)throw job.cancelled;
     job.phase='running';
     const worker=job.worker=new Worker(join(__dirname,'file-tools-worker.cjs'),{workerData:{task,context:{id,dir,root:this.root,database:join(this.root,'documents.sqlite')}},resourceLimits:{maxOldGenerationSizeMb:384}});
-    worker.on('message',message=>{if(this.jobs.get(key)!==job||job.cancelled)return;if(message.progress){watchdog();this.progress(owner,message.progress);return;}
+    worker.on('message',message=>{if(this.jobs.get(key)!==job||job.cancelled)return;if(message.progress){watchdog();job.progress=message.progress;this.progress(owner,message.progress);return;}
      if(message.error){void job.finish(Error(message.error));return;}
      const report=message.report as FileToolReport;if(!report||report.id!==id||report.kind!==task.kind){void job.finish(Error('任务返回的记录无效'));return;}this.reports.set(id,report);
      if(task.kind==='rename-undo'){const old=this.reports.get(task.receipt);if(old){old.receipt=undefined;old.stats.undone=1;}}
@@ -73,6 +76,8 @@ export class FileToolsService{
   if(task.kind==='duplicates'&&(!Number.isFinite(task.minBytes)||task.minBytes<0||typeof task.extensions!=='string'))throw Error('扫描条件无效');
   if(task.kind==='document-index'&&typeof task.extensions!=='string')throw Error('文档类型无效');
   if(task.kind==='document-search'&&(typeof task.query!=='string'||!task.query.trim()||task.query.length>256))throw Error('请输入 1–256 字符的正文关键词');
+  if(task.kind==='integrity-create'&&(task.roots.length!==1||typeof task.recursive!=='boolean'))throw Error('请选择一个要生成清单的目录');
+  if(task.kind==='integrity-verify')task={...task,manifest:paths([task.manifest])[0]};
   if(task.kind==='rename-apply'&&!this.reports.has(task.report)||task.kind==='rename-undo'&&!this.reports.has(task.receipt))throw Error('任务记录不存在');
   if(task.kind==='rename-apply')for(const ids of [task.ids,task.excluded])if(ids!==undefined&&(!Array.isArray(ids)||ids.some(id=>!Number.isInteger(id)||id<0)||ids.length>100000))throw Error('选择项目无效');
   return task;

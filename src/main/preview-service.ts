@@ -10,6 +10,11 @@ function inspect(path:string,kind:string):Promise<{entries?:FileEntry[];metadata
   const timer=setTimeout(()=>{void worker.terminate();reject(new Error('文件解析超时，请用默认程序打开'));},15000);
   const finish=()=>{clearTimeout(timer);void worker.terminate();};worker.once('message',message=>{finish();message.error?reject(new Error(message.error)):resolve(message.result);});worker.once('error',error=>{finish();reject(error);});worker.once('exit',code=>{clearTimeout(timer);if(code!==0)reject(new Error('文件解析已终止'));});
 });}
+export async function reloadWorkbook(path:string):Promise<import('../shared/workbook').WorkbookData>{
+ const result=await inspect(path,'workbook');
+ if(!result.workbook)throw new Error('工作簿无法读取');
+ return result.workbook;
+}
 const images:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon',svg:'image/svg+xml',avif:'image/avif'};
 const media:Record<string,string>={mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',flac:'audio/flac',opus:'audio/ogg',aac:'audio/aac',m4a:'audio/mp4',mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',webm:'video/webm',mkv:'video/x-matroska'};
 export async function preparePreview(path:string,register:(path:string,mime:string)=>string,directory:(path:string,target?:string)=>Promise<DirectoryInfo>):Promise<PreviewData>{

@@ -56,7 +56,7 @@
 .rename-format[open]>.rename-format-body{animation:tool-pane-in .14s var(--ease)}
 .rename-number-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;min-width:0}
 .rename-number-fields .number-control{width:100%;min-width:0}
-.rename-number-fields .number-control input{width:100%;min-width:0}
+.rename-number-fields .number-control input{width:auto;min-width:48px}
 .rename-number-fields .number-control>button{width:24px;flex-shrink:0;padding:4px}
 .rename-enumerate-option{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);grid-column:2}
 .rename-variable-hint{grid-column:1/-1;overflow-wrap:anywhere}

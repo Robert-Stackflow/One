@@ -1,0 +1,76 @@
+:root {
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  color: #202522;
+  background: #fff;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; }
+body { margin: 0; overflow: hidden; user-select: none; -webkit-user-select: none; }
+input { user-select: text; -webkit-user-select: text; }
+button { font-family: inherit; }
+.window { height: 100vh; display: flex; flex-direction: column; background: #fff; overflow: hidden; }
+.titlebar {
+  height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 15px 0 22px; -webkit-app-region: drag;
+}
+.brand { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 650; }
+.brand img { width: 22px; height: 22px; }
+.brand-divider { width: 1px; height: 14px; margin: 0 3px; background: #e3e7e3; }
+.brand-subtitle { font-size: 12px; font-weight: 400; color: #7d877f; }
+.window-actions { display: flex; -webkit-app-region: no-drag; }
+.window-actions button {
+  width: 32px; height: 30px; border: 0; border-radius: 7px; background: transparent;
+  color: #69746c; cursor: pointer; display: grid; place-items: center;
+}
+.window-actions button:hover { background: #f1f3f1; color: #202522; }
+.window-actions svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+main { position: relative; flex: 1; min-height: 0; padding: 32px 44px 0; }
+.eyebrow { font-size: 11px; letter-spacing: .05em; color: #879188; font-variant-numeric: tabular-nums; }
+.scene {
+  position: absolute; inset: 76px 44px 18px; opacity: 0; pointer-events: none;
+  transform: translateY(9px); transition: opacity .2s ease, transform .24s cubic-bezier(.2,.7,.2,1);
+}
+.scene.active { opacity: 1; pointer-events: auto; transform: translateY(0); }
+h1 { margin: 0; font-size: 30px; line-height: 1.3; letter-spacing: -.04em; font-weight: 650; }
+.intro { margin: 8px 0 0; color: #7b867e; font-size: 12px; line-height: 1.6; }
+.install-location { margin-top: 32px; }
+.location-top { display: block; margin-bottom: 10px; font-size: 12px; font-weight: 600; }
+.location-row {
+  display: flex; align-items: center; gap: 11px; min-height: 48px; padding: 0 8px 0 14px;
+  border: 1px solid #dfe5df; border-radius: 9px; background: #fff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.location-row:focus-within { border-color: #6e9076; box-shadow: 0 0 0 3px #5d866a1c; }
+.folder-icon { width: 17px; height: 17px; flex: none; fill: none; stroke: #7b897e; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.location-row input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #273a2c; font: 12px "Segoe UI Variable", "Microsoft YaHei UI", sans-serif; }
+.browse { border: 0; border-radius: 6px; padding: 7px 10px; background: transparent; color: #42684b; cursor: pointer; font-size: 12px; }
+.browse:hover { background: #f1f5f1; }
+.path-error { min-height: 16px; margin-top: 7px; color: #aa4a42; font-size: 11px; }
+footer { height: 66px; flex: none; display: flex; justify-content: flex-end; align-items: center; padding: 0 32px; border-top: 1px solid #ebeeeb; }
+.footer-actions { display: flex; align-items: center; gap: 10px; }
+.secondary, .primary { height: 36px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: background .16s ease, box-shadow .16s ease, transform .16s ease; }
+.secondary { min-width: 64px; padding: 0 12px; border: 0; background: transparent; color: #6b776d; }
+.secondary:hover { background: #f3f5f3; }
+.primary { min-width: 104px; padding: 0 17px; border: 1px solid #254630; background: #254630; color: #fff; box-shadow: 0 2px 5px #193d221b; }
+.primary:hover { background: #315c3e; box-shadow: 0 4px 10px #193d2224; transform: translateY(-1px); }
+.primary:disabled { opacity: .55; cursor: default; transform: none; box-shadow: none; }
+#running, #working, #done, #failed { display: flex; align-items: center; flex-direction: column; justify-content: center; text-align: center; padding-bottom: 20px; }
+#running h1, #working h1, #done h1, #failed h1 { margin-top: 18px; font-size: 24px; }
+.running-symbol { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 17px; background: #f2f5f2; color: #5c7563; }
+.running-symbol svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.work-symbol, .done-symbol, .failed-symbol { width: 58px; height: 58px; display: grid; place-items: center; }
+.work-symbol { position: relative; }
+.work-symbol img { width: 29px; height: 29px; z-index: 1; }
+.work-ring { position: absolute; inset: 0; border: 2px solid #e9efe9; border-top-color: #527e5e; border-radius: 50%; animation: spin 1.2s linear infinite; }
+.progress-track { width: 256px; height: 3px; margin-top: 25px; border-radius: 99px; background: #e8eee8; overflow: hidden; }
+.progress-fill { width: 0; height: 100%; border-radius: 99px; background: #537d5f; transition: width .24s ease; }
+.progress-track.indeterminate .progress-fill { width: 34%; animation: indeterminate 1.3s ease-in-out infinite; }
+.progress-caption { min-height: 16px; margin-top: 8px; color: #8c978d; font-size: 10px; }
+.done-symbol { border-radius: 17px; background: #eaf3ea; color: #3c7a48; }
+.done-symbol svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.done-path { max-width: 100%; margin-top: 20px; padding: 9px 13px; overflow: hidden; border-radius: 7px; background: #f4f6f4; color: #607064; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.failed-symbol { border-radius: 17px; background: #faeae7; color: #b65d51; font-size: 26px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes indeterminate { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

@@ -1,4 +1,5 @@
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
+import './disk.css';
 import type { DiskNode, ScanProgress } from '../shared/types';
 import { ScanTree } from '../shared/scan-tree';
 import type { Tile } from '../shared/treemap';
@@ -7,6 +8,7 @@ import {breadcrumbIndices} from '../shared/breadcrumbs';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import {DiskList} from './disk-list';
 import {DiskMap} from './disk-map';
+import {installFileDropOverlay} from './file-drop-overlay';
 import { api, q, esc, icon, button, iconButton, size, toast, action } from './ui';
 
 export function diskPage() {
@@ -184,8 +186,7 @@ export function setupDisk() {
   action('cancel-scan',async()=>{folderRevision++;acceptUpdates=false;await api.cancelScan();q<HTMLButtonElement>('cancel-scan').disabled=true;q('scan-state').textContent='已停止';q('scan-activity').hidden=true;q('scan-progress').textContent='';});
   action('show-issues',() => { const messages = issues.length ? issues : [...tree.nodes.values()].filter(n => n.issue).map(n => n.path+'：'+n.issue); if (!messages.length) return; q('issues-text').textContent = messages.join('\n\n'); openDialog(q<HTMLDialogElement>('issues-dialog')); });
   action('close-issues',() => closeDialog(q<HTMLDialogElement>('issues-dialog')));
-  q('page-disk').addEventListener('dragover',event => { event.preventDefault(); });
-  q('page-disk').addEventListener('drop',event => { event.preventDefault(); const file = event.dataTransfer?.files[0]; if (file && !scanning) { q<HTMLInputElement>('disk-path').value = api.droppedFile(file); q('scan').click(); } });
+  for(const id of ['disk-empty','disk-workspace'])installFileDropOverlay(q(id),{placement:'host',spacious:true,title:'分析空间占用',detail:'松开以扫描拖入的文件夹',onDrop:async paths=>{const items=await api.dropPathKinds(paths);const folder=items.find(item=>item.kind==='directory');if(!folder)return toast('请拖入文件夹');await openFolder(folder.path);}});
   const refreshVisibility=()=>{clearTimeout(drawTimer);drawTimer=undefined;list.setActive(listShowing());if(showing())requestAnimationFrame(draw);else{closeCrumbMenu();dismissDiskContext?.();q('map-tooltip').hidden=true;tooltipTarget=undefined;hovered=undefined;filtered=undefined;drawnNodes=[];map.release();}};
   onWindowVisibility(refreshVisibility);
   return {activate(value:boolean){if(active===value)return;active=value;refreshVisibility();},openFolder};

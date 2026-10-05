@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import DOMPurify from 'dompurify';
 import {marked} from 'marked';
-import {columnName,type WorkbookData} from '../shared/workbook';
+import {columnName,type SheetData,type WorkbookData} from '../shared/workbook';
 import {iconButton,esc,api,toast} from './ui';
 import {customControls,closeControls} from './controls';
 import {isolatedFrame} from './document-frame';
@@ -10,12 +10,66 @@ const safeHTML=(html:string)=>DOMPurify.sanitize(html,{FORBID_TAGS:['script','if
 const all=(node:Document|Element,name:string)=>Array.from(node.getElementsByTagNameNS('*',name));
 function xml(text:string){if(/<!DOCTYPE|<!ENTITY/i.test(text))throw new Error('文档包含不支持的 XML 声明');const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.querySelector('parsererror'))throw new Error('文档 XML 无法读取');return doc;}
 export function renderWorkbook(host:HTMLElement,data:WorkbookData,outline:SetOutline=()=>{}){
- const root=document.createElement('div');root.className='special-reader';host.append(root);let index=0,page=0,filter='';
- root.innerHTML=`<div class="reader-toolbar"><select id="sheet-select" aria-label="工作表">${data.sheets.map((s,i)=>`<option value="${i}">${esc(s.name)}</option>`).join('')}</select><input id="sheet-filter" placeholder="筛选行" aria-label="筛选行"><div class="spacer"></div>${iconButton('sheet-copy','复制当前页','copy')}</div><div class="sheet-formula" id="sheet-formula">选择单元格查看内容与公式</div><div class="sheet-scroll"><table class="sheet-table"></table></div><div class="reader-toolbar"><span id="sheet-count"></span><div class="spacer"></div>${iconButton('sheet-prev','上一页','back')}<span id="sheet-page"></span>${iconButton('sheet-next','下一页','arrow')}</div>`;
- const q=<T extends HTMLElement=HTMLElement>(s:string)=>root.querySelector<T>(s)!;customControls(root);
- const rows=()=>data.sheets[index]?.rows.filter(row=>!filter||row.cells.some(cell=>cell.value.toLocaleLowerCase().includes(filter)))||[];
- const draw=()=>{const sheet=data.sheets[index],list=rows(),pages=Math.max(1,Math.ceil(list.length/100));page=Math.min(page,pages-1);q('#sheet-count').textContent=sheet?`${list.length.toLocaleString()} 行 · ${sheet.columns} 列${sheet.truncated?' · 已截取，最多 20,000 行 / 200 列 / 100,000 单元格':''}`:'空工作簿';q('#sheet-page').textContent=`${page+1} / ${pages}`;q<HTMLButtonElement>('#sheet-prev').disabled=page===0;q<HTMLButtonElement>('#sheet-next').disabled=page>=pages-1;const table=q('table');table.replaceChildren();if(!sheet)return;const head=document.createElement('thead');head.innerHTML='<tr><th></th>'+Array.from({length:sheet.columns},(_,i)=>`<th>${columnName(i)}</th>`).join('')+'</tr>';table.append(head);const body=document.createElement('tbody');for(const row of list.slice(page*100,page*100+100)){const tr=document.createElement('tr'),number=document.createElement('th');number.textContent=String(row.number);tr.append(number);const cells=new Map(row.cells.map(c=>[c.column,c]));for(let col=0;col<sheet.columns;col++){const cell=cells.get(col),td=document.createElement('td');td.textContent=cell?.value||'';td.title=cell?.formula?'='+cell.formula:cell?.value||'';td.tabIndex=0;td.onclick=()=>{table.querySelector('.active-cell')?.classList.remove('active-cell');td.classList.add('active-cell');q('#sheet-formula').textContent=`${columnName(col)}${row.number}  ${cell?.formula?'='+cell.formula:cell?.value||''}`;};td.onkeydown=e=>{if(e.key==='Enter')td.click();if(e.ctrlKey&&e.key.toLowerCase()==='c'){e.preventDefault();void api.copyText(cell?.value||'').catch(toast);}};tr.append(td);}body.append(tr);}table.append(body);q('.sheet-scroll').scrollTop=0;};
- q('#sheet-select').onchange=()=>{index=Number((q('#sheet-select') as HTMLSelectElement).value);q('#sheet-formula').textContent='选择单元格查看内容与公式';page=0;draw();};let timer:ReturnType<typeof setTimeout>;q<HTMLInputElement>('#sheet-filter').oninput=e=>{clearTimeout(timer);timer=setTimeout(()=>{filter=(e.target as HTMLInputElement).value.toLocaleLowerCase();page=0;draw();},180);};q('#sheet-prev').onclick=()=>{page--;draw();};q('#sheet-next').onclick=()=>{page++;draw();};q('#sheet-copy').onclick=()=>{const text=rows().slice(page*100,page*100+100).map(row=>{const values=Array(data.sheets[index].columns).fill('');for(const cell of row.cells)values[cell.column]=cell.value;return values.map(v=>/[\t\n"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v).join('\t');}).join('\r\n');void api.copyText(text).then(()=>toast('已复制当前页')).catch(toast);};draw();outline(data.sheets.map((sheet,i)=>({label:sheet.name,icon:'list',activate:()=>{index=i;page=0;q<HTMLSelectElement>('#sheet-select').value=String(i);q('#sheet-select').dispatchEvent(new Event('change'));}})));return()=>{clearTimeout(timer);closeControls();root.remove();};
+ const root=document.createElement('div');root.className='special-reader';host.append(root);
+ let index=0,page=0,filter='';let cachedRows:SheetData['rows']|undefined;
+ root.innerHTML=`<div class="reader-toolbar"><select id="sheet-select" aria-label="工作表">${data.sheets.map((s,i)=>`<option value="${i}">${esc(s.name)}</option>`).join('')}</select><input id="sheet-filter" type="search" placeholder="筛选行" aria-label="筛选行"><div class="spacer"></div>${iconButton('sheet-copy','复制当前页','copy')}</div><div class="sheet-formula" id="sheet-formula">选择单元格查看内容与公式</div><div class="sheet-scroll"><table class="sheet-table"></table><div class="sheet-empty-state" hidden><span id="sheet-empty-message"></span><button id="sheet-clear-filter" type="button">清除筛选</button></div></div><div class="reader-toolbar"><span id="sheet-count"></span><div class="spacer"></div>${iconButton('sheet-prev','上一页','back')}<span id="sheet-page"></span>${iconButton('sheet-next','下一页','arrow')}</div>`;
+ const q=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
+ customControls(root);
+ const rows=()=>cachedRows??(cachedRows=filter?data.sheets[index]?.rows.filter(row=>row.cells.some(cell=>cell.value.toLocaleLowerCase().includes(filter)))||[]:data.sheets[index]?.rows||[]);
+ const table=q<HTMLTableElement>('table');
+ const activeCell=(target:EventTarget|null)=>{
+  if(!(target instanceof HTMLTableCellElement))return;
+  const tr=target.parentElement;
+  if(!(tr instanceof HTMLTableRowElement)||tr.parentElement?.tagName!=='TBODY')return;
+  const row=rows()[page*100+tr.sectionRowIndex],column=target.cellIndex-1;
+  if(!row||column<0)return;
+  return {td:target,row,column,cell:row.cells.find(cell=>cell.column===column)};
+ };
+ table.onclick=event=>{
+  const selected=activeCell(event.target);if(!selected)return;
+  const {td,row,column,cell}=selected;
+  table.querySelector('.active-cell')?.classList.remove('active-cell');td.classList.add('active-cell');
+  q('#sheet-formula').textContent=`${columnName(column)}${row.number}  ${cell?.formula?'='+cell.formula:cell?.value||''}`;
+ };
+ table.onkeydown=event=>{
+  const selected=activeCell(event.target);if(!selected)return;
+  if(event.key==='Enter'){event.preventDefault();selected.td.click();}
+  else if(event.ctrlKey&&event.key.toLowerCase()==='c'){event.preventDefault();void api.copyText(selected.cell?.value||'').catch(toast);}
+ };
+ const draw=()=>{
+  const sheet=data.sheets[index],list=rows(),pages=Math.max(1,Math.ceil(list.length/100));
+  page=Math.min(page,pages-1);
+  q('#sheet-count').textContent=sheet?`${filter?`筛选结果 ${list.length.toLocaleString()} 行（共 ${sheet.rows.length.toLocaleString()} 行）`:`${list.length.toLocaleString()} 行`} · ${sheet.columns} 列${sheet.truncated?' · 已截取，最多 20,000 行 / 200 列 / 100,000 单元格':''}`:'空工作簿';
+  q('#sheet-page').textContent=`${page+1} / ${pages}`;
+  q<HTMLButtonElement>('#sheet-prev').disabled=page===0;
+  q<HTMLButtonElement>('#sheet-next').disabled=page>=pages-1;
+  q<HTMLButtonElement>('#sheet-copy').disabled=list.length===0;
+  q('.sheet-empty-state').hidden=list.length>0;
+  q('#sheet-empty-message').textContent=filter?'没有匹配的行':'工作表为空';
+  q('#sheet-clear-filter').hidden=!filter;
+  table.replaceChildren();
+  if(!sheet)return;
+  const head=document.createElement('thead');head.innerHTML='<tr><th></th>'+Array.from({length:sheet.columns},(_,i)=>`<th>${columnName(i)}</th>`).join('')+'</tr>';table.append(head);
+  const body=document.createElement('tbody');
+  for(const row of list.slice(page*100,page*100+100)){
+   const tr=document.createElement('tr'),number=document.createElement('th');number.textContent=String(row.number);tr.append(number);
+   const cells=new Map(row.cells.map(cell=>[cell.column,cell]));
+   for(let col=0;col<sheet.columns;col++){
+    const cell=cells.get(col),td=document.createElement('td');td.textContent=cell?.value||'';td.title=cell?.formula?'='+cell.formula:cell?.value||'';td.tabIndex=0;
+    tr.append(td);
+   }
+   body.append(tr);
+  }
+  table.append(body);q('.sheet-scroll').scrollTop=0;
+ };
+ q('#sheet-select').onchange=()=>{index=Number(q<HTMLSelectElement>('#sheet-select').value);cachedRows=undefined;q('#sheet-formula').textContent='选择单元格查看内容与公式';page=0;draw();};
+ let timer:ReturnType<typeof setTimeout>;
+ q<HTMLInputElement>('#sheet-filter').oninput=event=>{clearTimeout(timer);timer=setTimeout(()=>{filter=(event.target as HTMLInputElement).value.toLocaleLowerCase();cachedRows=undefined;page=0;draw();},180);};
+ q('#sheet-clear-filter').onclick=()=>{clearTimeout(timer);q<HTMLInputElement>('#sheet-filter').value='';filter='';cachedRows=undefined;page=0;draw();q<HTMLInputElement>('#sheet-filter').focus();};
+ q('#sheet-prev').onclick=()=>{page--;draw();};q('#sheet-next').onclick=()=>{page++;draw();};
+ q('#sheet-copy').onclick=()=>{const text=rows().slice(page*100,page*100+100).map(row=>{const values=Array(data.sheets[index].columns).fill('');for(const cell of row.cells)values[cell.column]=cell.value;return values.map(value=>/[\t\n"]/.test(value)?'"'+value.replace(/"/g,'""')+'"':value).join('\t');}).join('\r\n');void api.copyText(text).then(()=>toast('已复制当前页')).catch(toast);};
+ draw();outline(data.sheets.map((sheet,i)=>({label:sheet.name,icon:'list',activate:()=>{q<HTMLSelectElement>('#sheet-select').value=String(i);q('#sheet-select').dispatchEvent(new Event('change'));}})));
+ return()=>{clearTimeout(timer);closeControls();root.remove();};
 }
 export async function renderFont(host:HTMLElement,url:string,metadata:(v:Record<string,string>)=>void){
  const root=document.createElement('div');root.className='font-reader';host.append(root);const name='OnePreview'+crypto.randomUUID().replace(/-/g,'');const face=new FontFace(name,await fetch(url).then(r=>r.arrayBuffer()));await face.load();document.fonts.add(face);metadata({'字体状态':'已加载，仅用于本次预览'});

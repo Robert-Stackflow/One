@@ -533,7 +533,7 @@ impl<'a> View<'a> {
         if flags > 3 { return Err(bad()); }
         Ok(flags & 1 != 0)
     }
-    fn possible_cached(&self, id: usize, kind: &str, terms: &[Term], fuzzy: bool, detailed: bool, cache: &mut ParentLiteralCache) -> io::Result<bool> {
+    fn possible_cached(&self, id: usize, kind: &str, exts: &[String], terms: &[Term], fuzzy: bool, detailed: bool, cache: &mut ParentLiteralCache) -> io::Result<bool> {
         let start = id.checked_mul(ROW).ok_or_else(bad)?;
         let bytes = self.rows.get(start..start + ROW).ok_or_else(bad)?;
         let flags = uint(bytes, 60)?;
@@ -544,6 +544,8 @@ impl<'a> View<'a> {
         if kind == "folder" && !directory || !kind.is_empty() && kind != "folder" && directory {
             return Ok(false);
         }
+        if (!exts.is_empty() || matches!(kind, "doc" | "pic" | "video" | "audio"))
+            && !accepts_extension(self.text(bytes,12)?,kind,exts) {return Ok(false);}
         if flags & 2 == 0 {
             return Ok(true);
         }
@@ -794,9 +796,9 @@ impl<'a> SearchPass<'a, '_> {
     }
 }
 #[inline(always)]
-fn possible_candidate(view: &View<'_>, candidate: &Candidate<'_>, kind: &str, terms: &[Term], fuzzy: bool, detailed: bool, cache: &mut ParentLiteralCache) -> io::Result<bool> {
+fn possible_candidate(view: &View<'_>, candidate: &Candidate<'_>, kind: &str, exts: &[String], terms: &[Term], fuzzy: bool, detailed: bool, cache: &mut ParentLiteralCache) -> io::Result<bool> {
     match candidate {
-        Candidate::Base(id) => view.possible_cached(*id,kind,terms,fuzzy,detailed,cache),
+        Candidate::Base(id) => view.possible_cached(*id,kind,exts,terms,fuzzy,detailed,cache),
         Candidate::Extra(_,_) => Ok(true),
     }
 }
@@ -887,10 +889,11 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
         && matches!(kind.as_str(), "" | "file" | "folder")
         && terms.iter().all(|term|term.separators==0);
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
+    let local_only = v["rootScope"].as_str().is_some_and(|value| !value.is_empty());
     let prefix = if current.is_empty() { String::new() } else { format!("{current}\\") };
     let upper = format!("{current}]");
     let progressive = v["progressive"].as_bool().unwrap_or(false) && !matches!(kind.as_str(), "app" | "setting");
-    let local_progressive = progressive && !prefix.is_empty();
+    let local_progressive = (progressive || local_only) && !prefix.is_empty();
     let mut pass = SearchPass {
         heap:Matches::new(), total:0, local_total:0, prefix:&prefix, kind:&kind, exts:&exts,
         matcher:QueryMatcher::new(&terms, fuzzy, pinyin),
@@ -924,18 +927,21 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
         if overlay.is_empty() {
             for (n,id) in range.enumerate() {
                 if n % 1024 == 0 && !gate.current(v,ticket) { return Ok(cancelled()); }
-                if !view.possible_cached(id,&kind,&terms,fuzzy,detailed,&mut parent_literals)? { continue; }
+                if !view.possible_cached(id,&kind,&exts,&terms,fuzzy,detailed,&mut parent_literals)? { continue; }
                 pass.candidate(&view,Candidate::Base(id),false)?;
             }
         } else {
             for (n, candidate) in overlay.iter(&view, range, Some((&prefix, &upper))).enumerate() {
                 if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
                 let candidate=candidate?;
-                if !possible_candidate(&view,&candidate,&kind,&terms,fuzzy,detailed,&mut parent_literals)? { continue; }
+                if !possible_candidate(&view,&candidate,&kind,&exts,&terms,fuzzy,detailed,&mut parent_literals)? { continue; }
                 pass.candidate(&view, candidate, false)?;
             }
         }
         if !gate.current(v, ticket) { return Ok(cancelled()); }
+        if local_only {
+            return Ok(json!({"items":items(&pass.heap,&view,overlay,launchers)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0}));
+        }
         output(json!({"id":v["id"],"result":{"items":items(&pass.heap,&view,overlay,launchers)?,"total":pass.total,"localTotal":pass.local_total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));
     }
     if !matches!(kind.as_str(), "app" | "setting") {
@@ -959,7 +965,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
                     if id % MASK_BLOCK == 0 { possible_block = view.block_possible(id,required_mask)?; }
                     if !possible_block { continue; }
                 }
-                if view.possible_cached(id,&kind,&terms,fuzzy,detailed,&mut parent_literals)? {
+                if view.possible_cached(id,&kind,&exts,&terms,fuzzy,detailed,&mut parent_literals)? {
                     pass.candidate(&view,Candidate::Base(id),local_progressive)?;
                 }
                 if progressive && !local_progressive && id % 4096 == 0 && partial_count < 3 && pass.total > 0 && partial_at.elapsed().as_millis() >= if partial_count==0 {60} else {200} {
@@ -972,7 +978,7 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
             for (n, candidate) in overlay.iter_masked(&view, 0..view.count(), if block_filter { required_mask } else { 0 }).enumerate() {
                 if n % 1024 == 0 && !gate.current(v, ticket) { return Ok(cancelled()); }
                 let candidate=candidate?;
-                if possible_candidate(&view,&candidate,&kind,&terms,fuzzy,detailed,&mut parent_literals)? {
+                if possible_candidate(&view,&candidate,&kind,&exts,&terms,fuzzy,detailed,&mut parent_literals)? {
                     pass.candidate(&view, candidate, local_progressive)?;
                 }
                 if progressive && !local_progressive && n % 4096 == 0 && partial_count < 3 && pass.total > 0 && partial_at.elapsed().as_millis() >= if partial_count==0 {60} else {200} {
@@ -1149,7 +1155,7 @@ mod tests {
                         score(row, path, &terms, fuzzy, pinyin),
                         "cached mapped literal {path} / {query}"
                     );
-                    if !view.possible_cached(id, &kind, &terms, fuzzy, true, &mut ParentLiteralCache::default()).unwrap() {
+                    if !view.possible_cached(id, &kind, &exts, &terms, fuzzy, true, &mut ParentLiteralCache::default()).unwrap() {
                         assert!(
                             !accepts(row, &kind, &exts)
                                 || score(row, path, &terms, fuzzy, pinyin).is_none()
@@ -1167,7 +1173,7 @@ mod tests {
                     let mut cache=ParentLiteralCache::default();
                     for id in 0..view.count() {
                         let row=view.row(id).unwrap();
-                        if !view.possible_cached(id,&kind,&terms,fuzzy,detailed,&mut cache).unwrap() {
+                        if !view.possible_cached(id,&kind,&exts,&terms,fuzzy,detailed,&mut cache).unwrap() {
                             assert!(!accepts(&row,&kind,&exts)
                                 || score(&row,&row.path,&terms,fuzzy,pinyin).is_none(),"{query} / {id}");
                         }

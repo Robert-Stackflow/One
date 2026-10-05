@@ -17,8 +17,8 @@ function pieces(values:string[]){
 }
 
 /** Pair replacements without splitting an entire large text into temporary line arrays. */
-export function textDiffRows(changes:Change[]){
- const rows:FileToolRow[]=[];let oldLine=1,newLine=1,addedLines=0,removedLines=0;
+function visitTextDiffRows(changes:Change[],visit:(row:FileToolRow)=>void){
+ let id=0,oldLine=1,newLine=1,addedLines=0,removedLines=0;
  for(let at=0;at<changes.length;at++){
   const change=changes[at];if(!change.added&&!change.removed){oldLine+=change.count||0;newLine+=change.count||0;continue;}
   const oldStart=oldLine,newStart=newLine,left:string[]=[],right:string[]=[];
@@ -26,7 +26,15 @@ export function textDiffRows(changes:Change[]){
    const c=changes[at],count=c.count||0;if(c.removed){left.push(c.value);removedLines+=count;oldLine+=count;}else{right.push(c.value);addedLines+=count;newLine+=count;}at++;
   }
   at--;
-  const old=pieces(left),next=pieces(right);for(let n=0;n<Math.max(old.length,next.length);n++)rows.push({id:rows.length,status:left.length&&right.length?'修改':left.length?'删除':'新增',oldLine:old[n]?oldStart+old[n].line:oldLine,newLine:next[n]?newStart+next[n].line:newLine,count:Math.max(old[n]?.count||0,next[n]?.count||0),leftText:old[n]?.text||'',rightText:next[n]?.text||''});
+  const old=pieces(left),next=pieces(right);for(let n=0;n<Math.max(old.length,next.length);n++)visit({id:id++,status:left.length&&right.length?'修改':left.length?'删除':'新增',oldLine:old[n]?oldStart+old[n].line:oldLine,newLine:next[n]?newStart+next[n].line:newLine,count:Math.max(old[n]?.count||0,next[n]?.count||0),leftText:old[n]?.text||'',rightText:next[n]?.text||''});
  }
- return{rows,stats:{addedLines,removedLines,leftLines:oldLine-1,rightLines:newLine-1}};
+ return{count:id,stats:{addedLines,removedLines,leftLines:oldLine-1,rightLines:newLine-1}};
+}
+
+/** Emit rows incrementally so large comparisons need not retain every output row. */
+export function streamTextDiffRows(changes:Change[],visit:(row:FileToolRow)=>void){return visitTextDiffRows(changes,visit);}
+
+export function textDiffRows(changes:Change[]){
+ const rows:FileToolRow[]=[];const result=visitTextDiffRows(changes,row=>rows.push(row));
+ return{rows,stats:result.stats};
 }

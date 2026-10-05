@@ -1,4 +1,4 @@
-.index-priority-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 24px;align-items:start}
+.index-priority-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .index-priority-groups .settings-card{margin-bottom:0;padding:0 14px}
 .index-priority-section .section-label{display:flex;align-items:center;gap:8px}
 .index-priority-section .section-label:before{content:"";width:5px;height:5px;border-radius:50%;background:var(--muted)}
@@ -14,4 +14,3 @@
 .index-priority-row>.icon-button{width:26px;min-width:26px;height:26px;min-height:26px;padding:5px;opacity:0;color:var(--muted)}
 .index-priority-row:hover>.icon-button,.index-priority-row:focus-within>.icon-button{opacity:1}
 .index-priority-groups .path-empty{margin:0;padding:15px 0}
-@media(max-width:1150px){.index-priority-groups{grid-template-columns:minmax(0,1fr);gap:20px}}

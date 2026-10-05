@@ -3,7 +3,9 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 const lock = JSON.parse(await readFile('package-lock.json','utf8'));
-const packages = Object.entries(lock.packages).filter(([path, value]) => path.startsWith('node_modules/') && !value.dev).map(([path]) => path);
+// Renderer dependencies are bundled even when npm marks them as dev-only.
+// Include their notices alongside the native runtime dependencies.
+const packages = Object.keys(lock.packages).filter(path => path.startsWith('node_modules/'));
 let output = 'One — Third-party notices\nElectron and Chromium notices are distributed alongside One.exe.\n\n';
 for (const path of packages) {
   const root = resolve(path);
@@ -20,4 +22,4 @@ for(const crate of crates.packages.filter(p=>p.source)){
   for(const file of await readdir(root))if(/^(license|copying|copyright|notice)/i.test(file))try{output+=await readFile(join(root,file),'utf8')+'\n';}catch{}
 }
 output+='\n===== vscode-icons artwork =====\nSource: https://github.com/vscode-icons/vscode-icons\n'+await readFile('assets/file-icons/LICENSE','utf8');
-await writeFile('THIRD_PARTY_NOTICES.txt', output, 'utf8');
+await writeFile('THIRD_PARTY_NOTICES.txt', output.replace(/\r\n?/g,'\n').replace(/[ \t]+$/gm,''), 'utf8');

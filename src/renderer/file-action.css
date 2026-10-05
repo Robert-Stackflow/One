@@ -34,7 +34,7 @@
 .file-action-rename .rename-format-body>.tool-field>.custom-select{width:154px}
 .file-action-rename .rename-number-fields{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:18px}
 .file-action-rename .rename-number-fields .number-control{width:128px;flex:none}
-.file-action-rename .rename-number-fields input{width:100%;min-width:0}
+.file-action-rename .rename-number-fields .number-control input[type=number]{width:auto;min-width:48px}
 .file-action-variable-help{font-size:11px;color:var(--muted)}
 .file-action-variable-help>summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;width:fit-content}
 .file-action-variable-help>summary>.icon{width:14px;height:14px}
@@ -90,16 +90,54 @@
 .lock-path-popover .lock-target-input{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:0;padding:0}
 .lock-path-popover input:not([type=checkbox]):not([type=range]){flex:1;min-width:0;font-size:12px;border:0;background:transparent;padding-inline:6px}
 .lock-path-popover #lock-add{flex:none;font-size:12px;padding-inline:10px}
-.file-action-lock-results{padding:24px;min-width:0;min-height:0;overflow:auto}
+.file-action-lock-results{display:flex;flex-direction:column;padding:24px;min-width:0;min-height:0;overflow:auto}
 .file-action-lock-results .lock-process{border-radius:10px;padding:14px}
 .file-action-locksmith .lock-process-head button{font-size:11px;min-height:30px;padding:5px 9px;color:var(--muted);background:transparent}
 .file-action-locksmith .lock-process-head button:hover{color:var(--fg);background:var(--hover)}
 .file-action-locksmith .file-action-footer{display:flex;align-items:center;gap:10px}
-.file-action-lock-status{font-size:12px;color:var(--muted)}
+.file-action-lock-status{display:flex;align-items:center;gap:14px;flex:1;min-width:0;font-size:12px;color:var(--muted)}
+.file-action-lock-status #lock-status{flex:none}
+.file-action-lock-status #lock-summary{min-width:0;min-height:0;margin:0;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)}
 .file-action-locksmith .file-action-footer button{font-size:12px}
 .file-action-locksmith #lock-cancel:disabled{display:none}
-.file-action-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;gap:12px;text-align:center;color:var(--muted)}
-.file-action-empty>.icon{width:32px;height:32px;stroke-width:1.25}
-.file-action-empty h3{font-size:14px;font-weight:500;color:var(--fg);margin:0}
+.file-action-empty{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;min-height:260px;text-align:center;color:var(--muted)}
+.file-action-empty[hidden]{display:none}
+.lock-empty-symbol{display:grid;place-items:center;width:54px;height:54px;margin-bottom:20px;border-radius:16px;background:var(--soft)}
+.lock-empty-symbol .icon{width:27px;height:27px;stroke-width:1.4}
+.file-action-empty h3{font-size:15px;font-weight:550;color:var(--fg);margin:0}
+.lock-empty-progress{width:min(240px,70%);height:4px;margin-top:22px;border-radius:999px;overflow:hidden;background:var(--soft)}
+.lock-empty-progress span{display:block;height:100%;border-radius:inherit;background:var(--fg);transition:width .18s ease}
+.lock-empty-progress[data-indeterminate] span{width:30%!important;animation:lock-scan-progress 1.5s ease-in-out infinite}
+@keyframes lock-scan-progress{from{transform:translateX(-110%)}to{transform:translateX(340%)}}
 .file-action-locksmith .toast{left:50%}
-@media(prefers-reduced-motion:reduce){.file-action-config-panel,.lock-path-popover{animation:none}}
+@media(prefers-reduced-motion:reduce){.file-action-config-panel,.lock-path-popover,.lock-empty-progress[data-indeterminate] span{animation:none}}
+body:not(.file-action-window) #page-tools:not(.embedded-rename)>.file-action-results{display:contents}
+body:not(.file-action-window) #page-tools:not(.embedded-rename)>.file-action-results>.file-action-preview-caption,body:not(.file-action-window) #page-tools:not(.embedded-rename)>.file-action-results>.file-action-columns,body:not(.file-action-window) #page-tools:not(.embedded-rename)>.file-action-footer{display:none}
+#page-tools.embedded-rename{display:grid;grid-template-columns:minmax(285px,34%) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;column-gap:0;row-gap:0;height:calc(100vh - 168px);min-height:620px}
+.embedded-rename>.file-tools-toolbar{grid-column:1/-1}
+.embedded-rename>.file-drop-overlay.local{position:relative;inset:auto;grid-column:1/-1;grid-row:2/4;min-height:0;align-self:stretch;justify-self:stretch}
+.embedded-rename>#tool-pane-rename{grid-column:1;grid-row:2;min-width:0;min-height:0;background:var(--soft);border:1px solid var(--line);border-radius:14px 0 0 0;overflow:auto}
+.embedded-rename .rename-config{display:flex;flex-direction:column;border:0;border-radius:0;background:transparent;padding:0;gap:0}
+.embedded-rename .rename-rules,.embedded-rename .rename-scope,.embedded-rename .file-action-format{padding:20px;border:0;gap:16px}
+.embedded-rename .rename-rules .tool-field-pair{grid-template-columns:1fr}
+.embedded-rename .rename-scope-options,.embedded-rename .rename-match-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.embedded-rename .rename-add-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.embedded-rename .rename-config textarea{min-height:112px;background:var(--surface);font-size:11px}
+.embedded-rename .rename-section-title>span{display:none}
+.embedded-rename>.file-action-results{grid-column:2;grid-row:2;border:1px solid var(--line);border-left:0;border-radius:0 14px 0 0;overflow:auto;padding:20px;min-height:0}
+.embedded-rename .tool-result-heading{margin:0 0 14px}
+.embedded-rename .tool-result-heading h2{font-size:12px;font-weight:400;color:var(--muted)}
+.embedded-rename #tool-result-detail{display:none}
+.embedded-rename .tool-results{border:0;border-radius:0}
+.embedded-rename>.file-action-footer{grid-column:1/-1;grid-row:3;border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;padding:14px 20px}
+.embedded-rename .rename-actions{padding:0}
+#page-locksmith.embedded-locksmith{display:grid;grid-template-columns:minmax(270px,30%) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;height:70vh;min-height:560px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.embedded-locksmith>.file-action-lock-targets{grid-column:1;grid-row:1}
+.embedded-locksmith>.file-action-lock-results{grid-column:2;grid-row:1}
+.embedded-locksmith>.file-action-footer{grid-column:1/-1;grid-row:2;display:flex;align-items:center;gap:10px}
+.embedded-locksmith .lock-targets>div{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px;align-items:center;gap:8px}
+.embedded-locksmith .lock-targets>div>span:nth-child(2){flex:1;min-width:0}
+.embedded-locksmith .lock-targets strong{display:block;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.embedded-locksmith .lock-targets small{display:block;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px}
+.embedded-locksmith #lock-cancel:disabled{display:none}
+@media(max-width:900px){#page-tools.embedded-rename,#page-locksmith.embedded-locksmith{grid-template-columns:minmax(0,1fr)}.embedded-rename>#tool-pane-rename,.embedded-rename>.file-action-results,.embedded-locksmith>.file-action-lock-targets,.embedded-locksmith>.file-action-lock-results{grid-column:1;grid-row:auto;border:1px solid var(--line);border-radius:12px}.embedded-rename>.file-action-footer,.embedded-locksmith>.file-action-footer{grid-column:1;grid-row:auto}}

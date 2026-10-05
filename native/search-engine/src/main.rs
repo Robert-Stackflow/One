@@ -694,10 +694,13 @@ fn accepts(row: &impl SearchRow, kind: &str, exts: &[String]) -> bool {
     {
         return false;
     }
+    accepts_extension(row.lower(), kind, exts)
+}
+fn accepts_extension(lower: &str, kind: &str, exts: &[String]) -> bool {
     if kind.is_empty() && exts.is_empty() {
         return true;
     }
-    let ext = row.lower().rsplit('.').next().unwrap_or("");
+    let ext = lower.rsplit('.').next().unwrap_or("");
     if !exts.is_empty() && !exts.iter().any(|value| value == ext) {
         return false;
     }
@@ -855,6 +858,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let shared_parent = matcher.shares_parent();
     let rules = priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default());
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
+    let local_only = v["rootScope"].as_str().is_some_and(|value| !value.is_empty());
     let index = s.index.read().unwrap();
     let launchers = s.launchers.read().unwrap();
     let extra_rows = &launchers.rows;
@@ -866,7 +870,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         && !prefix.is_empty() && !matches!(kind.as_str(), "app" | "setting");
     // An ordered range visits only the current subtree, without scanning the full index.
     // ']' is the byte immediately after '\\', so this upper bound includes every child.
-    if progressive {
+    if progressive || local_only {
         for (n, (path, row)) in index.rows.range(PathKey::lookup(&prefix)..PathKey::lookup(format!("{current}]"))).enumerate() {
             if n % 1024 == 0 && !current_query(s, v, ticket) {
                 output(json!({"id":id,"result":{"items":[],"total":0,"elapsed":0,"cancelled":true}}));
@@ -880,6 +884,10 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
         }
         if !current_query(s, v, ticket) {
             output(json!({"id":id,"result":{"items":[],"total":0,"elapsed":0,"cancelled":true}}));
+            return;
+        }
+        if local_only {
+            output(json!({"id":id,"result":{"items":ranked_items(&heap,&index,extra_rows),"total":total,"localTotal":total,"elapsed":start.elapsed().as_secs_f64()*1000.0}}));
             return;
         }
         output(json!({"id":id,"result":{"items":ranked_items(&heap,&index,extra_rows),"total":total,"localTotal":total,"elapsed":start.elapsed().as_secs_f64()*1000.0,"partial":true}}));

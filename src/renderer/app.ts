@@ -1,15 +1,6 @@
-import './system-information.css';
-import './text.css';
 import './search.css';
 import './styles.css';
-import './disk.css';
-import './preview.css';
-import './preview-chrome.css';
 import './refinement.css';
-import './color.css';
-import './hud.css';
-import './echo.css';
-import './preview-redesign.css';
 import './selection.css';
 import './interface-refinement.css';
 import './components.css';
@@ -30,6 +21,7 @@ const render=async()=>{
  else if(view==='picker')(await import('./picker-view')).renderPicker();
  else if(view==='file-action')await (await import('./file-action-view')).renderFileAction();
  else if(view==='search-menu')await (await import('./search-menu')).renderSearchMenu();
+ else if(view==='tray-menu')await (await import('./tray-menu-view')).renderTrayMenu();
  else if(view==='file-context')await (await import('./file-context-view')).renderFileContextMenu();
  else if(view==='dialog-bar')await (await import('./dialog-bar-view')).renderDialogBar();
  else if(view==='search')await (await import('./search-view')).renderSearch();

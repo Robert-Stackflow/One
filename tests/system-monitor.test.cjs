@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),{buildSync}=require('esbuild'),path=require('node:path');
-const output=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','system-monitor');buildSync({entryPoints:['src/shared/disk-monitor.ts','src/main/disk-monitor.ts','src/main/system-info-service.ts'],outdir:output,bundle:true,platform:'node',outExtension:{'.js':'.cjs'}});
+const output=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/unit','system-monitor');buildSync({entryPoints:['src/shared/disk-monitor.ts','src/main/disk-monitor.ts','src/main/system-info-service.ts'],outdir:output,bundle:true,platform:'node',external:['electron'],outExtension:{'.js':'.cjs'}});
 const {DiskAlertPolicy,validateDiskMonitor}=require(path.join(output,'shared/disk-monitor.cjs')),{WriterSampler}=require(path.join(output,'main/disk-monitor.cjs')),{formatInformationValue}=require(path.join(output,'main/system-info-service.cjs'));
 const settings={enabled:true,notify:true,intervalSeconds:2,rules:[{drive:'C:\\',enabled:true,unit:'percent',threshold:10}]};
 const volume=free=>[{drive:'C:\\',free,total:100,type:3,label:'',filesystem:'NTFS'}];

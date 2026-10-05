@@ -5,7 +5,9 @@ const {snapshot}=require('./app-memory-benchmark.cjs');
 async function main(){
  const out=path.resolve(process.env.ONE_IDLE_OUTPUT||'C:/Users/ruida/Documents/Codex/2026-09-13/dioa/work/native-idle');await fs.mkdir(out,{recursive:true});const profile=await fs.mkdtemp(path.join(out,'profile-'));
  await require('esbuild').build({entryPoints:['src/shared/settings.ts'],outfile:path.join(out,'settings.cjs'),bundle:true,platform:'node'});const {mergeSettings,defaultSettings}=require(path.join(out,'settings.cjs'));
- const data=await fs.readFile(process.env.ONE_BENCH_BIG_CACHE||'D:/Repositories/One/work/index-memory/run-kqm1CD/snapshot.bin');assert.equal(data.subarray(0,8).toString(),'ONEIDX06');const size=data.readUInt32LE(8),settings=JSON.parse(data.subarray(12,12+size));assert.deepEqual(settings.roots,[]);const count=Number(data.readBigUInt64LE(28+size));await fs.writeFile(path.join(profile,'file-index.bin'),data);await fs.writeFile(path.join(profile,'settings.json'),JSON.stringify(mergeSettings(defaultSettings(),{search:settings,diskMonitor:{enabled:true,notify:false},appearance:{mode:'light'}})));
+ let count=null,settings={roots:[],maxEntries:1000};
+ if(process.env.ONE_BENCH_BIG_CACHE||!process.env.ONE_IDLE_NO_CACHE){const data=await fs.readFile(process.env.ONE_BENCH_BIG_CACHE||'D:/Repositories/One/work/index-memory/run-kqm1CD/snapshot.bin');assert.equal(data.subarray(0,8).toString(),'ONEIDX06');const size=data.readUInt32LE(8);settings=JSON.parse(data.subarray(12,12+size));assert.deepEqual(settings.roots,[]);count=Number(data.readBigUInt64LE(28+size));await fs.writeFile(path.join(profile,'file-index.bin'),data);}
+ await fs.writeFile(path.join(profile,'settings.json'),JSON.stringify(mergeSettings(defaultSettings(),{search:settings,diskMonitor:{enabled:true,notify:false},appearance:{mode:'light'}})));
  const loader=path.join(profile,'observer.cjs'),ms=Number(process.env.ONE_IDLE_SAMPLE_MS||30000),selected=process.env.ONE_IDLE_PAGE||'overview';assert.ok(ms>=10000&&ms<=60000);assert.ok(['overview','writers'].includes(selected));
  await fs.writeFile(loader,`const {app,BrowserWindow}=require('electron'),fs=require('fs');
  const out=${JSON.stringify(profile)},expected=${count},ms=${ms},selected=${JSON.stringify(selected)},at=Date.now(),stages=[];let started=false;
@@ -14,9 +16,9 @@ async function main(){
  function observe(w){const ready=()=>{if(started||!w.webContents.getURL().includes('view=main'))return;started=true;stage('mainLoaded');void run(w).catch(e=>{report({error:String(e),stack:e.stack});app.quit();});};w.webContents.once('did-finish-load',ready);if(!w.webContents.isLoadingMainFrame())ready();}
  app.on('browser-window-created',(_,w)=>observe(w));for(const w of BrowserWindow.getAllWindows())observe(w);
  async function run(main){
-  const until=Date.now()+120000;let loaded=false;
-  while(Date.now()<until){const s=await main.webContents.executeJavaScript('window.one.searchState()');if(s.count===expected&&!loaded){loaded=true;stage('indexLoaded');}if(loaded&&!s.running)break;await delay(100);}
-  if(!loaded||Date.now()>=until)throw Error('Index readiness timeout');stage('indexReady');await delay(1500);
+  {const until=Date.now()+120000;let loaded=false,ready=false;
+   while(Date.now()<until){const s=await main.webContents.executeJavaScript('window.one.searchState()');if((expected===null||s.count===expected)&&!loaded){loaded=true;stage('indexLoaded');}if(loaded&&!s.running){ready=true;break;}await delay(100);}
+   if(!ready)throw Error('Index readiness timeout');}stage('indexReady');await delay(1500);
   if(selected==='writers'){await main.webContents.executeJavaScript('document.querySelector("[data-page=system]").click();document.querySelector("#alerts-tab").click()');await delay(6000);}
   for(const w of BrowserWindow.getAllWindows())await w.webContents.executeJavaScript('window.benchMutations=0;window.benchObserver=new MutationObserver(r=>window.benchMutations+=r.length);window.benchObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true})');
   for(const w of BrowserWindow.getAllWindows())w.hide();await delay(2500);

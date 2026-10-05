@@ -170,35 +170,59 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
     const content=frame.contentDocument;if(!content)return;
     const deferred=new Set(content.querySelectorAll<HTMLImageElement>('.markdown-content img[data-preview-src]'));
     const loadedImages=new Set<HTMLImageElement>();
-    const imageDisplayCache=new Map<HTMLImageElement,string>(),loadingImages=new Set<HTMLImageElement>();
+    const imageDisplayCache=new Map<HTMLImageElement,{url:string;width:number;height:number}>(),loadingImages=new Set<HTMLImageElement>();
     const pendingMath=new Set(content.querySelectorAll<HTMLElement>('.markdown-content .math-pending[data-math]'));
     const renderedMath=new Set<HTMLElement>();
     let frameId=0,previewAlive=true;
     const near=(element:Element,height:number)=>{const bounds=element.getBoundingClientRect();return bounds.top<=height+1000&&bounds.bottom>=-1000;};
+    const displaySize=()=>{
+      const ratio=Math.min(2,Math.max(1,content.defaultView?.devicePixelRatio||1))*1.1;
+      const readingWidth=content.querySelector<HTMLElement>('.markdown-content')?.clientWidth||920;
+      return {width:Math.max(128,Math.min(1152,Math.ceil(readingWidth*ratio))),height:Math.max(128,Math.min(864,Math.ceil(780*ratio)))};
+    };
+    const releaseDisplay=(url:string)=>{if(url.startsWith('one-file://display/'))void api.previewReleaseDisplayImage(url).catch(()=>{});};
+    const trimDisplayCache=()=>{for(const [image,entry] of imageDisplayCache){if(imageDisplayCache.size<=6)break;if(loadedImages.has(image))continue;imageDisplayCache.delete(image);releaseDisplay(entry.url);}};
     const loadNear=()=>{
       const height=content.documentElement.clientHeight||frame.clientHeight;
+      const display=displaySize();
       for(const image of loadedImages){
         if(!image.isConnected){loadedImages.delete(image);continue;}
         const bounds=image.getBoundingClientRect();
-        if(bounds.top<=height+4000&&bounds.bottom>=-4000)continue;
+        if(bounds.top<=height+4000&&bounds.bottom>=-4000){
+          const cached=imageDisplayCache.get(image),source=image.dataset.previewSrc;
+          if(cached?.url.startsWith('one-file://display/')&&source&&!loadingImages.has(image)&&loadingImages.size<2&&(display.width>cached.width*1.05||display.height>cached.height*1.05)){
+            loadingImages.add(image);
+            void api.previewDisplayImage(source,display.width,display.height).catch(()=>null).then(next=>{
+              if(!next){if(imageDisplayCache.get(image)===cached)Object.assign(cached,display);return;}
+              if(!previewAlive||!image.isConnected){releaseDisplay(next);return;}
+              imageDisplayCache.delete(image);imageDisplayCache.set(image,{url:next,...display});
+              if(near(image,content.documentElement.clientHeight||frame.clientHeight))image.src=next;
+              else{image.removeAttribute('src');loadedImages.delete(image);deferred.add(image);}
+              releaseDisplay(cached.url);
+            }).finally(()=>{loadingImages.delete(image);if(previewAlive)schedule();});
+          }
+          continue;
+        }
         image.removeAttribute('src');
         loadedImages.delete(image);
         deferred.add(image);
       }
+      trimDisplayCache();
       for(const image of deferred){
         if(!near(image,height))continue;
         const cached=imageDisplayCache.get(image);
-        if(cached){image.src=cached;deferred.delete(image);loadedImages.add(image);continue;}
+        if(cached){imageDisplayCache.delete(image);imageDisplayCache.set(image,cached);image.src=cached.url;deferred.delete(image);loadedImages.add(image);continue;}
         if(loadingImages.size>=2)break;
         if(loadingImages.has(image))continue;
         const source=image.dataset.previewSrc;
         if(!source){deferred.delete(image);continue;}
         loadingImages.add(image);
-        void api.previewDisplayImage(source).catch(()=>null).then(display=>{
-          if(!previewAlive||!image.isConnected)return;
-          const shown=display||source;imageDisplayCache.set(image,shown);
-          if(!near(image,content.documentElement.clientHeight||frame.clientHeight))return;
+        void api.previewDisplayImage(source,display.width,display.height).catch(()=>null).then(result=>{
+          if(!previewAlive||!image.isConnected){if(result)releaseDisplay(result);return;}
+          const shown=result||source;imageDisplayCache.set(image,{url:shown,...display});
+          if(!near(image,content.documentElement.clientHeight||frame.clientHeight)){trimDisplayCache();return;}
           image.src=shown;deferred.delete(image);loadedImages.add(image);
+          trimDisplayCache();
         }).finally(()=>{loadingImages.delete(image);if(previewAlive)schedule();});
       }
       for(const node of renderedMath){
@@ -217,7 +241,7 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
     const schedule=()=>{if(frameId)return;frameId=requestAnimationFrame(()=>{frameId=0;loadNear();});};
     content.defaultView?.addEventListener('scroll',schedule,{passive:true});
     content.defaultView?.addEventListener('resize',schedule);
-    releaseImages=()=>{previewAlive=false;cancelAnimationFrame(frameId);imageDisplayCache.clear();content.defaultView?.removeEventListener('scroll',schedule);content.defaultView?.removeEventListener('resize',schedule);};
+    releaseImages=()=>{previewAlive=false;cancelAnimationFrame(frameId);for(const entry of imageDisplayCache.values())releaseDisplay(entry.url);imageDisplayCache.clear();content.defaultView?.removeEventListener('scroll',schedule);content.defaultView?.removeEventListener('resize',schedule);};
     loadNear();
     const gallery=installLightbox(content);
     const card=content.createElement('aside');card.className='link-card';card.hidden=true;content.body.append(card);

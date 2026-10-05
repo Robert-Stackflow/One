@@ -1,6 +1,6 @@
 {
   "name": "one-desktop",
-  "version": "0.16.15",
+  "version": "0.16.17",
   "private": true,
   "author": "One",
   "description": "本地 Windows 桌面工具箱",
@@ -15,12 +15,18 @@
     "test": "node scripts/test.mjs",
     "test:ui": "npm run build && node tests/electron-smoke.cjs",
     "package": "node scripts/package.mjs",
+    "package:installer": "node scripts/build-installer.mjs --custom",
+    "package:installer:custom": "node scripts/build-installer.mjs --custom",
+    "package:installer:engine": "node scripts/build-installer.mjs",
+    "test:installer:ui": "node tests/electron-installer-smoke.cjs",
+    "test:installer:integration": "node tests/electron-installer-install.cjs",
     "test:refinement": "npm run build && node tests/refinement-smoke.cjs",
     "icons": "node scripts/export-icons.cjs",
     "test:experience": "npm run build && node tests/experience-smoke.cjs",
     "test:redesign": "npm run build && node tests/redesign-smoke.cjs",
     "test:utilities": "npm run build && node tests/utilities-smoke.cjs",
     "test:search": "npm run build && node tests/search-smoke.cjs && node tests/popup-idle-reclaim.cjs",
+    "test:search-menu-scale": "npm run build && node tests/search-folder-topn-performance.cjs && node tests/search-folder-menu-response.cjs",
     "test:text": "npm run build && node tests/text-tools-smoke.cjs",
     "test:preview": "npm run build && node tests/special-preview-smoke.cjs",
     "test:system": "npm run build && node tests/system-information-smoke.cjs",
@@ -34,6 +40,14 @@
     "test:file-tools": "npm run build && node tests/file-tools-smoke.cjs"
   },
   "dependencies": {
+    "iconv-lite": "^0.7.3",
+    "koffi": "^3.3.2",
+    "loudness": "^0.4.2",
+    "opencc-js": "^1.4.2",
+    "pdfjs-dist": "^6.3.289",
+    "uiohook-napi": "^1.5.5"
+  },
+  "devDependencies": {
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.12.4",
     "@codemirror/language-data": "^6.5.2",
@@ -41,39 +55,31 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@lezer/highlight": "^1.2.5",
-    "@xmldom/xmldom": "^0.9.12",
-    "diff": "^9.0.0",
-    "docx-preview": "^0.4.1",
-    "dompurify": "^3.4.16",
-    "exifr": "^7.1.3",
-    "highlight.js": "^11.12.0",
-    "iconv-lite": "^0.7.3",
-    "jszip": "^3.10.2",
-    "katex": "^0.17.0",
-    "koffi": "^3.3.2",
-    "loudness": "^0.4.2",
-    "lucide": "^1.49.0",
-    "marked": "^18.0.14",
-    "marked-katex-extension": "^5.1.13",
-    "music-metadata": "^11.16.1",
-    "opencc-js": "^1.4.2",
-    "pdfjs-dist": "^6.3.289",
-    "sax": "1.6.1",
-    "uiohook-napi": "^1.5.5",
-    "vscode-icons-js": "^11.6.1",
-    "yaml": "^2.9.1",
-    "yauzl": "^3.4.0"
-  },
-  "devDependencies": {
     "@playwright/test": "^1.56.0",
     "@types/node": "^22.16.0",
     "@types/sax": "^1.2.7",
     "@types/yauzl": "^3.4.0",
+    "@xmldom/xmldom": "^0.9.12",
+    "diff": "^9.0.0",
+    "docx-preview": "^0.4.1",
+    "dompurify": "^3.4.16",
     "electron": "44.5.1",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.28.2",
+    "exifr": "^7.1.3",
+    "highlight.js": "^11.12.0",
+    "jszip": "^3.10.2",
+    "katex": "^0.17.0",
+    "lucide": "^1.49.0",
+    "marked": "^18.0.14",
+    "marked-katex-extension": "^5.1.13",
+    "music-metadata": "^11.16.1",
+    "sax": "1.6.1",
     "typescript": "^5.9.3",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vscode-icons-js": "^11.6.1",
+    "yaml": "^2.9.1",
+    "yauzl": "^3.4.0"
   },
   "build": {
     "electronDist": "node_modules/electron/dist",
@@ -88,7 +94,12 @@
       "!dist/**/*.obj",
       "!dist/main/*-test.cjs",
       "!dist/main/brightness-worker.*",
-      "!dist/main/brightness.ps1"
+      "!dist/main/brightness.ps1",
+      "!node_modules/@napi-rs/canvas/**/*",
+      "!node_modules/@napi-rs/canvas-win32-x64-msvc/**/*",
+      "!node_modules/pdfjs-dist/build/**/*",
+      "!node_modules/pdfjs-dist/web/**/*",
+      "!node_modules/pdfjs-dist/types/**/*"
     ],
     "asarUnpack": [
       "dist/main/maintenance.ps1",
@@ -96,10 +107,12 @@
       "node_modules/uiohook-napi/**/*",
       "node_modules/loudness/**/*",
       "dist/native/One.Native.exe",
+      "dist/native/One.Thumbnail.exe",
       "dist/native/One.Search.exe",
       "dist/native/One.Dialog.dll",
       "dist/native/One.Shell.dll",
       "dist/native/One.Shell.exe",
+      "dist/native/One.LaunchNormal.exe",
       "dist/main/explorer-menu.ps1",
       "dist/main/explorer-menu.xml",
       "dist/main/One.ExplorerMenu.Locksmith.msix",
@@ -111,6 +124,7 @@
       "dist/native/One.Windows.exe",
       "dist/native/One.OpenWith.exe",
       "dist/main/system-info.ps1",
+      "dist/main/proxy-info.ps1",
       "dist/native/One.Monitor.exe",
       "dist/native/One.Levels.exe"
     ],
@@ -124,6 +138,28 @@
       "signAndEditExecutable": true,
       "icon": "assets/icons/one.ico",
       "signExecutable": false
-    }
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "en_US",
+        "zh_CN"
+      ],
+      "displayLanguageSelector": true,
+      "include": "build/installer.nsh",
+      "artifactName": "One-${version}-Setup-Engine-x64.${ext}"
+    },
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
+    "compression": "maximum"
   }
 }

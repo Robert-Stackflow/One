@@ -1,0 +1,24 @@
+.file-drop-overlay{position:fixed;inset:0;z-index:250;display:grid;place-items:center;padding:24px;pointer-events:none;background:color-mix(in srgb,var(--surface) 42%,transparent);backdrop-filter:blur(0);opacity:0;visibility:hidden;transition:opacity .18s var(--ease),backdrop-filter .18s var(--ease),visibility .18s}
+.file-drop-overlay.visible{opacity:1;visibility:visible;backdrop-filter:blur(2px)}
+.file-drop-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;width:min(380px,100%);min-height:214px;padding:24px;border:1px dashed color-mix(in srgb,var(--fg) 28%,var(--surface));border-radius:20px;background:var(--surface);box-shadow:0 18px 50px #00000018,0 2px 8px #0000000b;transform:translateY(8px) scale(.98);transition:transform .2s var(--ease)}
+.file-drop-overlay.visible .file-drop-card{transform:translateY(0) scale(1)}
+.file-drop-icon{display:grid;place-items:center;width:54px;height:54px;margin-bottom:5px;border-radius:15px;background:var(--soft);color:var(--fg)}
+.file-drop-icon .icon{width:26px;height:26px}
+.file-drop-card strong{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.file-drop-detail{font-size:12px;color:var(--muted);text-align:center}
+.file-drop-zone{position:relative}
+.file-drop-overlay.local{position:absolute;z-index:6;inset:0;padding:4px;border-radius:12px;background:var(--surface)}
+.file-drop-overlay.local.visible{backdrop-filter:none}
+.file-drop-overlay.local .file-drop-card{flex-direction:row;gap:8px;width:100%;height:100%;min-height:0;padding:6px 10px;border-radius:9px;box-shadow:none;transform:scale(.97)}
+.file-drop-overlay.local.visible .file-drop-card{transform:scale(1)}
+.file-drop-overlay.local .file-drop-icon{width:26px;height:26px;flex:none;margin:0;border-radius:7px}
+.file-drop-overlay.local .file-drop-icon .icon{width:15px;height:15px}
+.file-drop-overlay.local strong{font-size:12px;font-weight:550;letter-spacing:0}
+.file-drop-overlay.local .file-drop-detail{display:none}
+.file-drop-overlay.local.spacious{padding:12px;border-radius:inherit}
+.file-drop-overlay.local.spacious .file-drop-card{flex-direction:column;justify-content:center;gap:9px;border-radius:12px}
+.file-drop-overlay.local.spacious .file-drop-icon{width:44px;height:44px;border-radius:12px}
+.file-drop-overlay.local.spacious .file-drop-icon .icon{width:22px;height:22px}
+.file-drop-overlay.local.spacious strong{font-size:15px;font-weight:600}
+.file-drop-overlay.local.spacious .file-drop-detail{display:block}
+@media(prefers-reduced-motion:reduce){.file-drop-overlay,.file-drop-card{transition:none}}

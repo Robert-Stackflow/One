@@ -31,20 +31,24 @@ export interface Settings {
 }
 export interface MaintenanceRow { name: string; source: string; status: string; command: string; location: string }
 export interface FileEntry { name: string; path: string; directory: boolean; size?: number; packedSize?: number }
-export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
+export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; workbookToken?:string; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
 export interface LinkCard {domain:string;title:string;description:string;image?:string}
 export type { PickerData } from './picker';
 export interface OneAPI {
+  trayMenuState():Promise<import('../main/tray-menu').TrayMenuView>;trayMenuAction(id:import('../main/tray-menu').TrayMenuAction):Promise<void>;trayMenuReady():Promise<void>;trayMenuHide():Promise<void>;onTrayMenuChanged(callback:()=>void):()=>void;
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;
   echoReady():Promise<void>;
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
+  fileToolsCancelId(id:string):Promise<void>;
   fileToolsCancel(kind?:import('./file-tools').FileToolKind):Promise<void>;
   fileToolsPage(id:string,page:number,group?:number):Promise<import('./file-tools').FileToolRow[]>;
   fileToolsHistory():Promise<import('./file-tools').FileToolReport[]>;
   fileToolsOverview(active?:boolean):Promise<import('./file-tools').FileToolOverview>;
   onFileToolsProgress(callback:(value:import('./file-tools').FileToolProgress)=>void):()=>void;
   systemInformation(kind:import('./system-info').InformationKind,refresh?:boolean):Promise<import('./system-info').InformationReport>;
+  proxyDiagnostics(refresh?:boolean):Promise<import('./proxy-info').ProxyDiagnostics>;
+  onProxyDiagnosticsProgress(callback:(value:import('./proxy-info').ProxyDiagnosticsProgress)=>void):()=>void;
   onSystemInformationProgress(callback:(value:import('./system-info').InformationProgress)=>void):()=>void;
   onSystemInformationGroup(callback:(value:{kind:import('./system-info').InformationKind;group:import('./system-info').InformationGroup})=>void):()=>void;
   exportSystemInformation(reports:import('./system-info').InformationReport[]):Promise<string|null>;
@@ -59,7 +63,12 @@ export interface OneAPI {
   maintenanceScan(kind:import('./maintenance').MaintenanceKind):Promise<import('./maintenance').MaintenanceReport>;maintenanceCancel(kind:import('./maintenance').MaintenanceKind):Promise<void>;maintenanceApply(report:string,ids:string[]):Promise<import('./maintenance').MaintenanceOutcome>;maintenanceReceipts():Promise<import('./maintenance').MaintenanceReceipt[]>;maintenanceRestore(id:string):Promise<void>;maintenanceManage(kind:'pagefile'|'hibernate-on'):Promise<void>;
   echoDisplays():Promise<{id:string;name:string;width:number;height:number}[]>;positionEcho():Promise<void>;finishEchoPosition():Promise<void>;onEchoPosition(callback:()=>void):()=>void;
   patchSettings(value: SettingsPatch): Promise<Settings>;
-  appInfo(): Promise<{version:string;dataPath:string;packaged:boolean}>;
+  appInfo(): Promise<{version:string;dataPath:string;packaged:boolean;administrator:boolean}>;
+  elevate():Promise<{administrator:boolean;restarting:boolean}>;
+  restartNormal():Promise<void>;
+  restart():Promise<void>;
+  settingsBackupExport():Promise<{saved:boolean;path?:string}>;
+  settingsBackupImport():Promise<{imported:boolean;exportedAt?:string}>;
   fileIcons(paths:string[]):Promise<Record<string,string>>;
   menuPresets():Promise<import('./menu-presets').MenuPreset[]>;
   menuBar():Promise<import('./search').MenuBar>;onMenuBar(callback:(bar:import('./search').MenuBar)=>void):()=>void;onSearchPreferences(callback:(settings:import('./search').SearchSettings)=>void):()=>void;onNavigatePage(callback:(target:import('./menu-builtins').OneMenuTarget)=>void):()=>void;
@@ -68,17 +77,18 @@ export interface OneAPI {
   dialogBarData():Promise<import('./dialog-bar').DialogBarData>;onDialogBarData(callback:(data:import('./dialog-bar').DialogBarData)=>void):()=>void;onDialogBarCollapse(callback:()=>void):()=>void;dialogBarChoose(path:string):Promise<void>;dialogBarSize(rows:number,active:boolean):Promise<void>;dialogBarCollapse():Promise<void>;dialogBarSettings():Promise<void>;
   fileMenuData():Promise<import('./file-menu').FileMenuTarget|null>;onFileMenu(callback:(target:import('./file-menu').FileMenuTarget)=>void):()=>void;fileMenuAction(session:string,action:import('./file-menu').FileMenuAction,value?:string):Promise<void>;fileMenuApps(session:string):Promise<import('./preview').OpenWithApp[]>;fileMenuClose(focus?:boolean,childOnly?:boolean):Promise<void>;fileMenuSubmenu(session:string,top:number,focus?:boolean):Promise<void>;onFileMenuExpanded(callback:(open:boolean)=>void):()=>void;fileMenuSize(session:string,height:number):Promise<void>;onSearchFilesChanged(callback:()=>void):()=>void;
   textPipeline(text:string,steps:import('./text-tools').TextStep[]):Promise<string>;cancelText():Promise<void>;onTextProgress(callback:(value:import('./text-tools').TextProgress)=>void):()=>void;textCompare(left:string,right:string,ignoreWhitespace:boolean):Promise<import('./text-tools').TextComparison>;textDifferencePage(id:string,page:number):Promise<import('./text-tools').TextDifference[]>;clearTextComparison(id:string):Promise<void>;textBatch(request:import('./text-tools').TextBatchRequest):Promise<import('./text-tools').TextBatchResult>;
-  searchState():Promise<import('./search').SearchState&{bridgeError:string}>;searchFiles(query:string,foldersOnly?:boolean,token?:string):Promise<import('./search').SearchResult>;rebuildSearch():Promise<void>;cancelSearchIndex():Promise<void>;showSearch():Promise<void>;searchContext():Promise<import('./search').SearchContext>;searchChoose(path:string):Promise<void>;searchReady():Promise<void>;searchPreferences():Promise<import('./search').SearchSettings>;onSearchState(callback:(value:import('./search').SearchState&{bridgeError:string})=>void):()=>void;onSearchContext(callback:(value:import('./search').SearchContext)=>void):()=>void;onSearchReset(callback:()=>void):()=>void;onSearchProgress(callback:(value:import('./search').SearchProgress)=>void):()=>void;
+  searchState():Promise<import('./search').SearchState&{bridgeError:string}>;searchFiles(query:string,foldersOnly?:boolean,token?:string,rootScope?:string):Promise<import('./search').SearchResult>;searchAction(id:string):Promise<void>;rebuildSearch():Promise<void>;cancelSearchIndex():Promise<void>;showSearch():Promise<void>;searchContext():Promise<import('./search').SearchContext>;searchChoose(path:string):Promise<void>;searchReady():Promise<void>;searchPreferences():Promise<import('./search').SearchSettings>;searchSavedQuery(operation:'add',value:import('./search').SavedSearch):Promise<import('./search').SearchSettings>;searchSavedQuery(operation:'remove',value:string):Promise<import('./search').SearchSettings>;onSearchState(callback:(value:import('./search').SearchState&{bridgeError:string})=>void):()=>void;onSearchContext(callback:(value:import('./search').SearchContext)=>void):()=>void;onSearchReset(callback:()=>void):()=>void;onSearchProgress(callback:(value:import('./search').SearchProgress)=>void):()=>void;
+  portSnapshot(refresh?:boolean):Promise<import('./ports').PortSnapshot>;
   inspectLocks(path:string):Promise<void>;onLockTarget(callback:(path:string)=>void):()=>void;
   lockState():Promise<import('./locksmith').LocksmithState>;scanLocks(paths:string[]):Promise<import('./locksmith').LocksmithState>;cancelLocks():Promise<void>;endLockProcess(token:string):Promise<void>;onLocks(callback:(value:import('./locksmith').LocksmithState)=>void):()=>void;
-  utilityState():Promise<import('./utilities').UtilityState>; topmostWindows():Promise<import('./utilities').WindowEntry[]>; toggleTopmost(id:number):Promise<void>;clearTopmost():Promise<void>;onUtilityState(callback:(value:import('./utilities').UtilityState)=>void):()=>void;
+  utilityState():Promise<import('./utilities').UtilityState>; topmostWindows():Promise<import('./utilities').WindowEntry[]>; toggleTopmost(id:number):Promise<void>;clearTopmost():Promise<void>;clickerState():Promise<import('./utilities').ClickerState>;clickerStart():Promise<import('./utilities').ClickerState>;clickerStop():Promise<import('./utilities').ClickerState>;clickerCapture():Promise<{x:number;y:number}>;onUtilityState(callback:(value:import('./utilities').UtilityState)=>void):()=>void;
   settings(): Promise<Settings>; saveSettings(value: Settings): Promise<Settings>;
-  transform(request: TextRequest): Promise<string>; openText(encoding: string): Promise<{ path: string; text: string } | null>;
+  transform(request: TextRequest): Promise<string>; openText(encoding: string): Promise<{ path: string; text: string } | null>; readTextPath(path:string,encoding:string):Promise<{path:string;text:string}>;
   saveText(text: string, encoding: string): Promise<string | null>; copyText(text: string): Promise<void>;
-  pickFile(initialPath?: string): Promise<string | null>; droppedFile(file: File): string;
-  preview(path: string): Promise<void>; previewData(): Promise<PreviewData>; navigatePreview(step: number): Promise<void>;
+  pickFile(initialPath?: string): Promise<string | null>; droppedFile(file: File): string;dropPathKinds(paths:string[]):Promise<{path:string;kind:'file'|'directory'|'other'}[]>;
+  preview(path: string): Promise<void>; previewData(knownWorkbookToken?:string): Promise<PreviewData>; previewWorkbookReady(token:string):Promise<void>; navigatePreview(step: number): Promise<void>;
   selectPreview(path: string): Promise<void>; directoryOpen(path:string):Promise<import('./directory').DirectoryInfo>;directoryPage(id:string,offset:number,limit:number,query?:string):Promise<import('./directory').DirectoryPage>;directoryRelease(id:string):Promise<void>;
-  previewResource(path:string):Promise<string|null>;previewImage(path:string):Promise<{url:string;width?:number;height?:number}|null>;previewDisplayImage(url:string):Promise<string|null>;previewThumbnail(url:string):Promise<string|null>;previewLinkCard(url:string):Promise<LinkCard>;previewOpenLink(url:string):Promise<void>;
+  previewResource(path:string):Promise<string|null>;previewImage(path:string):Promise<{url:string;width?:number;height?:number}|null>;previewDisplayImage(url:string,width:number,height:number):Promise<string|null>;previewReleaseDisplayImage(url:string):Promise<void>;previewThumbnail(url:string):Promise<string|null>;previewLinkCard(url:string):Promise<LinkCard>;previewOpenLink(url:string):Promise<void>;
   previewFlags(value?: {pinned?:boolean;held?:boolean}): Promise<{pinned:boolean;held:boolean}>;
   appearance(): Promise<Appearance>; installedFonts(refresh?:boolean):Promise<import('./fonts').InstalledFont[]>; onAppearance(callback: (value:Appearance) => void): () => void;
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;

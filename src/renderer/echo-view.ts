@@ -2,6 +2,8 @@ import {api,q,button,icon,switchControl,toast} from './ui';
 import {bindPreference} from './preferences';
 import {updateSelectOptions} from './controls';
 import {echoNames,type EchoChannel,type EchoSettings,defaultEcho} from '../shared/echo';
+import './hud.css';
+import './echo.css';
 
 export function echoPage(){return `<div data-enhancement-panel="echo" hidden>
  <div class="settings-card echo-master"><div class="setting-row"><div class="setting-copy"><h2>按键与状态提示</h2></div>${switchControl('keyEcho','开启按键回显')}</div><div class="echo-shared-position"><label for="echo-display">提示位置</label><select id="echo-display" aria-label="提示显示器"><option value="cursor">跟随鼠标所在屏幕</option></select>${button('echo-position-live','拖动调整位置','move')}</div></div>

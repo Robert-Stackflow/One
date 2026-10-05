@@ -1,4 +1,6 @@
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
+import './color.css';
+import './hud.css';
 import {api,q,icon,button,toast,iconButton,switchControl} from './ui';
 import {ColorPalette} from './color-palette';
 import {colorFormats,colorFormatNames,type ColorFormat} from '../shared/colors';

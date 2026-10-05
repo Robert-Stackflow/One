@@ -125,6 +125,7 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .sidebar-collapsed .sidebar-group-caption{max-height:0;margin-bottom:0;opacity:0}
 .sidebar-collapsed .sidebar-group{margin-top:13px}
 .sidebar-collapsed .sidebar-group::before{content:'';align-self:center;width:28px;height:1px;margin-bottom:7px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--fg) 19%,transparent) 22% 78%,transparent);pointer-events:none}
+.sidebar-collapsed .sidebar-group[aria-label="工具"]::before{width:24px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--fg) 13%,transparent) 26% 74%,transparent)}
 .sidebar>[data-page=settings]{margin-top:0}
 @media(prefers-reduced-motion:reduce){.sidebar-group-caption{transition:none}}
 #page-preview #dropzone{margin-bottom:20px}

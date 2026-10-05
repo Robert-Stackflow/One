@@ -1,8 +1,9 @@
 import {parentPort} from 'node:worker_threads';
-import {lstat,opendir,mkdir,writeFile} from 'node:fs/promises';
+import {writeFileSync} from 'node:fs';
+import {lstat,opendir,mkdir} from 'node:fs/promises';
 import {basename,dirname,extname,isAbsolute,join,relative,resolve} from 'node:path';
 import {compareTextLines} from './bounded-diff';
-import {textDiffRows} from './text-diff';
+import {streamTextDiffRows} from './text-diff';
 import {transform} from '../shared/text';
 import {validateSteps,operationNames,type TextStep,type TextProgress,type TextBatchRequest,type TextBatchResult,type TextDifference} from '../shared/text-tools';
 import {compareNatural} from '../shared/natural-sort';
@@ -32,10 +33,13 @@ parentPort!.on('message',async task=>{try{
  else if(task.kind==='compare'){
   if(typeof task.left!=='string'||typeof task.right!=='string'||task.left.length>10_000_000||task.right.length>10_000_000)throw new Error('比较文本超过长度上限');
   progress({phase:'正在比较',completed:0,total:1});
-  const comparison=compareTextLines(task.left,task.right,!!task.ignoreWhitespace),{rows,stats}=textDiffRows(comparison.changes),pageSize=100;
+  const comparison=compareTextLines(task.left,task.right,!!task.ignoreWhitespace),pageSize=100;
   await mkdir(task.cache.directory,{recursive:true});
-  for(let i=0;i<rows.length;i+=pageSize){await writeFile(join(task.cache.directory,`${i/pageSize}.json`),JSON.stringify(rows.slice(i,i+pageSize)));progress({phase:'正在整理差异',completed:i+Math.min(pageSize,rows.length-i),total:rows.length});}
-  result={id:task.cache.id,count:rows.length,pageSize,grouped:comparison.grouped,stats};
+  let count=0;let page=0;let rows:unknown[]=[];
+  const flush=()=>{if(!rows.length)return;writeFileSync(join(task.cache.directory,`${page++}.json`),JSON.stringify(rows));rows=[];};
+  const {stats}=streamTextDiffRows(comparison.changes,row=>{rows.push(row);count++;if(rows.length===pageSize){flush();progress({phase:'正在整理差异',completed:count,total:0});}});
+  flush();progress({phase:'正在整理差异',completed:count,total:count});
+  result={id:task.cache.id,count,pageSize,grouped:comparison.grouped,stats};
  }else result=pipeline(task.text,validateSteps(task.steps));
  parentPort!.postMessage({result});
  }catch(error){parentPort!.postMessage({error:(error as Error).message});}});

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'"><title>安装 One</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <div class="window">
+    <header class="titlebar"><div class="brand"><img src="icon.png" alt=""><span>One</span><span class="brand-divider"></span><span class="brand-subtitle">安装程序</span></div><div class="window-actions"><button id="minimize" aria-label="最小化"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button><button id="close" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>
+    <main>
+      <div class="eyebrow" id="version">ONE</div>
+      <section id="welcome" class="scene active"><h1>安装 One</h1><div class="install-location"><label class="location-top" for="directory">安装位置</label><div class="location-row"><svg class="folder-icon" viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v9A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/></svg><input id="directory" spellcheck="false" aria-label="安装位置"><button id="browse" class="browse" type="button">浏览</button></div><div id="path-error" class="path-error" role="alert"></div></div></section>
+      <section id="running" class="scene"><div class="running-symbol"><svg viewBox="0 0 24 24"><path d="M12 3v9m-5.5-6.5a9 9 0 1 0 11 0"/></svg></div><h1>One 正在运行</h1><p id="running-message" class="intro">请先保存 One 中的工作，然后退出应用。</p></section>
+      <section id="working" class="scene"><div class="work-symbol"><div class="work-ring"></div><img src="icon.png" alt=""></div><h1 id="work-title">正在准备安装</h1><p id="work-detail" class="intro">正在检查安装包</p><div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div><div id="progress-caption" class="progress-caption"></div></section>
+      <section id="done" class="scene"><div class="done-symbol"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></div><h1>One 已安装</h1><div id="installed-path" class="done-path"></div><p id="launch-error" class="path-error" role="alert"></p></section>
+      <section id="failed" class="scene"><div class="failed-symbol">!</div><h1>安装失败</h1><p id="failure-message" class="intro"></p></section>
+    </main>
+    <footer><div class="footer-actions"><button id="secondary" class="secondary" type="button">取消</button><button id="primary" class="primary" type="button">开始安装</button></div></footer>
+  </div><script src="renderer.js"></script>
+</body></html>

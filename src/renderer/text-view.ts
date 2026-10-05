@@ -1,4 +1,6 @@
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
+import './text.css';
+import {installFileDropOverlay} from './file-drop-overlay';
 import {api,q,button,iconButton,icon,esc,action,toast} from './ui';
 import type {EditorState} from '@codemirror/state';
 import type {TextEditor} from './text-editor';
@@ -40,9 +42,16 @@ export function setupText(){
  };
  const compare=()=>task(async()=>{comparing=true;try{const left=await editors.source!.text(),right=await editors.result!.text();if(cancelled)throw new Error('处理已停止');const report=await api.textCompare(left,right,q<HTMLInputElement>('diff-ignore-space').checked);if(cancelled){await api.clearTextComparison(report.id);throw new Error('处理已停止');}comparison=report;diffPage=-1;difference=0;await renderDiff();if(cancelled)throw new Error('处理已停止');const dialog=q<HTMLDialogElement>('text-diff-dialog');if(!dialog.open)openDialog(dialog);}finally{comparing=false;}});action('text-compare',compare);action('text-diff-refresh',compare);action('text-diff-close',()=>closeDialog(q<HTMLDialogElement>('text-diff-dialog')));action('diff-previous',async()=>{difference=Math.max(0,difference-1);await renderDiff();});action('diff-next',async()=>{difference=Math.min((comparison?.count||1)-1,difference+1);await renderDiff();});
  q('text-diff-dialog').addEventListener('close',()=>{diffRevision++;if(comparing){cancelled=true;void api.cancelText().catch(toast);}const id=comparison?.id;comparison=undefined;diffs=[];diffPage=-1;q('diff-content').replaceChildren();if(id)void api.clearTextComparison(id).catch(toast);});
- const addPath=(path:string)=>{const e=q<HTMLTextAreaElement>('batch-paths');e.value+=(e.value?'\n':'')+path;};action('batch-add-file',async()=>{const path=await api.pickFile();if(path)addPath(path);});action('batch-add-folder',async()=>{const path=await api.pickDirectory();if(path)addPath(path);});action('batch-output-pick',async()=>{const path=await api.pickDirectory();if(path)q<HTMLInputElement>('batch-output').value=path;});q('batch-paths').addEventListener('dragover',e=>e.preventDefault());q('batch-paths').addEventListener('drop',e=>{e.preventDefault();for(const f of e.dataTransfer?.files||[]){const path=api.droppedFile(f);if(path)addPath(path);}});
+ const addPath=(path:string)=>{const e=q<HTMLTextAreaElement>('batch-paths');e.value+=(e.value?'\n':'')+path;};action('batch-add-file',async()=>{const path=await api.pickFile();if(path)addPath(path);});action('batch-add-folder',async()=>{const path=await api.pickDirectory();if(path)addPath(path);});action('batch-output-pick',async()=>{const path=await api.pickDirectory();if(path)q<HTMLInputElement>('batch-output').value=path;});
  q('batch-merge').onchange=()=>q('batch-merge-options').hidden=!q<HTMLInputElement>('batch-merge').checked;
  action('batch-start',()=>task(async()=>{validateSteps(steps);lastBatchOutput='';q('batch-errors').hidden=true;const result=await api.textBatch({paths:q<HTMLTextAreaElement>('batch-paths').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean),steps,inputEncoding:q<HTMLSelectElement>('batch-input-encoding').value,outputEncoding:q<HTMLSelectElement>('batch-output-encoding').value,output:q<HTMLInputElement>('batch-output').value,extensions:q<HTMLInputElement>('batch-extensions').value,recursive:q<HTMLInputElement>('batch-recursive').checked,merge:q<HTMLInputElement>('batch-merge').checked,separator:q<HTMLTextAreaElement>('batch-separator').value.replace(/\r?\n/g,'\r\n')});q('batch-state').textContent=`已处理 ${result.completed} / ${result.files} 个文件 · ${result.output}`;q('batch-errors').textContent=result.failed.map(f=>f.path+'\n'+f.error).join('\n\n');q('batch-errors').hidden=!result.failed.length;}));
  api.onTextProgress(p=>{if(p.output)lastBatchOutput=p.output;q('text-state').textContent=p.phase+(p.total?` ${p.completed} / ${p.total}`:'');if(p.output)q('batch-state').textContent=`${p.phase} ${p.completed} / ${p.total} · ${lastBatchOutput}`;});
+ for(const destination of ['source','result'] as const)installFileDropOverlay(q(destination).closest<HTMLElement>('.editor')!,{placement:'host',spacious:true,title:destination==='source'?'打开原文':'打开对照文件',detail:'松开以读取文本文件',onDrop:async paths=>{
+  if(paths.length!==1)return toast('每次请拖入一个文本文件');
+  const [item]=await api.dropPathKinds(paths);if(item.kind!=='file')return toast('请拖入文件');
+  const file=await api.readTextPath(item.path,q<HTMLSelectElement>('encoding').value);
+  await task(async()=>{if(destination==='source')remember();await set(destination,file.text);if(destination==='source')q('text-file').textContent=file.path.split(/[\\/]/).pop()!;});
+ }});
+ installFileDropOverlay(q('batch-paths').closest<HTMLElement>('details')!,{placement:'host',spacious:true,title:'添加批处理项目',detail:'松开以添加文件或文件夹',onDrop:paths=>{for(const path of paths)addPath(path);}});
  return {activate:(active:boolean)=>{if(active)void ensure().catch(toast);}};
 }

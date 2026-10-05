@@ -26,7 +26,7 @@ async function main(){
  const out=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/workbook-stream-native');await fs.mkdir(out,{recursive:true});
  const temporary=await fs.mkdtemp(path.join(out,'case-'));
  try{
-  const module=path.join(temporary,'workbook.cjs'),xlsx=path.join(temporary,'large.xlsx'),ods=path.join(temporary,'small.ods');
+  const module=path.join(temporary,'workbook.cjs'),xlsx=path.join(temporary,'large.xlsx'),ods=path.join(temporary,'small.ods'),doctype=path.join(temporary,'doctype.xlsx'),odsDoctype=path.join(temporary,'doctype.ods');
   await build({entryPoints:['src/main/workbook.ts'],outfile:module,bundle:true,platform:'node',target:'node22'});
   const book=new JSZip();
   book.file('xl/workbook.xml','<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Large" r:id="r1"/></sheets></workbook>');
@@ -49,7 +49,11 @@ async function main(){
   await fs.writeFile(ods,await odsZip.generateAsync({type:'nodebuffer'}));
   const small=await childRead(module,ods);
   assert.deepEqual(small.sheets,[{name:'小表',rows:1,first:'中文'}]);
-  const report={result:'PASS',largeBytes:(await fs.stat(xlsx)).size,largeMs:large.elapsedMs,largePeakPrivateMiB:large.peakPrivate/1024**2,baselineMs:baseline?.elapsedMs,baselinePeakPrivateMiB:baseline&&baseline.peakPrivate/1024**2,largePreview:true,largePreviewMs:previewMs,ods:true};
+  const invalid=new JSZip();invalid.file('xl/workbook.xml','<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Invalid" r:id="r1"/></sheets></workbook>');invalid.file('xl/_rels/workbook.xml.rels','<Relationships><Relationship Id="r1" Target="worksheets/sheet1.xml"/></Relationships>');invalid.file('xl/worksheets/sheet1.xml','<!DOCTYPE worksheet [<!ENTITY sample "unsafe">]><worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>&sample;</t></is></c></row></sheetData></worksheet>');await fs.writeFile(doctype,await invalid.generateAsync({type:'nodebuffer'}));
+  await assert.rejects(()=>require(module).readWorkbook(doctype),/XML 超出范围/);
+  const invalidOds=new JSZip();invalidOds.file('content.xml','<!DOCTYPE office:document-content [<!ENTITY sample "unsafe">]><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body>&sample;</office:body></office:document-content>');await fs.writeFile(odsDoctype,await invalidOds.generateAsync({type:'nodebuffer'}));
+  await assert.rejects(()=>require(module).readWorkbook(odsDoctype),/XML 超出范围/);
+  const report={result:'PASS',largeBytes:(await fs.stat(xlsx)).size,largeMs:large.elapsedMs,largePeakPrivateMiB:large.peakPrivate/1024**2,baselineMs:baseline?.elapsedMs,baselinePeakPrivateMiB:baseline&&baseline.peakPrivate/1024**2,largePreview:true,largePreviewMs:previewMs,ods:true,doctypeRejected:true};
   await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
  }finally{
