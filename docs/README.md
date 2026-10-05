@@ -22,6 +22,7 @@
 ## 开发资料
 
 - [开发、发布与缓存规则](development/开发与缓存.md)
+- [安装器](development/安装器.md)
 - [需求](development/需求.md)
 - [技术栈](development/技术栈.md)
 - [开发计划](development/开发计划.md)
