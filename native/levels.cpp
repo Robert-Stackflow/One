@@ -50,7 +50,26 @@ class Wmi{
  std::vector<ComPtr<IWbemClassObject>> query(const wchar_t* query){std::vector<ComPtr<IWbemClassObject>> rows;if(!connect())return rows;ComPtr<IEnumWbemClassObject> list;if(FAILED(services->ExecQuery(Bstr(L"WQL"),Bstr(query),WBEM_FLAG_FORWARD_ONLY|WBEM_FLAG_RETURN_IMMEDIATELY,nullptr,&list)))return rows;for(int i=0;i<32;i++){ComPtr<IWbemClassObject> row;ULONG count=0;if(list->Next(1200,1,&row,&count)!=S_OK||!count)break;rows.push_back(row);}return rows;}
  static std::wstring text(IWbemClassObject* row,const wchar_t* key){VARIANT v;VariantInit(&v);row->Get(key,0,&v,nullptr,nullptr);std::wstring result=v.vt==VT_BSTR&&v.bstrVal?v.bstrVal:L"";VariantClear(&v);return result;}
  static int number(IWbemClassObject* row,const wchar_t* key){VARIANT v;VariantInit(&v);row->Get(key,0,&v,nullptr,nullptr);int n=v.vt==VT_UI1?v.bVal:v.vt==VT_I4?v.lVal:v.vt==VT_UI4?(int)v.ulVal:-1;VariantClear(&v);return n;}
- bool write(const std::wstring& path,int value){ComPtr<IWbemClassObject> type,input,args,reply;if(FAILED(services->GetObject(Bstr(L"WmiMonitorBrightnessMethods"),0,nullptr,&type,nullptr))||FAILED(type->GetMethod(L"WmiSetBrightness",0,&input,nullptr))||FAILED(input->SpawnInstance(0,&args)))return false;VARIANT timeout;VariantInit(&timeout);timeout.vt=VT_BSTR;timeout.bstrVal=SysAllocString(L"0");HRESULT hr=args->Put(L"Timeout",0,&timeout,CIM_UINT32);VariantClear(&timeout);VARIANT brightness;VariantInit(&brightness);brightness.vt=VT_UI1;brightness.bVal=(BYTE)value;if(FAILED(hr)||FAILED(args->Put(L"Brightness",0,&brightness,CIM_UINT8)))return false;hr=services->ExecMethod(Bstr(path.c_str()),Bstr(L"WmiSetBrightness"),0,nullptr,args.Get(),&reply,nullptr);return SUCCEEDED(hr)&&number(reply.Get(),L"ReturnValue")==0;}
+ bool write(const std::wstring& path,int value){
+  ComPtr<IWbemClassObject> type,input,args,reply;
+  if(FAILED(services->GetObject(Bstr(L"WmiMonitorBrightnessMethods"),0,nullptr,&type,nullptr))||
+     FAILED(type->GetMethod(L"WmiSetBrightness",0,&input,nullptr))||
+     FAILED(input->SpawnInstance(0,&args)))return false;
+  VARIANT timeout;VariantInit(&timeout);timeout.vt=VT_BSTR;timeout.bstrVal=SysAllocString(L"0");
+  HRESULT hr=args->Put(L"Timeout",0,&timeout,CIM_UINT32);VariantClear(&timeout);
+  VARIANT brightness;VariantInit(&brightness);brightness.vt=VT_UI1;brightness.bVal=(BYTE)value;
+  if(FAILED(hr)||FAILED(args->Put(L"Brightness",0,&brightness,CIM_UINT8)))return false;
+  hr=services->ExecMethod(Bstr(path.c_str()),Bstr(L"WmiSetBrightness"),0,nullptr,args.Get(),&reply,nullptr);
+  if(FAILED(hr))return false;
+  // Some drivers complete the call without an output object, despite the
+  // method declaring a Boolean return value.
+  if(!reply)return true;
+  VARIANT result;VariantInit(&result);hr=reply->Get(L"ReturnValue",0,&result,nullptr,nullptr);
+  const bool ok=FAILED(hr)||result.vt==VT_EMPTY||result.vt==VT_NULL||
+    (result.vt==VT_BOOL&&result.boolVal==VARIANT_TRUE)||
+    (result.vt==VT_UI4&&result.ulVal==0)||(result.vt==VT_I4&&result.lVal==0);
+  VariantClear(&result);return ok;
+ }
 };
 struct Panel{HANDLE handle=nullptr;DWORD min=0,max=100;int value=0;bool vcp=false;std::wstring name,method,instance,path;ULONGLONG readAt=0,usedAt=0;~Panel(){if(handle)DestroyPhysicalMonitor(handle);}};
 std::wstring normalized(std::wstring s){for(auto& c:s)c=towupper(c);auto at=s.rfind(L'_');if(at!=std::wstring::npos&&s.size()-at<=4&&s.find_first_not_of(L"0123456789",at+1)==std::wstring::npos)s.resize(at);return s;}
