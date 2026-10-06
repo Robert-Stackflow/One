@@ -23,6 +23,15 @@ async function run() {
     assert.match(unavailable.error, /已被占用/);
     await expect(page.locator('#color-shortcut-notice')).toBeVisible();
     await expect(page.locator('#color-shortcut-message')).toContainText('已被占用');
+    const notice = await page.locator('#color-shortcut-notice').boundingBox();
+    assert.ok(notice && notice.height < 52, `conflict notice should stay compact: ${JSON.stringify(notice)}`);
+    await page.locator('#color-shortcut').focus();
+    await page.keyboard.press('Control+Alt+P');
+    await expect(page.locator('#color-shortcut')).toHaveValue('Ctrl+Alt+P');
+    await expect.poll(() => page.evaluate(async () => (await window.one.settings()).colorShortcut)).toBe('Ctrl+Alt+P');
+    await expect.poll(() => page.evaluate(async () => (await window.one.colorShortcutStatus()).error)).toContain('已被占用');
+    await expect(page.locator('#color-shortcut-notice')).toBeVisible();
+    await expect(page.locator('#toast')).toBeHidden();
     await app.evaluate(({ globalShortcut }) => { globalShortcut.register = () => true; });
     await page.locator('#color-shortcut-retry').click();
     await expect(page.locator('#color-shortcut-notice')).toBeHidden();

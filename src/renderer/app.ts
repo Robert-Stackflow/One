@@ -15,6 +15,7 @@ if(['main','file-action','preview','picker','search','color-editor','dialog-bar'
 const render=async()=>{
  if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
+ else if(view==='screen-ruler')(await import('./screen-ruler-view')).renderScreenRuler();
  else if(view==='color-editor')(await import('./color-editor-view')).renderColorEditor();
  else if(view==='command-confirm')await (await import('./menu-confirmation-view')).renderMenuConfirmation();
  else if(view==='preview')await (await import('./preview-view')).renderPreview();

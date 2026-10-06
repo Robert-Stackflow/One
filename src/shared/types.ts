@@ -48,6 +48,7 @@ export interface OneAPI {
   onFileToolsProgress(callback:(value:import('./file-tools').FileToolProgress)=>void):()=>void;
   systemInformation(kind:import('./system-info').InformationKind,refresh?:boolean):Promise<import('./system-info').InformationReport>;
   proxyDiagnostics(refresh?:boolean):Promise<import('./proxy-info').ProxyDiagnostics>;
+  dnsCheck(domain:string):Promise<import('./dns').DnsCheckReport>;
   onProxyDiagnosticsProgress(callback:(value:import('./proxy-info').ProxyDiagnosticsProgress)=>void):()=>void;
   onSystemInformationProgress(callback:(value:import('./system-info').InformationProgress)=>void):()=>void;
   onSystemInformationGroup(callback:(value:{kind:import('./system-info').InformationKind;group:import('./system-info').InformationGroup})=>void):()=>void;
@@ -93,6 +94,7 @@ export interface OneAPI {
   appearance(): Promise<Appearance>; installedFonts(refresh?:boolean):Promise<import('./fonts').InstalledFont[]>; onAppearance(callback: (value:Appearance) => void): () => void;
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;
   pickColor(): Promise<void>; colorCapture(): Promise<ScreenCapture|null>; chooseColor(hex: string): Promise<void>; onColor(callback: (value:string) => void): () => void;
+  openScreenRuler(mode?:'live'|'static'):Promise<void>;closeScreenRuler():Promise<void>;
   showColorEditor(hex?:string):Promise<void>;colorState():Promise<import('./colors').ColorState>;onColorSettings(callback:()=>void):()=>void;onColorEditorOpen(callback:(hex:string)=>void):()=>void;colorEditorSize(height:number):Promise<void>;clearColorHistory():Promise<void>;
   colorShortcutStatus():Promise<{active:boolean;error:string}>;retryColorShortcut():Promise<{active:boolean;error:string}>;onColorShortcutStatus(callback:(status:{active:boolean;error:string})=>void):()=>void;
   onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean):Promise<void>; onPreviewClosing(callback:()=>void):()=>void;

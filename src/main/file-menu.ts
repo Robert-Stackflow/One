@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {copyShellItem,renameShellItem,openWithApplications,openInApplication} from './open-with';
 import {renameDestinationName,type FileMenuTarget,type FileMenuAction} from '../shared/file-menu';
 import type {OpenWithApp} from '../shared/preview';
+import {pathCopyText} from '../shared/path-copy';
 import {PopupReadiness,deferPopupBlur} from './popup-lifecycle';
 interface Callbacks{create(submenu:boolean):BrowserWindow;focus(window:BrowserWindow):void;active(owner:number,value:boolean):void;open(path:string):Promise<void>;preview(path:string):Promise<void>;system(path:string,owner:BrowserWindow,point:{x:number;y:number}):Promise<void>;changed():void}
 export class FileContextMenu{
@@ -12,7 +13,7 @@ export class FileContextMenu{
  private readiness=new WeakMap<BrowserWindow,PopupReadiness>();
  private point={x:0,y:0};private childTop=0;private childSession='';private childRevision=0;
  private applications=new Map<string,{time:number;items:OpenWithApp[]}>();private pendingApps=new Map<string,Promise<OpenWithApp[]>>();
- constructor(private callbacks:Callbacks){}
+ constructor(private callbacks:Callbacks,private roots:()=>string[]=()=>[]){}
  warm(submenu=false){const existing=submenu?this.child:this.window;if(existing&&!existing.isDestroyed())return existing;const w=this.callbacks.create(submenu);this.readiness.set(w,new PopupReadiness(w));if(submenu)this.child=w;else this.window=w;
   let idleCleanup:NodeJS.Timeout|undefined;
   const clearIdle=()=>{clearTimeout(idleCleanup);idleCleanup=undefined;};
@@ -44,12 +45,12 @@ export class FileContextMenu{
  async apps(session:string){const target=this.require(session);if(target.directory||target.launchKind)return [];const key=extname(target.path).toLowerCase(),cached=this.applications.get(key);if(cached&&Date.now()-cached.time<120000)return cached.items;const pending=this.pendingApps.get(key);if(pending)return pending;
   const task=openWithApplications(target.path).then(items=>{if(this.applications.size>=128)this.applications.delete(this.applications.keys().next().value!);this.applications.set(key,{time:Date.now(),items});return items;}).finally(()=>this.pendingApps.delete(key));this.pendingApps.set(key,task);return task;
  }
- async run(session:string,action:FileMenuAction,value?:string){const target=this.require(session),owner=this.owner!;if(!['open','preview','reveal','copy-path','copy-name','copy','cut','rename','trash','open-with','native'].includes(action))throw new Error('菜单操作无效');if(target.launchKind&&action!=='open'&&action!=='copy-name')throw new Error('此项目不支持该操作');
+ async run(session:string,action:FileMenuAction,value?:string){const target=this.require(session),owner=this.owner!;if(!['open','preview','reveal','copy-path','copy-relative','copy-name','copy-quoted','copy','cut','rename','trash','open-with','native'].includes(action))throw new Error('菜单操作无效');if(target.launchKind&&action!=='open'&&action!=='copy-name')throw new Error('此项目不支持该操作');
   if(action==='native'){const p=screen.dipToScreenPoint(this.point);this.finish(session,true);await this.callbacks.system(target.path,owner,p);return;}
   if(action==='open'){await this.callbacks.open(target.path);this.finish(session,false);return;}
   if(action==='preview'){await this.callbacks.preview(target.path);this.finish(session,false);return;}
   if(action==='reveal'){shell.showItemInFolder(target.path);this.finish(session,false);return;}
-  if(action==='copy-path'||action==='copy-name'){clipboard.writeText(action==='copy-path'?target.path:target.name);this.finish(session,true);return;}
+  if(action==='copy-path'||action==='copy-relative'||action==='copy-name'||action==='copy-quoted'){clipboard.writeText(target.launchKind?target.name:pathCopyText(target.path,action==='copy-relative'?'relative':action==='copy-name'?'name':action==='copy-quoted'?'quoted':'full',this.roots()));this.finish(session,true);return;}
   await stat(target.path);
   if(action==='copy'||action==='cut')await copyShellItem(target.path,action==='cut');
   else if(action==='rename'){const name=renameDestinationName(value);if(name!==basename(target.path))await renameShellItem(target.path,join(dirname(target.path),name));this.callbacks.changed();}

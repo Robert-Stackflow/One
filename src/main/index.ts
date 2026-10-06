@@ -12,6 +12,7 @@ import {DiskService} from './disk-service';
 import {MaintenanceClient} from './maintenance-client';
 import {SystemInformationService} from './system-info-service';
 import {ProxyDiagnosticsService} from './proxy-service';
+import {checkDns} from './dns-check';
 import {DiskMonitorService} from './disk-monitor';
 import {validInformationKind} from '../shared/system-info';
 import {EchoService} from './echo';
@@ -113,6 +114,7 @@ const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSourc
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
 let colorWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
+let rulerWindows:BrowserWindow[]=[],rulerOpening=false,rulerEscapeRegistered=false;
 const workers = new Set<Worker>();let diskService:DiskService;let maintenance:MaintenanceClient;let systemInformation:SystemInformationService;let proxyDiagnostics:ProxyDiagnosticsService;let diskMonitor:DiskMonitorService;let echoes:EchoService;
 let main: BrowserWindow; let tray: Tray; let trayMenuPanel:TrayMenuPanel|undefined; let inputPaused=false;
 let textService:TextService;let fileTools:FileToolsService;let locksmith:LocksmithService;let awake:AwakeService;let topmost:TopmostService;let clicker:ClickerService;let ports:PortService;
@@ -186,7 +188,7 @@ function showSearch(kind:SearchContext['kind']='search',hwnd=foreground(true)?.h
  void searchBridge.context(hwnd,focus).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
 function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();if(settings.search.explorerTyping)searchPopup(true);dialogBar?.warm();}
-async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{await searchBridge.jump(searchContext,path);}catch(error){searchWindow?.show();searchWindow?.focus();throw error;}}else{const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
+async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}else await searchBridge.jump(searchContext,path);}catch(error){if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure)return;error=new Error(failure);}searchWindow?.show();searchWindow?.focus();throw error;}}else{const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
 function utilityState(){return {awake:awake?.state()||{...settings.utilities.awake,active:false,locked:false,remaining:0,error:''},pinned:topmost?.count()||0,shortcutError:topmost?.error||'',clicker:clicker?.state()||{running:false,clicks:0,remaining:0,error:''}};}
 function utilityChanged(){if(!awake||!topmost||!clicker)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}
 let applicationIcon: Electron.NativeImage;
@@ -367,9 +369,31 @@ function colorDisplays(){return screen.getAllDisplays().map(d=>({bounds:screen.d
 function refreshColorDisplays(){colorFollower?.postMessage({displays:colorDisplays()});}
 function sendColorFrame(){if(!colorWindow||colorWindow.isDestroyed()||colorWindow.webContents.isLoading()||colorFramePending||!colorSample||colorSample===colorSentSample)return;colorSentSample=colorSample;colorFramePending=true;colorWindow.webContents.send('one:color-sample',colorSample);}
 function closeColors(cancelled=true){screen.removeListener('display-added',refreshColorDisplays);screen.removeListener('display-removed',refreshColorDisplays);screen.removeListener('display-metrics-changed',refreshColorDisplays);const worker=colorWorker,follower=colorFollower;colorWorker=null;colorFollower=null;worker?.postMessage('stop');follower?.postMessage('stop');const window=colorWindow;colorWindow=null;if(window&&!window.isDestroyed())window.close();colorSample=undefined;colorSentSample=undefined;colorFramePending=false;input?.setModalActive(recordingShortcut);colorEditor?.finishPicking(cancelled);}
+function closeScreenRuler(){const windows=rulerWindows;rulerWindows=[];if(rulerEscapeRegistered){globalShortcut.unregister('Escape');rulerEscapeRegistered=false;}for(const window of windows)if(!window.isDestroyed())window.close();input?.setModalActive(recordingShortcut);}
+type ScreenRulerMode='live'|'static';
+function openScreenRuler(mode:ScreenRulerMode='live'){
+ if(quitting||finishingQuit||rulerWindows.length||rulerOpening)return;
+ rulerOpening=true;
+ try{
+  if(colorWindow)closeColors();
+  const displays=screen.getAllDisplays();
+  if(mode==='live'){
+   if(!globalShortcut.register('Escape',()=>closeScreenRuler()))throw new Error('Esc 快捷键已被占用，无法启动实时屏幕尺');
+   rulerEscapeRegistered=true;
+  }
+  input?.setModalActive(true);
+  const pointer=screen.getCursorScreenPoint(),active=screen.getDisplayNearestPoint(pointer);
+  for(const display of displays){
+   const window=windowFor('screen-ruler',{...display.bounds,minWidth:1,minHeight:1,frame:false,thickFrame:false,hasShadow:false,roundedCorners:false,resizable:false,movable:false,fullscreenable:false,focusable:mode!=='live',transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true},`&scale=${display.scaleFactor}&mode=${mode}`);
+   rulerWindows.push(window);
+   window.setAlwaysOnTop(true,'screen-saver');window.on('closed',()=>{rulerWindows=rulerWindows.filter(item=>item!==window);if(rulerWindows.length){closeScreenRuler();return;}if(rulerEscapeRegistered){globalShortcut.unregister('Escape');rulerEscapeRegistered=false;}input?.setModalActive(recordingShortcut);});
+   window.once('ready-to-show',()=>{if(!window.isDestroyed()&&rulerWindows.includes(window)){if(mode==='static'&&display.id===active.id){window.show();window.focus();}else window.showInactive();}});
+  }
+ }catch(error){closeScreenRuler();throw error;}finally{rulerOpening=false;}
+}
 async function acceptColor(hex:string,fromScreen=false){clipboard.writeText(colorFormats(hex)[settings.colorFormat]);closeColors(false);colorEditor.remember(hex);await saveSettings(current=>({...current,colorHistory:[hex,...current.colorHistory.filter(c=>c.toUpperCase()!==hex)].slice(0,20)}));if(quitting||finishingQuit)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed())w.webContents.send('one:color',hex);if(fromScreen&&settings.colorShowEditor)colorEditor.show(hex);}
 async function pickColor(){
-  if(colorWorker||quitting||finishingQuit)return;colorEditor?.startPicking();input?.setModalActive(true);
+  if(colorWorker||quitting||finishingQuit)return;if(rulerWindows.length)closeScreenRuler();colorEditor?.startPicking();input?.setModalActive(true);
   const point=screen.getCursorScreenPoint();const window=windowFor('color-picker',{x:point.x+24,y:point.y+24,width:216,height:276,minWidth:1,minHeight:1,resizable:false,movable:false,focusable:false,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true,hasShadow:false,thickFrame:false});
   colorWindow=window;window.setIgnoreMouseEvents(true);window.setAlwaysOnTop(true,'screen-saver');window.on('closed',()=>{if(colorWindow===window)closeColors();});
   window.once('ready-to-show',()=>{if(!window.isDestroyed()&&colorWindow===window){window.showInactive();sendColorFrame();}});
@@ -415,6 +439,7 @@ function registerIPC() {
   handle('echo-position',()=>echoes.edit());handle('echo-finish',e=>echoes.finish(BrowserWindow.fromWebContents(e.sender)!),['echo']);
   handle('system-information',(_e,kind,refresh)=>{if(!validInformationKind(kind)||refresh!==undefined&&typeof refresh!=='boolean')throw new Error('系统信息请求无效');return systemInformation.read(kind,refresh);});
   handle('proxy-diagnostics',(_e,refresh)=>{if(refresh!==undefined&&typeof refresh!=='boolean')throw new Error('代理检测请求无效');return proxyDiagnostics.read(refresh);});
+  handle('dns-check',(_e,domain)=>checkDns(domain),['main']);
   handle('export-system-information',async(_e,reports)=>{if(!Array.isArray(reports)||reports.length>16||JSON.stringify(reports).length>8*1024*1024)throw new Error('系统信息报告无效');const path=await pickPath('save','导出系统信息','系统信息.json');if(!path)return null;await writeFile(path,JSON.stringify({created:new Date().toISOString(),reports},null,2),'utf8');return path;});
   handle('disk-monitor',(event,active,source='maintenance')=>{if(!['maintenance','information'].includes(source)||active!==undefined&&typeof active!=='boolean')throw new Error('磁盘监控请求无效');const w=BrowserWindow.fromWebContents(event.sender);return active===undefined?diskMonitor.state:diskMonitor.subscribe(active&&!!w?.isVisible()&&!w.isMinimized(),source);});
   handle('disk-trace',(_e,enabled)=>{if(typeof enabled!=='boolean')throw new Error('跟踪请求无效');return diskMonitor.trace(enabled);});
@@ -524,6 +549,8 @@ function registerIPC() {
     return pending;
   },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar']);
   handle('pick-color',()=>pickColor(),['main','color-editor']);
+  handle('screen-ruler-open',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='static')throw new Error('屏幕尺模式无效');return openScreenRuler(mode);},['main']);
+  handle('screen-ruler-close',()=>closeScreenRuler(),['screen-ruler']);
   handle('color-editor-show',(_event,hex)=>{if(hex!==undefined&&(typeof hex!=='string'||!/^#[0-9a-f]{6}$/i.test(hex)))throw new Error('颜色无效');colorEditor.show(hex?.toUpperCase());});
   handle('color-state',()=>colorEditor.snapshot(),['main','color-editor']);
   handle('color-editor-size',(_event,height)=>{if(typeof height!=='number'||!Number.isFinite(height)||height<200||height>1800)throw new Error('窗口尺寸无效');colorEditor.resize(height);},['color-editor']);
@@ -656,8 +683,8 @@ async function start() {
   search=new SearchService(join(app.getPath('userData'),'file-index.ndjson'),settings.search,searchChanged,process.env.ONE_SEARCH_BACKEND==='memory'?'memory':'disk');searchBridge=new SearchBridge(showSearch,searchChanged,echo);
   configurePicker(() => settings.search.bookmarks, async () => (await searchBridge.context(0)).folders);
   launcher=new LauncherService(items=>{search.launchers(items);searchChanged();});search.launchers(launcher.entries());launcher.refresh();
-  fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}});
-  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch('search',searchContext.hwnd,false,searchContext.tab),undefined,command=>menuConfirmation.request(command),favoriteCurrentFolder,async(command,context)=>{if(command.onePage){const target=await oneMenuTarget(command,context);showMain();main.webContents.send('one:navigate-page',target);}else if(command.oneAction==='pick-color')await pickColor();});
+  fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}},()=>settings.search.roots);
+  menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch('search',searchContext.hwnd,false,searchContext.tab),undefined,command=>menuConfirmation.request(command),favoriteCurrentFolder,async(command,context)=>{if(command.onePage){const target=await oneMenuTarget(command,context);showMain();main.webContents.send('one:navigate-page',target);}else if(command.oneAction==='pick-color')await pickColor();else if(command.oneAction==='screen-ruler')await openScreenRuler();});
   textService=new TextService((owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>w.webContents.id===owner);if(window&&!window.webContents.isDestroyed())window.webContents.send('one:text-progress',value);});
   fileTools=new FileToolsService(join(app.getPath('userData'),'file-tools'),(owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&w.webContents.id===owner);window?.webContents.send('one:file-tools-progress',value);});
   colorEditor=new ColorEditor(()=>windowFor('color-editor',{width:420,height:360,minWidth:320,minHeight:200,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,title:'颜色 · One'}),()=>({history:settings.colorHistory,formats:settings.colorVisibleFormats,format:settings.colorFormat,showEditor:settings.colorShowEditor}));
@@ -688,5 +715,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

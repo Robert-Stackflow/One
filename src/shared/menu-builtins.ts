@@ -1,6 +1,6 @@
 export type OneMenuPage='home'|'tools'|'text'|'disk'|'system'|'hardware'|'locksmith'|'settings'|'preview';
 export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'>}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]};
-export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'}
+export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'|'screen-ruler'}
 export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'opened',label:'已打开的文件夹',category:'文件操作',icon:'folder'},
  {id:'bookmarks',label:'收藏文件夹',category:'文件操作',icon:'star'},
@@ -39,6 +39,7 @@ export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'system-maintenance',label:'系统维护',category:'One',icon:'system',onePage:'system'},
  {id:'system-information',label:'系统信息',category:'One',icon:'cpu',onePage:'hardware'},
  {id:'pick-color',label:'屏幕取色',category:'One',icon:'color',oneAction:'pick-color'},
+ {id:'screen-ruler',label:'屏幕尺',category:'One',icon:'ruler',oneAction:'screen-ruler',keywords:'测量 距离 像素 尺寸'},
  {id:'one-preferences',label:'One 设置',category:'One',icon:'settings',onePage:'settings'},
  {id:'settings',label:'自定义菜单',category:'One',icon:'settings'},
 ];

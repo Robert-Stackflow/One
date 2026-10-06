@@ -1,9 +1,9 @@
 import {api,icon,toast} from './ui';
 /** Capture the actual combination while temporarily releasing our global shortcut. */
-export function setupShortcut(input:HTMLInputElement){
+export function setupShortcut(input:HTMLInputElement,onError:(error:unknown)=>void=toast){
   input.readOnly=true;input.classList.add('shortcut-input');input.placeholder='点击录入快捷键';let original='',recording=false;
-  const finish=()=>{if(!recording)return;recording=false;input.classList.remove('recording');input.placeholder='点击录入快捷键';void api.recordShortcut(false).catch(toast);};
-  input.addEventListener('focus',()=>{original=input.value;recording=true;input.classList.add('recording');input.placeholder='按下组合键';void api.recordShortcut(true).catch(toast);});
+  const finish=()=>{if(!recording)return;recording=false;input.classList.remove('recording');input.placeholder='点击录入快捷键';void api.recordShortcut(false).catch(onError);};
+  input.addEventListener('focus',()=>{original=input.value;recording=true;input.classList.add('recording');input.placeholder='按下组合键';void api.recordShortcut(true).catch(onError);});
   input.addEventListener('blur',finish);
   window.addEventListener('blur',finish);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)finish();});

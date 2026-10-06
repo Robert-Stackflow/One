@@ -1,5 +1,16 @@
 .content[data-current-page=color] .page-heading{padding-bottom:20px}
 .color-header-actions{display:flex;align-items:center;gap:8px}
+.color-ruler-split{position:relative;display:inline-flex;align-items:stretch;height:32px;border:1px solid var(--line);border-radius:9px;background:var(--surface);z-index:5}
+.color-ruler-split>button{border:0;background:transparent;border-radius:0;min-height:0;height:100%;padding:0 10px;gap:6px}
+.color-ruler-split>button:hover{background:var(--soft)}
+.color-ruler-split>#start-screen-ruler{border-radius:8px 0 0 8px}
+.color-ruler-split>#screen-ruler-options{width:31px;justify-content:center;border-left:1px solid var(--line);border-radius:0 8px 8px 0;padding:0}
+.color-ruler-split>#screen-ruler-options .icon{width:14px;height:14px}
+.color-ruler-menu{position:absolute;right:0;top:calc(100% + 6px);width:184px;padding:5px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:0 12px 28px #0002}
+.color-ruler-menu[hidden]{display:none}
+.color-ruler-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;border:0;background:transparent;border-radius:7px;padding:8px 10px;text-align:left;font-size:12px}
+.color-ruler-menu button:hover,.color-ruler-menu button[aria-checked=true]{background:var(--soft)}
+.color-ruler-menu small{font-size:10px;color:var(--muted)}
 .color-page .color-workbench{grid-template-columns:260px minmax(0,1fr);gap:24px;margin-bottom:0;align-items:start}
 .color-page .color-overview{min-width:0;gap:12px}
 .color-page .color-sample{height:164px;border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:none}
@@ -30,12 +41,16 @@
 .color-page .color-settings .preference-row{min-width:0;min-height:32px;padding:0;gap:12px;border:0}
 .color-page .color-settings .preference-row>label{font-size:12px;color:var(--muted);flex-shrink:0}
 .color-page .color-settings .color-shortcut-field,.color-page .color-settings .custom-select{width:200px;max-width:65%;min-width:0;margin:0}
+.color-page .color-settings .color-shortcut-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-content:start;align-items:center;column-gap:12px;row-gap:8px}
+.color-page .color-settings .color-shortcut-row .color-shortcut-field{max-width:100%}
 .color-shortcut-field .shortcut-control{width:100%;max-width:none}
-.color-shortcut-notice{display:flex;align-items:center;gap:6px;width:100%;font-size:11px;line-height:1.4;color:#9a3412;animation:color-shortcut-in .16s var(--ease)}
+.color-shortcut-notice{grid-column:1/-1;justify-self:end;display:flex;align-items:center;gap:8px;width:min(100%,360px);min-height:34px;padding:5px 6px 5px 10px;border:1px solid color-mix(in srgb,#b45309 18%,var(--line));border-radius:8px;background:color-mix(in srgb,#f59e0b 7%,var(--surface));color:#92400e;font-size:11px;line-height:1.4;animation:color-shortcut-in .16s var(--ease)}
 .color-shortcut-notice[hidden]{display:none}
+.color-shortcut-notice>.icon{width:14px;height:14px;flex:none}
 .color-shortcut-notice span{flex:1;min-width:0}
-.color-shortcut-notice button{border:0;background:transparent;color:inherit;flex:none;min-height:24px;padding:2px 4px;font-size:11px;text-decoration:underline;text-underline-offset:2px}
-.color-shortcut-notice button:hover{background:var(--hover)}
+.color-shortcut-notice button{border:0;background:transparent;color:inherit;flex:none;min-height:24px;padding:2px 7px;font-size:11px;text-decoration:none;border-radius:5px}
+.color-shortcut-notice button:hover{background:color-mix(in srgb,#b45309 10%,transparent)}
+.color-shortcut-field .shortcut-control:has(input[aria-invalid=true]){border-color:color-mix(in srgb,#b45309 42%,var(--line))}
 html[data-theme=dark] .color-shortcut-notice{color:#fbbf24}
 @keyframes color-shortcut-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:1050px){
