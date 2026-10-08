@@ -300,10 +300,20 @@ void selftest(DragData *data,bool report_entries) {
 bool archive_cancelled(){if(poll_escape&&(GetAsyncKeyState(VK_ESCAPE)&0x8000))cancelled=true;return cancelled.load();}
 
 void archive_drag(const fs::path &source,const fs::path &stage,int encoding,const std::string &revision,
-                  const std::string &password,int format,bool testing,uintptr_t owner){
+                  const std::string &password,int format,bool testing,uintptr_t owner,const fs::path &lease){
     wchar_t test_mode[2]{};GetEnvironmentVariableW(L"ONE_TEST_MODE",test_mode,2);
     if(testing&&std::wstring(test_mode)!=L"1")fail("Drag protocol test is disabled");
     if(fs::exists(stage))fail("Drag staging directory already exists");
+    std::unique_ptr<SourceLock> lease_lock;
+    if(!lease.empty()){
+        if(stage.filename()!=L"payload"||lease.filename()!=L"lease.lock"||stage.parent_path()!=lease.parent_path())fail("Invalid drag cache lease path");
+        lease_lock=std::make_unique<SourceLock>(lease);
+        constexpr char signature[]="One archive drag lease v1\n";
+        char value[sizeof(signature)]{};DWORD read=0;LARGE_INTEGER size{};
+        if(!GetFileSizeEx(lease_lock->value,&size)||size.QuadPart!=sizeof(signature)-1||
+            !ReadFile(lease_lock->value,value,sizeof(value),&read,nullptr)||read!=sizeof(signature)-1||
+            std::memcmp(value,signature,read))fail("Invalid drag cache lease");
+    }
     auto count=input_u32();if(!count||count>10000)fail("Select 1–10000 entries to drag");
     std::set<size_t> selected;for(uint32_t i=0;i<count;++i){auto value=input_u32();if(value>=1000000)fail("Invalid drag entry index");selected.insert(value);}
     SourceLock lock(source);if(zip_revision(source)!=revision)fail("Archive changed; reopen it before dragging");

@@ -12,7 +12,7 @@ async function main(){
   const source=path.join(root,'源文件.txt');
   const target=path.join(root,'bundle.zip');
   await fs.writeFile(source,'One archive UI smoke\n');
-  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};
+  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,TEMP:root,TMP:root};
   delete env.ELECTRON_RUN_AS_NODE;
   let app;
   const errors=[];
@@ -20,7 +20,7 @@ async function main(){
     app=await electron.launch({args:[path.resolve('.')],env});
     app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
     const page=await app.firstWindow();
-    await app.evaluate(({shell})=>{globalThis.archiveRevealCount=0;shell.showItemInFolder=()=>{globalThis.archiveRevealCount++;};});
+    await app.evaluate(({shell})=>{globalThis.archiveRevealCount=0;globalThis.archiveOpenPathCount=0;shell.showItemInFolder=()=>{globalThis.archiveRevealCount++;};shell.openPath=async()=>{globalThis.archiveOpenPathCount++;return '';};});
     await page.waitForSelector('[data-page="archive"]');
     const files=page.locator('.sidebar-group[aria-label="文件"] .nav');
     assert.equal(await files.last().getAttribute('data-page'),'archive');
@@ -224,6 +224,10 @@ async function main(){
     await page.locator('[data-page="archive"]').click();
     assert.equal(await page.locator('#archive-open-completed').isChecked(),true);
     await page.locator('#archive-open-completed').uncheck();
+    await expect.poll(()=>page.evaluate(async()=>(await window.one.settings()).archive.openCompleted)).toBe(false);
+    await page.reload();await page.locator('[data-page="archive"]').click();
+    await expect(page.locator('#archive-open-completed')).not.toBeChecked();
+    assert.equal(await app.evaluate(()=>globalThis.archiveOpenPathCount),0,'archive operations must not open directories through another route');
     assert.deepEqual(errors,[]);
     console.log('Archive UI smoke passed: ZIP/7Z/TAR/GZ/XZ creation, encryption, split archives, composites, late progress protection and open-folder preference.');
   }finally{

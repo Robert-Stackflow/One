@@ -7,6 +7,7 @@ import {createReadStream,createWriteStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding} from '../shared/archive';
 import {zipEditPacket} from './archive-update';
+import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string};
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
@@ -27,10 +28,24 @@ export class ArchiveService {
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0'){}
+  private dragCache:ArchiveDragCache;
+  private cacheMaintenance:Promise<DragCacheReport>;
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{}){
+    this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
+    this.cacheMaintenance=this.dragCache.sweep();
+  }
   get pendingTasks(){return this.pending.size;}
   cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){if(task.committing)return false;task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
-  async stop(){for(const task of this.active.values())if(!task.committing)task.child.kill();for(const task of this.publishing.values())task.controller.abort();await Promise.allSettled([...this.pending]);await rm(this.cacheRoot,{recursive:true,force:true}).catch(()=>{});this.cached.clear();}
+  async stop(){
+    for(const task of this.active.values())if(!task.committing)task.child.kill();
+    for(const task of this.publishing.values())task.controller.abort();
+    await Promise.allSettled([...this.pending]);await this.cacheMaintenance;
+    for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
+    this.cached.clear();await this.dragCache.sweep();
+    // Another helper can outlive a crashed One instance. Never recursively
+    // remove its leased payload merely because this instance is quitting.
+    await this.dragCache.removeEmptyRoot().catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
+  }
   run(owner:number,request:ArchiveRequest,requestedId?:string):Promise<ArchiveListing|ArchiveResult>{
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
@@ -125,6 +140,7 @@ export class ArchiveService {
     });
   }
   private async perform(owner:number,request:ArchiveRequest,id:string):Promise<ArchiveListing|ArchiveResult> {
+    await this.cacheMaintenance;
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
     if(request.operation==='list'){
       const source=archiveSource(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
@@ -144,10 +160,10 @@ export class ArchiveService {
       const packet=Buffer.alloc(4+selected.length*4);packet.writeUInt32LE(selected.length);
       selected.forEach((value,index)=>packet.writeUInt32LE(value,4+index*4));
       const prepared=await this.acquireSource(owner,id,source);
-      const stage=join(this.cacheRoot,`drag-${id}`);
+      let job:Awaited<ReturnType<ArchiveDragCache['create']>>|undefined;
       try{
-        await mkdir(this.cacheRoot,{recursive:true});
-        const messages=await this.execute(owner,id,'drag',[prepared.path,stage,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner)],secret,'prepare',packet);
+        await this.dragCache.sweep();job=await this.dragCache.create(id);
+        const messages=await this.execute(owner,id,'drag',[prepared.path,job.payload,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner),job.lease],secret,'prepare',packet);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('拖出未完成');
         return {path:source,count:result.count,cancelled:result.cancelled===true};
@@ -155,7 +171,7 @@ export class ArchiveService {
         prepared.release();
         // The helper exits only after the target ends its async operation and
         // closes all contents streams. Never remove files when DoDragDrop alone returns.
-        await rm(stage,{recursive:true,force:true}).catch(()=>{});
+        if(job)await this.dragCache.release(id).then(removed=>{if(!removed)this.diagnostic('archive-drag-cache-retained',id,true);}).catch(error=>this.diagnostic('archive-drag-cache-cleanup',String(error),true));
       }
     }
     if(request.operation==='update'){

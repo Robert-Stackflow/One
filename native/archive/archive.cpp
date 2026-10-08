@@ -399,8 +399,8 @@ int wmain(int argc, wchar_t **argv) {
                 seven_create(argv[2], paths, password, format);
             } else fail("This archive format is read-only");
         } else if (mode == L"drag" || mode == L"drag-test") {
-            if (argc != 6 && argc != 7) fail("Drag requires a staging directory, encoding and revision");
-            archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", argc == 7 ? std::stoull(argv[6]) : 0);
+            if (argc < 6 || argc > 8) fail("Drag requires a staging directory, encoding and revision");
+            archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", argc >= 7 ? std::stoull(argv[6]) : 0, argc == 8 ? fs::path(argv[7]) : fs::path{});
         } else if (mode == L"update") {
             if (argc != 7 || archive_format(argv[2]) != 0) fail("Update requires a ZIP archive, staging paths, encoding and revision");
             zip_update(argv[2], argv[3], argv[4], _wtoi(argv[5]), utf8(argv[6]), password);
