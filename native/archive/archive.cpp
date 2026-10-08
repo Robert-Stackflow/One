@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <mutex>
 #include "mz.h"
 #include "mz_os.h"
 #include "mz_strm.h"
@@ -50,7 +51,7 @@ std::string json(const std::string &value) {
     return result + '"';
 }
 
-void emit(const std::string &line) { std::printf("%s\n", line.c_str()); std::fflush(stdout); }
+void emit(const std::string &line) { static std::mutex mutex; std::lock_guard guard(mutex); std::printf("%s\n", line.c_str()); std::fflush(stdout); }
 [[noreturn]] void fail(const std::string &message) { throw std::runtime_error(message); }
 
 static std::string password_from_stdin() {
@@ -234,8 +235,8 @@ void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string
     if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(items.size()) + "}");
 }
 
-static void extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
-                    const std::set<size_t> &selected, const std::string &password) {
+void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
+                    const std::set<size_t> &selected, const std::string &password, bool result) {
     zip_preflight(reader, items);
     if (fs::exists(destination)) fail("Extraction destination already exists");
     fs::create_directory(destination);
@@ -256,7 +257,7 @@ static void extract(Reader &reader, const std::vector<Entry> &items, const fs::p
             if (name.starts_with(folder)) return true;
         return false;
     };
-    size_t done = 0, total = 0;
+    size_t done = 0, total = 0; ULONGLONG last_progress = 0;
     uint64_t expected_bytes = 0;
     for (const auto &item : items) if (included(item)) {
         ++total;
@@ -270,6 +271,7 @@ static void extract(Reader &reader, const std::vector<Entry> &items, const fs::p
         fail("Not enough free disk space to extract the archive");
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during extraction");
+        if (archive_cancelled()) fail("Archive drag cancelled");
         if (included(item)) {
             if (item.encrypted && password.empty()) fail("Password required");
             fs::path target = destination / entry_path(item.name);
@@ -288,6 +290,7 @@ static void extract(Reader &reader, const std::vector<Entry> &items, const fs::p
                 uint64_t written = 0;
                 int count;
                 while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {
+                    if (archive_cancelled()) fail("Archive drag cancelled");
                     if ((uint64_t)count > item.size - written) fail("ZIP entry expanded beyond its declared size: " + item.name);
                     DWORD actual = 0;
                     if (!WriteFile(output.handle, buffer, (DWORD)count, &actual, nullptr) || actual != (DWORD)count)
@@ -298,11 +301,15 @@ static void extract(Reader &reader, const std::vector<Entry> &items, const fs::p
                     fail("Cannot extract or verify ZIP entry: " + item.name);
             }
             ++done;
-            emit("{\"type\":\"progress\",\"done\":" + std::to_string(done) + ",\"total\":" + std::to_string(total) + "}");
+            const auto now = GetTickCount64();
+            if (done == 1 || done == total || now - last_progress >= 100) {
+                emit("{\"type\":\"progress\",\"done\":" + std::to_string(done) + ",\"total\":" + std::to_string(total) + "}");
+                last_progress = now;
+            }
         }
         err = mz_zip_reader_goto_next_entry(reader.value);
     }
-    emit("{\"type\":\"result\",\"count\":" + std::to_string(done) + "}");
+    if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(done) + "}");
 }
 
 static void create(const fs::path &destination, const std::vector<fs::path> &sources,
@@ -391,6 +398,9 @@ int wmain(int argc, wchar_t **argv) {
                 if (volume_size) fail("This archive format does not support volumes");
                 seven_create(argv[2], paths, password, format);
             } else fail("This archive format is read-only");
+        } else if (mode == L"drag" || mode == L"drag-test") {
+            if (argc != 6 && argc != 7) fail("Drag requires a staging directory, encoding and revision");
+            archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", argc == 7 ? std::stoull(argv[6]) : 0);
         } else if (mode == L"update") {
             if (argc != 7 || archive_format(argv[2]) != 0) fail("Update requires a ZIP archive, staging paths, encoding and revision");
             zip_update(argv[2], argv[3], argv[4], _wtoi(argv[5]), utf8(argv[6]), password);
@@ -426,7 +436,7 @@ int wmain(int argc, wchar_t **argv) {
                 if (format == 0) {
                     Reader reader(argv[2], encoding); auto items = zip_entries(reader);
                     if (!selected.empty() && *selected.rbegin() >= items.size()) fail("Selected entry index is out of range");
-                    extract(reader, items, argv[3], selected, password);
+                    zip_extract(reader, items, argv[3], selected, password);
                 } else seven_extract(argv[2], argv[3], selected, password, format);
             }
         } else fail("Unknown archive operation");

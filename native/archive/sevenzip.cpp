@@ -1,4 +1,5 @@
 #include "common.h"
+#include "zip-common.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -244,6 +245,7 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release() override{ULONG value=--refs;if(!value)delete this;return value;}
     HRESULT STDMETHODCALLTYPE Write(const void *data,U32 size,U32 *done) override {
+        if(archive_cancelled())return E_ABORT;
         if(!done)return E_POINTER;*done=0;if(size>limit-written)return E_FAIL;
         if(!WriteFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr))return HRESULT_FROM_WIN32(GetLastError());
         written+=*done;return *done==size?S_OK:E_FAIL;
@@ -253,7 +255,7 @@ public:
 class ExtractRequest final:public ExtractCallback7,public Password7 {
     std::atomic<ULONG> refs{1};
     const std::vector<Item> &items;fs::path destination;std::wstring password;FileOutput *active=nullptr;
-    U32 done=0,total=0;bool testing=false;
+    U32 done=0,total=0;bool testing=false;ULONGLONG last_progress=0;
 public:
     ExtractRequest(const std::vector<Item> &entries,const fs::path &path,const std::string &secret,U32 expected,bool test):
         items(entries),destination(path),password(wide(secret)),total(expected),testing(test){}
@@ -268,12 +270,13 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release() override{ULONG value=--refs;if(!value)delete this;return value;}
     HRESULT STDMETHODCALLTYPE SetTotal(U64) override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE SetCompleted(const U64*) override{return S_OK;}
+    HRESULT STDMETHODCALLTYPE SetCompleted(const U64*) override{return archive_cancelled()?E_ABORT:S_OK;}
     HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR *out) override {
         if(!out)return E_POINTER;*out=nullptr;if(password.empty())return E_ABORT;
         *out=SysAllocStringLen(password.data(),(UINT)password.size());return *out?S_OK:E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE GetStream(U32 index,OutStream7 **stream,int mode) override {
+        if(archive_cancelled())return E_ABORT;
         if(!stream||index>=items.size())return E_INVALIDARG;*stream=nullptr;
         if(testing||mode!=0)return S_OK;
         const auto &item=items[index];const auto target=destination/entry_path(item.name);
@@ -288,7 +291,8 @@ public:
         bool complete=!active||active->complete();
         if(active){active->Release();active=nullptr;}
         if(result!=0||!complete)return E_FAIL;
-        ++done;emit("{\"type\":\"progress\",\"done\":"+std::to_string(done)+",\"total\":"+std::to_string(total)+"}");
+        ++done;const auto now=GetTickCount64();
+        if(done==1||done==total||now-last_progress>=100){emit("{\"type\":\"progress\",\"done\":"+std::to_string(done)+",\"total\":"+std::to_string(total)+"}");last_progress=now;}
         return S_OK;
     }
 };
@@ -307,15 +311,24 @@ std::vector<U32> selected_indices(const std::vector<Item> &items,const std::set<
 }
 
 void seven_list(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format){
+    const auto revision=zip_revision(source);
     OpenArchive reader(source,password,format);
     U32 total=reader.count();
-    emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+"}");
+    emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+",\"revision\":"+json(revision)+"}");
     for(size_t i=offset;i<total&&i-offset<limit;++i){
         const auto item=reader.item((U32)i);
         emit("{\"type\":\"entry\",\"index\":"+std::to_string(item.index)+",\"name\":"+json(item.name)+
             ",\"directory\":"+(item.directory?"true":"false")+",\"size\":"+std::to_string(item.size)+
             ",\"compressed\":"+std::to_string(item.compressed)+",\"encrypted\":"+(item.encrypted?"true":"false")+"}");
     }
+    if(zip_revision(source)!=revision)fail("Archive changed during listing; reopen it");
+}
+
+std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &password,int format){
+    OpenArchive reader(source,password,format);auto items=reader.items();preflight(reader,items);
+    std::vector<Entry> result;result.reserve(items.size());
+    for(const auto &item:items)result.push_back({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});
+    return result;
 }
 
 void seven_test(const fs::path &source,const std::string &password,int format){
@@ -327,7 +340,7 @@ void seven_test(const fs::path &source,const std::string &password,int format){
 }
 
 void seven_extract(const fs::path &source,const fs::path &destination,
-                   const std::set<size_t> &selected,const std::string &password,int format){
+                   const std::set<size_t> &selected,const std::string &password,int format,bool result){
     OpenArchive reader(source,password,format);auto items=reader.items();
     if(!selected.empty()&&*selected.rbegin()>=items.size())fail("Selected entry index is out of range");
     preflight(reader,items);
@@ -341,5 +354,5 @@ void seven_extract(const fs::path &source,const fs::path &destination,
     auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false);
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
     callback->Release();if(code!=S_OK)fail("Cannot extract archive; check its contents or password");
-    emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
+    if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
 }

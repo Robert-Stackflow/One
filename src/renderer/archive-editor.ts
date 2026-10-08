@@ -77,6 +77,7 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
   if(await options.save(snapshot.map(d=>d.change))){drafts=[];render();await options.saved();}
  };
  return {
+  hasChanges:()=>drafts.length>0,
   async discardBeforeLoad(){if(drafts.length&&!await confirmDialog({title:'放弃未保存的修改',message:'重新打开压缩包会清除当前待保存的变更。',confirm:'放弃并打开'}))return false;drafts=[];entries.clear();render();return true;},
   loaded(listing:ArchiveListing){if(listing.offset===0)entries.clear();for(const entry of listing.entries)entries.set(entry.index,entry);render();},
   setBusy(value:boolean){busy=value;render();},

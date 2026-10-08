@@ -8,7 +8,7 @@ import {pipeline} from 'node:stream/promises';
 import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding} from '../shared/archive';
 import {zipEditPacket} from './archive-update';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number}|{type:'ready'}|{type:'error';message:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string};
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
@@ -27,7 +27,7 @@ export class ArchiveService {
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void){}
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0'){}
   get pendingTasks(){return this.pending.size;}
   cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){if(task.committing)return false;task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
   async stop(){for(const task of this.active.values())if(!task.committing)task.child.kill();for(const task of this.publishing.values())task.controller.abort();await Promise.allSettled([...this.pending]);await rm(this.cacheRoot,{recursive:true,force:true}).catch(()=>{});this.cached.clear();}
@@ -40,7 +40,7 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test'|'update',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
+  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test'|'update'|'drag',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
     return new Promise((done,reject)=>{
       const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe'});
       const task={child,owner,committing:false};
@@ -55,10 +55,10 @@ export class ArchiveService {
         while((end=buffered.indexOf('\n'))>=0){const line=buffered.slice(0,end).trim();buffered=buffered.slice(end+1);if(!line)continue;
           try{const message=JSON.parse(line) as Message;
             if(message.type==='ready'){
-              if(operation!=='update'||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
-              else{task.committing=true;this.changed(owner,{id,operation:'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}
+              if(!['update','drag'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
+              else{task.committing=true;this.changed(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}
             }
-            else if(message.type==='progress')this.changed(owner,{id,operation:progressOperation??operation as ArchiveProgress['operation'],done:message.done,total:message.total});
+            else if(message.type==='progress')this.changed(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??operation as ArchiveProgress['operation'],done:message.done,total:message.total});
             else if(message.type==='error'){failed=true;error=message.message;}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
@@ -71,7 +71,7 @@ export class ArchiveService {
       const value=Buffer.from(secret,'utf8'),header=Buffer.alloc(4);header.writeUInt32LE(value.length);
       child.stdin.on('error',()=>{});
       const input=Buffer.concat([header,value,...(packet?[packet]:[])]);
-      if(operation==='update')child.stdin.write(input);else child.stdin.end(input);
+      if(operation==='update'||operation==='drag')child.stdin.write(input);else child.stdin.end(input);
     });
   }
   private async acquireSource(owner:number,id:string,source:string):Promise<{path:string;release:()=>void}>{
@@ -135,6 +135,28 @@ export class ArchiveService {
         if(!meta)throw Error('无法读取压缩包目录');
         return {path:source,total:meta.total,comment:meta.comment,revision:meta.revision,editable:meta.editable===true,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
       }finally{prepared.release();}
+    }
+    if(request.operation==='drag'){
+      const source=archiveSource(request.path),secret=password(request.password);
+      if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后再拖出');
+      const selected=request.selected;
+      if(!Array.isArray(selected)||!selected.length||selected.length>10000||selected.some(index=>!Number.isInteger(index)||index<0||index>=1000000))throw Error('请选择 1–10000 项拖出');
+      const packet=Buffer.alloc(4+selected.length*4);packet.writeUInt32LE(selected.length);
+      selected.forEach((value,index)=>packet.writeUInt32LE(value,4+index*4));
+      const prepared=await this.acquireSource(owner,id,source);
+      const stage=join(this.cacheRoot,`drag-${id}`);
+      try{
+        await mkdir(this.cacheRoot,{recursive:true});
+        const messages=await this.execute(owner,id,'drag',[prepared.path,stage,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner)],secret,'prepare',packet);
+        const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
+        if(!result)throw Error('拖出未完成');
+        return {path:source,count:result.count,cancelled:result.cancelled===true};
+      }finally{
+        prepared.release();
+        // The helper exits only after the target ends its async operation and
+        // closes all contents streams. Never remove files when DoDragDrop alone returns.
+        await rm(stage,{recursive:true,force:true}).catch(()=>{});
+      }
     }
     if(request.operation==='update'){
       const source=archiveSource(request.path);
