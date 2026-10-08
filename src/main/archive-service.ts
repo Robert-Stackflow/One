@@ -12,7 +12,7 @@ const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
 const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||Buffer.byteLength(value,'utf8')>1024)throw Error('密码无效或过长');return value;};
-const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z)$/i.test(target))throw Error('创建压缩包请选择 .zip 或 .7z 路径');return target;};
+const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(target))throw Error('不支持该压缩包格式');return target;};
 const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(source))throw Error('暂不支持该压缩格式');return source;};
 const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|tar\.gz|tar\.xz|zip|7z|rar|r00|tar|tgz|txz|gz|xz)$/i,'');
 const composite=(source:string)=>/\.(?:tar\.gz|tar\.xz|tgz|txz)$/i.test(source);
@@ -135,17 +135,22 @@ export class ArchiveService {
     }
     if(request.operation==='create'){
       const target=archiveTarget(request.path),sources=request.sources;
-      const seven=/\.7z$/i.test(target);
+      const seven=/\.7z$/i.test(target),zip=/\.zip$/i.test(target),single=/\.(?:gz|xz)$/i.test(target)&&!composite(target);
       if(!Array.isArray(sources)||!sources.length||sources.length>128)throw Error('请选择 1–128 个文件或文件夹');
       const volumeBytes=request.volumeBytes??0;
       if(!Number.isSafeInteger(volumeBytes)||volumeBytes<0||volumeBytes>64*1024**3||(volumeBytes>0&&volumeBytes<1024**2))
         throw Error('分卷大小须为 1 MB 至 64 GB');
+      const secret=password(request.password);
+      if(!zip&&!seven&&(secret||volumeBytes))throw Error('TAR、GZ 和 XZ 不支持密码或分卷');
       const checked=await Promise.all(sources.map(async item=>{const source=path(item),info=await lstat(source);if(info.isSymbolicLink()||(!info.isFile()&&!info.isDirectory()))throw Error('不支持压缩链接或特殊文件');if(info.isDirectory()&&!relative(source,target).startsWith('..')&&!isAbsolute(relative(source,target)))throw Error('压缩包不能保存在被压缩的文件夹中');return source;}));
+      if(single&&(checked.length!==1||!(await lstat(checked[0])).isFile()))throw Error('GZ 和 XZ 只能压缩单个文件；压缩文件夹请选 TAR.GZ 或 TAR.XZ');
       const names=new Set<string>();
       for(const source of checked){const name=basename(source).toLowerCase();if(names.has(name))throw Error('所选内容包含同名文件或文件夹，请分开压缩');names.add(name);}
       if(existsSync(target)||seven&&volumeBytes>0&&existsSync(target+'.001'))throw Error('目标压缩包已经存在');
-      const temporary=join(dirname(target),`.one-archive-${id}.${seven?'7z':'zip'}`);
+      const suffix=basename(target).slice(archiveName(target).length);
+      const temporary=join(dirname(target),`.one-archive-${id}${suffix}`);
       const temporaryStem=temporary.slice(0,-4),targetStem=target.slice(0,-4);
+      const stage=join(dirname(target),`.one-archive-${id}-stage`);
       const zipParts=async()=>{
         const prefix=basename(temporaryStem)+'.z';
         return (await readdir(dirname(temporary))).filter(name=>name.startsWith(prefix)&&/^\d{2,}$/.test(name.slice(prefix.length)))
@@ -156,8 +161,15 @@ export class ArchiveService {
       const controller=new AbortController();
       const published:string[]=[];
       try{
-        const messages=await this.execute(owner,id,'create',[temporary,...(!seven&&volumeBytes?[`--volume=${volumeBytes}`]:[]),...checked],password(request.password));
-        await this.execute(owner,id,'test',[temporary,'0'],password(request.password));
+        let messages:Message[];
+        if(composite(target)){
+          await mkdir(stage);
+          const inner=join(stage,archiveName(target)+'.tar');
+          await this.execute(owner,id,'create',[inner,...checked],'');
+          await this.execute(owner,id,'test',[inner,'0'],'');
+          messages=await this.execute(owner,id,'create',[temporary,inner],'');
+        }else messages=await this.execute(owner,id,'create',[temporary,...(zip&&volumeBytes?[`--volume=${volumeBytes}`]:[]),...checked],secret);
+        await this.execute(owner,id,'test',[temporary,'0'],secret);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认创建成功');
         if(seven&&volumeBytes){
@@ -175,15 +187,15 @@ export class ArchiveService {
             this.changed(owner,{id,operation:'create',done:index+1,total:count});
           }
         }
-        const parts=seven?sevenParts:await zipParts();
+        const parts=seven?sevenParts:zip?await zipParts():[];
         controller.signal.throwIfAborted();
         for(const item of parts)if(existsSync(item.target))throw Error('目标目录中已存在同名分卷');
         for(const item of parts){controller.signal.throwIfAborted();await link(item.temporary,item.target);published.push(item.target);}
         controller.signal.throwIfAborted();
         if(!seven||!volumeBytes)await link(temporary,target);
-        return {path:seven&&volumeBytes?target+'.001':target,count:result.count};
+        return {path:seven&&volumeBytes?target+'.001':target,count:composite(target)?checked.length:result.count};
       }catch(error){await Promise.allSettled(published.map(item=>rm(item,{force:true})));throw error;}
-      finally{this.publishing.delete(id);await rm(temporary,{force:true}).catch(()=>{});for(const item of seven?sevenParts:await zipParts().catch(()=>[]))await rm(item.temporary,{force:true}).catch(()=>{});}
+      finally{this.publishing.delete(id);await rm(temporary,{force:true}).catch(()=>{});for(const item of seven?sevenParts:zip?await zipParts().catch(()=>[]):[])await rm(item.temporary,{force:true}).catch(()=>{});await rm(stage,{recursive:true,force:true}).catch(()=>{});}
     }
     if(request.operation==='extract'){
       const source=archiveSource(request.path),parent=path(request.parent),parentInfo=await stat(parent);

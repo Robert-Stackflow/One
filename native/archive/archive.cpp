@@ -334,9 +334,12 @@ int wmain(int argc, wchar_t **argv) {
                 std::transform(extension.begin(), extension.end(), extension.begin(), [](wchar_t ch) { return std::towlower(ch); });
                 if (extension != L".7z") fail("Create a 7Z archive with a .7z target path");
                 if (volume_size) fail("7Z volumes are prepared after archive verification");
-                seven_create(argv[2], paths, password);
+                seven_create(argv[2], paths, password, format);
             } else if (format == 0) create(argv[2], paths, password, volume_size);
-            else fail("Only ZIP and 7Z creation is supported");
+            else if (format == 0xee || format == 0xef || format == 0x0c) {
+                if (volume_size) fail("This archive format does not support volumes");
+                seven_create(argv[2], paths, password, format);
+            } else fail("This archive format is read-only");
         } else if (mode == L"list" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             if (mode == L"list") {

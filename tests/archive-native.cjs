@@ -88,7 +88,21 @@ try{
     }
   }
   const createdSeven=path.join(root,'created.7z');
-  assert.match(call(['create',path.join(root,'not-rar.rar'),folder],'',2).at(-1).message,/only ZIP and 7Z creation/i);
+  assert.match(call(['create',path.join(root,'not-rar.rar'),folder],'',2).at(-1).message,/read-only/i);
+  for(const [extension,source] of [['tar',folder],['gz',path.join(folder,'nested.txt')],['xz',path.join(folder,'nested.txt')]]){
+    const archive=path.join(root,`created.${extension}`);
+    call(['create',archive,source]);
+    const found=call(['list',archive,'0','50','0']).filter(line=>line.type==='entry');
+    assert(found.length>0,`${extension} should contain entries`);
+    assert.equal(call(['test',archive,'0']).at(-1).count,found.length);
+    const destination=path.join(root,`created-${extension}-out`);call(['extract',archive,destination,'','0']);
+    const extracted=extension==='tar'?path.join(destination,'中文目录','nested.txt'):path.join(destination,found[0].name);
+    assert.equal(fs.readFileSync(extracted,'utf8'),'nested content');
+    if(!sevenZip.error){const external=spawnSync('7z',['t','-y',archive],{encoding:'utf8'});assert.equal(external.status,0,external.stdout+'\n'+external.stderr);}
+  }
+  assert.match(call(['create',path.join(root,'bad-secret.tar'),folder],'secret',2).at(-1).message,/encryption/i);
+  assert.match(call(['create',path.join(root,'bad-volume.tar'),'--volume=1048576',folder],'',2).at(-1).message,/volumes/i);
+  assert.match(call(['create',path.join(root,'bad-folder.gz'),folder],'',2).at(-1).message,/regular file/i);
   call(['create',createdSeven,folder],'secret');
   assert.match(call(['list',createdSeven,'0','50','0'],'',2).at(-1).message,/password|open/i);
   const createdItems=call(['list',createdSeven,'0','50','0'],'secret').filter(line=>line.type==='entry');

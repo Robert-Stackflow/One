@@ -24,6 +24,7 @@ async function main(){
     assert.equal(await files.last().getAttribute('data-page'),'archive');
     await files.last().click();
     await expect(page.locator('#page-name')).toHaveText('压缩与解压');
+    assert.equal(await page.locator('#archive-open-completed').isChecked(),false);
     await expect(page.locator('[data-archive-pane="create"]')).toBeVisible();
     await expect(page.locator('[data-archive-pane="browse"]')).toBeHidden();
     await page.locator('#archive-sources').fill(source);
@@ -166,8 +167,47 @@ async function main(){
       await expect(page.locator('.archive-entry')).toHaveCount(1,{timeout:30000});
       await expect(page.locator('.archive-entry-name')).toHaveText('源文件.txt');
     }
+    for(const [format,label,inputs,count] of [
+      ['tar','TAR',[source,second],2],
+      ['tar.gz','TAR.GZ',[source,second],2],
+      ['tgz','TAR.GZ',[source,second],2],
+      ['tar.xz','TAR.XZ',[source,second],2],
+      ['txz','TAR.XZ',[source,second],2],
+      ['gz','GZ（单文件）',[source],1],
+      ['xz','XZ（单文件）',[source],1],
+    ]){
+      const archive=path.join(root,`one-created-${format.replaceAll('.','-')}.${format}`);
+      await page.locator('[data-archive-mode="create"]').click();
+      await page.locator('#archive-format').click();
+      await page.locator(`#archive-format-options [role="option"][aria-label="${label}"]`).click();
+      assert.equal(await page.locator('#archive-volume').isDisabled(),true);
+      assert.equal(await page.locator('#archive-create-password').isDisabled(),true);
+      await page.locator('#archive-sources').fill(inputs.join('\n'));
+      await page.locator('#archive-target').fill(archive);
+      await page.locator('#archive-create').click();
+      await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
+      if(!made.error){const external=spawnSync('7z',['t','-y',archive],{encoding:'utf8'});assert.equal(external.status,0,external.stdout+'\n'+external.stderr);}
+      await page.locator('[data-archive-mode="browse"]').click();
+      await page.locator('#archive-source').fill(archive);
+      await page.locator('#archive-open').click();
+      await expect(page.locator('.archive-entry')).toHaveCount(count,{timeout:30000});
+      await page.locator('#archive-test').click();
+      await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
+      const output=path.join(root,`output-${format.replaceAll('.','-')}`);await fs.mkdir(output);
+      await page.locator('#archive-parent').fill(output);
+      await page.locator('#archive-extract-all').click();
+      await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
+      const entries=await fs.readdir(output,{recursive:true});
+      if(format==='xz')assert.equal(await fs.readFile(path.join(output,entries[0]),'utf8'),'One archive UI smoke\n');
+      else assert(entries.some(name=>name.endsWith('源文件.txt')),`${format} should extract the source file`);
+    }
+    await page.locator('#archive-open-completed').check();
+    await page.reload();
+    await page.locator('[data-page="archive"]').click();
+    assert.equal(await page.locator('#archive-open-completed').isChecked(),true);
+    await page.locator('#archive-open-completed').uncheck();
     assert.deepEqual(errors,[]);
-    console.log('Archive UI smoke passed: ZIP/7Z creation, encrypted and split archives, TAR/GZ/XZ browsing and extraction.');
+    console.log('Archive UI smoke passed: ZIP/7Z/TAR/GZ/XZ creation, encrypted and split archives, composite browsing and extraction.');
   }finally{
     await app.close();
     await assert.rejects(fs.stat(path.join(profile,'archive-cache')),{code:'ENOENT'});

@@ -14,7 +14,7 @@ using U32=uint32_t;using U64=uint64_t;using I64=int64_t;
 constexpr U32 path_prop=3,dir_prop=6,size_prop=7,attributes_prop=9;
 constexpr U32 created_prop=10,accessed_prop=11,modified_prop=12;
 GUID iid(U32 group,U32 number){return {0x23170f69,0x40c1,0x278a,{0,0,0,(BYTE)group,0,(BYTE)number,0,0}};}
-GUID clsid7(){return {0x23170f69,0x40c1,0x278a,{0x10,0,0,1,0x10,7,0,0}};}
+GUID archive_clsid(int format){return {0x23170f69,0x40c1,0x278a,{0x10,0,0,1,0x10,(BYTE)format,0,0}};}
 bool matches(REFIID a,const GUID &b){return IsEqualGUID(a,b)!=0;}
 
 struct SeqIn:IUnknown{virtual HRESULT STDMETHODCALLTYPE Read(void*,U32,U32*)=0;};
@@ -144,8 +144,12 @@ public:
 };
 }
 
-void seven_create(const fs::path &destination,const std::vector<fs::path> &sources,const std::string &password){
+void seven_create(const fs::path &destination,const std::vector<fs::path> &sources,const std::string &password,int format){
     if(sources.empty()||fs::exists(destination))fail("Archive target already exists or has no input");
+    if(format!=7&&format!=0xee&&format!=0xef&&format!=0x0c)fail("Unsupported archive creation format");
+    if(format!=7&&!password.empty())fail("This archive format does not support encryption");
+    if((format==0xef||format==0x0c)&&(sources.size()!=1||!fs::is_regular_file(sources[0])))
+        fail("GZ and XZ require one regular file");
     auto items=collect(sources);
     wchar_t exe[32768]{};if(!GetModuleFileNameW(nullptr,exe,32768))fail("Cannot find archive helper path");
     HMODULE library=LoadLibraryExW((fs::path(exe).parent_path()/L"7z.dll").c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
@@ -155,18 +159,20 @@ void seven_create(const fs::path &destination,const std::vector<fs::path> &sourc
         using Create=HRESULT (WINAPI*)(const GUID*,const GUID*,void**);
         auto create=reinterpret_cast<Create>(GetProcAddress(library,"CreateObject"));
         if(!create)fail("7-Zip archive engine is incompatible");
-        auto class_id=clsid7(),interface_id=iid(6,0xa0);
-        if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)fail("Cannot initialize 7Z writer");
+        auto class_id=archive_clsid(format),interface_id=iid(6,0xa0);
+        if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)fail("Cannot initialize archive writer");
         auto property_id=iid(6,3);
-        if(archive->QueryInterface(property_id,reinterpret_cast<void**>(&properties))!=S_OK||!properties)fail("7Z writer does not support properties");
+        if(format==7&&(archive->QueryInterface(property_id,reinterpret_cast<void**>(&properties))!=S_OK||!properties))fail("7Z writer does not support properties");
         if(!password.empty()){
             const wchar_t *names[]={L"he"};PROPVARIANT values{};PropVariantInit(&values);values.vt=VT_BOOL;values.boolVal=VARIANT_TRUE;
             if(properties->SetProperties(names,&values,1)!=S_OK)fail("Cannot enable encrypted 7Z headers");
         }
-        output=new Output(destination);if(!output->valid())fail("Cannot create 7Z target");created=true;
+        output=new Output(destination);if(!output->valid())fail("Cannot create archive target");created=true;
         callback=new Request(items,password);
-        if(archive->UpdateItems(output,(U32)items.size(),callback)!=S_OK||!output->flush())fail("Cannot finish 7Z archive");
-        callback->Release();callback=nullptr;output->Release();output=nullptr;properties->Release();properties=nullptr;archive->Release();archive=nullptr;
+        if(archive->UpdateItems(output,(U32)items.size(),callback)!=S_OK||!output->flush())fail("Cannot finish archive");
+        callback->Release();callback=nullptr;output->Release();output=nullptr;
+        if(properties){properties->Release();properties=nullptr;}
+        archive->Release();archive=nullptr;
         FreeLibrary(library);
         emit("{\"type\":\"result\",\"count\":"+std::to_string(sources.size())+"}");
     }catch(...){
