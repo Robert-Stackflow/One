@@ -1,0 +1,10 @@
+RAR4 and RAR5 test archives are decoded from the libarchive project's public
+test fixtures under libarchive/test:
+https://github.com/libarchive/libarchive/blob/master/libarchive/test/test_read_format_rar.rar.uu
+https://github.com/libarchive/libarchive/blob/master/libarchive/test/test_read_format_rar5_stored_manyfiles.rar.uu
+
+rar4-sample.rar SHA-256 D421B86F6290AEFAD61B2A36737253B2B30FE27C156BD95ABFC230F24FE0307E
+rar5-sample.rar SHA-256 62687F5B5050C71A754F479DDA3803CB06359FDFA7AF4E62287ED4AC4ED38E8D
+
+These fixtures are used only in development tests; they are not included in
+the application installer.

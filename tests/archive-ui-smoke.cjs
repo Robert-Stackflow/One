@@ -3,6 +3,7 @@ const fs=require('node:fs/promises');
 const os=require('node:os');
 const path=require('node:path');
 const crypto=require('node:crypto');
+const {spawnSync}=require('node:child_process');
 const { _electron:electron,expect }=require('@playwright/test');
 
 async function main(){
@@ -87,8 +88,20 @@ async function main(){
     assert.equal(await fs.readFile(path.join(root,'occupied.z01'),'utf8'),'existing volume');
     await assert.rejects(fs.stat(occupied),{code:'ENOENT'});
     assert.equal((await fs.readdir(root)).some(name=>name.startsWith('.one-archive-')),false);
+    const seven=path.join(root,'encrypted.7z');
+    const made=spawnSync('7z',['a','-t7z','-y','-psecret','-mhe=on',seven,source],{encoding:'utf8'});
+    if(!made.error){
+      assert.equal(made.status,0,made.stdout+'\n'+made.stderr);
+      await page.locator('[data-archive-mode="browse"]').click();
+      await page.locator('#archive-source').fill(seven);
+      await page.locator('#archive-password').fill('secret');
+      await page.locator('#archive-open').click();
+      await expect(page.locator('.archive-entry-name')).toHaveText('源文件.txt');
+      await page.locator('#archive-test').click();
+      await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
+    }
     assert.deepEqual(errors,[]);
-    console.log('Archive UI smoke passed: sidebar order, create, browse, extract, split ZIP and smart extract.');
+    console.log('Archive UI smoke passed: sidebar order, create, browse, extract, split ZIP, smart extract and encrypted 7Z.');
   }finally{
     await app.close();
     await fs.rm(root,{recursive:true,force:true});

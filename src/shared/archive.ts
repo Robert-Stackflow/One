@@ -4,7 +4,7 @@ export type ArchiveListing = {path:string;total:number;comment:string;offset:num
 export type ArchiveProgress = {id:string;operation:'create'|'extract'|'test';done:number;total:number};
 export type ArchiveResult = {path:string;count:number};
 export type ArchiveRequest =
-  | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding}
+  | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding;password?:string}
   | {operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number}
   | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart';selected?:number[];password?:string;encoding?:ArchiveEncoding}
   | {operation:'test';path:string;password?:string;encoding?:ArchiveEncoding};

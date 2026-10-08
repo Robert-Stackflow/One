@@ -1,4 +1,13 @@
-One.Archive.exe native ZIP dependencies
+One.Archive.exe native archive dependencies
+
+7-Zip 26.04 (7z.dll, x64)
+Source: https://www.7-zip.org/download.html
+Binary: 7z2604-x64.exe
+Installer SHA-256: D54BF805F9F3704D1E8DB2FA3498AE7EF2DF0312B40B558E7C71C734430A665D
+7z.dll SHA-256: 899CD73D7FC60E1C1C35C7DE0F5BED3DC69BFE2CECBD48014D868A347970A0B1
+License: vendor/archive/7zip/License.txt (LGPL, unRAR restriction, BSD)
+Source archive: 7z2604-src.7z, SHA-256 6BCFD2679D178174DF06D09D50147DD7B5980D7BEAC896136689DFC9D51E0FD9
+The original DLL is loaded only in the separate One.Archive.exe process.
 
 minizip-ng 4.1.2
 Source: https://github.com/zlib-ng/minizip-ng/releases/tag/4.1.2

@@ -17,10 +17,9 @@
 #include "mz_strm.h"
 #include "mz_zip.h"
 #include "mz_zip_rw.h"
+#include "common.h"
 
-namespace fs = std::filesystem;
-
-static std::string utf8(const std::wstring &value) {
+std::string utf8(const std::wstring &value) {
     if (value.empty()) return {};
     int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), (int)value.size(), nullptr, 0, nullptr, nullptr);
     if (!size) throw std::runtime_error("Invalid Unicode path");
@@ -29,7 +28,7 @@ static std::string utf8(const std::wstring &value) {
     return result;
 }
 
-static std::wstring wide(const std::string &value) {
+std::wstring wide(const std::string &value) {
     if (value.empty()) return {};
     int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), (int)value.size(), nullptr, 0);
     if (!size) throw std::runtime_error("Archive contains an invalid Unicode name");
@@ -38,7 +37,7 @@ static std::wstring wide(const std::string &value) {
     return result;
 }
 
-static std::string json(const std::string &value) {
+std::string json(const std::string &value) {
     std::string result = "\"";
     const char hex[] = "0123456789abcdef";
     for (unsigned char ch : value) {
@@ -49,8 +48,8 @@ static std::string json(const std::string &value) {
     return result + '"';
 }
 
-static void emit(const std::string &line) { std::printf("%s\n", line.c_str()); std::fflush(stdout); }
-static void fail(const std::string &message) { throw std::runtime_error(message); }
+void emit(const std::string &line) { std::printf("%s\n", line.c_str()); std::fflush(stdout); }
+[[noreturn]] void fail(const std::string &message) { throw std::runtime_error(message); }
 
 static std::string password_from_stdin() {
     _setmode(_fileno(stdin), _O_BINARY);
@@ -63,7 +62,7 @@ static std::string password_from_stdin() {
     return password;
 }
 
-static bool safe_entry(const std::string &name, bool directory) {
+bool safe_entry(const std::string &name, bool directory) {
     if (name.empty() || name.size() > 32767 || name[0] == '/' || name[0] == '\\') return false;
     std::string part;
     auto valid = [](const std::string &component) {
@@ -82,7 +81,7 @@ static bool safe_entry(const std::string &name, bool directory) {
     return directory ? part.empty() || valid(part) : valid(part);
 }
 
-static fs::path entry_path(const std::string &name) {
+fs::path entry_path(const std::string &name) {
     std::string canonical = name;
     std::replace(canonical.begin(), canonical.end(), '\\', '/');
     return fs::u8path(canonical);
@@ -298,6 +297,15 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
     } catch (...) { mz_zip_writer_delete(&writer); throw; }
 }
 
+static int archive_format(const std::wstring &path) {
+    std::wstring name = fs::path(path).filename().wstring();
+    std::transform(name.begin(), name.end(), name.begin(), [](wchar_t ch) { return std::towlower(ch); });
+    if (name.ends_with(L".zip")) return 0;
+    if (name.ends_with(L".7z") || name.ends_with(L".7z.001")) return 7;
+    if (name.ends_with(L".rar") || name.ends_with(L".r00")) return 3;
+    fail("Unsupported archive format");
+}
+
 int wmain(int argc, wchar_t **argv) {
     _setmode(_fileno(stdout), _O_BINARY);
     try {
@@ -327,22 +335,27 @@ int wmain(int argc, wchar_t **argv) {
                 if (argc != 6) fail("Extract requires destination, selected indexes and encoding");
                 encoding = _wtoi(argv[5]);
             } else if (argc == 4) encoding = _wtoi(argv[3]);
-            Reader reader(argv[2], encoding);
-            if (mode == L"list") list(reader, std::stoull(argv[3]), std::min<size_t>(500, std::stoull(argv[4])));
-            else {
-                auto items = entries(reader);
-                if (mode == L"test") test(reader, items, password);
-                else {
-                    std::set<size_t> selected;
-                    std::wstring text = argv[4], part;
-                    for (wchar_t c : text + L',') {
-                        if (c == L',') { if (!part.empty()) { selected.insert(std::stoull(part)); part.clear(); } }
-                        else if (c >= L'0' && c <= L'9') part += c;
-                        else fail("Invalid selected entry index");
-                    }
+            int format = archive_format(argv[2]);
+            if (mode == L"list") {
+                size_t offset = std::stoull(argv[3]), limit = std::min<size_t>(500, std::stoull(argv[4]));
+                if (format == 0) { Reader reader(argv[2], encoding); list(reader, offset, limit); }
+                else seven_list(argv[2], offset, limit, password, format);
+            } else if (mode == L"test") {
+                if (format == 0) { Reader reader(argv[2], encoding); test(reader, entries(reader), password); }
+                else seven_test(argv[2], password, format);
+            } else {
+                std::set<size_t> selected;
+                std::wstring text = argv[4], part;
+                for (wchar_t c : text + L',') {
+                    if (c == L',') { if (!part.empty()) { selected.insert(std::stoull(part)); part.clear(); } }
+                    else if (c >= L'0' && c <= L'9') part += c;
+                    else fail("Invalid selected entry index");
+                }
+                if (format == 0) {
+                    Reader reader(argv[2], encoding); auto items = entries(reader);
                     if (!selected.empty() && *selected.rbegin() >= items.size()) fail("Selected entry index is out of range");
                     extract(reader, items, argv[3], selected, password);
-                }
+                } else seven_extract(argv[2], argv[3], selected, password, format);
             }
         } else fail("Unknown archive operation");
         return 0;

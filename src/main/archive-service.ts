@@ -10,7 +10,9 @@ const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
 const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||Buffer.byteLength(value,'utf8')>1024)throw Error('密码无效或过长');return value;};
-const zip=(value:unknown)=>{const target=path(value);if(extname(target).toLowerCase()!=='.zip')throw Error('当前阶段仅支持 ZIP 文件');return target;};
+const zip=(value:unknown)=>{const target=path(value);if(extname(target).toLowerCase()!=='.zip')throw Error('创建压缩包目前支持 ZIP 格式');return target;};
+const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00)$/i.test(source))throw Error('目前支持 ZIP、7Z 和 RAR 压缩包');return source;};
+const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|zip|7z|rar|r00)$/i,'');
 
 export class ArchiveService {
   private active=new Map<string,{child:ChildProcessWithoutNullStreams;owner:number}>();
@@ -56,14 +58,14 @@ export class ArchiveService {
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
     const id=randomUUID();
     if(request.operation==='list'){
-      const source=zip(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
-      const messages=await this.execute(owner,id,'list',[source,String(offset),'200',String(encoding(request.encoding))],'');
+      const source=archiveSource(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
+      const messages=await this.execute(owner,id,'list',[source,String(offset),'200',String(encoding(request.encoding))],password(request.password));
       const meta=messages.find((item):item is Extract<Message,{type:'meta'}>=>item.type==='meta');
       if(!meta)throw Error('无法读取压缩包目录');
       return {path:source,total:meta.total,comment:meta.comment,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
     }
     if(request.operation==='test'){
-      const source=zip(request.path);
+      const source=archiveSource(request.path);
       const messages=await this.execute(owner,id,'test',[source,String(encoding(request.encoding))],password(request.password));
       return {path:source,count:(messages.find(item=>item.type==='result') as {count:number}|undefined)?.count||0};
     }
@@ -100,7 +102,7 @@ export class ArchiveService {
       finally{await rm(temporary,{force:true}).catch(()=>{});for(const item of await stagedParts().catch(()=>[]))await rm(item.temporary,{force:true}).catch(()=>{});}
     }
     if(request.operation==='extract'){
-      const source=zip(request.path),parent=path(request.parent),parentInfo=await stat(parent);
+      const source=archiveSource(request.path),parent=path(request.parent),parentInfo=await stat(parent);
       if(!parentInfo.isDirectory())throw Error('请选择目标文件夹');
       const destination=request.destination??'folder';
       if(destination!=='folder'&&destination!=='smart')throw Error('解压位置模式无效');
@@ -120,7 +122,7 @@ export class ArchiveService {
           target=uniqueTarget(top[0],info.isFile());
           if(info.isFile())await link(extracted,target);else await rename(extracted,target);
         }else{
-          target=uniqueTarget(basename(source,extname(source)));
+          target=uniqueTarget(archiveName(source));
           await rename(temporary,target);
         }
         return {path:target,count:result.count};

@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {cp,mkdir,writeFile} from 'node:fs/promises';
+import {cp,copyFile,mkdir,writeFile} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 
@@ -30,7 +30,8 @@ await call(['-S',minizipSource,'-B',minizipBuild,'-G','Visual Studio 17 2022','-
   `-DZLIB_INCLUDE_DIR=${zlibSource};${zlibBuild}`,`-DZLIB_LIBRARY=${zlibLib}`]);
 await call(['--build',minizipBuild,'--config','Release','--target','minizip-ng','--parallel','8']);
 const command=resolve('work/archive-build/build-helper.cmd');
-await writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE /I"${minizipSource}" /I"${minizipBuild}" /I"${zlibSource}" /I"${zlibBuild}" native\\archive\\archive.cpp /Fe:dist\\native\\One.Archive.exe /Fo:work\\archive-build\\archive.obj /link "${minizipLib}" "${zlibLib}" bcrypt.lib crypt32.lib\r\n`, 'utf8');
+await writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE /I"${minizipSource}" /I"${minizipBuild}" /I"${zlibSource}" /I"${zlibBuild}" native\\archive\\archive.cpp native\\archive\\sevenzip.cpp /Fe:dist\\native\\One.Archive.exe /Fo:work\\archive-build\\ /link "${minizipLib}" "${zlibLib}" bcrypt.lib crypt32.lib ole32.lib oleaut32.lib\r\n`, 'utf8');
 const result=await run('cmd.exe',['/d','/c',command],{cwd:root,windowsHide:true,maxBuffer:4*1024*1024});
 process.stdout.write(result.stdout);
 process.stderr.write(result.stderr);
+await copyFile('vendor/archive/7zip/7z.dll','dist/native/7z.dll');

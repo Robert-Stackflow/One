@@ -47,10 +47,40 @@ try{
   if(!sevenZip.error)assert.equal(sevenZip.status,0,sevenZip.stdout+'\n'+sevenZip.stderr);
   const splitOutput=path.join(root,'split-output');call(['extract',split,splitOutput,'','0']);
   assert.deepEqual(fs.readFileSync(path.join(splitOutput,'large.bin')),largeData);
+  const rar4=path.resolve('tests/fixtures/rar4-sample.rar'),rar5=path.resolve('tests/fixtures/rar5-sample.rar');
+  assert.equal(call(['list',rar4,'0','50','0']).filter(line=>line.type==='entry').length,5);
+  assert.equal(call(['test',rar4,'0']).at(-1).count,5);
+  assert.equal(call(['list',rar5,'0','50','0']).filter(line=>line.type==='entry').length,3);
+  assert.equal(call(['test',rar5,'0']).at(-1).count,3);
+  const rarOut=path.join(root,'rar5-out');call(['extract',rar5,rarOut,'','0']);
+  assert.equal(fs.readFileSync(path.join(rarOut,'cebula.txt'),'utf8').slice(0,6),'Cebula');
+  if(!sevenZip.error){
+    const seven=path.join(root,'中文.7z');
+    const made=spawnSync('7z',['a','-t7z','-y',seven,folder],{encoding:'utf8',maxBuffer:1024*1024});
+    assert.equal(made.status,0,made.stdout+'\n'+made.stderr);
+    const sevenItems=call(['list',seven,'0','50','0']).filter(line=>line.type==='entry');
+    assert(sevenItems.some(item=>item.name.replaceAll('\\','/')==='中文目录/nested.txt'),JSON.stringify(sevenItems));
+    assert.equal(call(['test',seven,'0']).at(-1).count,sevenItems.length);
+    const sevenOut=path.join(root,'seven-out');call(['extract',seven,sevenOut,'','0']);
+    assert.equal(fs.readFileSync(path.join(sevenOut,'中文目录','nested.txt'),'utf8'),'nested content');
+    const locked=path.join(root,'locked.7z');
+    const encrypted=spawnSync('7z',['a','-t7z','-y','-psecret','-mhe=on',locked,folder],{encoding:'utf8',maxBuffer:1024*1024});
+    assert.equal(encrypted.status,0,encrypted.stdout+'\n'+encrypted.stderr);
+    assert.match(call(['list',locked,'0','50','0'],'',2).at(-1).message,/password|open/i);
+    assert(call(['list',locked,'0','50','0'],'secret').some(line=>line.type==='entry'));
+    assert.equal(call(['test',locked,'0'],'secret').at(-1).count,sevenItems.length);
+    const volumes=path.join(root,'volumes.7z');
+    const volumeResult=spawnSync('7z',['a','-t7z','-y','-v1m',volumes,large],{encoding:'utf8',maxBuffer:1024*1024});
+    assert.equal(volumeResult.status,0,volumeResult.stdout+'\n'+volumeResult.stderr);
+    const firstVolume=volumes+'.001';assert(fs.existsSync(firstVolume));
+    assert.equal(call(['test',firstVolume,'0']).at(-1).count,1);
+    const volumeOut=path.join(root,'volume-out');call(['extract',firstVolume,volumeOut,'','0']);
+    assert.deepEqual(fs.readFileSync(path.join(volumeOut,'large.bin')),largeData);
+  }
   for(const [index,name] of ['../escape.txt','C:/escape.txt','CON.txt','folder/file.txt:stream'].entries()){
     const evil=path.join(root,`evil-${index}.zip`),outside=path.join(root,`evil-${index}-out`);rawZip(name,evil);
     assert.match(call(['extract',evil,outside,'','0'], '',2).at(-1).message,/unsafe/i);
     assert(!fs.existsSync(path.join(root,'escape.txt')));
   }
-  console.log('Archive native smoke passed: AES, Unicode, selected folders, empty folders, split ZIP, CRC, unsafe paths.');
+  console.log('Archive native smoke passed: AES, Unicode, selected folders, split ZIP, 7Z, RAR4/5, CRC, unsafe paths.');
 }finally{fs.rmSync(root,{recursive:true,force:true});}

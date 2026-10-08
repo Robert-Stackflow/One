@@ -134,7 +134,8 @@
       "dist/main/proxy-info.ps1",
       "dist/native/One.Monitor.exe",
       "dist/native/One.Levels.exe",
-      "dist/native/One.Archive.exe"
+      "dist/native/One.Archive.exe",
+      "dist/native/7z.dll"
     ],
     "extraFiles": [
       "README.md",
