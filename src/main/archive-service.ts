@@ -1,6 +1,6 @@
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {lstat,link,rename,rm,stat} from 'node:fs/promises';
+import {lstat,link,readdir,rename,rm,stat} from 'node:fs/promises';
 import {join,dirname,basename,extname,isAbsolute,resolve,relative} from 'node:path';
 import {existsSync} from 'node:fs';
 import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding} from '../shared/archive';
@@ -70,34 +70,59 @@ export class ArchiveService {
     if(request.operation==='create'){
       const target=zip(request.path),sources=request.sources;
       if(!Array.isArray(sources)||!sources.length||sources.length>128)throw Error('请选择 1–128 个文件或文件夹');
+      const volumeBytes=request.volumeBytes??0;
+      if(!Number.isSafeInteger(volumeBytes)||volumeBytes<0||volumeBytes>64*1024**3||(volumeBytes>0&&volumeBytes<1024**2))
+        throw Error('分卷大小须为 1 MB 至 64 GB');
       const checked=await Promise.all(sources.map(async item=>{const source=path(item),info=await lstat(source);if(info.isSymbolicLink()||(!info.isFile()&&!info.isDirectory()))throw Error('不支持压缩链接或特殊文件');if(info.isDirectory()&&!relative(source,target).startsWith('..')&&!isAbsolute(relative(source,target)))throw Error('压缩包不能保存在被压缩的文件夹中');return source;}));
       const names=new Set<string>();
       for(const source of checked){const name=basename(source).toLowerCase();if(names.has(name))throw Error('所选内容包含同名文件或文件夹，请分开压缩');names.add(name);}
       if(existsSync(target))throw Error('目标压缩包已经存在');
       const temporary=join(dirname(target),`.one-archive-${id}.zip`);
+      const temporaryStem=temporary.slice(0,-4),targetStem=target.slice(0,-4);
+      const stagedParts=async()=>{
+        const prefix=basename(temporaryStem)+'.z';
+        return (await readdir(dirname(temporary))).filter(name=>name.startsWith(prefix)&&/^\d{2,}$/.test(name.slice(prefix.length)))
+          .sort((a,b)=>Number(a.slice(prefix.length))-Number(b.slice(prefix.length)))
+          .map(name=>({temporary:join(dirname(temporary),name),target:targetStem+'.z'+name.slice(prefix.length)}));
+      };
+      const published:string[]=[];
       try{
-        const messages=await this.execute(owner,id,'create',[temporary,...checked],password(request.password));
+        const messages=await this.execute(owner,id,'create',[temporary,...(volumeBytes?[`--volume=${volumeBytes}`]:[]),...checked],password(request.password));
         await this.execute(owner,id,'test',[temporary,'0'],password(request.password));
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认创建成功');
+        const parts=await stagedParts();
+        for(const item of parts)if(existsSync(item.target))throw Error('目标目录中已存在同名分卷');
+        for(const item of parts){await link(item.temporary,item.target);published.push(item.target);}
         await link(temporary,target);
         return {path:target,count:result.count};
-      }finally{await rm(temporary,{force:true}).catch(()=>{});}
+      }catch(error){await Promise.allSettled(published.map(item=>rm(item,{force:true})));throw error;}
+      finally{await rm(temporary,{force:true}).catch(()=>{});for(const item of await stagedParts().catch(()=>[]))await rm(item.temporary,{force:true}).catch(()=>{});}
     }
     if(request.operation==='extract'){
       const source=zip(request.path),parent=path(request.parent),parentInfo=await stat(parent);
       if(!parentInfo.isDirectory())throw Error('请选择目标文件夹');
+      const destination=request.destination??'folder';
+      if(destination!=='folder'&&destination!=='smart')throw Error('解压位置模式无效');
       const selected=request.selected||[];
       if(!Array.isArray(selected)||selected.length>10000||selected.some(value=>!Number.isSafeInteger(value)||value<0))throw Error('选择的条目无效');
-      const stem=basename(source,extname(source));
-      let target=join(parent,stem),suffix=2;
-      while(existsSync(target)){target=join(parent,`${stem} (${suffix++})`);if(suffix>10000)throw Error('没有可用的解压目录名');}
+      const uniqueTarget=(name:string,file=false)=>{const extension=file?extname(name):'',base=extension?name.slice(0,-extension.length):name;let target=join(parent,name),suffix=2;while(existsSync(target)){target=join(parent,`${base} (${suffix++})${extension}`);if(suffix>10000)throw Error('没有可用的解压目标名称');}return target;};
       const temporary=join(parent,`.one-extract-${id}`);
       try{
         const messages=await this.execute(owner,id,'extract',[source,temporary,selected.join(','),String(encoding(request.encoding))],password(request.password));
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认解压成功');
-        await rename(temporary,target);
+        const top=destination==='smart'?await readdir(temporary):[];
+        let target:string;
+        if(top.length===1){
+          const extracted=join(temporary,top[0]),info=await lstat(extracted);
+          if(!info.isFile()&&!info.isDirectory())throw Error('压缩包包含无法安全提交的条目');
+          target=uniqueTarget(top[0],info.isFile());
+          if(info.isFile())await link(extracted,target);else await rename(extracted,target);
+        }else{
+          target=uniqueTarget(basename(source,extname(source)));
+          await rename(temporary,target);
+        }
         return {path:target,count:result.count};
       }finally{await rm(temporary,{recursive:true,force:true}).catch(()=>{});}
     }

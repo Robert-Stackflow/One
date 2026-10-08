@@ -5,6 +5,6 @@ export type ArchiveProgress = {id:string;operation:'create'|'extract'|'test';don
 export type ArchiveResult = {path:string;count:number};
 export type ArchiveRequest =
   | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding}
-  | {operation:'create';path:string;sources:string[];password?:string}
-  | {operation:'extract';path:string;parent:string;selected?:number[];password?:string;encoding?:ArchiveEncoding}
+  | {operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number}
+  | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart';selected?:number[];password?:string;encoding?:ArchiveEncoding}
   | {operation:'test';path:string;password?:string;encoding?:ArchiveEncoding};

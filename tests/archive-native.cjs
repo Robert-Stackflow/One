@@ -2,6 +2,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
+const crypto=require('node:crypto');
 const {spawnSync}=require('node:child_process');
 
 const helper=path.resolve('dist/native/One.Archive.exe');
@@ -36,10 +37,20 @@ try{
   const selected=path.join(root,'selected');const index=items.find(item=>item.name==='中文目录/').index;
   call(['extract',zip,selected,String(index),'0'],'secret');
   assert.equal(fs.readFileSync(path.join(selected,'中文目录','nested.txt'),'utf8'),'nested content');
+  const large=path.join(root,'large.bin'),largeData=crypto.randomBytes(3*1024*1024);
+  fs.writeFileSync(large,largeData);
+  const split=path.join(root,'split.zip');
+  call(['create',split,'--volume=1048576',large]);
+  assert(fs.existsSync(path.join(root,'split.z01')),'split ZIP must create a .z01 volume');
+  assert.equal(call(['test',split,'0']).at(-1).count,1);
+  const sevenZip=spawnSync('7z',['t','-y',split],{encoding:'utf8',maxBuffer:1024*1024});
+  if(!sevenZip.error)assert.equal(sevenZip.status,0,sevenZip.stdout+'\n'+sevenZip.stderr);
+  const splitOutput=path.join(root,'split-output');call(['extract',split,splitOutput,'','0']);
+  assert.deepEqual(fs.readFileSync(path.join(splitOutput,'large.bin')),largeData);
   for(const [index,name] of ['../escape.txt','C:/escape.txt','CON.txt','folder/file.txt:stream'].entries()){
     const evil=path.join(root,`evil-${index}.zip`),outside=path.join(root,`evil-${index}-out`);rawZip(name,evil);
     assert.match(call(['extract',evil,outside,'','0'], '',2).at(-1).message,/unsafe/i);
     assert(!fs.existsSync(path.join(root,'escape.txt')));
   }
-  console.log('Archive native smoke passed: AES, Unicode, selected folders, empty folders, CRC, unsafe paths.');
+  console.log('Archive native smoke passed: AES, Unicode, selected folders, empty folders, split ZIP, CRC, unsafe paths.');
 }finally{fs.rmSync(root,{recursive:true,force:true});}

@@ -10,6 +10,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 #include "mz.h"
 #include "mz_os.h"
@@ -254,7 +255,8 @@ static void extract(Reader &reader, const std::vector<Entry> &items, const fs::p
     emit("{\"type\":\"result\",\"count\":" + std::to_string(done) + "}");
 }
 
-static void create(const fs::path &destination, const std::vector<fs::path> &sources, const std::string &password) {
+static void create(const fs::path &destination, const std::vector<fs::path> &sources,
+                   const std::string &password, int64_t volume_size) {
     if (sources.empty() || fs::exists(destination)) fail("Archive target already exists or has no input");
     void *writer = mz_zip_writer_create();
     if (!writer) fail("Cannot initialize ZIP writer");
@@ -263,7 +265,7 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
         mz_zip_writer_set_store_links(writer, 0);
         mz_zip_writer_set_compress_level(writer, 6);
         if (!password.empty()) { mz_zip_writer_set_password(writer, password.c_str()); mz_zip_writer_set_aes(writer, 1); }
-        if (mz_zip_writer_open_file(writer, utf8(destination.wstring()).c_str(), 0, 0) != MZ_OK) fail("Cannot create ZIP file");
+        if (mz_zip_writer_open_file(writer, utf8(destination.wstring()).c_str(), volume_size, 0) != MZ_OK) fail("Cannot create ZIP file");
         for (size_t i = 0; i < sources.size(); ++i) {
             const auto &path = sources[i];
             if (!fs::exists(path) || fs::is_symlink(path)) fail("Source is missing or a link");
@@ -304,9 +306,18 @@ int wmain(int argc, wchar_t **argv) {
         std::string password = password_from_stdin();
         if (mode == L"create") {
             if (argc < 4) fail("Create requires input paths");
+            int first_source = 3;
+            int64_t volume_size = 0;
+            if (std::wstring_view(argv[3]).starts_with(L"--volume=")) {
+                volume_size = std::stoll(argv[3] + 9);
+                if (volume_size < 1048576 || volume_size > (int64_t)64 * 1024 * 1024 * 1024)
+                    fail("ZIP volume size must be between 1 MiB and 64 GiB");
+                first_source = 4;
+            }
+            if (first_source >= argc) fail("Create requires input paths");
             std::vector<fs::path> paths;
-            for (int i = 3; i < argc; ++i) paths.emplace_back(argv[i]);
-            create(argv[2], paths, password);
+            for (int i = first_source; i < argc; ++i) paths.emplace_back(argv[i]);
+            create(argv[2], paths, password, volume_size);
         } else if (mode == L"list" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             if (mode == L"list") {
