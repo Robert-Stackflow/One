@@ -1,4 +1,5 @@
 #include "common.h"
+#include "resources.h"
 #include "sevenzip-update.h"
 #include <windows.h>
 #include <oleauto.h>
@@ -245,11 +246,13 @@ void seven_rewrite(IUnknown *original,const fs::path &destination,
     try{
         if(original->QueryInterface(iid(6,0xa0),reinterpret_cast<void**>(&archive))!=S_OK||!archive)fail("7Z archive cannot be updated");
         if(archive->QueryInterface(iid(6,3),reinterpret_cast<void**>(&properties))!=S_OK||!properties)fail("7Z writer does not support properties");
-        const wchar_t *keys[]={L"he"};PROPVARIANT value{};value.vt=VT_BOOL;value.boolVal=headers?VARIANT_TRUE:VARIANT_FALSE;
-        if(properties->SetProperties(keys,&value,1)!=S_OK)fail("Cannot preserve 7Z header encryption");
+        const wchar_t *keys[]={L"he",L"mt"};PROPVARIANT values[2]{};values[0].vt=VT_BOOL;values[0].boolVal=headers?VARIANT_TRUE:VARIANT_FALSE;
+        values[1].vt=VT_UI4;values[1].ulVal=archive_resources().threads;
+        if(properties->SetProperties(keys,values,2)!=S_OK)fail("Cannot preserve 7Z encryption and thread options");
         callback=new RewriteRequest(nodes,names,password,encrypted||headers,property);
         output=new Output(destination);if(!output->valid())fail("Cannot create staging 7Z","write");
         const auto code=archive->UpdateItems(output,callback->count(),callback);
+        if(code==E_OUTOFMEMORY)fail("7Z update exceeded the memory budget; increase the memory limit","resource");
         if(code!=S_OK||callback->failed||!output->flush())fail("Cannot update 7Z; source data changed, is unavailable or could not be written");
         callback->Release();callback=nullptr;output->Release();output=nullptr;properties->Release();properties=nullptr;archive->Release();archive=nullptr;
     }catch(...){if(callback)callback->Release();if(output)output->Release();if(properties)properties->Release();if(archive)archive->Release();throw;}
@@ -273,14 +276,19 @@ void seven_create(const fs::path &destination,const std::vector<fs::path> &sourc
         auto class_id=archive_clsid(format),interface_id=iid(6,0xa0);
         if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)fail("Cannot initialize archive writer");
         auto property_id=iid(6,3);
-        if(format==7&&(archive->QueryInterface(property_id,reinterpret_cast<void**>(&properties))!=S_OK||!properties))fail("7Z writer does not support properties");
-        if(!password.empty()){
-            const wchar_t *names[]={L"he"};PROPVARIANT values{};PropVariantInit(&values);values.vt=VT_BOOL;values.boolVal=VARIANT_TRUE;
-            if(properties->SetProperties(names,&values,1)!=S_OK)fail("Cannot enable encrypted 7Z headers");
+        if(format!=0xee){
+            if(archive->QueryInterface(property_id,reinterpret_cast<void**>(&properties))!=S_OK||!properties)fail("Archive writer does not support compression options");
+            const auto &resources=archive_resources();
+            const wchar_t *names[]={L"x",L"mt",L"he"};PROPVARIANT values[3]{};
+            values[0].vt=VT_UI4;values[0].ulVal=resources.level;values[1].vt=VT_UI4;values[1].ulVal=resources.threads;
+            values[2].vt=VT_BOOL;values[2].boolVal=password.empty()?VARIANT_FALSE:VARIANT_TRUE;
+            if(properties->SetProperties(names,values,format==7?3:format==0x0c?2:1)!=S_OK)fail("Cannot apply archive compression options");
         }
         output=new Output(destination);if(!output->valid())fail("Cannot create archive target");created=true;
         callback=new Request(items,password);
-        if(archive->UpdateItems(output,(U32)items.size(),callback)!=S_OK||!output->flush())fail("Cannot finish archive");
+        const auto code=archive->UpdateItems(output,(U32)items.size(),callback);
+        if(code==E_OUTOFMEMORY)fail("Compression exceeded the memory budget; increase the limit or use a lower level","resource");
+        if(code!=S_OK||!output->flush())fail("Cannot finish archive");
         callback->Release();callback=nullptr;output->Release();output=nullptr;
         if(properties){properties->Release();properties=nullptr;}
         archive->Release();archive=nullptr;

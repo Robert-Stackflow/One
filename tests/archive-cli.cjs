@@ -35,6 +35,9 @@ async function main(){
   };
   assert((await run(['--help'])).out.includes('One.Cli.exe'));
   const input=path.join(root,'中文 & input');await fs.mkdir(input);await fs.writeFile(path.join(input,'hello.txt'),'hello CLI');await fs.writeFile(path.join(input,'-leading $().txt'),'literal');
+  const stored=path.join(root,'store-only.zip');await run(['create','--json','--output',stored,'--level','0','--threads','1','--memory-mib','128',path.join(input,'hello.txt')]);
+  const storedZip=await JSZip.loadAsync(await fs.readFile(stored));assert.equal(storedZip.file('hello.txt')._data.compressedSize,Buffer.byteLength('hello CLI'));
+  await run(['create','--json','--output','invalid-level.zip','--level','10',input],'',2);await run(['test','--json','--memory-mib','127',stored],'',2);
   await run(['create','--json','--output',path.join(root,'literal.zip'),'--','-leading $().txt'],'',0,cli,input);
   await run(['create','--json','--output','中文 archive.zip',input]);
   const archive=path.join(root,'中文 archive.zip');

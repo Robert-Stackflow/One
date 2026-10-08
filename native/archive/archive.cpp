@@ -20,6 +20,7 @@
 #include "mz_zip.h"
 #include "mz_zip_rw.h"
 #include "common.h"
+#include "resources.h"
 #include "browse.h"
 #include "zip-common.h"
 
@@ -319,11 +320,12 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
                    const std::string &password, int64_t volume_size) {
     if (sources.empty() || fs::exists(destination)) fail("Archive target already exists or has no input");
     void *writer = mz_zip_writer_create();
-    if (!writer) fail("Cannot initialize ZIP writer");
+    if (!writer) fail("Cannot initialize ZIP writer","resource");
     try {
         mz_zip_writer_set_follow_links(writer, 0);
         mz_zip_writer_set_store_links(writer, 0);
-        mz_zip_writer_set_compress_level(writer, 6);
+        mz_zip_writer_set_compress_level(writer, (int16_t)archive_resources().level);
+        if(archive_resources().level==0)mz_zip_writer_set_compress_method(writer,MZ_COMPRESS_METHOD_STORE);
         if (!password.empty()) { mz_zip_writer_set_password(writer, password.c_str()); mz_zip_writer_set_aes(writer, 1); }
         if (mz_zip_writer_open_file(writer, utf8(destination.wstring()).c_str(), volume_size, 0) != MZ_OK) fail("Cannot create ZIP file","write");
         for (size_t i = 0; i < sources.size(); ++i) {
@@ -344,7 +346,7 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
                 } else if (fs::is_regular_file(item)) {
                     err = mz_zip_writer_add_file(writer, utf8(item.wstring()).c_str(), name.c_str());
                 } else fail("Source contains an unsupported file");
-                if (err != MZ_OK) fail("Cannot add source to ZIP: " + utf8(item.wstring()));
+                if (err != MZ_OK) fail("Cannot add source to ZIP: " + utf8(item.wstring()),err==MZ_MEM_ERROR?"resource":"archive");
             };
             if (fs::is_directory(path)) {
                 add(path, path.parent_path());
@@ -375,6 +377,7 @@ int wmain(int argc, wchar_t **argv) {
     _setmode(_fileno(stdout), _O_BINARY);
     try {
         if (argc < 3) fail("Usage: One.Archive.exe list|create|extract|test ...");
+        ArchiveResourceJob resources;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
         if (mode == L"create") {
@@ -472,6 +475,9 @@ int wmain(int argc, wchar_t **argv) {
         return 0;
     } catch (const ArchiveError &error) {
         emit("{\"type\":\"error\",\"code\":"+json(error.code)+",\"message\":" + json(error.what()) + "}");
+        return 2;
+    } catch (const std::bad_alloc &) {
+        emit("{\"type\":\"error\",\"code\":\"resource\",\"message\":\"Archive memory budget exceeded; increase the limit or use a lower compression level\"}");
         return 2;
     } catch (const std::exception &error) {
         emit("{\"type\":\"error\",\"message\":" + json(error.what()) + "}");

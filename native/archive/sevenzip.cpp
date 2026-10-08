@@ -171,7 +171,8 @@ public:
         for(int candidate:formats(format)){
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);
             if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)continue;
-            if(archive->Open(input,&scan,callback)==S_OK)return;
+            const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK)return;
+            if(opened==E_OUTOFMEMORY)fail("Opening the archive exceeded the memory budget","resource");
             archive->Close();archive->Release();archive=nullptr;
             input->Seek(0,FILE_BEGIN,nullptr);
         }
@@ -355,7 +356,7 @@ void seven_test(const fs::path &source,const std::string &password,int format,bo
     OpenArchive reader(source,password,format);auto items=reader.items();
     auto callback=new ExtractRequest(items,{},password,(U32)items.size(),true);
     HRESULT code=reader.get()->Extract(nullptr,U32(-1),1,callback);
-    const auto error=callback->errorCode;callback->Release();if(code!=S_OK)fail("Archive integrity check failed or password is incorrect",error);
+    const auto error=callback->errorCode;callback->Release();if(code==E_OUTOFMEMORY)fail("Archive integrity check exceeded the memory budget","resource");if(code!=S_OK)fail("Archive integrity check failed or password is incorrect",error);
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(items.size())+"}");
 }
 
@@ -374,7 +375,7 @@ void seven_extract(const fs::path &source,const fs::path &destination,
     fs::create_directory(destination);
     auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false);
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
-    const auto error=archive_cancelled()?"cancelled":callback->errorCode;callback->Release();if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
+    const auto error=archive_cancelled()?"cancelled":callback->errorCode;callback->Release();if(code==E_OUTOFMEMORY)fail("Archive extraction exceeded the memory budget","resource");if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
 }
 

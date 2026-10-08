@@ -10,6 +10,7 @@ import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 import type {ArchiveTasks} from './archive-tasks';
+import {archiveResources,archiveLevel,type ArchiveResources} from '../shared/archive-options';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive'){super(message);this.name='ArchiveFailure';}}
@@ -28,14 +29,14 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
-  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean}>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number}>();
   private stopped=false;
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
   private dragCache:ArchiveDragCache;
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&{compressionLevel?:number}=()=>archiveResources()){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
   }
@@ -63,8 +64,10 @@ export class ArchiveService {
     if(this.requests.size>=32)return Promise.reject(Error('同时运行的压缩任务过多，请等待当前任务完成'));
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
+    let resources:ArchiveResources,level:number;
+    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
-    const job={owner,cancelled:false,committing:false,finishing:false};this.jobs.set(id,job);
+    const job={owner,cancelled:false,committing:false,finishing:false,resources,level};this.jobs.set(id,job);
     const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown;
       try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path));
         this.checkpoint(id);result=await this.perform(owner,request,id);return result;
@@ -80,7 +83,8 @@ export class ArchiveService {
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
-      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup});
+      const options=this.jobs.get(id)!;
+      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB)}});
       const task={child,owner,committing:false,cooperative:operation==='publish'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;
@@ -96,7 +100,8 @@ export class ArchiveService {
               else{task.committing=true;if(operation==='publish'){child.stdin.write(Buffer.from([1]));this.notify(owner,{id,operation:'extract',done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
             else if(message.type==='progress')this.notify(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
-            else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled'].includes(message.code??''))errorCode=message.code!;}
+            else if((message as {type:string}).type==='resources'){this.diagnostic('archive-resources',JSON.stringify({id,operation,...options.resources,level:options.level}));}
+            else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled','resource'].includes(message.code??''))errorCode=message.code!;if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
           }catch{failed=true;error='压缩程序返回无效数据';child.kill();}

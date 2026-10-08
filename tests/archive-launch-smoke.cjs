@@ -15,7 +15,7 @@ async function main(){
   await build({entryPoints:['src/main/archive-launch.ts'],outfile:launch,bundle:true,platform:'node'});
   const {defaultSettings,validateSettings,mergeSettings}=require(prefs),{archiveLaunchPath}=require(launch);
   const old=defaultSettings();delete old.archive;
-  assert.deepEqual(validateSettings(old).archive,{doubleClick:'smart',defaultFormat:'zip',openCompleted:false,conflict:'rename'});
+  assert.deepEqual(validateSettings(old).archive,{doubleClick:'smart',defaultFormat:'zip',openCompleted:false,conflict:'rename',compressionLevel:6,threads:2,memoryMiB:1024});
   const legacy=defaultSettings();delete legacy.archive.conflict;assert.equal(validateSettings(legacy).archive.conflict,'rename');
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{doubleClick:'delete'}}));
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{openCompleted:'true'}}));

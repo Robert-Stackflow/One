@@ -3,6 +3,7 @@ import {open,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 import type {ArchiveEdit,ArchiveEncoding,ArchiveRequest,ArchiveListing,ArchiveResult} from '../shared/archive';
 import {archiveEditPacket} from './archive-update';
+import {archiveLevel,archiveResources} from '../shared/archive-options';
 
 export class CliFailure extends Error {
  constructor(message:string,readonly exitCode:number=2){super(message);this.name='CliFailure';}
@@ -11,19 +12,20 @@ type Job={operation:'list'|'create'|'extract'|'test'|'update';request:ArchiveReq
 export type CliCommand={json:boolean;progress:boolean;passwordStdin:boolean;help:boolean;jobs:Job[];jobsFile?:string};
 export const cliHelp=`One.Cli.exe archive <list|create|extract|test|update|batch> [options] [--] paths
 
-create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size SIZE] SOURCES...
+create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size SIZE] [--level 0-9] SOURCES...
 extract: --output DIRECTORY [--destination smart|folder|here] [--conflict rename|skip|replace]
          [--select 0,1,...] ARCHIVES...
 list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
+resources: --threads 1-64 (compression), --memory-mib 128-8192 (per helper, default 1024)
 
 Relative paths resolve from the working directory; batch job paths resolve from the jobs file.
 Update add-source paths resolve from the changes file. Passwords must be piped through stdin.
 No main window or Explorer folder is opened. Existing archive targets are never overwritten.
 Exit: 0 success, 1 operation failure, 2 arguments, 3 password, 4 invalid archive,
-      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 130 cancelled, 126 runtime missing.
+      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 130 cancelled, 126 runtime missing.
 `;
 function argument(condition:unknown,message:string):asserts condition {if(!condition)throw new CliFailure(message);}
 const filePath=(value:string,cwd:string)=>{argument(typeof value==='string'&&value.length>0&&value.length<=32768&&!/[\0\r\n]/.test(value),'Invalid path');return resolve(cwd,value);};
@@ -36,7 +38,8 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  const operation=args.shift()!;
  argument(['list','create','extract','test','update','batch'].includes(operation),'Unknown archive command');
  const flags=new Set(['json','progress','password-stdin','help']);
- const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
+ const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
+ for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib');
  const options=new Map<string,string>(),paths:string[]=[];let literal=false;
  for(let i=0;i<args.length;i++){
   const token=args[i];if(token==='--'&&!literal){literal=true;continue;}
@@ -53,12 +56,17 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  const encodingText=options.get('encoding')??'auto';argument(['auto','437','932','936','950','65001'].includes(encodingText),'Invalid code page');
  const encoding=(encodingText==='auto'?0:Number(encodingText)) as ArchiveEncoding;
  if(operation==='batch'){argument(paths.length===0&&options.has('jobs'),'batch requires --jobs and no paths');result.jobsFile=filePath(options.get('jobs')!,cwd);return result;}
+ const number=(key:string)=>{const value=options.get(key);if(value===undefined)return undefined;argument(/^\d+$/.test(value),`--${key} requires an integer`);return Number(value);};
+ let resources:ReturnType<typeof archiveResources>;
+ try{resources=archiveResources({threads:number('threads'),memoryMiB:number('memory-mib')});}catch(error){if(error instanceof CliFailure)throw error;throw new CliFailure(error instanceof Error?error.message:'Invalid resources');}
  argument(paths.length>0&&paths.length<=128,'Supply 1–128 paths');
  if(operation==='create'){
   argument(options.has('output'),'create requires --output');const path=filePath(options.get('output')!,cwd);argument(targetPattern.test(path),'Unsupported output archive format');
   const format=options.get('format');if(format){argument(['zip','7z','tar','tar.gz','tar.xz','gz','xz'].includes(format),'Unsupported format');const lower=path.toLowerCase(),actual=/\.(tar\.gz|tgz)$/.test(lower)?'tar.gz':/\.(tar\.xz|txz)$/.test(lower)?'tar.xz':lower.split('.').at(-1);argument(actual===format,'--format must match the output extension');}
   let volumeBytes=0;const volume=options.get('volume-size');if(volume){const match=/^(\d+)(KiB|MiB|GiB)?$/i.exec(volume);argument(match,'Volume size requires integer bytes or KiB/MiB/GiB');const unit=match[2]?.toLowerCase();volumeBytes=Number(match[1])*(unit==='kib'?1024:unit==='mib'?1024**2:unit==='gib'?1024**3:1);argument(Number.isSafeInteger(volumeBytes)&&volumeBytes>=1024**2&&volumeBytes<=64*1024**3,'Volume size must be 1 MiB–64 GiB');argument(/\.(zip|7z)$/i.test(path),'Only ZIP and 7Z support volumes');}
-  result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes}}];return result;
+  let level:number|undefined;try{level=options.has('level')?archiveLevel(number('level')):undefined;}catch{throw new CliFailure('--level must be an integer from 0 to 9');}
+  argument(!/\.tar$/i.test(path)||level===undefined||level===0,'TAR stores files without compression; only --level 0 is valid');
+  result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,...resources}}];return result;
  }
  argument(paths.every(path=>sourcePattern.test(path)),'Unsupported input archive format');
  if(operation==='extract'){
@@ -71,6 +79,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];
  }else result.jobs=paths.map(path=>({operation:operation as 'list'|'test',request:{operation:operation as 'list'|'test',path,encoding}}));
+ for(const job of result.jobs)Object.assign(job.request,resources);
  return result;
 }
 
@@ -90,7 +99,7 @@ export interface CliIO {out:(line:string)=>Promise<void>;err:(line:string)=>Prom
 export function cliExit(error:unknown,writing=false):number {
  if(error instanceof CliFailure)return error.exitCode;
  const code=error&&typeof error==='object'&&'code' in error?String(error.code):'';
- const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
+ const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
  if(['ENOENT','ENOTDIR','EISDIR'].includes(code))return 5;
  if(['EEXIST','ENOSPC','EROFS'].includes(code))return 6;
  if(['EACCES','EPERM','EBUSY'].includes(code))return writing?6:5;
