@@ -7,6 +7,7 @@ export async function readShellRequest(args:string[],profile:string):Promise<Fil
  if(dirname(path).toLowerCase()!==root.toLowerCase()||!/[\\/][a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.json$/i.test(path))throw Error('右键菜单请求路径无效');
  const handle=await open(path,'r');let value;
  try{const info=await handle.stat();if(!info.isFile()||info.size>4*1024*1024||Date.now()-info.mtimeMs>5*60*1000)throw Error('右键菜单请求已失效');value=JSON.parse(await handle.readFile('utf8'));}finally{await handle.close();}
- if(!value||!['locksmith','rename'].includes(value.tool)||!Array.isArray(value.paths)||!value.paths.length||value.paths.length>(value.tool==='locksmith'?32:4096)||value.paths.some((p:unknown)=>typeof p!=='string'||p.length>32767||!isAbsolute(p)||/[\x00\r\n]/.test(p)))throw Error('右键菜单选择无效');
+ if(!value||!['locksmith','rename','archive-create','archive-extract'].includes(value.tool)||!Array.isArray(value.paths)||!value.paths.length||value.paths.length>(value.tool==='archive-extract'?1:value.tool==='archive-create'?128:value.tool==='locksmith'?32:4096)||value.paths.some((p:unknown)=>typeof p!=='string'||p.length>32767||!isAbsolute(p)||/[\x00\r\n]/.test(p)))throw Error('右键菜单选择无效');
+ if(value.tool==='archive-extract'&&!/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(value.paths[0]))throw Error('所选文件不是支持的压缩包');
  await unlink(path);return{tool:value.tool,paths:[...new Set<string>(value.paths)]};
 }

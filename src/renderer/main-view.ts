@@ -110,6 +110,7 @@ export function renderMain() {
     else if(target.page==='tools'&&target.tool==='integrity')await toolsController!.openIntegrity(target.folder);
     else if(target.page==='tools'&&target.folder)await toolsController!.openFolder(target.folder);
     else if(target.page==='locksmith')await toolsController!.openLocksmith(target.paths||[]);
+    else if(target.page==='archive'&&target.action)archiveController!.openShell(target.action,target.paths||[]);
     else if(target.page==='home'&&target.section==='tasks')q('overview-task-center').scrollIntoView({block:'start'});
   })().catch(toast);});
   api.onLockTarget(path=>{void navigate('tools').then(active=>{if(active)return toolsController!.openLocksmith([path]);}).catch(toast);});

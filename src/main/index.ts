@@ -268,7 +268,10 @@ async function shellInvocation(args:string[],source='launch'){
    const target=await readShellRequest(args,app.getPath('userData'));
    if(!target)return;
    runtimeLog(app.getPath('userData'),'shell-request-open',`source=${source} tool=${target.tool} count=${target.paths.length}`);
-   openFileAction(target);
+   if(target.tool==='archive-create'||target.tool==='archive-extract'){
+    const send=()=>{if(!main.isDestroyed()&&!main.webContents.isDestroyed()){showMain();main.webContents.send('one:navigate-page',{page:'archive',action:target.tool==='archive-create'?'create':'extract',paths:target.paths});}};
+    if(main.webContents.isLoadingMainFrame())main.webContents.once('did-finish-load',send);else send();
+   }else openFileAction(target);
   }catch(error){
    if((error as NodeJS.ErrnoException).code==='ENOENT')return;
    runtimeLog(app.getPath('userData'),'shell-request-error',String(error));

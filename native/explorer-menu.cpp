@@ -5,16 +5,26 @@
 #include <vector>
 #include <atomic>
 #include <algorithm>
+#include <cwctype>
 // Read a bounded local configuration next to this DLL. No Electron process or scanning on the menu path.
 static const CLSID locks={0x49a8359c,0x85b9,0x4e7a,{0x90,0x5e,0x6a,0x72,0x49,0x11,0x75,0x0a}};
 static const CLSID renameCommand={0x57aba3e6,0x8d9a,0x4a16,{0xa7,0x17,0x65,0x41,0xb2,0x24,0x1a,0x36}};
+static const CLSID archiveCreate={0x9e88b01d,0xc56c,0x4730,{0xb3,0xc4,0x18,0x59,0x1f,0x6a,0xe4,0x0b}};
+static const CLSID archiveExtract={0x0a2b662f,0x8197,0x4bd9,{0x91,0x31,0x02,0x9b,0x52,0x9c,0x11,0x9e}};
+enum class Action {locksmith,rename,archiveCreate,archiveExtract};
+static const wchar_t* flag(Action action){switch(action){case Action::locksmith:return L"Locksmith";case Action::rename:return L"Rename";case Action::archiveCreate:return L"ArchiveCreate";default:return L"ArchiveExtract";}}
+static const wchar_t* title(Action action){switch(action){case Action::locksmith:return L"文件占用";case Action::rename:return L"批量重命名";case Action::archiveCreate:return L"创建压缩包";default:return L"解压压缩包";}}
+static const char* tool(Action action){switch(action){case Action::locksmith:return "locksmith";case Action::rename:return "rename";case Action::archiveCreate:return "archive-create";default:return "archive-extract";}}
+static const CLSID& canonical(Action action){switch(action){case Action::locksmith:return locks;case Action::rename:return renameCommand;case Action::archiveCreate:return archiveCreate;default:return archiveExtract;}}
+static DWORD limit(Action action){switch(action){case Action::locksmith:return 32;case Action::rename:return 4096;case Action::archiveCreate:return 128;default:return 1;}}
+static bool archive_path(std::wstring path){std::transform(path.begin(),path.end(),path.begin(),[](wchar_t c){return std::towlower(c);});for(const auto extension:{L".zip",L".7z",L".7z.001",L".rar",L".r00",L".tar",L".tar.gz",L".tgz",L".gz",L".tar.xz",L".txz",L".xz"})if(path.ends_with(extension))return true;return false;}
 static std::atomic<long> objects=0;
 static std::wstring setting(const wchar_t* name){
  HMODULE module=nullptr;if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)&setting,&module))return{};std::vector<wchar_t> path(32768);DWORD length=GetModuleFileNameW(module,path.data(),(DWORD)path.size());if(!length||length>=path.size())return{};std::wstring file(path.data(),length);file=file.substr(0,file.find_last_of(L"\\/"))+L"\\shell-config.bin";
  HANDLE input=CreateFileW(file.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(input==INVALID_HANDLE_VALUE)return{};DWORD size=GetFileSize(input,nullptr);if(size>256*1024||size%2){CloseHandle(input);return{};}std::vector<wchar_t> content(size/2+1,0);DWORD read=0;BOOL ok=ReadFile(input,content.data(),size,&read,nullptr);CloseHandle(input);if(!ok||read!=size)return{};
- const wchar_t* names[]={L"Executable",L"AppPath",L"Profile",L"Icon",L"Locksmith",L"Rename"};size_t offset=0;for(auto field:names){if(offset>=content.size())return{};const wchar_t* value=content.data()+offset;size_t count=wcslen(value);if(offset+count>=content.size())return{};if(wcscmp(name,field)==0)return value;offset+=count+1;}return{};
+ const wchar_t* names[]={L"Executable",L"AppPath",L"Profile",L"Icon",L"Locksmith",L"Rename",L"ArchiveCreate",L"ArchiveExtract"};size_t offset=0;for(auto field:names){if(offset>=content.size())return{};const wchar_t* value=content.data()+offset;size_t count=wcslen(value);if(offset+count>=content.size())return{};if(wcscmp(name,field)==0)return value;offset+=count+1;}return{};
 }
-static bool enabled(bool rename){return setting(rename?L"Rename":L"Locksmith")==L"1";}
+static bool enabled(Action action){return setting(flag(action))==L"1";}
 static std::wstring quote(const std::wstring& s){std::wstring out=L"\"";unsigned slashes=0;for(wchar_t c:s){if(c==L'\\'){slashes++;continue;}if(c==L'\"'){out.append(slashes*2+1,L'\\');out+=c;}else{out.append(slashes,L'\\');out+=c;}slashes=0;}out.append(slashes*2,L'\\');return out+L"\"";}
 static std::string utf8(const std::wstring& s){int size=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s.data(),(int)s.size(),nullptr,0,nullptr,nullptr);if(!size)return{};std::string out(size,'\0');WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s.data(),(int)s.size(),out.data(),size,nullptr,nullptr);return out;}
 static std::string json(const std::wstring& s){std::string out="\"";for(unsigned char c:utf8(s)){if(c=='"'||c=='\\')out+='\\';if(c<32){char hex[7];sprintf_s(hex,"\\u%04x",c);out+=hex;}else out+=(char)c;}return out+'"';}
@@ -24,35 +34,38 @@ static HRESULT launch(const std::wstring& request){const auto exe=setting(L"Exec
  STARTUPINFOW startup{sizeof(startup)};PROCESS_INFORMATION process{};if(!CreateProcessW(exe.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_UNICODE_ENVIRONMENT,block.data(),nullptr,&startup,&process))return HRESULT_FROM_WIN32(GetLastError());CloseHandle(process.hThread);CloseHandle(process.hProcess);return S_OK;
 }
 class Command final:public IExplorerCommand {
- std::atomic<ULONG> refs{1};bool rename;
-public:explicit Command(bool r):rename(r){objects++;}~Command(){objects--;}
+ std::atomic<ULONG> refs{1};Action action;
+public:explicit Command(Action a):action(a){objects++;}~Command(){objects--;}
  HRESULT __stdcall QueryInterface(REFIID id,void** out) override{if(!out)return E_POINTER;*out=nullptr;if(id==IID_IUnknown||id==IID_IExplorerCommand){*out=static_cast<IExplorerCommand*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
  ULONG __stdcall AddRef() override{return ++refs;}ULONG __stdcall Release() override{ULONG n=--refs;if(!n)delete this;return n;}
- HRESULT __stdcall GetTitle(IShellItemArray*,PWSTR* out) override{return SHStrDupW(rename?L"批量重命名":L"文件占用",out);}
+ HRESULT __stdcall GetTitle(IShellItemArray*,PWSTR* out) override{return SHStrDupW(title(action),out);}
  HRESULT __stdcall GetIcon(IShellItemArray*,PWSTR* out) override{const auto icon=setting(L"Icon");return icon.empty()?E_NOTIMPL:SHStrDupW(icon.c_str(),out);}
  HRESULT __stdcall GetToolTip(IShellItemArray*,PWSTR* out) override{*out=nullptr;return E_NOTIMPL;}
- HRESULT __stdcall GetCanonicalName(GUID* out) override{*out=rename?renameCommand:locks;return S_OK;}
- HRESULT __stdcall GetState(IShellItemArray* items,BOOL,EXPCMDSTATE* out) override{if(!out)return E_POINTER;DWORD count=0;*out=ECS_HIDDEN;if(!enabled(rename))return S_OK;
+ HRESULT __stdcall GetCanonicalName(GUID* out) override{*out=canonical(action);return S_OK;}
+ HRESULT __stdcall GetState(IShellItemArray* items,BOOL,EXPCMDSTATE* out) override{if(!out)return E_POINTER;DWORD count=0;*out=ECS_HIDDEN;if(!enabled(action))return S_OK;
   // Explorer may query the command before supplying the selection. Validate the actual items in Invoke.
-  if(!items||(SUCCEEDED(items->GetCount(&count))&&count&&count<=(rename?4096u:32u)))*out=ECS_ENABLED;return S_OK;}
+  if(!items){*out=ECS_ENABLED;return S_OK;}
+  if(FAILED(items->GetCount(&count))||!count||count>limit(action))return S_OK;
+  if(action==Action::archiveExtract){IShellItem* item=nullptr;if(FAILED(items->GetItemAt(0,&item)))return S_OK;SFGAOF attributes=0;HRESULT kind=item->GetAttributes(SFGAO_FOLDER,&attributes);PWSTR path=nullptr;HRESULT hr=item->GetDisplayName(SIGDN_FILESYSPATH,&path);item->Release();if(FAILED(kind)||(attributes&SFGAO_FOLDER)||FAILED(hr)||!path){CoTaskMemFree(path);return S_OK;}bool supported=archive_path(path);CoTaskMemFree(path);if(!supported)return S_OK;}
+  *out=ECS_ENABLED;return S_OK;}
  HRESULT __stdcall GetFlags(EXPCMDFLAGS* out) override{*out=ECF_DEFAULT;return S_OK;}
  HRESULT __stdcall EnumSubCommands(IEnumExplorerCommand** out) override{*out=nullptr;return E_NOTIMPL;}
  HRESULT __stdcall Invoke(IShellItemArray* items,IBindCtx*) override {
-  if(!items)return E_INVALIDARG;EXPCMDSTATE state;GetState(items,FALSE,&state);if(state!=ECS_ENABLED)return E_INVALIDARG;DWORD count=0;items->GetCount(&count);std::string content=rename?"{\"tool\":\"rename\",\"paths\":[":"{\"tool\":\"locksmith\",\"paths\":[";
+  if(!items)return E_INVALIDARG;EXPCMDSTATE state;GetState(items,FALSE,&state);if(state!=ECS_ENABLED)return E_INVALIDARG;DWORD count=0;items->GetCount(&count);std::string content="{\"tool\":\""+std::string(tool(action))+"\",\"paths\":[";
   for(DWORD i=0;i<count;i++){IShellItem* item=nullptr;HRESULT hr=items->GetItemAt(i,&item);if(FAILED(hr))return hr;PWSTR path=nullptr;hr=item->GetDisplayName(SIGDN_FILESYSPATH,&path);item->Release();if(FAILED(hr))return hr;if(i)content+=',';content+=json(path);CoTaskMemFree(path);if(content.size()>4*1024*1024-2)return E_INVALIDARG;}content+="]}";
   const auto root=setting(L"Profile")+L"\\shell-requests";if(setting(L"Profile").empty())return E_FAIL;if(!CreateDirectoryW(root.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return HRESULT_FROM_WIN32(GetLastError());GUID guid;HRESULT hr=CoCreateGuid(&guid);if(FAILED(hr))return hr;wchar_t id[40];StringFromGUID2(guid,id,40);std::wstring name(id+1,36),path=root+L"\\"+name+L".json";
   HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return HRESULT_FROM_WIN32(GetLastError());DWORD written=0;BOOL ok=WriteFile(file,content.data(),(DWORD)content.size(),&written,nullptr);CloseHandle(file);if(!ok||written!=content.size()){DeleteFileW(path.c_str());return E_FAIL;}hr=launch(path);if(FAILED(hr))DeleteFileW(path.c_str());return hr;
  }
 };
-class Factory final:public IClassFactory {std::atomic<ULONG> refs{1};bool rename;
-public:explicit Factory(bool r):rename(r){objects++;}~Factory(){objects--;}
+class Factory final:public IClassFactory {std::atomic<ULONG> refs{1};Action action;
+public:explicit Factory(Action a):action(a){objects++;}~Factory(){objects--;}
  HRESULT __stdcall QueryInterface(REFIID id,void** out) override{*out=nullptr;if(id==IID_IUnknown||id==IID_IClassFactory){*out=static_cast<IClassFactory*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
  ULONG __stdcall AddRef() override{return ++refs;}ULONG __stdcall Release() override{ULONG n=--refs;if(!n)delete this;return n;}
- HRESULT __stdcall CreateInstance(IUnknown* outer,REFIID id,void** out) override{if(outer)return CLASS_E_NOAGGREGATION;auto c=new Command(rename);HRESULT hr=c->QueryInterface(id,out);c->Release();return hr;}
+ HRESULT __stdcall CreateInstance(IUnknown* outer,REFIID id,void** out) override{if(outer)return CLASS_E_NOAGGREGATION;auto c=new Command(action);HRESULT hr=c->QueryInterface(id,out);c->Release();return hr;}
  HRESULT __stdcall LockServer(BOOL lock) override{objects+=lock?1:-1;return S_OK;}
 };
 #ifndef ONE_SHELL_LAUNCHER
-STDAPI DllGetClassObject(REFCLSID clsid,REFIID id,void** out){*out=nullptr;if(clsid!=locks&&clsid!=renameCommand)return CLASS_E_CLASSNOTAVAILABLE;auto factory=new Factory(clsid==renameCommand);auto hr=factory->QueryInterface(id,out);factory->Release();return hr;}
+STDAPI DllGetClassObject(REFCLSID clsid,REFIID id,void** out){*out=nullptr;Action action;if(clsid==locks)action=Action::locksmith;else if(clsid==renameCommand)action=Action::rename;else if(clsid==archiveCreate)action=Action::archiveCreate;else if(clsid==archiveExtract)action=Action::archiveExtract;else return CLASS_E_CLASSNOTAVAILABLE;auto factory=new Factory(action);auto hr=factory->QueryInterface(id,out);factory->Release();return hr;}
 STDAPI DllCanUnloadNow(){return objects?S_FALSE:S_OK;}
 #else
 int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int){return FAILED(launch(L""))?1:0;}

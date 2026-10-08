@@ -63,5 +63,9 @@ export function setupArchiveView(){
  find<HTMLButtonElement>('#archive-cancel').onclick=()=>{if(taskId)void api.archiveCancel(taskId);};
  api.onArchiveProgress((value:ArchiveProgress)=>{taskId=value.id;status(`${value.operation==='create'?'正在压缩':value.operation==='extract'?'正在解压':value.operation==='prepare'?'正在打开压缩包':'正在校验'} · ${value.done} / ${value.total||'…'}`,true);});
  installFileDropOverlay(root,{placement:'host',spacious:true,title:'压缩与解压',detail:'拖入常见压缩包浏览，或拖入文件与文件夹创建压缩包',onDrop:paths=>{if(paths.length===1&&/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(paths[0])){showMode('browse');find<HTMLInputElement>('#archive-source').value=paths[0];void load();}else{showMode('create');addPaths(paths);}}});
- return {activate:(_active:boolean)=>{}};
+ return {activate:(_active:boolean)=>{},openShell(action:'create'|'extract',paths:string[]){
+   if(action==='create'){showMode('create');find<HTMLTextAreaElement>('#archive-sources').value='';find<HTMLInputElement>('#archive-target').value='';addPaths(paths);return;}
+   if(paths.length!==1)return status('请选择一个压缩包');
+   showMode('browse');find<HTMLInputElement>('#archive-source').value=paths[0];find<HTMLInputElement>('#archive-password').value='';find<HTMLInputElement>('#archive-parent').value='';void load();
+ }};
 }

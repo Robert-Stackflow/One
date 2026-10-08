@@ -6,7 +6,9 @@ function Status {
  $v=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
  $locks=Get-AppxPackage -Name 'One.ExplorerMenu.Locksmith' -ErrorAction SilentlyContinue
  $rename=Get-AppxPackage -Name 'One.ExplorerMenu.Rename' -ErrorAction SilentlyContinue
- @{locksmith=([bool]$v.Locksmith);rename=([bool]$v.Rename);modern=(([bool]$v.Locksmith -or [bool]$v.Rename) -and (!$v.Locksmith -or [bool]$locks) -and (!$v.Rename -or [bool]$rename))}
+ $archiveCreate=Get-AppxPackage -Name 'One.ExplorerMenu.ArchiveCreate' -ErrorAction SilentlyContinue
+ $archiveExtract=Get-AppxPackage -Name 'One.ExplorerMenu.ArchiveExtract' -ErrorAction SilentlyContinue
+ @{locksmith=([bool]$v.Locksmith);rename=([bool]$v.Rename);archiveCreate=([bool]$v.ArchiveCreate);archiveExtract=([bool]$v.ArchiveExtract);modern=(([bool]$v.Locksmith -or [bool]$v.Rename -or [bool]$v.ArchiveCreate -or [bool]$v.ArchiveExtract) -and (!$v.Locksmith -or [bool]$locks) -and (!$v.Rename -or [bool]$rename) -and (!$v.ArchiveCreate -or [bool]$archiveCreate) -and (!$v.ArchiveExtract -or [bool]$archiveExtract))}
 }
 function Refresh-Shell {
  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class OneShellNotify { [DllImport("shell32.dll")] public static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2); }'
@@ -18,21 +20,21 @@ function Write-LaunchConfig($root,$fields) {
  Move-Item -LiteralPath $temporary -Destination $binary -Force
 }
 function Disable-LaunchConfig($root) {
- if(Test-Path -LiteralPath (Join-Path $root 'shell-config.bin')){Write-LaunchConfig $root @('','','','','0','0')}
+ if(Test-Path -LiteralPath (Join-Path $root 'shell-config.bin')){Write-LaunchConfig $root @('','','','','0','0','0','0')}
 }
 try {
  if($Operation -eq 'set'){
   $c=Get-Content -LiteralPath $Config -Raw -Encoding UTF8 | ConvertFrom-Json
   if(!(Test-Path -LiteralPath $key)){New-Item -Path $key -Force | Out-Null}
   foreach($menu in $c.menus){
-   $flag=if($menu.tool -eq 'locksmith'){'Locksmith'}else{'Rename'}
+   $flag=switch($menu.tool){'locksmith' {'Locksmith'} 'rename' {'Rename'} 'archive-create' {'ArchiveCreate'} 'archive-extract' {'ArchiveExtract'} default {throw '未知右键菜单类型'}}
    $hashName=$flag+'ManifestHash'
    $existing=Get-AppxPackage -Name $menu.packageName -ErrorAction SilentlyContinue
    $clsid="HKCU:\Software\Classes\CLSID\{$($menu.clsid)}"
    if($menu.enabled){
     $icon=Join-Path $menu.root 'one.ico'
     # Explorer may activate the command as soon as registration completes.
-    Write-LaunchConfig $menu.root @([string]$c.executable,[string]$c.appPath,[string]$c.profile,$icon,[string][int]($menu.tool -eq 'locksmith'),[string][int]($menu.tool -eq 'rename'))
+    Write-LaunchConfig $menu.root @([string]$c.executable,[string]$c.appPath,[string]$c.profile,$icon,[string][int]($menu.tool -eq 'locksmith'),[string][int]($menu.tool -eq 'rename'),[string][int]($menu.tool -eq 'archive-create'),[string][int]($menu.tool -eq 'archive-extract'))
     $manifest=Join-Path $menu.root 'AppxManifest.xml';$template=Join-Path $menu.root 'AppxManifest.template.xml'
     $previous=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
     $registeredVersion='';if(Test-Path -LiteralPath $manifest){try{[xml]$registered=Get-Content -LiteralPath $manifest -Raw -Encoding UTF8;$registeredVersion=[string]$registered.Package.Identity.Version}catch{}}
@@ -52,7 +54,8 @@ try {
     $dll=(Select-Xml -LiteralPath $template -XPath "//*[local-name()='Class'][1]").Node.Path
     New-Item -Path "$clsid\InprocServer32" -Force | Out-Null;Set-Item -LiteralPath "$clsid\InprocServer32" -Value (Join-Path $menu.root $dll)
     New-ItemProperty -LiteralPath "$clsid\InprocServer32" -Name ThreadingModel -Value Apartment -Force | Out-Null
-    foreach($type in @('*','Directory')){
+    $types=if($menu.tool -eq 'archive-extract'){@('*')}else{@('*','Directory')}
+    foreach($type in $types){
      $verb="HKCU:\Software\Classes\$type\shell\$($menu.verb)";New-Item -Path $verb -Force | Out-Null;Set-Item -LiteralPath $verb -Value $menu.title
      New-ItemProperty -LiteralPath $verb -Name ExplorerCommandHandler -Value "{$($menu.clsid)}" -Force | Out-Null
      New-ItemProperty -LiteralPath $verb -Name MultiSelectModel -Value Player -Force | Out-Null
