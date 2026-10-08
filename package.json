@@ -39,7 +39,7 @@
     "test:exit": "npm run build && node tests/graceful-exit-smoke.cjs",
     "test:inline-border": "npm run build && node tests/inline-border-smoke.cjs",
     "test:file-tools": "npm run build && node tests/file-tools-smoke.cjs",
-    "test:archive": "node scripts/build-archive.mjs && node tests/archive-native.cjs"
+    "test:archive": "node scripts/build-archive.mjs && node tests/archive-native.cjs && node tests/archive-update.cjs"
   },
   "dependencies": {
     "iconv-lite": "^0.7.3",

@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <cwctype>
 #include <filesystem>
 #include <set>
@@ -18,6 +19,7 @@
 #include "mz_zip.h"
 #include "mz_zip_rw.h"
 #include "common.h"
+#include "zip-common.h"
 
 std::string utf8(const std::wstring &value) {
     if (value.empty()) return {};
@@ -87,19 +89,59 @@ fs::path entry_path(const std::string &name) {
     return fs::u8path(canonical);
 }
 
-struct Reader {
-    void *value = mz_zip_reader_create();
-    explicit Reader(const std::wstring &path, int encoding) {
-        if (!value) fail("Cannot initialize ZIP reader");
-        if (encoding) mz_zip_reader_set_encoding(value, encoding);
-        if (mz_zip_reader_open_file(value, utf8(path).c_str()) != MZ_OK) fail("Cannot open ZIP archive");
+Reader::Reader(const std::wstring &path, int encoding):value(mz_zip_reader_create()),encoding(encoding) {
+    if (!value) fail("Cannot initialize ZIP reader");
+    if (encoding) mz_zip_reader_set_encoding(value, encoding);
+    if (mz_zip_reader_open_file(value, utf8(path).c_str()) != MZ_OK) {
+        mz_zip_reader_delete(&value);
+        fail("Cannot open ZIP archive");
     }
-    ~Reader() { mz_zip_reader_delete(&value); }
-};
+}
+Reader::~Reader() { mz_zip_reader_delete(&value); }
 
-struct Entry { size_t index; std::string name; bool directory; uint64_t size; uint64_t compressed; bool encrypted; };
+std::string zip_name(Reader &reader, const char *name, uint16_t flag,
+                    const uint8_t *extra, uint16_t extra_size, uint16_t unicode_tag) {
+    if (!name) return {};
+    if (flag & MZ_ZIP_FLAG_UTF8) { wide(name); return name; }
+    // Standard legacy ZIPs use CP437. Accept valid UTF-8 without the flag in
+    // auto mode; a manually selected code page always takes precedence.
+    int codepage = reader.encoding;
+    if (!codepage && extra) {
+        uint32_t crc = 0xffffffff;
+        for (const unsigned char *p = reinterpret_cast<const unsigned char *>(name); *p; ++p) {
+            crc ^= *p;
+            for (int bit = 0; bit < 8; ++bit) crc = (crc >> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+        }
+        crc ^= 0xffffffff;
+        for (size_t offset = 0; offset + 4 <= extra_size;) {
+            uint16_t tag = extra[offset] | (extra[offset+1] << 8), size = extra[offset+2] | (extra[offset+3] << 8);
+            if (size > extra_size - offset - 4) fail("Malformed ZIP extra field");
+            const auto *data = extra + offset + 4;
+            if (tag == unicode_tag && size >= 5 && data[0] == 1 &&
+                (uint32_t(data[1]) | (uint32_t(data[2]) << 8) | (uint32_t(data[3]) << 16) | (uint32_t(data[4]) << 24)) == crc) {
+                std::string value(reinterpret_cast<const char *>(data + 5), size - 5);
+                if (value.find('\0') != std::string::npos) fail("ZIP Unicode path contains a null character");
+                wide(value); return value;
+            }
+            offset += 4 + size;
+        }
+    }
+    if (!codepage && MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, nullptr, 0) > 0) return name;
+    if (!codepage) codepage = 437;
+    char *decoded = mz_os_utf8_string_create(name, codepage);
+    if (!decoded) fail("Cannot decode ZIP name with the selected code page");
+    std::string result(decoded); mz_os_utf8_string_delete(&decoded); wide(result);
+    return result;
+}
 
-static std::vector<Entry> entries(Reader &reader) {
+std::string zip_comment(Reader &reader, const char *comment) {
+    // Archive comments have no UTF-8 flag. Modern UTF-8 comments still need to
+    // display correctly after upgrading an archive with a selected legacy page.
+    const bool unicode = comment && MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, comment, -1, nullptr, 0) > 0;
+    return zip_name(reader, comment, unicode ? MZ_ZIP_FLAG_UTF8 : 0);
+}
+
+std::vector<Entry> zip_entries(Reader &reader) {
     std::vector<Entry> result;
     int err = mz_zip_reader_goto_first_entry(reader.value);
     if (err == MZ_END_OF_LIST) return result;
@@ -108,7 +150,8 @@ static std::vector<Entry> entries(Reader &reader) {
         mz_zip_file *info = nullptr;
         if (mz_zip_reader_entry_get_info(reader.value, &info) != MZ_OK || !info) fail("Cannot read ZIP entry");
         bool directory = mz_zip_reader_entry_is_dir(reader.value) == MZ_OK;
-        result.push_back({result.size(), info->filename ? info->filename : "", directory,
+        if (info->filename && std::strlen(info->filename) != info->filename_size) fail("ZIP path contains a null character");
+        result.push_back({result.size(), zip_name(reader, info->filename, info->flag, info->extrafield, info->extrafield_size), directory,
             (uint64_t)std::max<int64_t>(0, info->uncompressed_size), (uint64_t)std::max<int64_t>(0, info->compressed_size),
             (info->flag & MZ_ZIP_FLAG_ENCRYPTED) != 0});
         if (result.size() > 1000000) fail("ZIP contains too many entries");
@@ -118,7 +161,7 @@ static std::vector<Entry> entries(Reader &reader) {
     return result;
 }
 
-static void preflight(Reader &reader, const std::vector<Entry> &items) {
+void zip_preflight(Reader &reader, const std::vector<Entry> &items) {
     std::set<std::wstring> seen;
     void *zip_handle = nullptr;
     mz_zip_reader_get_zip_handle(reader.value, &zip_handle);
@@ -129,7 +172,7 @@ static void preflight(Reader &reader, const std::vector<Entry> &items) {
         mz_zip_reader_entry_get_info(reader.value, &info);
         if (!safe_entry(item.name, item.directory) || !info || (info->linkname && *info->linkname) ||
             mz_zip_entry_is_symlink(zip_handle) == MZ_OK ||
-            ((info->version_madeby >> 8) == 0 && (info->external_fa & FILE_ATTRIBUTE_REPARSE_POINT)))
+            (((info->version_madeby >> 8) == 0 || (info->version_madeby >> 8) == 10) && (info->external_fa & FILE_ATTRIBUTE_REPARSE_POINT)))
             fail("Archive contains an unsafe path or link: " + item.name);
         auto path = entry_path(item.name).wstring();
         while (!path.empty() && (path.back() == L'/' || path.back() == L'\\')) path.pop_back();
@@ -139,14 +182,17 @@ static void preflight(Reader &reader, const std::vector<Entry> &items) {
     }
 }
 
-static void list(Reader &reader, size_t offset, size_t limit) {
+static void list(Reader &reader, const std::string &revision, size_t offset, size_t limit) {
     void *zip_handle = nullptr;
     if (mz_zip_reader_get_zip_handle(reader.value, &zip_handle) != MZ_OK || !zip_handle) fail("Cannot read ZIP directory");
     uint64_t total = 0;
     if (mz_zip_get_number_entry(zip_handle, &total) != MZ_OK || total > 1000000) fail("ZIP contains too many entries");
     const char *comment = nullptr;
     mz_zip_reader_get_comment(reader.value, &comment);
-    emit("{\"type\":\"meta\",\"total\":" + std::to_string(total) + ",\"comment\":" + json(comment ? comment : "") + "}");
+    uint32_t disk = 0;
+    if (mz_zip_get_disk_number_with_cd(zip_handle, &disk) != MZ_OK) fail("Cannot read ZIP volume information");
+    emit("{\"type\":\"meta\",\"total\":" + std::to_string(total) + ",\"comment\":" + json(zip_comment(reader, comment)) +
+         ",\"revision\":" + json(revision) + ",\"editable\":" + (disk == 0 ? "true" : "false") + "}");
     if (offset >= total || !limit) return;
     int err = mz_zip_reader_goto_first_entry(reader.value);
     for (size_t i = 0; i < offset + limit && i < total; ++i) {
@@ -155,7 +201,7 @@ static void list(Reader &reader, size_t offset, size_t limit) {
             mz_zip_file *info = nullptr;
             if (mz_zip_reader_entry_get_info(reader.value, &info) != MZ_OK || !info) fail("Cannot read ZIP entry");
             bool directory = mz_zip_reader_entry_is_dir(reader.value) == MZ_OK;
-            emit("{\"type\":\"entry\",\"index\":" + std::to_string(i) + ",\"name\":" + json(info->filename ? info->filename : "") +
+            emit("{\"type\":\"entry\",\"index\":" + std::to_string(i) + ",\"name\":" + json(zip_name(reader, info->filename, info->flag, info->extrafield, info->extrafield_size)) +
                  ",\"directory\":" + (directory ? "true" : "false") + ",\"size\":" + std::to_string(std::max<int64_t>(0, info->uncompressed_size)) +
                  ",\"compressed\":" + std::to_string(std::max<int64_t>(0, info->compressed_size)) +
                  ",\"encrypted\":" + ((info->flag & MZ_ZIP_FLAG_ENCRYPTED) ? "true" : "false") + "}");
@@ -164,10 +210,11 @@ static void list(Reader &reader, size_t offset, size_t limit) {
     }
 }
 
-static void test(Reader &reader, const std::vector<Entry> &items, const std::string &password) {
+void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string &password, bool result) {
     mz_zip_reader_set_password(reader.value, password.empty() ? nullptr : password.c_str());
     int err = mz_zip_reader_goto_first_entry(reader.value);
     char buffer[65536];
+    ULONGLONG last_progress = 0;
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during test");
         if (!item.directory) {
@@ -177,15 +224,19 @@ static void test(Reader &reader, const std::vector<Entry> &items, const std::str
             while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {}
             if (count < 0 || mz_zip_reader_entry_close(reader.value) != MZ_OK) fail("ZIP integrity check failed: " + item.name);
         }
-        emit("{\"type\":\"progress\",\"done\":" + std::to_string(item.index + 1) + ",\"total\":" + std::to_string(items.size()) + "}");
+        const auto now = GetTickCount64();
+        if (item.index == 0 || item.index + 1 == items.size() || now - last_progress >= 60) {
+            emit("{\"type\":\"progress\",\"done\":" + std::to_string(item.index + 1) + ",\"total\":" + std::to_string(items.size()) + "}");
+            last_progress = now;
+        }
         err = mz_zip_reader_goto_next_entry(reader.value);
     }
-    emit("{\"type\":\"result\",\"count\":" + std::to_string(items.size()) + "}");
+    if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(items.size()) + "}");
 }
 
 static void extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
                     const std::set<size_t> &selected, const std::string &password) {
-    preflight(reader, items);
+    zip_preflight(reader, items);
     if (fs::exists(destination)) fail("Extraction destination already exists");
     fs::create_directory(destination);
     mz_zip_reader_set_password(reader.value, password.empty() ? nullptr : password.c_str());
@@ -340,6 +391,9 @@ int wmain(int argc, wchar_t **argv) {
                 if (volume_size) fail("This archive format does not support volumes");
                 seven_create(argv[2], paths, password, format);
             } else fail("This archive format is read-only");
+        } else if (mode == L"update") {
+            if (argc != 7 || archive_format(argv[2]) != 0) fail("Update requires a ZIP archive, staging paths, encoding and revision");
+            zip_update(argv[2], argv[3], argv[4], _wtoi(argv[5]), utf8(argv[6]), password);
         } else if (mode == L"list" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             if (mode == L"list") {
@@ -352,10 +406,14 @@ int wmain(int argc, wchar_t **argv) {
             int format = archive_format(argv[2]);
             if (mode == L"list") {
                 size_t offset = std::stoull(argv[3]), limit = std::min<size_t>(500, std::stoull(argv[4]));
-                if (format == 0) { Reader reader(argv[2], encoding); list(reader, offset, limit); }
+                if (format == 0) {
+                    const auto revision = zip_revision(argv[2]);
+                    Reader reader(argv[2], encoding); list(reader, revision, offset, limit);
+                    if (zip_revision(argv[2]) != revision) fail("ZIP changed during listing; reopen it");
+                }
                 else seven_list(argv[2], offset, limit, password, format);
             } else if (mode == L"test") {
-                if (format == 0) { Reader reader(argv[2], encoding); test(reader, entries(reader), password); }
+                if (format == 0) { Reader reader(argv[2], encoding); zip_test(reader, zip_entries(reader), password); }
                 else seven_test(argv[2], password, format);
             } else {
                 std::set<size_t> selected;
@@ -366,7 +424,7 @@ int wmain(int argc, wchar_t **argv) {
                     else fail("Invalid selected entry index");
                 }
                 if (format == 0) {
-                    Reader reader(argv[2], encoding); auto items = entries(reader);
+                    Reader reader(argv[2], encoding); auto items = zip_entries(reader);
                     if (!selected.empty() && *selected.rbegin() >= items.size()) fail("Selected entry index is out of range");
                     extract(reader, items, argv[3], selected, password);
                 } else seven_extract(argv[2], argv[3], selected, password, format);
