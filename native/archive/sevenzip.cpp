@@ -109,6 +109,7 @@ class OpenRequest final: public OpenCallback7,public Password7,public Volume7 {
     fs::path directory;
     std::wstring password;
 public:
+    bool passwordRequested=false;
     OpenRequest(const fs::path &source,const std::string &secret):directory(source.parent_path()),password(wide(secret)){}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
@@ -122,7 +123,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetTotal(const U64*,const U64*) override{return S_OK;}
     HRESULT STDMETHODCALLTYPE SetCompleted(const U64*,const U64*) override{return S_OK;}
     HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR *out) override {
-        if(!out)return E_POINTER;*out=nullptr;if(password.empty())return E_ABORT;
+        passwordRequested=true;if(!out)return E_POINTER;*out=nullptr;if(password.empty())return E_ABORT;
         *out=SysAllocStringLen(password.data(),(UINT)password.size());return *out?S_OK:E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE GetProperty(U32,PROPVARIANT *value) override {
@@ -161,7 +162,7 @@ public:
         if(!create)fail("7-Zip archive engine is incompatible");
         const auto name=source.filename().wstring();
         input=new FileInput(source,format==7&&name.size()>=3&&name.substr(name.size()-3)==L"001");
-        if(!input->valid())fail("Cannot open archive file");
+        if(!input->valid())fail("Cannot open archive file","read");
         callback=new OpenRequest(source,password);
         const U64 scan=1ull<<23;
         for(int candidate:formats(format)){
@@ -171,6 +172,8 @@ public:
             archive->Close();archive->Release();archive=nullptr;
             input->Seek(0,FILE_BEGIN,nullptr);
         }
+        if(callback->passwordRequested&&password.empty())fail("Password required","password");
+        // Header failure with a supplied password can also mean corruption.
         fail("Cannot open archive; check its format, volumes or password");
     }catch(...){close();throw;}}
     ~OpenArchive(){close();}
@@ -212,22 +215,22 @@ public:
 void preflight(OpenArchive &reader,const std::vector<Item> &items){
     std::set<std::wstring> seen;
     for(const auto &item:items){
-        if(!safe_entry(item.name,item.directory))fail("Archive contains an unsafe path: "+item.name);
+        if(!safe_entry(item.name,item.directory))fail("Archive contains an unsafe path: "+item.name,"safety");
         for(U32 prop:{symlink_prop,hardlink_prop,reparse_prop}){
             auto value=reader.property(item.index,prop);
             bool link=value.vt==VT_BSTR&&SysStringLen(value.bstrVal)>0 || value.vt==VT_BOOL&&value.boolVal==VARIANT_TRUE;
-            PropVariantClear(&value);if(link)fail("Archive contains a link: "+item.name);
+            PropVariantClear(&value);if(link)fail("Archive contains a link: "+item.name,"safety");
         }
         auto attrs=reader.property(item.index,attributes_prop);
         bool reparse=(attrs.vt==VT_UI4&&(attrs.ulVal&FILE_ATTRIBUTE_REPARSE_POINT)!=0);
-        PropVariantClear(&attrs);if(reparse)fail("Archive contains a reparse point: "+item.name);
+        PropVariantClear(&attrs);if(reparse)fail("Archive contains a reparse point: "+item.name,"safety");
         auto posix=reader.property(item.index,posix_prop);
         bool unix_link=posix.vt==VT_UI4&&(posix.ulVal&0170000)==0120000;
-        PropVariantClear(&posix);if(unix_link)fail("Archive contains a symbolic link: "+item.name);
+        PropVariantClear(&posix);if(unix_link)fail("Archive contains a symbolic link: "+item.name,"safety");
         auto path=entry_path(item.name).wstring();
         while(!path.empty()&&(path.back()==L'/'||path.back()==L'\\'))path.pop_back();
         std::transform(path.begin(),path.end(),path.begin(),[](wchar_t ch){return std::towlower(ch==L'/'?L'\\':ch);});
-        if(!seen.insert(path).second)fail("Archive contains duplicate paths");
+        if(!seen.insert(path).second)fail("Archive contains duplicate paths","safety");
     }
 }
 
@@ -257,6 +260,7 @@ class ExtractRequest final:public ExtractCallback7,public Password7 {
     const std::vector<Item> &items;fs::path destination;std::wstring password;FileOutput *active=nullptr;
     U32 done=0,total=0;bool testing=false;ULONGLONG last_progress=0;
 public:
+    std::string errorCode="archive";
     ExtractRequest(const std::vector<Item> &entries,const fs::path &path,const std::string &secret,U32 expected,bool test):
         items(entries),destination(path),password(wide(secret)),total(expected),testing(test){}
     ~ExtractRequest(){if(active)active->Release();}
@@ -272,7 +276,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetTotal(U64) override{return S_OK;}
     HRESULT STDMETHODCALLTYPE SetCompleted(const U64*) override{return archive_cancelled()?E_ABORT:S_OK;}
     HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR *out) override {
-        if(!out)return E_POINTER;*out=nullptr;if(password.empty())return E_ABORT;
+        if(!out)return E_POINTER;*out=nullptr;if(password.empty()){errorCode="password";return E_ABORT;}
         *out=SysAllocStringLen(password.data(),(UINT)password.size());return *out?S_OK:E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE GetStream(U32 index,OutStream7 **stream,int mode) override {
@@ -281,15 +285,18 @@ public:
         if(testing||mode!=0)return S_OK;
         const auto &item=items[index];const auto target=destination/entry_path(item.name);
         try{if(item.directory){fs::create_directories(target);return S_OK;}fs::create_directories(target.parent_path());}
-        catch(...){return E_FAIL;}
+        catch(...){errorCode="write";return E_FAIL;}
         auto output=new FileOutput(target,item.size);
-        if(!output->valid()){output->Release();return E_FAIL;}
+        if(!output->valid()){errorCode="write";output->Release();return E_FAIL;}
         active=output;active->AddRef();*stream=output;return S_OK;
     }
     HRESULT STDMETHODCALLTYPE PrepareOperation(int) override{return S_OK;}
     HRESULT STDMETHODCALLTYPE SetOperationResult(int result) override {
         bool complete=!active||active->complete();
         if(active){active->Release();active=nullptr;}
+        // 7-Zip NExtract::NOperationResult::kWrongPassword = 9.
+        // CRC/data errors remain archive errors; guessing would hide corruption.
+        if(result==9)errorCode="password";
         if(result!=0||!complete)return E_FAIL;
         ++done;const auto now=GetTickCount64();
         if(done==1||done==total||now-last_progress>=100){emit("{\"type\":\"progress\",\"done\":"+std::to_string(done)+",\"total\":"+std::to_string(total)+"}");last_progress=now;}
@@ -335,7 +342,7 @@ void seven_test(const fs::path &source,const std::string &password,int format){
     OpenArchive reader(source,password,format);auto items=reader.items();
     auto callback=new ExtractRequest(items,{},password,(U32)items.size(),true);
     HRESULT code=reader.get()->Extract(nullptr,U32(-1),1,callback);
-    callback->Release();if(code!=S_OK)fail("Archive integrity check failed or password is incorrect");
+    const auto error=callback->errorCode;callback->Release();if(code!=S_OK)fail("Archive integrity check failed or password is incorrect",error);
     emit("{\"type\":\"result\",\"count\":"+std::to_string(items.size())+"}");
 }
 
@@ -349,10 +356,10 @@ void seven_extract(const fs::path &source,const fs::path &destination,
     U64 expected=0;for(U32 index:indices){if(items[index].size>UINT64_MAX-expected)fail("Archive declares too much extracted data");expected+=items[index].size;}
     auto capacity=fs::space(destination.parent_path());constexpr U64 reserve=256ull*1024*1024;
     if(capacity.available!=UINTMAX_MAX&&(capacity.available<=reserve||expected>capacity.available-reserve))
-        fail("Not enough free disk space to extract the archive");
+        fail("Not enough free disk space to extract the archive","write");
     fs::create_directory(destination);
     auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false);
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
-    callback->Release();if(code!=S_OK)fail("Cannot extract archive; check its contents or password");
+    const auto error=archive_cancelled()?"cancelled":callback->errorCode;callback->Release();if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
 }

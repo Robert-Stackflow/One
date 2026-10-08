@@ -20,6 +20,8 @@ function append(profile:string,file:string,value:ReturnType<typeof record>){
  }).catch(()=>{});
 }
 export function runtimeLog(profile:string,event:string,detail=''){append(profile,'main.jsonl',record('info',event,detail));}
+export function runtimeCli(profile:string,event:string,detail:string,durationMs?:number,warning=false){append(profile,'cli.jsonl',record(warning?'warn':'info',event,detail,{source:'cli',category:'operation',durationMs}));}
+export async function flushRuntimeLogs(){await pending;}
 export function runtimeWarning(profile:string,event:string,detail=''){append(profile,'main.jsonl',record('warn',event,detail));}
 export function runtimeOperation(profile:string,event:string,role:string,durationMs:number,outcome:'ok'|'error'){
  append(profile,outcome==='ok'?'main.jsonl':'errors.jsonl',record(outcome==='ok'?'info':'error',`ipc:${event}`,`role=${safe(role)} outcome=${outcome}`,{category:'operation',durationMs}));
@@ -45,7 +47,7 @@ function diagnosticPath(profile:string,crashFolder:string,id:string){
  const [kind,...parts]=id.split('/');return join(kind==='log'?logFolder(profile):crashFolder,...parts);
 }
 export async function diagnosticsRecent(profile:string,crashFolder:string):Promise<DiagnosticRecord[]>{
- const files=(await diagnosticsList(profile,crashFolder)).filter(file=>file.kind==='log'&&/^(?:main|errors|fatal)\.jsonl(?:\.[12])?$/i.test(file.name)&&file.size<=maxLogBytes+maxDetail+1024);
+ const files=(await diagnosticsList(profile,crashFolder)).filter(file=>file.kind==='log'&&/^(?:main|errors|fatal|cli)\.jsonl(?:\.[12])?$/i.test(file.name)&&file.size<=maxLogBytes+maxDetail+1024);
  const values:DiagnosticRecord[]=[];
  for(const file of files){const body=await readFile(diagnosticPath(profile,crashFolder,file.id),'utf8').catch(()=>'');for(const line of body.split(/\r?\n/)){
   if(!line)continue;try{const item=JSON.parse(line) as Record<string,unknown>;if(typeof item.time!=='string'||typeof item.event!=='string')continue;

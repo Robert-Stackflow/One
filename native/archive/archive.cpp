@@ -52,7 +52,7 @@ std::string json(const std::string &value) {
 }
 
 void emit(const std::string &line) { static std::mutex mutex; std::lock_guard guard(mutex); std::printf("%s\n", line.c_str()); std::fflush(stdout); }
-[[noreturn]] void fail(const std::string &message) { throw std::runtime_error(message); }
+[[noreturn]] void fail(const std::string &message,const std::string &code) { throw ArchiveError(message,code); }
 
 static std::string password_from_stdin() {
     _setmode(_fileno(stdin), _O_BINARY);
@@ -174,11 +174,11 @@ void zip_preflight(Reader &reader, const std::vector<Entry> &items) {
         if (!safe_entry(item.name, item.directory) || !info || (info->linkname && *info->linkname) ||
             mz_zip_entry_is_symlink(zip_handle) == MZ_OK ||
             (((info->version_madeby >> 8) == 0 || (info->version_madeby >> 8) == 10) && (info->external_fa & FILE_ATTRIBUTE_REPARSE_POINT)))
-            fail("Archive contains an unsafe path or link: " + item.name);
+            fail("Archive contains an unsafe path or link: " + item.name,"safety");
         auto path = entry_path(item.name).wstring();
         while (!path.empty() && (path.back() == L'/' || path.back() == L'\\')) path.pop_back();
         std::transform(path.begin(), path.end(), path.begin(), [](wchar_t c) { return std::towlower(c == L'/' ? L'\\' : c); });
-        if (!seen.insert(path).second) fail("Archive contains duplicate paths");
+        if (!seen.insert(path).second) fail("Archive contains duplicate paths","safety");
         err = mz_zip_reader_goto_next_entry(reader.value);
     }
 }
@@ -219,8 +219,9 @@ void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during test");
         if (!item.directory) {
-            if (item.encrypted && password.empty()) fail("Password required");
-            if (mz_zip_reader_entry_open(reader.value) != MZ_OK) fail("Cannot open ZIP entry: " + item.name);
+            if (item.encrypted && password.empty()) fail("Password required","password");
+            const int opened=mz_zip_reader_entry_open(reader.value);
+            if (opened != MZ_OK) fail("Cannot open ZIP entry: " + item.name,opened==MZ_PASSWORD_ERROR?"password":"archive");
             int count;
             while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {}
             if (count < 0 || mz_zip_reader_entry_close(reader.value) != MZ_OK) fail("ZIP integrity check failed: " + item.name);
@@ -261,19 +262,19 @@ void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path
     uint64_t expected_bytes = 0;
     for (const auto &item : items) if (included(item)) {
         ++total;
-        if (item.size > UINT64_MAX - expected_bytes) fail("Archive declares too much extracted data");
+        if (item.size > UINT64_MAX - expected_bytes) fail("Archive declares too much extracted data","safety");
         expected_bytes += item.size;
     }
     const auto capacity = fs::space(destination.parent_path());
     constexpr uint64_t reserve = 256ull * 1024 * 1024;
     if (capacity.available != UINTMAX_MAX &&
         (capacity.available <= reserve || expected_bytes > capacity.available - reserve))
-        fail("Not enough free disk space to extract the archive");
+        fail("Not enough free disk space to extract the archive","write");
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during extraction");
-        if (archive_cancelled()) fail("Archive drag cancelled");
+        if (archive_cancelled()) fail("Archive drag cancelled","cancelled");
         if (included(item)) {
-            if (item.encrypted && password.empty()) fail("Password required");
+            if (item.encrypted && password.empty()) fail("Password required","password");
             fs::path target = destination / entry_path(item.name);
             if (item.directory) fs::create_directories(target);
             else {
@@ -284,17 +285,18 @@ void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path
                         CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr)) {}
                     ~Output() { if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle); }
                 } output(target);
-                if (output.handle == INVALID_HANDLE_VALUE) fail("Cannot create extracted file: " + item.name);
-                if (mz_zip_reader_entry_open(reader.value) != MZ_OK) fail("Cannot open ZIP entry: " + item.name);
+                if (output.handle == INVALID_HANDLE_VALUE) fail("Cannot create extracted file: " + item.name,"write");
+                const int opened=mz_zip_reader_entry_open(reader.value);
+                if (opened != MZ_OK) fail("Cannot open ZIP entry: " + item.name,opened==MZ_PASSWORD_ERROR?"password":"archive");
                 char buffer[65536];
                 uint64_t written = 0;
                 int count;
                 while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {
-                    if (archive_cancelled()) fail("Archive drag cancelled");
-                    if ((uint64_t)count > item.size - written) fail("ZIP entry expanded beyond its declared size: " + item.name);
+                    if (archive_cancelled()) fail("Archive drag cancelled","cancelled");
+                    if ((uint64_t)count > item.size - written) fail("ZIP entry expanded beyond its declared size: " + item.name,"safety");
                     DWORD actual = 0;
                     if (!WriteFile(output.handle, buffer, (DWORD)count, &actual, nullptr) || actual != (DWORD)count)
-                        fail("Cannot write extracted file: " + item.name);
+                        fail("Cannot write extracted file: " + item.name,"write");
                     written += (uint64_t)count;
                 }
                 if (count < 0 || written != item.size || mz_zip_reader_entry_close(reader.value) != MZ_OK)
@@ -322,7 +324,7 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
         mz_zip_writer_set_store_links(writer, 0);
         mz_zip_writer_set_compress_level(writer, 6);
         if (!password.empty()) { mz_zip_writer_set_password(writer, password.c_str()); mz_zip_writer_set_aes(writer, 1); }
-        if (mz_zip_writer_open_file(writer, utf8(destination.wstring()).c_str(), volume_size, 0) != MZ_OK) fail("Cannot create ZIP file");
+        if (mz_zip_writer_open_file(writer, utf8(destination.wstring()).c_str(), volume_size, 0) != MZ_OK) fail("Cannot create ZIP file","write");
         for (size_t i = 0; i < sources.size(); ++i) {
             const auto &path = sources[i];
             if (!fs::exists(path) || fs::is_symlink(path)) fail("Source is missing or a link");
@@ -349,7 +351,7 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
             } else add(path, path.parent_path());
             emit("{\"type\":\"progress\",\"done\":" + std::to_string(i + 1) + ",\"total\":" + std::to_string(sources.size()) + "}");
         }
-        if (mz_zip_writer_close(writer) != MZ_OK) fail("Cannot finish ZIP file");
+        if (mz_zip_writer_close(writer) != MZ_OK) fail("Cannot finish ZIP file","write");
         mz_zip_writer_delete(&writer);
         emit("{\"type\":\"result\",\"count\":" + std::to_string(sources.size()) + "}");
     } catch (...) { mz_zip_writer_delete(&writer); throw; }
@@ -445,6 +447,9 @@ int wmain(int argc, wchar_t **argv) {
             }
         } else fail("Unknown archive operation");
         return 0;
+    } catch (const ArchiveError &error) {
+        emit("{\"type\":\"error\",\"code\":"+json(error.code)+",\"message\":" + json(error.what()) + "}");
+        return 2;
     } catch (const std::exception &error) {
         emit("{\"type\":\"error\",\"message\":" + json(error.what()) + "}");
         return 2;

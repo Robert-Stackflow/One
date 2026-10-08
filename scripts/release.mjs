@@ -42,6 +42,9 @@ export async function validateRelease(folder,source,version){
  async function check(root){for(const item of await readdir(root,{withFileTypes:true})){
   const file=join(root,item.name);if(item.isDirectory()){await check(file);continue;}
   const entry=relative(source,file),normalized=entry.replaceAll('\\','/');
+  if(normalized==='dist/native/One.Cli.exe'){
+   if(hash(await readFile(join(folder,'win-unpacked','One.Cli.exe')))!==hash(await readFile(file)))throw new Error('发布命令行入口与当前构建不同');checked++;continue;
+  }
   if(normalized.endsWith('.obj')||/^dist\/main\/(?:.*-test\.cjs|brightness-worker\..*|brightness\.ps1)$/.test(normalized))continue;
   const description=asar.statFile(archive,entry);
   const packaged=description.unpacked?await readFile(join(archive+'.unpacked',entry)):asar.extractFile(archive,entry);

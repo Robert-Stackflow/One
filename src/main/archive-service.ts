@@ -9,7 +9,8 @@ import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveR
 import {zipEditPacket} from './archive-update';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
+export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive'){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
@@ -30,7 +31,7 @@ export class ArchiveService {
   private sweepQueued=false;
   private dragCache:ArchiveDragCache;
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{}){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
   }
@@ -57,10 +58,12 @@ export class ArchiveService {
   }
   private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
     return new Promise((done,reject)=>{
-      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe'});
+      // CLI cancellation is handled by this service, not a console-wide signal
+      // that could kill the helper during transactional publication.
+      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup});
       const task={child,owner,committing:false,cooperative:operation==='publish'};
       this.active.set(id,task);
-      const data:Message[]=[];let buffered='',error='',failed=false,settled=false;
+      const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;
       const finish=(reason?:Error)=>{if(settled)return;settled=true;this.active.delete(id);if(reason)reject(reason);else done(data);};
       child.stdout.setEncoding('utf8');child.stdout.on('data',(chunk:string)=>{
         buffered+=chunk;
@@ -73,7 +76,7 @@ export class ArchiveService {
               else{task.committing=true;if(operation==='publish'){child.stdin.write(Buffer.from([1]));this.changed(owner,{id,operation:'extract',done:0,total:0});}else{this.changed(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
             else if(message.type==='progress')this.changed(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
-            else if(message.type==='error'){failed=true;error=message.message;}
+            else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled'].includes(message.code??''))errorCode=message.code!;}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
           }catch{failed=true;error='压缩程序返回无效数据';child.kill();}
@@ -81,7 +84,7 @@ export class ArchiveService {
       });
       child.stderr.on('data',(chunk:Buffer)=>{if(error.length<512)error+=chunk.toString('utf8').slice(0,512);});
       child.on('error',cause=>finish(cause));
-      child.on('close',code=>{if(failed||code!==0)finish(new Error(error||'压缩任务已取消或失败'));else finish();});
+      child.on('close',code=>{if(failed||code!==0)finish(new ArchiveFailure(error||'压缩任务已取消或失败',errorCode));else finish();});
       const value=Buffer.from(secret,'utf8'),header=Buffer.alloc(4);header.writeUInt32LE(value.length);
       child.stdin.on('error',()=>{});
       const input=Buffer.concat([header,value,...(packet?[packet]:[])]);
@@ -198,7 +201,9 @@ export class ArchiveService {
       const prepared=await this.acquireSource(owner,id,source);
       try{
         const messages=await this.execute(owner,id,'test',[prepared.path,String(encoding(request.encoding))],password(request.password));
-        return {path:source,count:(messages.find(item=>item.type==='result') as {count:number}|undefined)?.count||0};
+        const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
+        if(!result)throw new ArchiveFailure('压缩程序未确认校验成功');
+        return {path:source,count:result.count};
       }finally{prepared.release();}
     }
     if(request.operation==='create'){
@@ -214,7 +219,7 @@ export class ArchiveService {
       if(single&&(checked.length!==1||!(await lstat(checked[0])).isFile()))throw Error('GZ 和 XZ 只能压缩单个文件；压缩文件夹请选 TAR.GZ 或 TAR.XZ');
       const names=new Set<string>();
       for(const source of checked){const name=basename(source).toLowerCase();if(names.has(name))throw Error('所选内容包含同名文件或文件夹，请分开压缩');names.add(name);}
-      if(existsSync(target)||seven&&volumeBytes>0&&existsSync(target+'.001'))throw Error('目标压缩包已经存在');
+      if(existsSync(target)||seven&&volumeBytes>0&&existsSync(target+'.001'))throw new ArchiveFailure('目标压缩包已经存在','write');
       const suffix=basename(target).slice(archiveName(target).length);
       const temporary=join(dirname(target),`.one-archive-${id}${suffix}`);
       const temporaryStem=temporary.slice(0,-4),targetStem=target.slice(0,-4);

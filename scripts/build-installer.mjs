@@ -23,7 +23,7 @@ async function run(file,args){
 }
 
 if(reuseBuild){
- for(const file of ['dist/main/index.cjs','dist/renderer/index.html','dist/native/One.Levels.exe','dist/native/One.LaunchNormal.exe','dist/icons/one.ico','dist/icons/one-16.png','dist/icons/one-taskbar-30.png','dist/icons/one-256.png'])await stat(resolve(file));
+ for(const file of ['dist/main/index.cjs','dist/main/archive-cli-entry.cjs','dist/renderer/index.html','dist/native/One.Cli.exe','dist/native/One.Levels.exe','dist/native/One.LaunchNormal.exe','dist/icons/one.ico','dist/icons/one-16.png','dist/icons/one-taskbar-30.png','dist/icons/one-256.png'])await stat(resolve(file));
  for(const name of ['one.ico','one-16.png','one-taskbar-30.png','one-256.png']){
   const sourceHash=createHash('sha256').update(await readFile(resolve('assets/icons',name))).digest('hex');
   const builtHash=createHash('sha256').update(await readFile(resolve('dist/icons',name))).digest('hex');
