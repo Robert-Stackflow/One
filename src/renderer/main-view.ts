@@ -9,6 +9,7 @@ import './interface-refinement.css';
 // paints with generic controls and then reflows when a dynamic module's CSS
 // arrives. Heavy document/preview styles remain in their feature chunks.
 import './file-tools.css';
+import './archive-view.css';
 import './text.css';
 import './disk.css';
 import './file-action.css';
@@ -31,7 +32,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 const settingRow = (title: string, description: string, control: string) => `<div class="setting-row"><div><h2>${title}</h2><p>${description}</p></div>${control}</div>`;
 export function renderMain() {
   const groups = [
-    {name:'文件',items:[['tools','文件工具'],['text','文本处理'],['search','文件搜索'],['disk','空间分析']]},
+    {name:'文件',items:[['tools','文件工具'],['text','文本处理'],['search','文件搜索'],['disk','空间分析'],['archive','压缩与解压']]},
     {name:'工具',items:[['input','操作增强'],['preview','快速预览'],['color','屏幕取色']]},
     {name:'系统',items:[['system','系统维护'],['hardware','系统信息'],['ports','端口与服务']]}
   ];
@@ -39,11 +40,11 @@ export function renderMain() {
   const nav = ([id,name]:string[]) => `<button class="nav ${id==='home'?'active':''}" data-page="${id}" title="${name}" aria-label="${name}" ${id==='home'?'aria-current="page"':''}>${icon(id)}<span class="nav-label">${name}</span></button>`;
   const navigation = `<nav class="sidebar-navigation" aria-label="功能导航">${nav(['home','概览'])}${groups.map(group=>`<section class="sidebar-group" aria-label="${group.name}"><h2 class="sidebar-group-caption" aria-hidden="true">${group.name}</h2>${group.items.map(nav).join('')}</section>`).join('')}</nav>${nav(['settings','设置'])}`;
   app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="color" hidden></div></div>
-  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-color" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
+  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-color" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
   </div><div class="toast-layer"><div class="toast" id="toast" hidden role="status"></div></div></main></div>${dialogMarkup({id:"issues-dialog",title:"未完成的扫描项目",closeId:"issues-dismiss",className:"dialog-wide",body:`<pre id="issues-text"></pre>`,actions:`${button('close-issues','关闭')}`})}`;
   setupChrome(); customControls(app);
   const content=document.querySelector<HTMLElement>('.content')!;
-  let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
+  let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,archiveController:ReturnType<typeof import('./archive-view').setupArchiveView>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
   let maintenanceController:ReturnType<typeof import('./maintenance-view').setupMaintenance>|undefined,informationController:ReturnType<typeof import('./system-info-view').setupSystemInformation>|undefined,portsController:ReturnType<typeof import('./ports-view').setupPorts>|undefined;
   let settingsController:ReturnType<typeof import('./settings-view').setupSettingsPage>|undefined;
   const mounted=new Set(['home']),mounting=new Map<string,Promise<void>>();
@@ -53,6 +54,7 @@ export function renderMain() {
     const work=(async()=>{
     const page=q<HTMLElement>('page-'+id);
     if(id==='tools'){const {fileToolsPage,setupFileTools}=await import('./file-tools-view');const {arrangeRenameLayout,wireRenameScopeMode}=await import('./rename-layout');const {arrangeLocksmithLayout}=await import('./locksmith-view');const {setupRenameSidebar}=await import('./rename-sidebar');page.innerHTML=fileToolsPage();page.classList.add('embedded-rename');const refresh=setupRenameSidebar(true);arrangeRenameLayout(page,false);arrangeLocksmithLayout(q('tool-pane-locksmith'));toolsController=setupFileTools();wireRenameScopeMode();refresh();}
+    else if(id==='archive'){const {archivePage,setupArchiveView}=await import('./archive-view');page.innerHTML=archivePage();customControls(page);archiveController=setupArchiveView();}
     else if(id==='text'){const {textPage,setupText}=await import('./text-view');page.innerHTML=textPage();customControls(page);textController=setupText();}
     else if(id==='disk'){const {diskPage,setupDisk}=await import('./disk-view');page.innerHTML=diskPage();customControls(page);q('disk-heading-actions').append(q('disk-actions'));diskController=setupDisk();}
     else if(id==='system'){const {maintenancePage,setupMaintenance}=await import('./maintenance-view');page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
@@ -72,6 +74,7 @@ export function renderMain() {
   const activate=(id:string,value:boolean)=>{
     if(id==='home')overviewController.activate(value);
     else if(id==='tools')toolsController?.activate(value);
+    else if(id==='archive')archiveController?.activate(value);
     else if(id==='text')textController?.activate(value);
     else if(id==='disk')diskController?.activate(value);
     else if(id==='system')maintenanceController?.activate(value);

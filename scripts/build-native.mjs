@@ -38,3 +38,4 @@ const result=await run('cmd.exe',['/d','/c',script],{cwd:resolve('.'),windowsHid
 const cargoTarget=resolve(process.env.CARGO_TARGET_DIR||'work/rust-search');
 await run('cargo',['build','--release','--locked','--manifest-path','native/search-engine/Cargo.toml'],{cwd:resolve('.'),windowsHide:true,env:{...process.env,CARGO_TARGET_DIR:cargoTarget,RUSTFLAGS:'-C target-feature=+crt-static'},maxBuffer:4*1024*1024});
 await copyFile(resolve(cargoTarget,'release/one-index.exe'),'dist/native/One.Index.exe');
+await import('./build-archive.mjs');

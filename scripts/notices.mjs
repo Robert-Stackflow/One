@@ -21,5 +21,12 @@ for(const crate of crates.packages.filter(p=>p.source)){
   const root=resolve(crate.manifest_path,'..');
   for(const file of await readdir(root))if(/^(license|copying|copyright|notice)/i.test(file))try{output+=await readFile(join(root,file),'utf8')+'\n';}catch{}
 }
+for(const [name,version,source] of [
+  ['minizip-ng','4.1.2','https://github.com/zlib-ng/minizip-ng'],
+  ['zlib','1.3.1','https://github.com/madler/zlib']
+]){
+  output+=`\n===== Native archive: ${name} ${version} =====\nSource: ${source}\nLicense: zlib\n`;
+  output+=await readFile(`vendor/archive/${name}/LICENSE`,'utf8')+'\n';
+}
 output+='\n===== vscode-icons artwork =====\nSource: https://github.com/vscode-icons/vscode-icons\n'+await readFile('assets/file-icons/LICENSE','utf8');
 await writeFile('THIRD_PARTY_NOTICES.txt', output.replace(/\r\n?/g,'\n').replace(/[ \t]+$/gm,''), 'utf8');

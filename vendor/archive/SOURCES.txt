@@ -1,0 +1,15 @@
+One.Archive.exe native ZIP dependencies
+
+minizip-ng 4.1.2
+Source: https://github.com/zlib-ng/minizip-ng/releases/tag/4.1.2
+Commit: 9826cbd4355af856b38bf8d863b29653b90c6b7f
+License: vendor/archive/minizip-ng/LICENSE (zlib)
+
+zlib 1.3.1
+Source: https://github.com/madler/zlib/releases/tag/v1.3.1
+Commit: 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+License: vendor/archive/zlib/LICENSE (zlib)
+
+Both dependencies are built statically with the MSVC x64 runtime. The archive
+helper is a separate process. Optional bzip2, LZMA, PPMd, and Zstd codecs are
+not enabled in this first ZIP implementation.

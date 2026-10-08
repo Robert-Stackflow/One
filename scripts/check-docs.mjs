@@ -3,7 +3,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {resolve,dirname,relative,isAbsolute} from 'node:path';
 
 // Include new Markdown before staging; ignored dependencies, samples and logs are excluded.
-const root=resolve('.'),files=[...new Set(execFileSync('git',['ls-files','--cached','--others','--exclude-standard','-z','--','*.md'],{cwd:root}).toString('utf8').split('\0').filter(Boolean))];
+const root=resolve('.'),files=[...new Set(execFileSync('git',['ls-files','--cached','--others','--exclude-standard','-z','--','*.md'],{cwd:root}).toString('utf8').split('\0').filter(file=>file&&!file.startsWith('vendor/')))];
 const allowed=['user-guide','development','research','history'],edges=new Map(),errors=[];let links=0;
 for(const file of files){
  const parts=file.split('/');

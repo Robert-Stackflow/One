@@ -38,7 +38,8 @@
     "test:launcher": "npm run build && node tests/search-launcher-native.cjs && node tests/search-launcher-smoke.cjs",
     "test:exit": "npm run build && node tests/graceful-exit-smoke.cjs",
     "test:inline-border": "npm run build && node tests/inline-border-smoke.cjs",
-    "test:file-tools": "npm run build && node tests/file-tools-smoke.cjs"
+    "test:file-tools": "npm run build && node tests/file-tools-smoke.cjs",
+    "test:archive": "node scripts/build-archive.mjs && node tests/archive-native.cjs"
   },
   "dependencies": {
     "iconv-lite": "^0.7.3",
@@ -132,7 +133,8 @@
       "dist/main/system-info.ps1",
       "dist/main/proxy-info.ps1",
       "dist/native/One.Monitor.exe",
-      "dist/native/One.Levels.exe"
+      "dist/native/One.Levels.exe",
+      "dist/native/One.Archive.exe"
     ],
     "extraFiles": [
       "README.md",
