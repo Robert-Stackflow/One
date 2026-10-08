@@ -31,7 +31,8 @@ const pickHighlights=(kind:InformationKind,groups:InformationGroup[]):Highlight[
   :groups.flatMap(group=>group.records.map(record=>({group,record})));
  const patterns=highlightPatterns[kind]||[];
  const limit=highlightLimits[kind]||3;
- return entries.filter(({record})=>record.fields.some(field=>useful(field.value))).slice(0,limit).map(({group,record})=>{
+ const seenAdapters=new Set<string>();
+ return entries.filter(({group,record})=>{if(!record.fields.some(field=>useful(field.value)))return false;if(['gpu','dxgi'].includes(group.id)){const key=record.title.trim().toLowerCase();if(seenAdapters.has(key))return false;seenAdapters.add(key);}return true;}).slice(0,limit).map(({group,record})=>{
   const preferred=record.fields.filter(field=>useful(field.value)&&patterns.some(pattern=>pattern.test(`${field.key} ${field.label}`)));
   const fields=[...preferred,...record.fields.filter(field=>useful(field.value)&&!preferred.includes(field))].slice(0,4);
   return {group,record,fields};

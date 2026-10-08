@@ -11,6 +11,18 @@
 .color-ruler-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;border:0;background:transparent;border-radius:7px;padding:8px 10px;text-align:left;font-size:12px}
 .color-ruler-menu button:hover,.color-ruler-menu button[aria-checked=true]{background:var(--soft)}
 .color-ruler-menu small{font-size:10px;color:var(--muted)}
+.color-pick-split{position:relative;display:inline-flex;align-items:stretch;height:32px;border-radius:9px;background:var(--accent);color:var(--on-accent);z-index:6}
+.color-pick-split>button{border:0;background:transparent;color:inherit;border-radius:0;min-height:0;height:100%;padding:0 10px;gap:6px}
+.color-pick-split>button:hover{background:color-mix(in srgb,var(--on-accent) 12%,transparent)}
+.color-pick-split>#start-color{border-radius:8px 0 0 8px}
+.color-pick-split>#color-pick-options{width:31px;justify-content:center;border-left:1px solid color-mix(in srgb,var(--on-accent) 28%,transparent);border-radius:0 8px 8px 0;padding:0}
+.color-pick-split>#color-pick-options .icon{width:14px;height:14px}
+.color-pick-split .color-ruler-menu{color:var(--fg);width:225px}
+html.transparent-root body.color-freeze-window,body.color-freeze-window #app,body.color-freeze-window #color-freeze-surface{width:100%;height:100%;margin:0;overflow:hidden;background:transparent!important}
+body.color-freeze-window #color-freeze-surface{cursor:crosshair;user-select:none}
+html.transparent-root body.color-zoom-window,body.color-zoom-window #app{width:100%;height:100%;margin:0;overflow:hidden;background:transparent!important}
+.color-zoom-frame{position:relative;width:300px;height:300px;margin:10px;overflow:hidden;box-sizing:border-box;border:1px solid #00000024;border-radius:8px;background:#f7f7f7;box-shadow:0 5px 14px #00000026,0 1px 3px #0000001c}
+.color-zoom-frame canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
 .color-page .color-workbench{grid-template-columns:260px minmax(0,1fr);gap:24px;margin-bottom:0;align-items:start}
 .color-page .color-overview{min-width:0;gap:12px}
 .color-page .color-sample{height:164px;border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:none}
@@ -41,23 +53,14 @@
 .color-page .color-settings .preference-row{min-width:0;min-height:32px;padding:0;gap:12px;border:0}
 .color-page .color-settings .preference-row>label{font-size:12px;color:var(--muted);flex-shrink:0}
 .color-page .color-settings .color-shortcut-field,.color-page .color-settings .custom-select{width:200px;max-width:65%;min-width:0;margin:0}
-.color-page .color-settings .color-shortcut-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-content:start;align-items:center;column-gap:12px;row-gap:8px}
-.color-page .color-settings .color-shortcut-row .color-shortcut-field{max-width:100%}
-.color-shortcut-field .shortcut-control{width:100%;max-width:none}
-.color-shortcut-notice{grid-column:1/-1;justify-self:end;display:flex;align-items:center;gap:8px;width:min(100%,360px);min-height:34px;padding:5px 6px 5px 10px;border:1px solid color-mix(in srgb,#b45309 18%,var(--line));border-radius:8px;background:color-mix(in srgb,#f59e0b 7%,var(--surface));color:#92400e;font-size:11px;line-height:1.4;animation:color-shortcut-in .16s var(--ease)}
-.color-shortcut-notice[hidden]{display:none}
-.color-shortcut-notice>.icon{width:14px;height:14px;flex:none}
-.color-shortcut-notice span{flex:1;min-width:0}
-.color-shortcut-notice button{border:0;background:transparent;color:inherit;flex:none;min-height:24px;padding:2px 7px;font-size:11px;text-decoration:none;border-radius:5px}
-.color-shortcut-notice button:hover{background:color-mix(in srgb,#b45309 10%,transparent)}
-.color-shortcut-field .shortcut-control:has(input[aria-invalid=true]){border-color:color-mix(in srgb,#b45309 42%,var(--line))}
-html[data-theme=dark] .color-shortcut-notice{color:#fbbf24}
-@keyframes color-shortcut-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.color-page .color-settings .color-shortcut-row{align-items:center}
+.color-page .color-settings .color-shortcut-field{width:260px;max-width:70%;margin-left:auto}
+.color-shortcut-field .shortcut-field{width:100%;max-width:none}
 @media(max-width:1050px){
  .color-page .color-workbench{grid-template-columns:200px minmax(0,1fr);gap:20px}
  .color-page .color-values>button{grid-template-columns:48px minmax(0,1fr) 16px;gap:10px;padding-inline:12px}
  .color-page .color-settings{grid-template-columns:minmax(0,1fr);gap:14px}
- .color-page .color-settings .color-shortcut-field,.color-page .color-settings .custom-select{width:240px;max-width:65%}
+ .color-page .color-settings .color-shortcut-field,.color-page .color-settings .custom-select{width:260px;max-width:70%}
 }
 @media(max-width:650px){.color-page .color-workbench{grid-template-columns:minmax(0,1fr)}.color-page .color-sample{height:140px}}
 .color-main-variants>span{font-size:11px;color:var(--muted)}
@@ -102,4 +105,4 @@ html[data-theme=dark] .color-shortcut-notice{color:#fbbf24}
 .color-editor-more>.icon{width:14px;height:14px;transition:transform .16s var(--ease)}
 .color-editor-more[aria-expanded=true]>.icon{transform:rotate(180deg)}
 .color-editor-window .toast{left:50%;max-width:calc(100vw - 36px);bottom:16px;font-size:12px;z-index:10}
-@media(prefers-reduced-motion:reduce){.color-variant-list>button,.color-editor-sample,.color-editor-more>.icon{transition:none}.color-variant-list>button:hover{transform:none}.color-shortcut-notice{animation:none}}
+@media(prefers-reduced-motion:reduce){.color-variant-list>button,.color-editor-sample,.color-editor-more>.icon{transition:none}.color-variant-list>button:hover{transform:none}}

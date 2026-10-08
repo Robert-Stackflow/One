@@ -16,7 +16,7 @@
 // No injection into the target process and no changes to its original DWM border.
 constexpr UINT commandId=0xEED0;
 constexpr ULONG_PTR ownerTag=0x4F4E4539;
-struct Frame{HWND border=nullptr;DWORD pid=0;RECT rect{};int thickness=0;int alpha=-1;COLORREF color=CLR_INVALID;};
+struct Frame{HWND border=nullptr;DWORD pid=0;RECT rect{};int thickness=0;int corner=-1;int alpha=-1;COLORREF color=CLR_INVALID;};
 std::map<HWND,Frame> frames;std::set<HWND> menus;
 std::queue<std::string> commands;std::mutex mutex;std::atomic<bool> ended=false;
 bool enabled=false,menuEnabled=false,borders=true;int opacity=80,thickness=3;COLORREF color=RGB(76,139,245);HWND lastMenu=nullptr;
@@ -33,13 +33,23 @@ void CALLBACK events(HWINEVENTHOOK,DWORD event,HWND hwnd,LONG object,LONG child,
  if(event==EVENT_SYSTEM_MENUPOPUPEND&&object==OBJID_SYSMENU)lastMenu=nullptr;
 }
 LRESULT CALLBACK proc(HWND w,UINT m,WPARAM a,LPARAM b){if(m==WM_NCHITTEST)return HTTRANSPARENT;if(m==WM_MOUSEACTIVATE)return MA_NOACTIVATE;if(m==WM_PAINT){PAINTSTRUCT p;auto dc=BeginPaint(w,&p);RECT r;GetClientRect(w,&r);auto brush=CreateSolidBrush(color);FillRect(dc,&r,brush);DeleteObject(brush);EndPaint(w,&p);return 0;}return DefWindowProcW(w,m,a,b);}
+// Hidden IME/owner windows may sit between the target and border in z-order.
+HWND nextVisible(HWND target){for(HWND next=GetWindow(target,GW_HWNDNEXT);next;next=GetWindow(next,GW_HWNDNEXT)){if(!IsWindowVisible(next))continue;DWORD cloaked=0;if(SUCCEEDED(DwmGetWindowAttribute(next,DWMWA_CLOAKED,&cloaked,sizeof(cloaked)))&&cloaked)continue;return next;}return nullptr;}
 void render(HWND target,Frame& f){DWORD pid=0;GetWindowThreadProcessId(target,&pid);DWORD cloaked=0;DwmGetWindowAttribute(target,DWMWA_CLOAKED,&cloaked,sizeof(cloaked));
  if(!enabled||!borders||!opacity||!IsWindowVisible(target)||IsIconic(target)||cloaked||pid!=f.pid||!(GetWindowLongPtrW(target,GWL_EXSTYLE)&WS_EX_TOPMOST)){if(f.border)ShowWindow(f.border,SW_HIDE);return;}
  RECT r{};if(FAILED(DwmGetWindowAttribute(target,DWMWA_EXTENDED_FRAME_BOUNDS,&r,sizeof(r))))GetWindowRect(target,&r);int t=MulDiv(thickness,GetDpiForWindow(target),96);InflateRect(&r,t,t);
- if(!f.border){f.border=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TRANSPARENT|WS_EX_NOACTIVATE,L"OneTopmostBorder",L"",WS_POPUP|WS_DISABLED,r.left,r.top,r.right-r.left,r.bottom-r.top,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);}
- const bool changed=!EqualRect(&r,&f.rect)||f.thickness!=t;
- if(changed){const int width=r.right-r.left,height=r.bottom-r.top;int round=IsZoomed(target)?0:MulDiv(16,GetDpiForWindow(target),96);HRGN outer=round?CreateRoundRectRgn(0,0,width+1,height+1,round+2*t,round+2*t):CreateRectRgn(0,0,width,height);HRGN inner=round?CreateRoundRectRgn(t,t,width-t+1,height-t+1,round,round):CreateRectRgn(t,t,width-t,height-t);CombineRgn(outer,outer,inner,RGN_DIFF);DeleteObject(inner);SetWindowRgn(f.border,outer,FALSE);f.rect=r;f.thickness=t;}
- if(f.alpha!=opacity){SetLayeredWindowAttributes(f.border,0,(BYTE)(opacity*255/100),LWA_ALPHA);f.alpha=opacity;}if(changed||!IsWindowVisible(f.border)||GetWindow(target,GW_HWNDNEXT)!=f.border)SetWindowPos(f.border,target,r.left,r.top,r.right-r.left,r.bottom-r.top,SWP_NOACTIVATE|SWP_SHOWWINDOW);if(changed||f.color!=color){InvalidateRect(f.border,nullptr,FALSE);f.color=color;}
+ if(!f.border){f.border=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TRANSPARENT|WS_EX_NOACTIVATE|WS_EX_TOPMOST,L"OneTopmostBorder",L"",WS_POPUP|WS_DISABLED,r.left,r.top,r.right-r.left,r.bottom-r.top,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);}
+ if(!f.border)return;
+ const int width=r.right-r.left,height=r.bottom-r.top,round=IsZoomed(target)?0:MulDiv(16,GetDpiForWindow(target),96);
+ // Moving the target only needs a cheap position update; rebuild the region on size/DPI changes.
+ const bool moved=!EqualRect(&r,&f.rect),shapeChanged=f.thickness!=t||f.corner!=round||f.rect.right-f.rect.left!=width||f.rect.bottom-f.rect.top!=height;
+ if(shapeChanged){HRGN outer=round?CreateRoundRectRgn(0,0,width+1,height+1,round+2*t,round+2*t):CreateRectRgn(0,0,width,height);HRGN inner=round?CreateRoundRectRgn(t,t,width-t+1,height-t+1,round,round):CreateRectRgn(t,t,width-t,height-t);CombineRgn(outer,outer,inner,RGN_DIFF);DeleteObject(inner);SetWindowRgn(f.border,outer,FALSE);f.thickness=t;f.corner=round;}
+ f.rect=r;
+ if(f.alpha!=opacity){SetLayeredWindowAttributes(f.border,0,(BYTE)(opacity*255/100),LWA_ALPHA);f.alpha=opacity;}
+ RECT actual{};const bool displaced=!GetWindowRect(f.border,&actual)||!EqualRect(&actual,&r);
+ if(!(GetWindowLongPtrW(f.border,GWL_EXSTYLE)&WS_EX_TOPMOST))SetWindowPos(f.border,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
+ if(moved||displaced||!IsWindowVisible(f.border)||nextVisible(target)!=f.border)SetWindowPos(f.border,target,r.left,r.top,width,height,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+ if(shapeChanged||f.color!=color){InvalidateRect(f.border,nullptr,FALSE);f.color=color;}
 }
 int main(){SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);WNDCLASSW c{};c.lpfnWndProc=proc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"OneTopmostBorder";RegisterClassW(&c);
  std::thread([]{std::string line;while(std::getline(std::cin,line)){std::lock_guard<std::mutex> lock(mutex);commands.push(line);}ended=true;}).detach();

@@ -1,0 +1,68 @@
+const {_electron:electron,expect}=require('@playwright/test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+
+async function main(){
+ const profile=await fs.mkdtemp(path.resolve('work','diagnostics-smoke-'));
+ const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+ const app=await electron.launch({args:[path.resolve('.')],env});
+ try{
+  const page=await app.firstWindow();await page.waitForSelector('[data-page=settings]');
+  assert.equal(await app.evaluate(({crashReporter})=>crashReporter.getUploadToServer()),false);
+  await page.locator('[data-page=settings]').click();await page.locator('[data-settings-tab=backup]').click();
+  await expect(page.locator('[data-settings-panel=backup]')).toBeVisible();
+  await expect(page.locator('[data-settings-tab=logs]')).toHaveCount(0);
+  await expect(page.locator('[data-settings-panel=backup] .setting-icon')).toHaveCount(0);
+  await expect(page.locator('.diagnostics-intro').first().locator('p')).toHaveCount(0);
+  await page.evaluate(()=>window.one.diagnosticsReport('smoke','Error: verification stack\n  at diagnostics-ui-smoke'));
+  await page.locator('#diagnostics-refresh').click();
+  await expect(page.locator('.diagnostics-event').filter({hasText:'renderer:smoke'})).toBeVisible();
+  await page.locator('#diagnostics-level').click();await page.getByRole('option',{name:'错误与崩溃'}).click();
+  await expect(page.locator('.diagnostics-event')).not.toHaveCount(0);
+  await page.locator('#diagnostics-search').fill('diagnostics-ui-smoke');
+  await expect(page.locator('.diagnostics-event')).toHaveCount(1);
+  await page.locator('.diagnostics-event summary').click();
+  await expect(page.locator('.diagnostics-event pre')).toContainText('verification stack');
+  await page.locator('#diagnostics-search').fill('');
+  await fs.mkdir(path.resolve('work','diagnostics-ui'),{recursive:true});await page.screenshot({path:path.resolve('work','diagnostics-ui','settings-logs.png')});
+  await expect(page.locator('.diagnostics-item').filter({hasText:'errors.jsonl'})).toBeVisible();
+  const entries=await page.evaluate(()=>window.one.diagnosticsList());
+  const error=entries.find(entry=>entry.name==='errors.jsonl');assert.ok(error);
+  assert.match(await fs.readFile(path.join(profile,'logs','errors.jsonl'),'utf8'),/diagnostics-ui-smoke/);
+  await page.locator('.diagnostics-item').filter({hasText:'errors.jsonl'}).locator('input').check();
+  const pickerPromise=app.waitForEvent('window');await page.locator('#diagnostics-export').click();
+  const picker=await pickerPromise;await picker.locator('#picker-path').fill(profile);await picker.locator('#picker-go').click();
+  await expect(picker.locator('#picker-confirm')).toBeEnabled();await picker.locator('#picker-confirm').click();
+  await expect.poll(async()=>(await fs.readdir(profile)).some(name=>name.startsWith('One-诊断-'))).toBe(true);
+  const exportName=(await fs.readdir(profile)).find(name=>name.startsWith('One-诊断-'));
+  assert.match(await fs.readFile(path.join(profile,exportName,'log-errors.jsonl'),'utf8'),/diagnostics-ui-smoke/);
+  await page.locator('#diagnostics-delete').click();await page.locator('[data-dialog-confirm]').click();
+  await expect(page.locator('.diagnostics-item').filter({hasText:'errors.jsonl'})).toHaveCount(0);
+  await page.locator('[data-page=tools]').click();
+  await expect(page.locator('#page-tools')).toHaveClass(/embedded-rename/);
+  await expect(page.locator('#rename-settings-tab-rules')).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('.rename-rules')).toBeVisible();
+  await expect(page.locator('[data-tool-tab]')).toHaveCount(6);
+  const tabs=await page.locator('[data-tool-tab]').allTextContents();
+  assert.deepEqual(tabs,['批量重命名','文件占用','重复文件','文件比较','全文搜索','文件校验']);
+  await page.locator('#tool-tab-locksmith').click();await expect(page.locator('#tool-pane-locksmith .file-action-lock-targets')).toBeVisible();await expect(page.locator('#tool-pane-locksmith .file-action-lock-results')).toBeVisible();
+  await fs.mkdir(path.resolve('work','diagnostics-ui'),{recursive:true});await page.screenshot({path:path.resolve('work','diagnostics-ui','lock-tab.png')});
+  const lockLayout=await page.evaluate(()=>{const side=document.querySelector('#tool-pane-locksmith .file-action-lock-targets').getBoundingClientRect(),results=document.querySelector('#tool-pane-locksmith .file-action-lock-results').getBoundingClientRect(),footer=document.querySelector('#tool-pane-locksmith .file-action-footer').getBoundingClientRect();return {sideX:side.x,resultX:results.x,sideY:side.y,resultY:results.y,footerY:footer.y,resultBottom:results.bottom};});
+  assert.ok(lockLayout.sideX<lockLayout.resultX&&Math.abs(lockLayout.sideY-lockLayout.resultY)<2&&lockLayout.footerY>=lockLayout.resultBottom-2,JSON.stringify(lockLayout));
+  await page.evaluate(()=>window.one.patchSettings({appearance:{mode:'dark'}}));
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  const surface=await page.locator('html').evaluate(element=>getComputedStyle(element).getPropertyValue('--surface').trim());
+  assert.equal(surface,'#1e1e1f');
+  assert.equal(await page.locator('html').evaluate(element=>getComputedStyle(element).getPropertyValue('--accent').trim()),'#f2f2f2');
+  await page.screenshot({path:path.resolve('work','diagnostics-ui','dark-lock-tab.png')});
+  const conflict=await page.evaluate(async()=>{await window.one.recordShortcut(true,'smoke-hotkey');try{return await window.one.hotkeyConflict('Ctrl+Alt+F','color-shortcut');}finally{await window.one.recordShortcut(false,'smoke-hotkey');}});
+  assert.equal(conflict.source,'one');assert.match(conflict.label,/文件搜索/);
+  const overview=await page.evaluate(()=>window.one.systemInformation('overview',true));
+  assert.ok(overview.groups.length>0);
+  const adapters=overview.groups.find(group=>group.id==='dxgi')?.records||[];
+  assert.equal(new Set(adapters.map(record=>record.title+'|'+record.fields.find(field=>field.key==='DeviceId')?.value)).size,adapters.length);
+  console.log(JSON.stringify({result:'PASS',logs:entries.length,tabs,surface,hotkey:conflict.label,systemGroups:overview.groups.length}));
+ }finally{await app.close();}
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

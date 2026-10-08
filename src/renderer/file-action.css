@@ -65,6 +65,7 @@
 .file-action-footer .rename-actions{margin:0;gap:12px;flex-wrap:nowrap}
 .file-action-footer .rename-actions>label{font-size:12px}
 .file-action-footer .file-tools-toolbar{margin:0;flex:none}
+.file-action-rename .file-tools-toolbar>.tabs{display:none}
 .file-action-footer .file-tools-toolbar .toolbar{gap:8px}
 .file-action-footer .toolbar button{font-size:12px}
 .file-action-footer #rename-apply{order:2}

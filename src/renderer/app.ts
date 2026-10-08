@@ -9,12 +9,17 @@ import {setupTextSelection} from './selection';
 import {setupTooltips} from './tooltip';
 import {setupSegments} from './segments';
 import {setupWindowVisibility} from './window-visibility';
+import {api} from './ui';
 setupAppearance();setupTextSelection();setupTooltips();setupSegments();
+window.addEventListener('error',event=>{void api.diagnosticsReport('uncaught-error',event.error?.stack||`${event.message} at ${event.filename}:${event.lineno}:${event.colno}`).catch(()=>{});});
+window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
 const view=new URLSearchParams(location.search).get('view')||'main';
 if(['main','file-action','preview','picker','search','color-editor','dialog-bar'].includes(view))setupWindowVisibility();
 const render=async()=>{
  if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
+ else if(view==='color-zoom')await (await import('./color-zoom-view')).renderColorZoom();
+ else if(view==='color-freeze')await (await import('./color-freeze-view')).renderColorFreeze();
  else if(view==='screen-ruler')(await import('./screen-ruler-view')).renderScreenRuler();
  else if(view==='color-editor')(await import('./color-editor-view')).renderColorEditor();
  else if(view==='command-confirm')await (await import('./menu-confirmation-view')).renderMenuConfirmation();
@@ -28,4 +33,4 @@ const render=async()=>{
  else if(view==='search')await (await import('./search-view')).renderSearch();
  else (await import('./main-view')).renderMain();
 };
-void render().catch(console.error);
+void render().catch(error=>{void api.diagnosticsReport('render',error?.stack||String(error)).catch(()=>{});console.error(error);});

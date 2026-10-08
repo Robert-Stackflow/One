@@ -30,12 +30,15 @@
 - [图标设计](development/图标设计.md)
 - [持续优化进度](development/优化进度.md)
 - [原生文件索引模块](development/原生文件索引.md)
+- [压缩与解压实现计划](development/压缩与解压实现计划.md)
 
 ## 调研与历史
 
 - [空间分析调研](research/SpaceSniffer调研.md)
 - [屏幕取色调研](research/取色实现调研.md)
 - [文件索引内存与驻留](research/文件索引内存调研.md)
+- [Bandizip 功能与设置调研](research/Bandizip功能与设置调研.md)
+- [全局热键占用进程定位方案](research/全局热键占用进程定位方案.md)
 - [历史验收记录](history/README.md)
 
 历史文档保留当时的测量和环境说明；旧发布包与大型测试数据已清理，复现测试时从当前源码重新生成。

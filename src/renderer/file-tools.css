@@ -17,6 +17,26 @@
 #tool-group-back{display:none;font-size:11px;padding:4px 7px;min-height:26px;flex-shrink:0}
 #tool-group-back>.icon{width:13px;height:13px}
 .file-tool-pane:not([hidden]){animation:tool-pane-in .14s var(--ease)}
+#tool-pane-integrity .tool-config{gap:16px}#integrity-create-fields,#integrity-verify-fields:not([hidden]){display:grid;gap:14px}#tool-pane-integrity .tool-options{justify-content:space-between;align-items:center;gap:10px 22px;padding:12px 14px;border-radius:10px;background:var(--soft)}#tool-pane-integrity .tool-options>label{color:var(--fg);white-space:nowrap}#tool-pane-integrity .tool-hint{font-size:12px}#tool-pane-locksmith>.settings-card{margin:0}#tool-pane-locksmith .lock-target-input{padding:12px 20px}#tool-pane-locksmith .lock-targets,#tool-pane-locksmith .lock-results{padding:0 20px 16px}
+#tool-pane-locksmith:not([hidden]){display:grid;grid-template-columns:minmax(230px,30%) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;min-height:clamp(450px,calc(100vh - 270px),760px);border:1px solid var(--line);border-radius:var(--panel-radius);overflow:hidden;background:var(--surface)}
+#tool-pane-locksmith .file-action-lock-targets{min-height:0;padding:22px 16px;background:var(--soft);border-right:1px solid var(--line)}
+#tool-pane-locksmith .file-action-preview-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 4px 16px}
+#tool-pane-locksmith .file-action-preview-caption h2{font-size:15px;font-weight:550;margin:0}
+#tool-pane-locksmith #lock-target-actions{display:flex;gap:4px}
+#tool-pane-locksmith .lock-targets{padding:0;gap:6px}
+#tool-pane-locksmith .lock-targets>div{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px;align-items:center;gap:8px}
+#tool-pane-locksmith .lock-targets>div>span:nth-child(2){flex:1;min-width:0}
+#tool-pane-locksmith .lock-targets strong,#tool-pane-locksmith .lock-targets small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tool-pane-locksmith .lock-targets strong{font-size:12px;font-weight:500}
+#tool-pane-locksmith .lock-targets small{font-size:10px;color:var(--muted);margin-top:4px}
+#tool-pane-locksmith .lock-targets .icon-button{width:25px;height:25px;min-width:25px;min-height:25px;padding:5px;color:var(--muted);opacity:0}
+#tool-pane-locksmith .lock-targets>div:hover .icon-button,#tool-pane-locksmith .lock-targets .icon-button:focus-visible{opacity:1}
+#tool-pane-locksmith .file-action-lock-results{padding:24px;min-height:0}
+#tool-pane-locksmith .lock-results{padding:0}
+#tool-pane-locksmith .file-action-footer{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:0;padding:14px 22px;border-top:1px solid var(--line)}
+#tool-pane-locksmith .file-action-lock-status{min-width:0;flex:1}
+#tool-pane-locksmith #lock-cancel:disabled{display:none}
+@media(max-width:780px){#tool-pane-locksmith:not([hidden]){grid-template-columns:190px minmax(0,1fr)}#tool-pane-locksmith .file-action-lock-targets,#tool-pane-locksmith .file-action-lock-results{padding:16px}}
 @keyframes tool-pane-in{from{opacity:.6;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:1060px){
  .viewport-docked>.tool-result-layout.with-detail{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}

@@ -10,6 +10,7 @@ test('取色相近色保留不透明原色、亮暗顺序并去重；旧设置�
  for(const hex of ['#000000','#FFFFFF','#ff0000']){const colors=core.colorVariants(hex);assert.equal(new Set(colors.map(c=>c.hex)).size,colors.length);assert.ok(colors.some(c=>c.hex===hex.toUpperCase()&&c.label==='当前颜色'));assert.ok(colors.every(c=>/^#[A-F0-9]{6}$/.test(c.hex)));}
  assert.throws(()=>core.colorVariants('rgba(0,0,0,.5)'));
  const old=core.defaultSettings();delete old.colorShowEditor;assert.equal(core.validateSettings(old).colorShowEditor,true);assert.equal(core.validateSettings({...old,colorShowEditor:false}).colorShowEditor,false);assert.throws(()=>core.validateSettings({...old,colorShowEditor:1}));
+ const oldZoom=core.defaultSettings();delete oldZoom.colorWheelZoom;assert.equal(core.validateSettings(oldZoom).colorWheelZoom,false);assert.equal(core.validateSettings({...oldZoom,colorWheelZoom:true}).colorWheelZoom,true);assert.throws(()=>core.validateSettings({...oldZoom,colorWheelZoom:'yes'}));
  const history=core.validateSettings({...old,colorHistory:['#abcdef','#ABCDEF',...Array.from({length:25},(_,n)=>'#'+n.toString(16).padStart(6,'0'))]}).colorHistory;assert.equal(history.length,20);assert.equal(history[0],'#ABCDEF');assert.equal(new Set(history).size,20);
 });
 test('附着搜索高度包含透明安全边距、完整边框、输入栏和受限结果列表',()=>{
@@ -30,6 +31,8 @@ test('提示浮窗按类型呈现音量、锁定动画和组合键，不依赖�
 test('提示位置保存与旧外观设置迁移；无效位置被拒绝',()=>{
  const s=core.defaultSettings();assert.equal(s.appearance.toastPosition,'bottom-center');for(const position of ['top-left','top-center','top-right','bottom-left','bottom-center','bottom-right']){s.appearance.toastPosition=position;assert.equal(core.validateSettings(s).appearance.toastPosition,position);}
  delete s.appearance.toastPosition;assert.equal(core.validateSettings(s).appearance.toastPosition,'bottom-center');s.appearance.toastPosition='nowhere';assert.throws(()=>core.validateSettings(s),/提示位置/);
+ s.appearance.toastPosition='bottom-center';s.echo.keys={...s.echo.keys,x:.25,y:.7,display:'2'};delete s.appearance.popupPlacement;assert.deepEqual(core.validateSettings(s).appearance.popupPlacement,{x:.25,y:.7,display:'2'});
+ s.appearance.popupPlacement={x:.6,y:.3,display:'cursor'};assert.deepEqual(core.validateSettings(s).appearance.popupPlacement,s.appearance.popupPlacement);s.appearance.popupPlacement.x=1.1;assert.throws(()=>core.validateSettings(s),/弹窗位置/);
 });
 test('面包屑保留根和当前目录，优先显示最近的祖先',()=>{
  assert.deepEqual(core.breadcrumbIndices([50,80,80,80,100],240,32),[0,4]);assert.deepEqual(core.breadcrumbIndices([50,80,80,80,100],270,32),[0,3,4]);assert.deepEqual(core.breadcrumbIndices([50,80,80,80,100],400,32),[0,1,2,3,4]);assert.deepEqual(core.breadcrumbIndices([50,100],50,32),[0,1]);
@@ -60,7 +63,11 @@ test('文件搜索支持路径、空格短语和类型，默认集成关闭',()=
  assert.ok(core.searchMatcher('doc: "季度 报告"')(item)>0);assert.ok(core.searchMatcher('D:/报告')(item)>0);assert.equal(core.searchMatcher('folder:')(item),-1);assert.equal(core.searchMatcher('ext:txt')(item),-1);assert.equal(core.defaultSearch().explorerTyping,false);assert.throws(()=>core.validateSearch({...core.defaultSearch(),roots:['relative/path']}));
 });
 test('唤醒按绝对时间到期，锁屏暂停，旧配置安全迁移',()=>{
-  const defaults=core.defaultUtilities();assert.equal(defaults.awake.mode,'off');
+  const defaults=core.defaultUtilities();assert.equal(defaults.awake.mode,'off');assert.equal(defaults.topmost.shortcut,'Ctrl+Win+T');
+  assert.equal(defaults.topmost.popup,true);
+  const legacy=structuredClone(defaults);delete legacy.topmost.popup;assert.equal(core.validateUtilities(legacy).topmost.popup,true);
+  assert.equal(core.validateUtilities({...defaults,topmost:{...defaults.topmost,popup:false}}).topmost.popup,false);
+  assert.throws(()=>core.validateUtilities({...defaults,topmost:{...defaults.topmost,popup:'off'}}),/置顶提示设置无效/);
   const timed={mode:'timed',display:true,expiresAt:2000};
   assert.deepEqual(core.awakeEffective(timed,false,1000),{active:true,expired:false,remaining:1000});
   assert.equal(core.awakeEffective(timed,true,1000).active,false);
@@ -108,7 +115,7 @@ test('设置校验拒绝越界参数和任意角落命令', () => {
 
 test('0.2 设置迁移补齐外观与取色，热角命令参数保留为独立数组',()=>{
   const old=core.defaultSettings();delete old.appearance;delete old.cornerBindings;delete old.colorShortcut;delete old.colorHistory;
-  const settings=core.validateSettings(old);assert.equal(settings.appearance.lightBackground,'#ffffff');assert.equal(settings.appearance.darkBackground,'#181818');assert.equal(settings.colorShortcut,'Control+Alt+C');
+  const settings=core.validateSettings(old);assert.equal(settings.appearance.lightBackground,'#ffffff');assert.equal(settings.appearance.darkBackground,'#181818');assert.equal(settings.colorShortcut,'Shift+Win+C');
   settings.corners.TL='command';settings.cornerBindings.TL={command:'program.exe',args:['a b','$(not shell)','& not shell'],cwd:'',shortcut:''};assert.deepEqual(core.validateSettings(settings).cornerBindings.TL.args,settings.cornerBindings.TL.args);
   assert.throws(()=>core.validateSettings({...settings,cornerBindings:{...settings.cornerBindings,TL:{...settings.cornerBindings.TL,args:'unparsed command'}}}),/参数/);
   assert.throws(()=>core.validateSettings({...settings,appearance:{...settings.appearance,accent:'url(example)'}}),/颜色/);

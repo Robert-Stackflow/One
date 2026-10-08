@@ -12,9 +12,10 @@ export interface DisplayBrightness { name: string; supported: boolean; method: s
 export type CornerAction = 'off' | 'desktop' | 'tasks' | 'lock' | 'one' | 'start' | 'explorer' | 'screenshot' | 'color' | 'hotkey' | 'command';
 export interface CornerBinding { shortcut: string; command: string; args: string[]; cwd: string }
 export type ToastPosition='top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right';
-export interface Appearance { mode: 'system' | 'light' | 'dark'; accent: string; font: import('./fonts').UIFont; density: 'comfortable' | 'compact'; radius: number; lightBackground: string; lightForeground: string; darkBackground: string; darkForeground: string; toastPosition:ToastPosition }
+export interface PopupPlacement {x:number;y:number;display:string}
+export interface Appearance { mode: 'system' | 'light' | 'dark'; accent: string; font: import('./fonts').UIFont; density: 'comfortable' | 'compact'; radius: number; lightBackground: string; lightForeground: string; darkBackground: string; darkForeground: string; toastPosition:ToastPosition; popupPlacement:PopupPlacement }
 export interface ColorSample { hex: string; rgb: string; hsl: string }
-export interface ScreenCapture { url: string; data?:Uint8Array; width: number; height: number; hex: string; pixels: number; x:number; y:number }
+export interface ScreenCapture { url: string; data?:Uint8Array; width: number; height: number; hex: string; pixels: number; x:number; y:number; centerX?:number;centerY?:number;cropX?:number;cropY?:number;zoomFrozen?:boolean }
 export interface Settings {
   quickActions:import('./quick-actions').QuickActions;
   capsLock:import('./quick-actions').CapsPreferences;
@@ -27,7 +28,7 @@ export interface Settings {
   keyEcho: boolean; onlyCombinations: boolean; edgeScroll: boolean; copyMenu: boolean; explorerPreview: boolean;
   pauseFullscreen: boolean; excludedApps: string; dwellMs: number; cornerPixels: number; cooldownMs: number;
   copyIntervalMs: number; volumeStep: number; edgePixels: number; corners: Record<'TL' | 'TR' | 'BL' | 'BR', CornerAction>; edges: Record<Edge, EdgeSetting>;
-  cornerBindings: Record<'TL' | 'TR' | 'BL' | 'BR', CornerBinding>; appearance: Appearance; colorShortcut: string; colorHistory: string[]; colorFormat: import('./colors').ColorFormat; colorVisibleFormats: import('./colors').ColorFormat[]; colorShowEditor:boolean;
+  cornerBindings: Record<'TL' | 'TR' | 'BL' | 'BR', CornerBinding>; appearance: Appearance; colorShortcut: string; colorHistory: string[]; colorFormat: import('./colors').ColorFormat; colorVisibleFormats: import('./colors').ColorFormat[]; colorShowEditor:boolean; colorWheelZoom:boolean;
 }
 export interface MaintenanceRow { name: string; source: string; status: string; command: string; location: string }
 export interface FileEntry { name: string; path: string; directory: boolean; size?: number; packedSize?: number }
@@ -69,7 +70,13 @@ export interface OneAPI {
   restartNormal():Promise<void>;
   restart():Promise<void>;
   settingsBackupExport():Promise<{saved:boolean;path?:string}>;
-  settingsBackupImport():Promise<{imported:boolean;exportedAt?:string}>;
+  settingsBackupImport():Promise<{imported:boolean;exportedAt?:string;shortcutError?:string}>;
+  diagnosticsList():Promise<import('../main/runtime-log').DiagnosticFile[]>;
+  diagnosticsRecent():Promise<import('../main/runtime-log').DiagnosticRecord[]>;
+  diagnosticsDelete(ids:string[]):Promise<void>;
+  diagnosticsExport(ids:string[]):Promise<string|null>;
+  diagnosticsOpen():Promise<string>;
+  diagnosticsReport(kind:string,detail:string):Promise<void>;
   fileIcons(paths:string[]):Promise<Record<string,string>>;
   menuPresets():Promise<import('./menu-presets').MenuPreset[]>;
   menuBar():Promise<import('./search').MenuBar>;onMenuBar(callback:(bar:import('./search').MenuBar)=>void):()=>void;onSearchPreferences(callback:(settings:import('./search').SearchSettings)=>void):()=>void;onNavigatePage(callback:(target:import('./menu-builtins').OneMenuTarget)=>void):()=>void;
@@ -93,11 +100,12 @@ export interface OneAPI {
   previewFlags(value?: {pinned?:boolean;held?:boolean}): Promise<{pinned:boolean;held:boolean}>;
   appearance(): Promise<Appearance>; installedFonts(refresh?:boolean):Promise<import('./fonts').InstalledFont[]>; onAppearance(callback: (value:Appearance) => void): () => void;
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;
-  pickColor(): Promise<void>; colorCapture(): Promise<ScreenCapture|null>; chooseColor(hex: string): Promise<void>; onColor(callback: (value:string) => void): () => void;
+  pickColor(mode?:'live'|'frozen'): Promise<void>;colorFrozenStatus():Promise<boolean>;onColorFrozen(callback:(frozen:boolean)=>void):()=>void; colorCapture(): Promise<ScreenCapture|null>; chooseColor(hex: string): Promise<void>; onColor(callback: (value:string) => void): () => void;
   openScreenRuler(mode?:'live'|'static'):Promise<void>;closeScreenRuler():Promise<void>;
   showColorEditor(hex?:string):Promise<void>;colorState():Promise<import('./colors').ColorState>;onColorSettings(callback:()=>void):()=>void;onColorEditorOpen(callback:(hex:string)=>void):()=>void;colorEditorSize(height:number):Promise<void>;clearColorHistory():Promise<void>;
   colorShortcutStatus():Promise<{active:boolean;error:string}>;retryColorShortcut():Promise<{active:boolean;error:string}>;onColorShortcutStatus(callback:(status:{active:boolean;error:string})=>void):()=>void;
-  onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean):Promise<void>; onPreviewClosing(callback:()=>void):()=>void;
+  onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean,token:string):Promise<void>;onShortcutCaptured(callback:(value:{token:string;vk?:number;ctrlKey?:boolean;altKey?:boolean;shiftKey?:boolean;metaKey?:boolean;released?:boolean})=>void):()=>void; onPreviewClosing(callback:()=>void):()=>void;
+  hotkeyConflict(shortcut:string,field:string):Promise<{source:'one'|'external'|'none';label:string}>;
   openFile(path: string): Promise<void>; revealFile(path: string): Promise<void>; startFileDrag(path:string):Promise<void>; searchText(text: string): Promise<void>;
   sendToWorkbench(text: string): Promise<void>; inputStatus(): Promise<{ hook: boolean; native: boolean; error: string }>;
   pickerData(path?: string): Promise<import('./picker').PickerData>; pickerChoose(path: string, overwrite?: boolean): Promise<{ overwrite: boolean }>;

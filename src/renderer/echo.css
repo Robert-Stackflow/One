@@ -1,8 +1,4 @@
 .echo-master{margin-bottom:20px}
-.echo-master .setting-row{border-bottom:1px solid var(--line)}
-.echo-shared-position{display:flex;align-items:center;gap:12px;padding:16px 0}
-.echo-shared-position>label{margin-right:auto;font-size:12px;color:var(--muted)}
-.echo-shared-position .custom-select{width:220px;min-width:0}
 .echo-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px}
 .echo-channels{display:flex;flex-direction:column;gap:4px}
 .echo-channel{display:flex;align-items:center;gap:10px;border-radius:9px;padding:5px 10px;transition:background .12s var(--ease)}
@@ -30,5 +26,5 @@
 #echo-position-error{width:100%;font-size:10px;color:#ffb8b8;app-region:no-drag}
 
 
-@media(max-width:1050px){.echo-layout{grid-template-columns:200px minmax(0,1fr);gap:20px}.echo-shared-position{flex-wrap:wrap}.echo-shared-position .custom-select{width:200px}}
-@media(max-width:850px){.echo-layout{grid-template-columns:180px minmax(0,1fr);gap:12px}.echo-channel{padding-inline:8px;gap:8px}.echo-channel>button{font-size:12px;gap:7px}.echo-shared-position>label{flex-basis:100%}.echo-shared-position .custom-select{flex:1}}
+@media(max-width:1050px){.echo-layout{grid-template-columns:200px minmax(0,1fr);gap:20px}}
+@media(max-width:850px){.echo-layout{grid-template-columns:180px minmax(0,1fr);gap:12px}.echo-channel{padding-inline:8px;gap:8px}.echo-channel>button{font-size:12px;gap:7px}}

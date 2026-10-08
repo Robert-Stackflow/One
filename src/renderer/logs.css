@@ -1,0 +1,42 @@
+.settings-panels .diagnostics-card{padding:0;overflow:hidden}
+.diagnostics-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:20px 22px;border-bottom:1px solid var(--line)}
+.diagnostics-intro h3{font-size:14px;font-weight:550;margin:0 0 5px}
+.diagnostics-intro p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+.diagnostics-intro>span{white-space:nowrap;color:var(--muted);font-size:12px}
+.diagnostics-overview{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--line)}
+.diagnostics-overview>div{display:flex;flex-direction:column;gap:3px;padding:17px 22px;border-right:1px solid var(--line)}
+.diagnostics-overview>div:last-child{border:0}
+.diagnostics-overview strong{font-size:22px;line-height:1.2;font-weight:550;font-variant-numeric:tabular-nums}
+.diagnostics-overview span{font-size:11px;color:var(--muted)}
+.diagnostics-filters{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line)}
+.diagnostics-filters select{width:126px}.diagnostics-filters input{flex:1;min-width:150px}.diagnostics-filters>span{color:var(--muted);font-size:11px;white-space:nowrap}
+.diagnostics-events{max-height:460px;min-height:130px;overflow:auto}
+.diagnostics-event{border-bottom:1px solid var(--line)}
+.diagnostics-event:last-child{border:0}
+.diagnostics-event>summary{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 22px;list-style:none;cursor:pointer}
+.diagnostics-event>summary::-webkit-details-marker{display:none}
+.diagnostics-event>summary:hover{background:var(--hover)}
+.diagnostics-event>summary>time{width:128px;flex:none;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.diagnostics-level{display:inline-flex;align-items:center;justify-content:center;min-width:38px;padding:3px 6px;background:var(--soft);border-radius:5px;font-size:11px;color:var(--muted)}
+.diagnostics-event[data-level=error] .diagnostics-level,.diagnostics-event[data-level=fatal] .diagnostics-level{background:#c5625220;color:#c46b5b}
+.diagnostics-event[data-level=warn] .diagnostics-level{background:#b48b4720;color:#b48b47}
+.diagnostics-event-main{display:flex;flex:1;flex-direction:column;min-width:0;gap:2px}
+.diagnostics-event-main strong{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diagnostics-event-main small{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diagnostics-duration{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.diagnostics-event>summary>.icon{width:14px;height:14px;color:var(--muted);transition:transform .15s}
+.diagnostics-event[open]>summary>.icon{transform:rotate(180deg)}
+.diagnostics-event-detail{padding:0 22px 16px 210px}
+.diagnostics-event-detail>div{font-size:10px;color:var(--muted);margin-bottom:8px}
+.diagnostics-event-detail pre{margin:0;padding:12px 14px;max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--soft);font:11px/1.6 Consolas,'Cascadia Code',monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
+.diagnostics-files-card{margin-top:18px}
+.diagnostics-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line)}
+.diagnostics-select-all{display:inline-flex;align-items:center;gap:7px;margin-right:5px;font-size:12px;cursor:pointer}
+.diagnostics-list{max-height:320px;overflow:auto}
+.diagnostics-item{display:grid;grid-template-columns:18px 80px minmax(160px,1fr) 150px 65px;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line);font-size:12px;cursor:pointer}
+.diagnostics-item:hover{background:var(--hover)}.diagnostics-item:last-child{border:0}
+.diagnostics-kind,.diagnostics-item time,.diagnostics-item small{color:var(--muted)}
+.diagnostics-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.diagnostics-item small{text-align:right}
+.diagnostics-empty{padding:45px;text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:1050px){.diagnostics-item{grid-template-columns:18px 70px minmax(90px,1fr) 80px}.diagnostics-item time{display:none}.diagnostics-event>summary>time{width:100px}.diagnostics-event-detail{padding-left:150px}}
+@media(max-width:780px){.diagnostics-event>summary{gap:7px}.diagnostics-event>summary>time{display:none}.diagnostics-event-detail{padding-left:20px}.diagnostics-filters>span{width:100%}}

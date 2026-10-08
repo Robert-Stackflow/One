@@ -2,7 +2,7 @@ import {FileContextMenu} from './file-menu';
 import {explorerMenuState,setExplorerMenu} from './explorer-menu';
 import {readShellRequest} from './shell-request';
 import {ShellRequestInbox} from './shell-request-inbox';
-import {runtimeLog} from './runtime-log';
+import {runtimeLog,runtimeWarning,runtimeOperation,runtimeError,runtimeFatal,diagnosticsList,diagnosticsRecent,diagnosticsDelete,diagnosticsExport} from './runtime-log';
 import type {FileActionTarget} from '../shared/explorer-menu';
 import {PopupLifecycle,PopupReadiness,deferPopupBlur} from './popup-lifecycle';
 import {FileToolsService} from './file-tools-service';
@@ -36,13 +36,14 @@ import {validateSteps} from '../shared/text-tools';
 import {LocksmithService} from './locksmith';
 import {SearchService} from './search-service';
 import {SearchBridge} from './search-bridge';
+import {ShortcutCapture} from './shortcut-capture';
 import type {SearchContext} from '../shared/search';
 import {AwakeService} from './awake';
 import {TopmostService} from './topmost';
 import {PortService} from './port-service';
 import {ClickerService} from './clicker';
 import {elevationCommand} from './elevation-command';
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme } from 'electron';
+import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme } from 'electron';
 import { readFile, writeFile, mkdir, stat, readdir, rename, realpath } from 'node:fs/promises';
 import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -72,9 +73,14 @@ const execute = promisify(execFile);
 app.setName('One');
 const testMode = process.env.ONE_TEST_MODE === '1';
 const developmentMode = !app.isPackaged && process.env.ONE_DEVELOPMENT === '1';
+const loginStartupArg = '--one-login-startup';
 app.setAppUserModelId(developmentMode ? 'local.one.desktop.dev' : 'local.one.desktop');
 let starting:Promise<void>|undefined;let developmentQuitRequested=false;
 if (process.env.ONE_DATA_DIR && (testMode || developmentMode)) app.setPath('userData', resolve(process.env.ONE_DATA_DIR));
+crashReporter.start({uploadToServer:false,productName:'One'});
+process.on('uncaughtExceptionMonitor',error=>runtimeFatal(app.getPath('userData'),'main-uncaught-exception',error));
+process.on('unhandledRejection',reason=>runtimeError(app.getPath('userData'),'main-unhandled-rejection',reason));
+app.on('child-process-gone',(_event,details)=>runtimeError(app.getPath('userData'),'child-process-gone',JSON.stringify(details)));
 if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string }>();
@@ -113,7 +119,10 @@ const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
-let colorWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
+let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
+let colorFreezeWindows:BrowserWindow[]=[],colorFreezeBusy=false,colorSession=0;
+let colorZoomActive=false,colorZoomCardBounds:Electron.Rectangle|undefined;
+const shortcutCapture=new ShortcutCapture();let activeShortcutToken='';
 let rulerWindows:BrowserWindow[]=[],rulerOpening=false,rulerEscapeRegistered=false;
 const workers = new Set<Worker>();let diskService:DiskService;let maintenance:MaintenanceClient;let systemInformation:SystemInformationService;let proxyDiagnostics:ProxyDiagnosticsService;let diskMonitor:DiskMonitorService;let echoes:EchoService;
 let main: BrowserWindow; let tray: Tray; let trayMenuPanel:TrayMenuPanel|undefined; let inputPaused=false;
@@ -200,6 +209,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
     ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:true } });
   const windowId = window.webContents.id; roles.set(windowId, view);
+  if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-created',`role=${view} id=${windowId}`);
   // The open-with submenu is cheap to recreate and rarely reopened after a pause.
   // Keep the parent menu warm for repeated right-clicks, but release its extra renderer sooner.
   if(view==='file-context'&&query.includes('submenu='))popupLifecycle.track(window,8_000);
@@ -217,9 +227,14 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.on('show',sendWindowState);window.on('hide',sendWindowState);
   window.on('minimize',sendWindowState);window.on('restore',sendWindowState);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('did-fail-load',(_event,code,description,url)=>{if(code!==-3)runtimeError(app.getPath('userData'),`window-load:${view}`,`${code} ${description} ${url}`);});
+  window.webContents.on('console-message',details=>{if(details.level==='error')runtimeError(app.getPath('userData'),`renderer-console:${view}`,`${details.message} (${details.sourceId}:${details.lineNumber})`);});
+  window.webContents.on('render-process-gone',(_event,details)=>runtimeError(app.getPath('userData'),`renderer-gone:${view}`,JSON.stringify(details)));
+  window.webContents.on('unresponsive',()=>runtimeWarning(app.getPath('userData'),`renderer-unresponsive:${view}`));
+  window.webContents.on('responsive',()=>runtimeLog(app.getPath('userData'),`renderer-responsive:${view}`));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.on('close',()=>{if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => { fileTools?.cancel(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -266,8 +281,9 @@ function echo(text:string,channel?:import('../shared/echo').EchoChannel){echoes?
 function textValue(value: unknown, limit = 10_000_000): string { if (typeof value !== 'string' || value.length > limit) throw new Error('文本参数无效或超过长度上限'); return value; }
 function filePath(value: unknown): string { if (typeof value !== 'string' || value.length > 32768 || !isAbsolute(value) || value.includes('\0')) throw new Error('文件路径无效'); return resolve(value); }
 const fileActionIPC=new Set(['file-action-data','window-action','window-state','settings','app-info','file-icons','file-icon','shell-icons','file-tools-run','file-tools-cancel','file-tools-page','file-tools-history','lock-state','lock-scan','lock-cancel','lock-end','pick-file','pick-directory','drop-path-kinds','open-file','reveal-file','native-context-menu','preview','copy-text','file-tools-overview','appearance']);
+const auditedIPC=new Set(['patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate']);
 function handle(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown, allowed = ['main']) {
-  ipcMain.handle(`one:${name}`, (event, ...args) => { const role = roles.get(event.sender.id); if (!role || !(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效'); return handler(event, ...args); });
+  ipcMain.handle(`one:${name}`, async(event, ...args) => {const start=performance.now(),role=roles.get(event.sender.id)||'unknown';try{if (!(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效');const result=await handler(event,...args);if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'ok');return result;}catch(error){if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'error');runtimeError(app.getPath('userData'),`ipc:${name}`,error);throw error;} });
 }
 const privilegePowerShell=join(process.env.SystemRoot||'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe');
 async function administrator(){
@@ -326,11 +342,11 @@ async function preview(path: string) {
 function ElectronContents(id: number) { const window = BrowserWindow.getAllWindows().find(w => w.webContents.id === id); if (!window) throw new Error('预览窗口已关闭'); return window.webContents; }
 async function persistSettings(next:Settings){await mkdir(app.getPath('userData'),{recursive:true});const temporary=settingsPath()+'.tmp';await writeFile(temporary,JSON.stringify(next,null,2),'utf8');await rename(temporary,settingsPath());settings=next;}
 let saving:Promise<unknown>=Promise.resolve();
-function saveSettings(value:Settings|((current:Settings)=>Settings)){
+function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortcutConflict=false}:{allowShortcutConflict?:boolean}={}){
   const task=saving.catch(()=>{}).then(async()=>{const previous=settings,next=validateSettings(typeof value==='function'?value(settings):value);
     const changed=(key:keyof Settings)=>JSON.stringify(previous[key])!==JSON.stringify(next[key]);
-    if(changed('colorShortcut')&&!recordingShortcut){try{colorShortcut(next.colorShortcut);}catch(error){colorShortcut(previous.colorShortcut);throw error;}}
-    try{await persistSettings(next);}catch(error){if(changed('colorShortcut')&&!recordingShortcut)colorShortcut(previous.colorShortcut);throw error;}
+    if(changed('colorShortcut')&&!recordingShortcut){try{colorShortcut(next.colorShortcut);}catch(error){if(!allowShortcutConflict){try{colorShortcut(previous.colorShortcut);}catch{}throw error;}}}
+    try{await persistSettings(next);}catch(error){if(changed('colorShortcut')&&!recordingShortcut)try{colorShortcut(previous.colorShortcut);}catch{}throw error;}
     const inputKeys=['quickActions','capsLock','echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings','utilities'] as const;
     if(inputKeys.some(changed)){if(inputPaused)input?.stop();else input?.update(next);}
     if(changed('search')){
@@ -342,10 +358,12 @@ function saveSettings(value:Settings|((current:Settings)=>Settings)){
     }
     if(changed('utilities')){if(JSON.stringify(previous.utilities.awake)!==JSON.stringify(next.utilities.awake))awake?.update(next.utilities.awake);if(JSON.stringify(previous.utilities.topmost)!==JSON.stringify(next.utilities.topmost))topmost?.update(next.utilities.topmost);if(JSON.stringify(previous.utilities.clicker)!==JSON.stringify(next.utilities.clicker))clicker?.update(next.utilities.clicker);}
     if(changed('diskMonitor'))diskMonitor?.configure(next.diskMonitor);
-    if(changed('appearance'))refreshWindowAppearance();
-    if(['colorHistory','colorVisibleFormats','colorFormat','colorShowEditor'].some(key=>changed(key as keyof Settings)))for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&['main','color-editor'].includes(roles.get(w.webContents.id)||''))w.webContents.send('one:color-settings');
-    if(previous.general.launchAtLogin!==next.general.launchAtLogin){if(app.isPackaged&&!testMode)app.setLoginItemSettings({openAtLogin:next.general.launchAtLogin});trayMenuPanel?.changed();}
+    if(changed('appearance')){refreshWindowAppearance();if(JSON.stringify(previous.appearance.popupPlacement)!==JSON.stringify(next.appearance.popupPlacement))echoes?.reposition();}
+    if(changed('colorWheelZoom'))colorWorker?.postMessage({wheelZoomEnabled:next.colorWheelZoom});
+    if(['colorHistory','colorVisibleFormats','colorFormat','colorShowEditor','colorWheelZoom'].some(key=>changed(key as keyof Settings)))for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&['main','color-editor','color-picker'].includes(roles.get(w.webContents.id)||''))w.webContents.send('one:color-settings');
+    if(previous.general.launchAtLogin!==next.general.launchAtLogin){if(app.isPackaged&&!testMode)app.setLoginItemSettings({openAtLogin:next.general.launchAtLogin,...(next.general.launchAtLogin?{args:[loginStartupArg]}:{})});trayMenuPanel?.changed();}
     if(previous.keyEcho&&!next.keyEcho)echoes?.hideTransient();if(previous.keyEcho&&!next.keyEcho)echoes?.cancelEdit();
+    const keys=(Object.keys(previous) as (keyof Settings)[]).filter(changed);if(keys.length)runtimeLog(app.getPath('userData'),'settings-updated',keys.join(','));
     return next;
   });saving=task;return task;
 }
@@ -363,12 +381,47 @@ async function importSettingsBackup(){
   const source=await readFile(path,'utf8');if(source.length>4*1024*1024)throw new Error('备份文件过大');
   let backup:unknown;try{backup=JSON.parse(source);}catch{throw new Error('备份文件不是有效的 JSON');}
   if(!backup||typeof backup!=='object'||(backup as Partial<SettingsBackup>).format!=='one-settings-backup'||(backup as Partial<SettingsBackup>).schema!==1)throw new Error('不是 One 设置备份文件');
-  const value=validateSettings((backup as SettingsBackup).settings);await saveSettings(value);return {imported:true,exportedAt:(backup as SettingsBackup).exportedAt};
+  const value=validateSettings((backup as SettingsBackup).settings);await saveSettings(value,{allowShortcutConflict:true});
+  const shortcutError=[colorShortcutError,topmost?.error,searchBridge?.error].filter(error=>error&&/快捷键/.test(error)).join('；');
+  return {imported:true,exportedAt:(backup as SettingsBackup).exportedAt,shortcutError};
 }
 function colorDisplays(){return screen.getAllDisplays().map(d=>({bounds:screen.dipToScreenRect(null,d.bounds),workArea:screen.dipToScreenRect(null,d.workArea),scaleFactor:d.scaleFactor}));}
 function refreshColorDisplays(){colorFollower?.postMessage({displays:colorDisplays()});}
-function sendColorFrame(){if(!colorWindow||colorWindow.isDestroyed()||colorWindow.webContents.isLoading()||colorFramePending||!colorSample||colorSample===colorSentSample)return;colorSentSample=colorSample;colorFramePending=true;colorWindow.webContents.send('one:color-sample',colorSample);}
-function closeColors(cancelled=true){screen.removeListener('display-added',refreshColorDisplays);screen.removeListener('display-removed',refreshColorDisplays);screen.removeListener('display-metrics-changed',refreshColorDisplays);const worker=colorWorker,follower=colorFollower;colorWorker=null;colorFollower=null;worker?.postMessage('stop');follower?.postMessage('stop');const window=colorWindow;colorWindow=null;if(window&&!window.isDestroyed())window.close();colorSample=undefined;colorSentSample=undefined;colorFramePending=false;input?.setModalActive(recordingShortcut);colorEditor?.finishPicking(cancelled);}
+function sendColorFrame(){if(!colorWindow||colorWindow.isDestroyed()||colorWindow.webContents.isLoading()||colorFramePending||!colorSample||colorSample===colorSentSample)return;colorSentSample=colorSample;colorFramePending=true;colorWindow.webContents.send('one:color-sample',colorSample);if(colorZoomWindow&&!colorZoomWindow.isDestroyed()&&!colorZoomWindow.webContents.isLoading())colorZoomWindow.webContents.send('one:color-sample',colorSample);}
+function updateColorZoom(active:boolean,x=0,y=0){
+ const window=colorWindow;if(!window||window.isDestroyed()||colorZoomActive===active)return;colorZoomActive=active;
+ if(!active){colorZoomCardBounds=undefined;const zoom=colorZoomWindow;colorZoomWindow=null;if(zoom&&!zoom.isDestroyed())zoom.destroy();colorFollower?.postMessage('resume');colorWorker?.postMessage({resetZoomViewport:true});return;}
+ colorFollower?.postMessage('pause');
+ const point=screen.screenToDipPoint({x,y}),display=screen.getDisplayNearestPoint(point),area=display.workArea;
+ const bounds={x:Math.round(Math.max(area.x,Math.min(point.x-160,area.x+area.width-320))),y:Math.round(Math.max(area.y,Math.min(point.y-160,area.y+area.height-320))),width:320,height:320};
+ const zoom=windowFor('color-zoom',{...bounds,minWidth:1,minHeight:1,frame:false,thickFrame:false,hasShadow:false,roundedCorners:false,resizable:false,movable:false,fullscreenable:false,focusable:true,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true});
+ colorZoomWindow=zoom;zoom.setAlwaysOnTop(true,'screen-saver');zoom.once('ready-to-show',()=>{if(!zoom.isDestroyed()&&colorZoomWindow===zoom){zoom.showInactive();zoom.moveTop();window.moveTop();sendColorFrame();}});
+ const cardX=bounds.x+bounds.width+8+216<=area.x+area.width?bounds.x+bounds.width+8:bounds.x-224>=area.x?bounds.x-224:bounds.x+Math.round((bounds.width-216)/2);
+ const cardY=cardX>=bounds.x&&cardX<bounds.x+bounds.width?bounds.y+bounds.height+8:bounds.y+Math.round((bounds.height-276)/2);
+ colorZoomCardBounds={x:Math.round(Math.max(area.x,Math.min(cardX,area.x+area.width-216))),y:Math.round(Math.max(area.y,Math.min(cardY,area.y+area.height-276))),width:216,height:276};
+ const physical=screen.dipToScreenRect(null,{x:bounds.x+10,y:bounds.y+10,width:300,height:300});
+ colorWorker?.postMessage({zoomViewport:{x:physical.x,y:physical.y,width:physical.width,height:physical.height}});
+}
+function clearColorFreeze(){const windows=colorFreezeWindows;colorFreezeWindows=[];for(const window of windows)if(!window.isDestroyed())window.destroy();if(colorWorker&&colorWindow&&!colorWindow.isDestroyed()){colorWindow.webContents.send('one:color-frozen',false);if(!colorWindow.isVisible())colorWindow.showInactive();colorWindow.moveTop();}}
+async function freezeColor(){
+ if(colorFreezeBusy||!colorWorker||colorFreezeWindows.length)return;
+ const session=colorSession,worker=colorWorker;colorFreezeBusy=true;
+ try{
+  if(colorWindow&&!colorWindow.isDestroyed())colorWindow.hide();
+  const displays=screen.getAllDisplays(),active=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const ready:Promise<void>[]=[];
+  for(const display of displays){
+   const window=windowFor('color-freeze',{...display.bounds,minWidth:1,minHeight:1,frame:false,thickFrame:false,hasShadow:false,roundedCorners:false,resizable:false,movable:false,fullscreenable:false,focusable:true,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true});
+   colorFreezeWindows.push(window);window.setAlwaysOnTop(true,'screen-saver');
+   ready.push(new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('冻结取色层加载超时')),5000);window.once('ready-to-show',()=>{clearTimeout(timer);if(colorWorker!==worker||session!==colorSession||window.isDestroyed()){resolve();return;}if(display.id===active.id){window.show();window.focus();}else window.showInactive();resolve();});window.once('closed',()=>{clearTimeout(timer);reject(new Error('冻结取色层已关闭'));});}));
+  }
+  await Promise.all(ready);if(colorWorker!==worker||session!==colorSession)return;
+  if(colorWindow&&!colorWindow.isDestroyed()){colorWindow.showInactive();colorWindow.moveTop();colorWindow.webContents.send('one:color-frozen',true);}
+ }catch(error){if(colorWorker===worker&&session===colorSession)clearColorFreeze();throw error;}
+ finally{if(session===colorSession)colorFreezeBusy=false;}
+}
+function toggleColorFreeze(){if(colorFreezeBusy||!colorWorker)return;if(colorFreezeWindows.length)clearColorFreeze();else void freezeColor().catch(error=>echo((error as Error).message));}
+function closeColors(cancelled=true){colorSession++;screen.removeListener('display-added',refreshColorDisplays);screen.removeListener('display-removed',refreshColorDisplays);screen.removeListener('display-metrics-changed',refreshColorDisplays);const worker=colorWorker,follower=colorFollower;colorWorker=null;colorFollower=null;worker?.postMessage('stop');follower?.postMessage('stop');clearColorFreeze();const zoom=colorZoomWindow;colorZoomWindow=null;if(zoom&&!zoom.isDestroyed())zoom.destroy();const window=colorWindow;colorWindow=null;if(window&&!window.isDestroyed())window.close();colorSample=undefined;colorSentSample=undefined;colorFramePending=false;colorFreezeBusy=false;colorZoomActive=false;colorZoomCardBounds=undefined;input?.setModalActive(recordingShortcut);colorEditor?.finishPicking(cancelled);}
 function closeScreenRuler(){const windows=rulerWindows;rulerWindows=[];if(rulerEscapeRegistered){globalShortcut.unregister('Escape');rulerEscapeRegistered=false;}for(const window of windows)if(!window.isDestroyed())window.close();input?.setModalActive(recordingShortcut);}
 type ScreenRulerMode='live'|'static';
 function openScreenRuler(mode:ScreenRulerMode='live'){
@@ -392,24 +445,45 @@ function openScreenRuler(mode:ScreenRulerMode='live'){
  }catch(error){closeScreenRuler();throw error;}finally{rulerOpening=false;}
 }
 async function acceptColor(hex:string,fromScreen=false){clipboard.writeText(colorFormats(hex)[settings.colorFormat]);closeColors(false);colorEditor.remember(hex);await saveSettings(current=>({...current,colorHistory:[hex,...current.colorHistory.filter(c=>c.toUpperCase()!==hex)].slice(0,20)}));if(quitting||finishingQuit)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed())w.webContents.send('one:color',hex);if(fromScreen&&settings.colorShowEditor)colorEditor.show(hex);}
-async function pickColor(){
-  if(colorWorker||quitting||finishingQuit)return;if(rulerWindows.length)closeScreenRuler();colorEditor?.startPicking();input?.setModalActive(true);
-  const point=screen.getCursorScreenPoint();const window=windowFor('color-picker',{x:point.x+24,y:point.y+24,width:216,height:276,minWidth:1,minHeight:1,resizable:false,movable:false,focusable:false,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true,hasShadow:false,thickFrame:false});
+async function pickColor(mode:'live'|'frozen'='live'){
+  if(colorWorker||quitting||finishingQuit)return;if(rulerWindows.length)closeScreenRuler();colorSession++;colorZoomActive=false;colorEditor?.startPicking();input?.setModalActive(true);
+  const point=screen.getCursorScreenPoint();const window=windowFor('color-picker',{x:point.x+24,y:point.y+24,width:216,height:276,minWidth:1,minHeight:1,resizable:false,movable:false,focusable:false,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true,hasShadow:false,thickFrame:false},settings.colorWheelZoom?'&wheelZoom=1':'');
   colorWindow=window;window.setIgnoreMouseEvents(true);window.setAlwaysOnTop(true,'screen-saver');window.on('closed',()=>{if(colorWindow===window)closeColors();});
-  window.once('ready-to-show',()=>{if(!window.isDestroyed()&&colorWindow===window){window.showInactive();sendColorFrame();}});
+  let windowReady=false,inputReady=false;
+  const showLoupe=()=>{if(windowReady&&inputReady&&mode==='live'&&!window.isDestroyed()&&colorWindow===window){window.showInactive();sendColorFrame();}};
+  window.once('ready-to-show',()=>{windowReady=true;showLoupe();});
   const follower=new Worker(join(__dirname,'color-position-worker.cjs'),{workerData:{hwnd:Number(window.getNativeWindowHandle().readBigUInt64LE()),displays:colorDisplays()}});colorFollower=follower;
-  follower.on('message',message=>{if(message.error&&colorFollower===follower){closeColors();echo(message.error);}});follower.once('error',error=>{if(colorFollower===follower){closeColors();echo(error.message);}});follower.once('exit',()=>{if(colorFollower===follower)closeColors();});
+  follower.on('message',message=>{if(message.paused&&colorFollower===follower&&colorZoomCardBounds&&!window.isDestroyed()){window.setBounds(colorZoomCardBounds,false);window.moveTop();}if(message.error&&colorFollower===follower){closeColors();echo(message.error);}});follower.once('error',error=>{if(colorFollower===follower){closeColors();echo(error.message);}});follower.once('exit',()=>{if(colorFollower===follower)closeColors();});
   screen.on('display-added',refreshColorDisplays);screen.on('display-removed',refreshColorDisplays);screen.on('display-metrics-changed',refreshColorDisplays);
-  const worker=new Worker(join(__dirname,'color-worker.cjs'));colorWorker=worker;
+  const worker=new Worker(join(__dirname,'color-worker.cjs'),{workerData:{wheelZoomEnabled:settings.colorWheelZoom}});colorWorker=worker;
+  let resolveReady!:()=>void,rejectReady!:(error:Error)=>void;const ready=new Promise<void>((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
   worker.on('message',message=>{if(colorWorker!==worker||window.isDestroyed())return;
-    if(message.error){closeColors();echo(message.error);return;}if(message.cancel){closeColors();return;}if(message.pick){void acceptColor(message.pick,true).catch(error=>echo(error.message));return;}
-    if(message.sample){const s=message.sample;colorSample={url:'',data:s.data,width:s.width,height:s.height,hex:s.hex,pixels:s.pixels,x:s.x,y:s.y};
+    if(message.ready){inputReady=true;resolveReady();showLoupe();return;}
+    if(message.error){if(!inputReady)rejectReady(new Error(message.error));else{closeColors();echo(message.error);}return;}
+    if(message.toggleFreeze){updateColorZoom(false);toggleColorFreeze();return;}
+    if(message.cancel){closeColors();return;}if(message.pick){void acceptColor(message.pick,true).catch(error=>echo(error.message));return;}
+    if(message.sample){const s=message.sample;updateColorZoom(!!s.zoomFrozen,s.x,s.y);colorSample={url:'',data:s.data,width:s.width,height:s.height,hex:s.hex,pixels:s.pixels,x:s.x,y:s.y,centerX:s.centerX,centerY:s.centerY,cropX:s.cropX,cropY:s.cropY,zoomFrozen:s.zoomFrozen};
       sendColorFrame();
     }
-  });worker.once('error',error=>{if(colorWorker===worker){closeColors();echo(error.message);}});worker.once('exit',()=>{if(colorWorker===worker)closeColors();});
+  });worker.once('error',error=>{if(colorWorker===worker){if(!inputReady)rejectReady(error);else{closeColors();echo(error.message);}}});worker.once('exit',()=>{if(colorWorker===worker){if(!inputReady)rejectReady(new Error('取色输入监听已退出'));else closeColors();}});
+  const timeout=setTimeout(()=>rejectReady(new Error('取色输入监听未能启动')),4000);
+  try{await ready;if(mode==='frozen'&&colorWorker===worker)await freezeColor();}
+  catch(error){if(colorWorker===worker)closeColors();throw error;}
+  finally{clearTimeout(timeout);}
 }
 function refreshWindowAppearance(){const a=settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
 function colorShortcutStatus(){return {active:!!registeredColorShortcut,error:colorShortcutError};}
+function hotkeyConflict(shortcut:string,field:string){
+ if(!recordingShortcut||typeof shortcut!=='string'||shortcut.length>100||typeof field!=='string'||field.length>80)throw new Error('快捷键查询无效');
+ const normalize=(value:string)=>value.toLowerCase().replace(/\b(control|ctrl)\b/g,'ctrl').replace(/\b(super|meta|win)\b/g,'win').split('+').map(part=>part.trim()).sort().join('+');
+ const wanted=normalize(shortcut);
+ const own:[string,string,string,boolean][]=[['color-shortcut','屏幕取色',settings.colorShortcut,true],['topmost-shortcut','窗口置顶',settings.utilities.topmost.shortcut,settings.utilities.topmost.enabled],['clicker-shortcut','鼠标连点',settings.utilities.clicker.shortcut,settings.utilities.clicker.enabled],['search-shortcut','文件搜索',settings.search.shortcut,true],['search-programShortcut','程序搜索',settings.search.programShortcut,true]];
+ const match=own.find(([id,,value,enabled])=>id!==field&&enabled&&value&&normalize(value)===wanted);
+ if(match)return {source:'one' as const,label:`One 的「${match[1]}」正在使用`};
+ const accelerator=shortcut.replace(/\bCtrl\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');
+ try{if(globalShortcut.isRegistered(accelerator))return {source:'external' as const,label:'热键已注册；退出录入后按下组合键，观察哪个程序响应'};if(!globalShortcut.register(accelerator,()=>{}))return {source:'external' as const,label:'被其他程序或 Windows 占用；退出录入后按下组合键查看响应'};globalShortcut.unregister(accelerator);return {source:'none' as const,label:''};}
+ catch{return {source:'external' as const,label:'此组合键无法注册；可能是 Windows 保留快捷键'};}
+}
 function colorShortcut(value:string){
   try{
     if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
@@ -418,12 +492,34 @@ function colorShortcut(value:string){
   }catch(error){colorShortcutError=String((error as Error).message||error);throw error;}
   finally{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:color-shortcut-status',colorShortcutStatus());}
 }
+function stopShortcutRecording(token?:string){
+  if(token&&token!==activeShortcutToken)return;
+  activeShortcutToken='';shortcutCapture.stop();
+  if(!recordingShortcut)return;
+  recordingShortcut=false;input.setModalActive(!!colorWorker);topmost.record(false);searchBridge.record(false);
+  try{colorShortcut(settings.colorShortcut);}catch{}
+}
+async function startShortcutRecording(token:string){
+  stopShortcutRecording();activeShortcutToken=token;recordingShortcut=true;
+  input.setModalActive(true);topmost.record(true);searchBridge.record(true);
+  if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
+  const hwnd=main.getNativeWindowHandle().readBigUInt64LE();
+  await shortcutCapture.start(hwnd,key=>{
+    if(activeShortcutToken===token&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:shortcut-captured',{token,...key});
+  });
+}
 async function previewExplorerSelection(hwnd:number,focus:number){
  const context=await searchBridge.context(hwnd,focus),current=foreground(true);
  if(current?.hwnd!==hwnd||current.focus!==focus||context.kind!=='explorer'||context.selected?.length!==1)return;
  await preview(filePath(context.selected[0]));
 }
 function registerIPC() {
+  handle('diagnostics-list',()=>diagnosticsList(app.getPath('userData'),app.getPath('crashDumps')),['main']);
+  handle('diagnostics-recent',()=>diagnosticsRecent(app.getPath('userData'),app.getPath('crashDumps')),['main']);
+  handle('diagnostics-delete',(_event,ids)=>diagnosticsDelete(app.getPath('userData'),app.getPath('crashDumps'),ids),['main']);
+  handle('diagnostics-export',async(_event,ids)=>{if(!Array.isArray(ids)||ids.length>100)throw new Error('导出列表无效');const target=await pickPath('directory','选择诊断资料保存位置');return target?diagnosticsExport(app.getPath('userData'),app.getPath('crashDumps'),target,ids):null;},['main']);
+  handle('diagnostics-open',()=>shell.openPath(join(app.getPath('userData'),'logs')),['main']);
+  handle('diagnostics-report',(_event,kind,detail)=>{if(typeof kind!=='string'||kind.length>60||typeof detail!=='string'||detail.length>16*1024)throw new Error('错误报告无效');runtimeError(app.getPath('userData'),`renderer:${kind}`,detail);},['main']);
   handle('explorer-menu-state',()=>explorerMenuState());
   handle('explorer-menu-set',(_event,value)=>setExplorerMenu(value));
   handle('file-action-data',event=>{const target=fileActions.get(event.sender.id);if(!target)throw Error('文件操作窗口无效');return target;});
@@ -548,7 +644,8 @@ function registerIPC() {
     if(!pending){pending=fontSource(family).then(source=>{if(!source)return null;let url:string|undefined;if(source.path){const token=randomUUID();fontAssets.set(token,{path:source.path,mime:extname(source.path).toLowerCase()==='.otf'?'font/otf':'font/ttf'});url=`one-file://asset/${token}/font`;}return{url,local:source.local};}).catch(error=>{fontSources.delete(family);throw error;});fontSources.set(family,pending);}
     return pending;
   },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar']);
-  handle('pick-color',()=>pickColor(),['main','color-editor']);
+  handle('pick-color',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='frozen')throw new Error('取色模式无效');return pickColor(mode);},['main','color-editor']);
+  handle('color-frozen-status',()=>colorFreezeWindows.length>0,['color-picker']);
   handle('screen-ruler-open',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='static')throw new Error('屏幕尺模式无效');return openScreenRuler(mode);},['main']);
   handle('screen-ruler-close',()=>closeScreenRuler(),['screen-ruler']);
   handle('color-editor-show',(_event,hex)=>{if(hex!==undefined&&(typeof hex!=='string'||!/^#[0-9a-f]{6}$/i.test(hex)))throw new Error('颜色无效');colorEditor.show(hex?.toUpperCase());});
@@ -557,10 +654,11 @@ function registerIPC() {
   handle('color-shortcut-status',()=>colorShortcutStatus(),['main']);
   handle('color-shortcut-retry',()=>{try{colorShortcut(settings.colorShortcut);}catch{}return colorShortcutStatus();},['main']);
   handle('color-history-clear',()=>saveSettings(current=>({...current,colorHistory:[]})).then(()=>{}),['main','color-editor']);
-  handle('color-capture',()=>colorSample||null,['color-picker']);
+  handle('color-capture',()=>colorSample||null,['color-picker','color-zoom']);
   handle('color-frame',()=>{colorFramePending=false;sendColorFrame();},['color-picker']);
   handle('choose-color',async(event,value)=>{if(typeof value!=='string'||!/^#[0-9a-f]{6}$/i.test(value))throw new Error('颜色无效');await acceptColor(value.toUpperCase(),roles.get(event.sender.id)==='color-picker');},['color-picker','color-editor','main']);
-    handle('record-shortcut',(_event,active)=>{if(typeof active!=='boolean')throw new Error('参数无效');recordingShortcut=active;input.setModalActive(active||!!colorWorker);topmost.record(active);searchBridge.record(active);if(active){if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';}else colorShortcut(settings.colorShortcut);});
+    handle('record-shortcut',(_event,active,token)=>{if(typeof active!=='boolean'||typeof token!=='string'||!token||token.length>80)throw new Error('参数无效');return active?startShortcutRecording(token):stopShortcutRecording(token);},['main']);
+    handle('hotkey-conflict',(_event,shortcut,field)=>hotkeyConflict(shortcut,field),['main']);
   // The default floating level reorders behind the taskbar, which can clear WS_EX_TOPMOST on Windows.
   handle('preview-preferences',async(_event,value)=>{if(value===undefined)return settings.preview;return (await saveSettings(current=>mergeSettings(current,{preview:value}))).preview;},['preview']);
   handle('preview-open-with',event=>{const data=previews.get(event.sender.id);if(!data)throw new Error('预览尚未准备');return openWithApplications(data.path);},['preview']);
@@ -663,6 +761,9 @@ async function start() {
     applicationIcon.addRepresentation({scaleFactor: size / windowIconSize, buffer: await iconBytes(size,true)});
   }
   try { settings = validateSettings(JSON.parse(await readFile(settingsPath(), 'utf8'))); } catch {}
+  // Upgrade existing login items without changing an entry disabled in Windows settings.
+  if(app.isPackaged&&!testMode&&settings.general.launchAtLogin&&app.getLoginItemSettings().openAtLogin&&!app.getLoginItemSettings({args:[loginStartupArg]}).openAtLogin)
+    app.setLoginItemSettings({openAtLogin:true,args:[loginStartupArg]});
   const migratedSearch=migrateSearchDefaults(settings.search,process.env);
   if(migratedSearch!==settings.search)await persistSettings({...settings,search:migratedSearch});
   const renderer = resolve(__dirname, '../renderer');
@@ -676,7 +777,7 @@ async function start() {
   ports=new PortService();
   diskMonitor=new DiskMonitorService(value=>{if(main&&!main.isDestroyed()&&main.isVisible()&&!main.isMinimized())main.webContents.send('one:disk-monitor',value);},(drive,state)=>{const volume=state.volumes.find(v=>v.drive===drive);if(main&&!main.isDestroyed())main.webContents.send('one:disk-alert',{drive,free:volume?.free||0});if(!testMode&&Notification.isSupported()){const notice=new Notification({title:'One · 磁盘空间不足',body:drive+' 剩余 '+((volume?.free||0)/1024**3).toFixed(2)+' GB'});notice.on('click',()=>{showMain();main.webContents.send('one:disk-alert-open');});notice.show();}});
   diskMonitor.configure(settings.diskMonitor);
-  echoes=new EchoService(windowFor,()=>settings,placement=>saveSettings(current=>({...current,echo:{...current.echo,keys:{...current.echo.keys,...placement}}})),()=>{if(main&&!main.isDestroyed())main.webContents.send('one:echo-position');});
+  echoes=new EchoService(windowFor,()=>settings,placement=>saveSettings(current=>({...current,appearance:{...current.appearance,popupPlacement:placement}})),()=>{if(main&&!main.isDestroyed())main.webContents.send('one:echo-position');});
   initNative(); foreground(); clicker=new ClickerService(settings.utilities.clicker,utilityChanged); input = new InputService(settings, { echo, level:value=>echoes.level(value),caps:active=>echoes.caps(active),show: showMain, color:()=>void pickColor().catch(error=>echo(error.message)), preview:previewExplorerSelection,clicker:()=>clicker.toggle() });
   locksmith=new LocksmithService(state=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:locks',state);});
   awake=new AwakeService(utilityChanged);topmost=new TopmostService(utilityChanged,echo);awake.update(settings.utilities.awake);topmost.update(settings.utilities.topmost);
@@ -693,9 +794,9 @@ async function start() {
   registerIPC(); main = windowFor('main');
   trayMenuPanel=new TrayMenuPanel(()=>windowFor('tray-menu',{width:296,height:356,minWidth:296,minHeight:200,frame:false,resizable:false,maximizable:false,minimizable:false,skipTaskbar:true,alwaysOnTop:true,hasShadow:true,roundedCorners:true,title:'One 菜单'}),()=>({entries:trayMenuEntries({paused:inputPaused,launchAtLogin:settings.general.launchAtLogin}),paused:inputPaused}));
   if(testMode&&process.env.ONE_TEST_TRAY_MENU==='1')(globalThis as typeof globalThis&{oneTestTrayMenu?:TrayMenuPanel}).oneTestTrayMenu=trayMenuPanel;
-  main.once('ready-to-show', () => {if(!process.argv.some(a=>a.startsWith('--one-shell-request=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
+  main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!process.argv.some(a=>a.startsWith('--one-shell-request=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
   nativeTheme.on('updated',refreshWindowAppearance);
-  main.on('blur',()=>{if(recordingShortcut){recordingShortcut=false;input.setModalActive(!!colorWorker);topmost.record(false);searchBridge.record(false);try{colorShortcut(settings.colorShortcut);}catch{}}});
+  main.on('blur',()=>stopShortcutRecording());
   main.on('close', event => { if(!quitting&&!testMode){event.preventDefault();if(settings.general.closeToTray)main.hide();else app.quit();} });
   if (!testMode) {
     const trayIcon=nativeImage.createFromBuffer(await iconBytes(trayIconSize,false));
@@ -707,8 +808,8 @@ async function start() {
   }
 }
 if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.argv.includes('--one-quit-for-install')) app.quit(); else {
- app.on('second-instance',(_event,args)=>{if(args.includes('--one-quit-for-install')){app.quit();return;}runtimeLog(app.getPath('userData'),'second-instance',args.some(value=>value.startsWith('--one-shell-request='))?'shell-request':'show-main');void shellInvocation(args,'second-instance');});
- app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;runtimeLog(app.getPath('userData'),'main-start',app.isPackaged?'packaged':'development');starting=start();return starting.finally(()=>{starting=undefined;});}).then(async()=>{
+ app.on('second-instance',(_event,args)=>{if(args.includes('--one-quit-for-install')){app.quit();return;}if(args.includes(loginStartupArg)&&!args.some(value=>value.startsWith('--one-shell-request='))){runtimeLog(app.getPath('userData'),'second-instance','login-startup-already-running');return;}runtimeLog(app.getPath('userData'),'second-instance',args.some(value=>value.startsWith('--one-shell-request='))?'shell-request':'show-main');void shellInvocation(args,'second-instance');});
+ app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;runtimeLog(app.getPath('userData'),'main-start',`version=${app.getVersion()} mode=${app.isPackaged?'packaged':'development'} platform=${process.platform} arch=${process.arch}`);starting=start();return starting.finally(()=>{starting=undefined;});}).then(async()=>{
   runtimeLog(app.getPath('userData'),'main-ready');
   if(process.argv.some(a=>a.startsWith('--one-shell-request=')))await shellInvocation(process.argv);
   shellInbox=new ShellRequestInbox(app.getPath('userData'),path=>shellInvocation([`--one-shell-request=${path}`],'inbox'));

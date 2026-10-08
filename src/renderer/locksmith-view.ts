@@ -4,7 +4,16 @@ import {api,q,button,iconButton,icon,esc,toast} from './ui';
 import type {LocksmithState} from '../shared/locksmith';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import {installFileDropOverlay} from './file-drop-overlay';
+import {setupLockPathPopover} from './lock-path-popover';
 export function locksmithCard(){return `<div class="settings-card" id="file-lock-card"><div class="setting-row"><span class="setting-icon">${icon('locksmith')}</span><div class="setting-copy"><h2>检查占用</h2><p>查找正在使用文件或目录的进程。</p></div>${iconButton('lock-open-window','独立窗口','open')}${iconButton('lock-refresh','重新扫描','refresh')}</div><div class="utility-fields lock-target-input"><input id="lock-path" aria-label="检查占用的文件或目录" placeholder="输入文件或目录路径">${button('lock-add','添加')}${button('lock-pick-file','文件','file')}${button('lock-pick-folder','目录','folder')}</div><div class="lock-targets" id="lock-targets"></div><div class="utility-fields"><span id="lock-status" role="status">尚未检查</span><div class="spacer"></div>${button('lock-cancel','停止')}${button('lock-scan','检查占用','search',true)}</div><p class="utility-message" id="lock-summary"></p><div class="lock-results" id="lock-results"></div></div>${dialogMarkup({id:"lock-end-dialog",title:"结束进程",closeId:"lock-end-close",body:`<p id="lock-end-name"></p><p class="footnote">此进程中未保存的内容可能丢失。结束后会释放它占用的文件。</p>`,actions:`<button id="lock-end-cancel" autofocus>取消</button>${button('lock-end-confirm','结束进程','',true)}`})}`;}
+export function arrangeLocksmithLayout(page:HTMLElement){
+ const card=q('file-lock-card'),sidebar=document.createElement('aside'),results=document.createElement('section'),footer=document.createElement('footer');
+ sidebar.className='file-action-lock-targets';sidebar.innerHTML='<div class="file-action-preview-caption"><h2>检查目标</h2><div id="lock-target-actions"></div></div>';
+ for(const id of ['lock-pick-file','lock-pick-folder','lock-open-window']){const b=q(id);b.classList.add('icon-button','quiet');b.title=id==='lock-pick-file'?'添加文件':id==='lock-pick-folder'?'添加文件夹':'独立窗口';b.setAttribute('aria-label',b.title);b.innerHTML=icon(id==='lock-pick-file'?'file':id==='lock-pick-folder'?'folder':'open');sidebar.querySelector('#lock-target-actions')!.append(b);}
+ setupLockPathPopover(sidebar.querySelector('#lock-target-actions')!,card.querySelector<HTMLElement>('.lock-target-input')!);sidebar.append(q('lock-targets'));
+ results.className='file-action-lock-results';results.setAttribute('aria-label','相关进程');results.innerHTML=`<div class="file-action-preview-caption"><h2>相关进程</h2></div><div id="lock-empty" class="file-action-empty"><span class="lock-empty-symbol">${icon('locksmith')}</span><h3 id="lock-empty-title">添加文件或文件夹</h3><div id="lock-empty-progress" class="lock-empty-progress" role="progressbar" aria-label="占用检查进度" hidden><span id="lock-empty-progress-fill"></span></div></div>`;results.append(q('lock-results'));
+ footer.className='file-action-footer';footer.innerHTML='<div class="file-action-lock-status"></div>';footer.querySelector('div')!.append(q('lock-status'),q('lock-summary'));footer.append(q('lock-cancel'),q('lock-scan'));card.hidden=true;page.append(sidebar,results,footer);q('lock-scan').innerHTML=icon('refresh')+'重新检查';q('lock-refresh').hidden=true;
+}
 export function setupLocksmith(){
   let paths:string[]=[],state:LocksmithState|undefined,pending='',active=false,targetsTouched=false,targetRevision=0,scanTimer:ReturnType<typeof setTimeout>|undefined;let inspectTask=Promise.resolve();const dialog=q<HTMLDialogElement>('lock-end-dialog');
   q('lock-open-window').hidden=document.body.classList.contains('file-action-window');q('lock-open-window').onclick=()=>{cancelQueued();void api.cancelLocks().then(()=>api.openFileAction('locksmith',paths)).catch(toast);};
@@ -35,7 +44,7 @@ export function setupLocksmith(){
   const autoScan=()=>{clearTimeout(scanTimer);const revision=++targetRevision;scanTimer=setTimeout(()=>{scanTimer=undefined;if(revision===targetRevision)void inspect([...paths]).catch(toast);},120);};
   api.onLocks(render);void api.lockState().then(s=>{if(!targetsTouched)render(s);}).catch(toast);
   const drop=q('lock-targets');drop.addEventListener('dragover',e=>e.preventDefault());drop.addEventListener('drop',e=>{e.preventDefault();for(const file of e.dataTransfer?.files||[]){const path=api.droppedFile(file);if(path)add(path);}});
-  if(!document.body.classList.contains('file-action-window'))installFileDropOverlay(q('page-locksmith'),{placement:'host',spacious:true,title:'检查文件占用',detail:'松开以添加文件或文件夹并开始检查',onDrop:targets=>{for(const path of targets)add(path);}});
+  if(!document.body.classList.contains('file-action-window'))installFileDropOverlay(q('tool-pane-locksmith'),{placement:'host',spacious:true,title:'检查文件占用',detail:'松开以添加文件或文件夹并开始检查',onDrop:targets=>{for(const path of targets)add(path);}});
   const resume=()=>{if(showing()){targets();if(state)render(state);}};
   onWindowVisibility(resume);
   return{activate(value:boolean){active=value;resume();},inspect,addTargets:(targets:string[])=>{for(const path of targets)add(path);}};

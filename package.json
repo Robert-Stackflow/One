@@ -1,6 +1,6 @@
 {
   "name": "one-desktop",
-  "version": "0.16.18",
+  "version": "0.16.20",
   "private": true,
   "author": "One",
   "description": "本地 Windows 桌面工具箱",
@@ -122,6 +122,7 @@
       "dist/native/One.Index.exe",
       "dist/main/maintenance-actions.ps1",
       "dist/native/One.Windows.exe",
+      "dist/native/One.Shortcut.exe",
       "dist/native/One.OpenWith.exe",
       "dist/main/system-info.ps1",
       "dist/main/proxy-info.ps1",
