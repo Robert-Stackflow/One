@@ -1,6 +1,6 @@
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {lstat,link,readdir,rename,rm,stat} from 'node:fs/promises';
+import {lstat,link,mkdir,readdir,rename,rm,stat} from 'node:fs/promises';
 import {join,dirname,basename,extname,isAbsolute,resolve,relative} from 'node:path';
 import {existsSync} from 'node:fs';
 import {createReadStream,createWriteStream} from 'node:fs';
@@ -13,37 +13,42 @@ const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||val
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
 const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||Buffer.byteLength(value,'utf8')>1024)throw Error('密码无效或过长');return value;};
 const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z)$/i.test(target))throw Error('创建压缩包请选择 .zip 或 .7z 路径');return target;};
-const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00)$/i.test(source))throw Error('目前支持 ZIP、7Z 和 RAR 压缩包');return source;};
-const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|zip|7z|rar|r00)$/i,'');
+const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(source))throw Error('暂不支持该压缩格式');return source;};
+const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|tar\.gz|tar\.xz|zip|7z|rar|r00|tar|tgz|txz|gz|xz)$/i,'');
+const composite=(source:string)=>/\.(?:tar\.gz|tar\.xz|tgz|txz)$/i.test(source);
+type CachedTar={path:string;directory:string;stamp:string;users:number;used:number;stale:boolean};
 
 export class ArchiveService {
   private active=new Map<string,{child:ChildProcessWithoutNullStreams;owner:number}>();
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
-  constructor(private changed:(owner:number,progress:ArchiveProgress)=>void){}
+  private cached=new Map<string,CachedTar>();
+  private preparing=new Map<string,Promise<CachedTar>>();
+  private sweepQueued=false;
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void){}
   get pendingTasks(){return this.pending.size;}
   cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
-  async stop(){for(const task of this.active.values())task.child.kill();for(const task of this.publishing.values())task.controller.abort();await Promise.allSettled([...this.pending]);}
+  async stop(){for(const task of this.active.values())task.child.kill();for(const task of this.publishing.values())task.controller.abort();await Promise.allSettled([...this.pending]);await rm(this.cacheRoot,{recursive:true,force:true}).catch(()=>{});this.cached.clear();}
   run(owner:number,request:ArchiveRequest):Promise<ArchiveListing|ArchiveResult>{
     const task=this.perform(owner,request);
     this.pending.add(task);
     void task.finally(()=>this.pending.delete(task)).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test',args:string[],secret:string):Promise<Message[]> {
+  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test',args:string[],secret:string,progressOperation?:ArchiveProgress['operation']):Promise<Message[]> {
     return new Promise((done,reject)=>{
       const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe'});
       this.active.set(id,{child,owner});
       const data:Message[]=[];let buffered='',error='',failed=false,settled=false;
       const finish=(reason?:Error)=>{if(settled)return;settled=true;this.active.delete(id);if(reason)reject(reason);else done(data);};
-      if(operation!=='list')this.changed(owner,{id,operation,done:0,total:0});
+      if(operation!=='list')this.changed(owner,{id,operation:progressOperation??operation,done:0,total:0});
       child.stdout.setEncoding('utf8');child.stdout.on('data',(chunk:string)=>{
         buffered+=chunk;
         if(buffered.length>2*1024*1024){child.kill();failed=true;error='压缩程序输出超出限制';return;}
         let end:number;
         while((end=buffered.indexOf('\n'))>=0){const line=buffered.slice(0,end).trim();buffered=buffered.slice(end+1);if(!line)continue;
           try{const message=JSON.parse(line) as Message;
-            if(message.type==='progress')this.changed(owner,{id,operation:operation as ArchiveProgress['operation'],done:message.done,total:message.total});
+            if(message.type==='progress')this.changed(owner,{id,operation:progressOperation??operation as ArchiveProgress['operation'],done:message.done,total:message.total});
             else if(message.type==='error'){failed=true;error=message.message;}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
@@ -57,20 +62,76 @@ export class ArchiveService {
       child.stdin.on('error',()=>{});child.stdin.end(Buffer.concat([header,value]));
     });
   }
+  private async acquireSource(owner:number,id:string,source:string):Promise<{path:string;release:()=>void}>{
+    if(!composite(source))return {path:source,release:()=>{}};
+    const info=await stat(source),stamp=`${info.size}:${info.mtimeMs}:${info.birthtimeMs}`;
+    const prefix=source.toLowerCase()+'|',key=prefix+stamp;
+    for(const [oldKey,old] of this.cached)if(oldKey.startsWith(prefix)&&oldKey!==key){old.stale=true;this.cached.delete(oldKey);if(!old.users)void rm(old.directory,{recursive:true,force:true}).catch(()=>{});}
+    let item=this.cached.get(key);
+    if(!item){
+      let preparing=this.preparing.get(key);
+      if(!preparing){
+        preparing=(async()=>{
+          await mkdir(this.cacheRoot,{recursive:true});
+          const directory=join(this.cacheRoot,randomUUID()),inner=join(directory,'inner.tar');
+          try{
+            const messages=await this.execute(owner,id,'extract',[source,directory,'','0'],'','prepare');
+            if(!messages.some(message=>message.type==='result'))throw Error('无法打开复合压缩包');
+            const names=await readdir(directory);
+            if(names.length!==1)throw Error('复合压缩包应包含一个 TAR 文件');
+            const extracted=join(directory,names[0]),details=await lstat(extracted);
+            if(!details.isFile()||details.isSymbolicLink())throw Error('复合压缩包的内部文件无效');
+            if(extracted.toLowerCase()!==inner.toLowerCase())await rename(extracted,inner);
+            const probe=await this.execute(owner,id,'list',[inner,'0','1','0'],'');
+            if(!probe.some(message=>message.type==='meta'))throw Error('复合压缩包的内部文件不是 TAR');
+            const current=await stat(source);
+            if(`${current.size}:${current.mtimeMs}:${current.birthtimeMs}`!==stamp)throw Error('压缩包在读取期间发生了变化，请重试');
+            const ready={path:inner,directory,stamp,users:0,used:Date.now(),stale:false};
+            this.cached.set(key,ready);
+            return ready;
+          }catch(error){await rm(directory,{recursive:true,force:true}).catch(()=>{});throw error;}
+        })();
+        this.preparing.set(key,preparing);
+        void preparing.finally(()=>this.preparing.delete(key)).catch(()=>{});
+      }
+      item=await preparing;
+    }
+    item.users++;item.used=Date.now();
+    const cached=item;
+    return {path:cached.path,release:()=>{cached.users--;if(cached.stale&&!cached.users)void rm(cached.directory,{recursive:true,force:true}).catch(()=>{});else this.sweepCache();}};
+  }
+  private sweepCache(){
+    if(this.cached.size<=2||this.sweepQueued)return;
+    this.sweepQueued=true;
+    setImmediate(()=>{
+      this.sweepQueued=false;
+      for(const [key,item] of [...this.cached].sort((a,b)=>a[1].used-b[1].used)){
+        if(this.cached.size<=2)break;
+        if(item.users)continue;
+        this.cached.delete(key);void rm(item.directory,{recursive:true,force:true}).catch(()=>{});
+      }
+    });
+  }
   private async perform(owner:number,request:ArchiveRequest):Promise<ArchiveListing|ArchiveResult> {
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
     const id=randomUUID();
     if(request.operation==='list'){
       const source=archiveSource(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
-      const messages=await this.execute(owner,id,'list',[source,String(offset),'200',String(encoding(request.encoding))],password(request.password));
-      const meta=messages.find((item):item is Extract<Message,{type:'meta'}>=>item.type==='meta');
-      if(!meta)throw Error('无法读取压缩包目录');
-      return {path:source,total:meta.total,comment:meta.comment,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
+      const prepared=await this.acquireSource(owner,id,source);
+      try{
+        const messages=await this.execute(owner,id,'list',[prepared.path,String(offset),'200',String(encoding(request.encoding))],password(request.password));
+        const meta=messages.find((item):item is Extract<Message,{type:'meta'}>=>item.type==='meta');
+        if(!meta)throw Error('无法读取压缩包目录');
+        return {path:source,total:meta.total,comment:meta.comment,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
+      }finally{prepared.release();}
     }
     if(request.operation==='test'){
       const source=archiveSource(request.path);
-      const messages=await this.execute(owner,id,'test',[source,String(encoding(request.encoding))],password(request.password));
-      return {path:source,count:(messages.find(item=>item.type==='result') as {count:number}|undefined)?.count||0};
+      const prepared=await this.acquireSource(owner,id,source);
+      try{
+        const messages=await this.execute(owner,id,'test',[prepared.path,String(encoding(request.encoding))],password(request.password));
+        return {path:source,count:(messages.find(item=>item.type==='result') as {count:number}|undefined)?.count||0};
+      }finally{prepared.release();}
     }
     if(request.operation==='create'){
       const target=archiveTarget(request.path),sources=request.sources;
@@ -133,8 +194,9 @@ export class ArchiveService {
       if(!Array.isArray(selected)||selected.length>10000||selected.some(value=>!Number.isSafeInteger(value)||value<0))throw Error('选择的条目无效');
       const uniqueTarget=(name:string,file=false)=>{const extension=file?extname(name):'',base=extension?name.slice(0,-extension.length):name;let target=join(parent,name),suffix=2;while(existsSync(target)){target=join(parent,`${base} (${suffix++})${extension}`);if(suffix>10000)throw Error('没有可用的解压目标名称');}return target;};
       const temporary=join(parent,`.one-extract-${id}`);
+      const prepared=await this.acquireSource(owner,id,source);
       try{
-        const messages=await this.execute(owner,id,'extract',[source,temporary,selected.join(','),String(encoding(request.encoding))],password(request.password));
+        const messages=await this.execute(owner,id,'extract',[prepared.path,temporary,selected.join(','),String(encoding(request.encoding))],password(request.password));
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认解压成功');
         const top=destination==='smart'?await readdir(temporary):[];
@@ -149,7 +211,7 @@ export class ArchiveService {
           await rename(temporary,target);
         }
         return {path:target,count:result.count};
-      }finally{await rm(temporary,{recursive:true,force:true}).catch(()=>{});}
+      }finally{prepared.release();await rm(temporary,{recursive:true,force:true}).catch(()=>{});}
     }
     throw Error('未知压缩操作');
   }

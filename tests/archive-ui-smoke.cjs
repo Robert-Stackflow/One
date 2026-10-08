@@ -133,10 +133,44 @@ async function main(){
     await expect(page.locator('.archive-entry-name')).toHaveText('large.bin');
     await page.locator('#archive-test').click();
     await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
+    if(!made.error){
+      const tar=path.join(root,'documents.tar'),gzip=tar+'.gz',xz=tar+'.xz',tgz=path.join(root,'documents.tgz'),txz=path.join(root,'documents.txz');
+      for(const args of [['a','-ttar',tar,source,second],['a','-tgzip',gzip,tar],['a','-txz',xz,tar],['a','-tgzip',tgz,tar],['a','-txz',txz,tar]]){
+        const generated=spawnSync('7z',args,{encoding:'utf8'});assert.equal(generated.status,0,generated.stdout+'\n'+generated.stderr);
+      }
+      for(const archive of [tar,xz,tgz,txz,gzip]){
+        await page.locator('#archive-source').fill(archive);
+        await page.locator('#archive-open').click();
+        await expect(page.locator('.archive-entry')).toHaveCount(2,{timeout:30000});
+        await page.locator('#archive-test').click();
+        await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
+      }
+      const unpack=path.join(root,'composite-output');await fs.mkdir(unpack);
+      const cacheBefore=(await fs.readdir(path.join(profile,'archive-cache'))).sort();
+      await page.locator('#archive-source').fill(gzip);
+      await page.locator('#archive-open').click();
+      await expect(page.locator('#archive-status-text')).toContainText('已读取',{timeout:30000});
+      const cacheAfter=(await fs.readdir(path.join(profile,'archive-cache'))).sort();
+      assert.deepEqual(cacheAfter,cacheBefore,'reopening an unchanged composite archive should reuse its prepared TAR');
+      await page.locator('#archive-parent').fill(unpack);
+      await page.locator('#archive-extract-all').click();
+      await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
+      assert.equal(await fs.readFile(path.join(unpack,'documents','second.txt'),'utf8'),'second');
+      const revisedTar=path.join(root,'revised.tar'),revisedGzip=revisedTar+'.gz';
+      for(const args of [['a','-ttar',revisedTar,source],['a','-tgzip',revisedGzip,revisedTar]]){
+        const generated=spawnSync('7z',args,{encoding:'utf8'});assert.equal(generated.status,0,generated.stdout+'\n'+generated.stderr);
+      }
+      await fs.rm(gzip);await fs.rename(revisedGzip,gzip);
+      await page.locator('#archive-source').fill(gzip);
+      await page.locator('#archive-open').click();
+      await expect(page.locator('.archive-entry')).toHaveCount(1,{timeout:30000});
+      await expect(page.locator('.archive-entry-name')).toHaveText('源文件.txt');
+    }
     assert.deepEqual(errors,[]);
-    console.log('Archive UI smoke passed: sidebar order, ZIP and 7Z creation, encrypted and split archives, browse and extract.');
+    console.log('Archive UI smoke passed: ZIP/7Z creation, encrypted and split archives, TAR/GZ/XZ browsing and extraction.');
   }finally{
     await app.close();
+    await assert.rejects(fs.stat(path.join(profile,'archive-cache')),{code:'ENOENT'});
     await fs.rm(root,{recursive:true,force:true});
   }
 }

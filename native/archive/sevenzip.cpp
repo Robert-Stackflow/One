@@ -144,10 +144,12 @@ class OpenArchive final {
     Archive7 *archive=nullptr;
     FileInput *input=nullptr;
     OpenRequest *callback=nullptr;
+    fs::path source;
+    int format;
     static std::vector<int> formats(int format){return format==3?std::vector<int>{0xcc,3}:std::vector<int>{format};}
     void close(){if(archive){archive->Close();archive->Release();archive=nullptr;}if(callback){callback->Release();callback=nullptr;}if(input){input->Release();input=nullptr;}if(library){FreeLibrary(library);library=nullptr;}}
 public:
-    OpenArchive(const fs::path &source,const std::string &password,int format){try{
+    OpenArchive(const fs::path &source,const std::string &password,int format):source(source),format(format){try{
         wchar_t exe[32768]{};
         if(!GetModuleFileNameW(nullptr,exe,32768))fail("Cannot find archive helper path");
         const auto dll=fs::path(exe).parent_path()/L"7z.dll";
@@ -183,6 +185,14 @@ public:
         auto name=property(index,path_prop);
         std::string text=name.vt==VT_BSTR?utf8(std::wstring(name.bstrVal,SysStringLen(name.bstrVal))):"";
         PropVariantClear(&name);
+        if(text.empty()&&(format==0x0c||format==0xef)){
+            auto fallback=source.filename().wstring(),lower=fallback;
+            std::transform(lower.begin(),lower.end(),lower.begin(),[](wchar_t ch){return std::towlower(ch);});
+            if(lower.ends_with(L".txz")||lower.ends_with(L".tgz"))fallback=fallback.substr(0,fallback.size()-4)+L".tar";
+            else if(lower.ends_with(L".xz"))fallback.resize(fallback.size()-3);
+            else if(lower.ends_with(L".gz"))fallback.resize(fallback.size()-3);
+            text=utf8(fallback);
+        }
         auto dir=property(index,dir_prop);bool directory=dir.vt==VT_BOOL&&dir.boolVal==VARIANT_TRUE;PropVariantClear(&dir);
         auto size=property(index,size_prop);U64 bytes=size.vt==VT_UI8?size.uhVal.QuadPart:size.vt==VT_UI4?size.ulVal:0;PropVariantClear(&size);
         auto packed=property(index,packed_prop);U64 compressed=packed.vt==VT_UI8?packed.uhVal.QuadPart:packed.vt==VT_UI4?packed.ulVal:0;PropVariantClear(&packed);

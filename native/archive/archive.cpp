@@ -303,6 +303,9 @@ static int archive_format(const std::wstring &path) {
     if (name.ends_with(L".zip")) return 0;
     if (name.ends_with(L".7z") || name.ends_with(L".7z.001")) return 7;
     if (name.ends_with(L".rar") || name.ends_with(L".r00")) return 3;
+    if (name.ends_with(L".tar")) return 0xee;
+    if (name.ends_with(L".tar.gz") || name.ends_with(L".tgz") || name.ends_with(L".gz")) return 0xef;
+    if (name.ends_with(L".tar.xz") || name.ends_with(L".txz") || name.ends_with(L".xz")) return 0x0c;
     fail("Unsupported archive format");
 }
 
@@ -333,7 +336,7 @@ int wmain(int argc, wchar_t **argv) {
                 if (volume_size) fail("7Z volumes are prepared after archive verification");
                 seven_create(argv[2], paths, password);
             } else if (format == 0) create(argv[2], paths, password, volume_size);
-            else fail("RAR creation is not supported");
+            else fail("Only ZIP and 7Z creation is supported");
         } else if (mode == L"list" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             if (mode == L"list") {

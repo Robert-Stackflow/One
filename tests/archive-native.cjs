@@ -76,9 +76,19 @@ try{
     assert.equal(call(['test',firstVolume,'0']).at(-1).count,1);
     const volumeOut=path.join(root,'volume-out');call(['extract',firstVolume,volumeOut,'','0']);
     assert.deepEqual(fs.readFileSync(path.join(volumeOut,'large.bin')),largeData);
+    const tar=path.join(root,'native.tar'),gzip=path.join(root,'single.gz'),xz=path.join(root,'single.xz');
+    for(const args of [['a','-ttar',tar,path.join(folder,'nested.txt')],['a','-tgzip',gzip,path.join(folder,'nested.txt')],['a','-txz',xz,path.join(folder,'nested.txt')]]){
+      const made=spawnSync('7z',args,{encoding:'utf8'});assert.equal(made.status,0,made.stdout+'\n'+made.stderr);
+    }
+    for(const [archive,name] of [[tar,'nested.txt'],[gzip,'nested.txt'],[xz,'single']]){
+      assert.equal(call(['list',archive,'0','50','0']).find(line=>line.type==='entry').name,name);
+      assert.equal(call(['test',archive,'0']).at(-1).count,1);
+      const destination=path.join(root,'native-'+path.basename(archive)+'-out');call(['extract',archive,destination,'','0']);
+      assert.equal(fs.readFileSync(path.join(destination,name),'utf8'),'nested content');
+    }
   }
   const createdSeven=path.join(root,'created.7z');
-  assert.match(call(['create',path.join(root,'not-rar.rar'),folder],'',2).at(-1).message,/RAR creation/i);
+  assert.match(call(['create',path.join(root,'not-rar.rar'),folder],'',2).at(-1).message,/only ZIP and 7Z creation/i);
   call(['create',createdSeven,folder],'secret');
   assert.match(call(['list',createdSeven,'0','50','0'],'',2).at(-1).message,/password|open/i);
   const createdItems=call(['list',createdSeven,'0','50','0'],'secret').filter(line=>line.type==='entry');
@@ -93,5 +103,5 @@ try{
     assert.match(call(['extract',evil,outside,'','0'], '',2).at(-1).message,/unsafe/i);
     assert(!fs.existsSync(path.join(root,'escape.txt')));
   }
-  console.log('Archive native smoke passed: AES, Unicode, selected folders, split ZIP, 7Z, RAR4/5, CRC, unsafe paths.');
+  console.log('Archive native smoke passed: AES, Unicode, split ZIP, 7Z, RAR4/5, TAR, GZ, XZ, CRC and unsafe paths.');
 }finally{fs.rmSync(root,{recursive:true,force:true});}
