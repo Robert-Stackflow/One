@@ -17,7 +17,7 @@ export interface FileToolReport {id:string;kind:FileToolKind;created:number;coun
 export interface FileToolProgress {id:string;kind:FileToolKind;phase:string;completed:number;total:number;path?:string;bytes?:number;found?:number}
 export interface FileToolActive {id:string;kind:FileToolKind;started:number;phase:string;completed:number;total:number;path:string}
 export interface FileToolFailure {kind:FileToolKind;at:number;message:string}
-export interface FileToolOverview {version:string;index:{count:number;running:boolean;error:string};disk:{running:boolean;root:string;files:number;directories:number};volumes:import('./disk-monitor').VolumeStatus[];active:FileToolActive[];failures:FileToolFailure[];recent:FileToolReport[]}
+export interface FileToolOverview {version:string;index:{count:number;running:boolean;error:string};disk:{running:boolean;root:string;files:number;directories:number};volumes:import('./disk-monitor').VolumeStatus[];active:FileToolActive[];failures:FileToolFailure[];recent:FileToolReport[];archive:import('./archive').ArchiveTaskOverview}
 export function renameName(name:string,options:RenameOptions,index:number,date:number,directory=false){
  const at=name.lastIndexOf('.'),hasExtension=!directory&&at>0,stem=hasExtension?name.slice(0,at):name,extension=hasExtension?name.slice(at+1):'';
  let value=options.target==='stem'?stem:options.target==='extension'?extension:name;

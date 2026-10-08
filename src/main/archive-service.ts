@@ -9,6 +9,7 @@ import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveR
 import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
+import type {ArchiveTasks} from './archive-tasks';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive'){super(message);this.name='ArchiveFailure';}}
@@ -27,21 +28,30 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean}>();
+  private stopped=false;
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
   private dragCache:ArchiveDragCache;
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
   }
   get pendingTasks(){return this.pending.size;}
-  cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){if(task.cooperative){task.child.stdin.write(Buffer.from([2]));return true;}if(task.committing)return false;task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
+  taskOverview(){return this.tasks?.overview()??Promise.resolve({active:[],recent:[],error:''});}
+  cancelId(id:string){const job=this.jobs.get(id);if(!job)throw Error('任务已结束');if(!this.cancel(id,job.owner))throw Error('正在完成最终保存，请等待任务结束');return job.owner;}
+  private checkpoint(id:string){if(this.jobs.get(id)?.cancelled)throw new ArchiveFailure('压缩任务已取消','cancelled');}
+  private seal(owner:number,id:string,confirmed=false){const job=this.jobs.get(id);if(confirmed&&job)job.cancelled=false;this.checkpoint(id);if(job)job.committing=true;this.notify(owner,{id,operation:'commit',done:0,total:0});}
+  private notify(owner:number,value:ArchiveProgress){const job=this.jobs.get(value.id);this.tasks?.progress(value,!!job&&!job.cancelled&&!job.finishing&&!job.committing);this.changed(owner,value);}
+  cancel(id:string,owner:number){const job=this.jobs.get(id);if(!job||job.owner!==owner||job.finishing||job.committing)return false;job.cancelled=true;
+    this.tasks?.cancelling(id);
+    const task=this.active.get(id);if(task&&task.owner===owner){if(task.cooperative)task.child.stdin.write(Buffer.from([2]));else task.child.kill();}
+    this.publishing.get(id)?.controller.abort();return true;}
   async stop(){
-    for(const task of this.active.values()){if(task.cooperative)task.child.stdin.write(Buffer.from([2]));else if(!task.committing)task.child.kill();}
-    for(const task of this.publishing.values())task.controller.abort();
-    await Promise.allSettled([...this.pending]);await this.cacheMaintenance;
+    this.stopped=true;for(const [id,job] of this.jobs)this.cancel(id,job.owner);
+    await Promise.allSettled([...this.pending]);await this.tasks?.flush();await this.cacheMaintenance;
     for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
     this.cached.clear();await this.dragCache.sweep();
     // Another helper can outlive a crashed One instance. Never recursively
@@ -49,15 +59,24 @@ export class ArchiveService {
     await this.dragCache.removeEmptyRoot().catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
   }
   run(owner:number,request:ArchiveRequest,requestedId?:string):Promise<ArchiveListing|ArchiveResult>{
+    if(this.stopped)return Promise.reject(Error('压缩服务正在关闭'));
+    if(this.requests.size>=32)return Promise.reject(Error('同时运行的压缩任务过多，请等待当前任务完成'));
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
     this.requests.add(id);
-    const task=this.perform(owner,request,id);
+    const job={owner,cancelled:false,committing:false,finishing:false};this.jobs.set(id,job);
+    const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown;
+      try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path));
+        this.checkpoint(id);result=await this.perform(owner,request,id);return result;
+      }catch(cause){error=cause;throw cause;}
+      finally{job.finishing=true;await this.tasks?.finish(id,result&&'count'in result?result:undefined,error,job.cancelled||error instanceof ArchiveFailure&&error.code==='cancelled');}
+    })();
     this.pending.add(task);
-    void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);}).catch(()=>{});
+    void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
   private async execute(owner:number,id:string,operation:'list'|'browse'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
+    this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
@@ -74,9 +93,9 @@ export class ArchiveService {
           try{const message=JSON.parse(line) as Message;
             if(message.type==='ready'){
               if(!['update','drag','publish'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
-              else{task.committing=true;if(operation==='publish'){child.stdin.write(Buffer.from([1]));this.changed(owner,{id,operation:'extract',done:0,total:0});}else{this.changed(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
+              else{task.committing=true;if(operation==='publish'){child.stdin.write(Buffer.from([1]));this.notify(owner,{id,operation:'extract',done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
-            else if(message.type==='progress')this.changed(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
+            else if(message.type==='progress')this.notify(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
             else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled'].includes(message.code??''))errorCode=message.code!;}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
@@ -85,14 +104,14 @@ export class ArchiveService {
       });
       child.stderr.on('data',(chunk:Buffer)=>{if(error.length<512)error+=chunk.toString('utf8').slice(0,512);});
       child.on('error',cause=>finish(cause));
-      child.on('close',code=>{if(failed||code!==0)finish(new ArchiveFailure(error||'压缩任务已取消或失败',errorCode));else finish();});
+      child.on('close',code=>{if(failed||code!==0)finish(new ArchiveFailure(error||'压缩任务已取消或失败',this.jobs.get(id)?.cancelled?'cancelled':errorCode));else finish();});
       const value=Buffer.from(secret,'utf8'),header=Buffer.alloc(4);header.writeUInt32LE(value.length);
       child.stdin.on('error',()=>{});
       const input=Buffer.concat([header,value,...(packet?[packet]:[])]);
       if(operation==='update'||operation==='drag'||operation==='publish')child.stdin.write(input);else child.stdin.end(input);
       // Initial progress can synchronously request cancellation. Write the
       // private request frame first so a cooperative cancel byte cannot corrupt it.
-      if(operation!=='list'&&operation!=='browse')this.changed(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
+      if(operation!=='list'&&operation!=='browse')this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
     });
   }
   private async acquireSource(owner:number,id:string,source:string):Promise<{path:string;release:()=>void}>{
@@ -147,6 +166,7 @@ export class ArchiveService {
   }
   private async perform(owner:number,request:ArchiveRequest,id:string):Promise<ArchiveListing|ArchiveResult> {
     await this.cacheMaintenance;
+    this.checkpoint(id);
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
     if(request.operation==='list'){
       const source=archiveSource(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
@@ -248,7 +268,7 @@ export class ArchiveService {
           await this.execute(owner,id,'test',[inner,'0'],'');
           messages=await this.execute(owner,id,'create',[temporary,inner],'');
         }else messages=await this.execute(owner,id,'create',[temporary,...(zip&&volumeBytes?[`--volume=${volumeBytes}`]:[]),...checked],secret);
-        await this.execute(owner,id,'test',[temporary,'0'],secret);
+        await this.execute(owner,id,'test',[temporary,'0'],secret);this.checkpoint(id);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认创建成功');
         if(seven&&volumeBytes){
@@ -263,15 +283,16 @@ export class ArchiveService {
             if(existsSync(item.target))throw Error('目标目录中已存在同名分卷');
             sevenParts.push(item);
             await pipeline(createReadStream(temporary,{start:index*volumeBytes,end:Math.min(size-1,(index+1)*volumeBytes-1)}),createWriteStream(item.temporary,{flags:'wx'}),{signal:controller.signal});
-            this.changed(owner,{id,operation:'create',done:index+1,total:count});
+            this.notify(owner,{id,operation:'create',done:index+1,total:count});
           }
         }
         const parts=seven?sevenParts:zip?await zipParts():[];
+        this.checkpoint(id);
         controller.signal.throwIfAborted();
         for(const item of parts)if(existsSync(item.target))throw Error('目标目录中已存在同名分卷');
         for(const item of parts){controller.signal.throwIfAborted();await link(item.temporary,item.target);published.push(item.target);}
         controller.signal.throwIfAborted();
-        if(!seven||!volumeBytes)await link(temporary,target);
+        this.seal(owner,id);if(!seven||!volumeBytes)await link(temporary,target);
         return {path:seven&&volumeBytes?target+'.001':target,count:composite(target)?checked.length:result.count};
       }catch(error){await Promise.allSettled(published.map(item=>rm(item,{force:true})));throw error;}
       finally{this.publishing.delete(id);await rm(temporary,{force:true}).catch(()=>{});for(const item of seven?sevenParts:zip?await zipParts().catch(()=>[]):[])await rm(item.temporary,{force:true}).catch(()=>{});await rm(stage,{recursive:true,force:true}).catch(()=>{});}
@@ -297,17 +318,20 @@ export class ArchiveService {
           const published=await this.execute(owner,id,'publish',[temporary,parent,join(parent,`.one-recovery-${id}`),conflict,source],'');
           const outcome=published.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
           if(!outcome)throw Error('压缩程序未确认提交成功');
+          if(!outcome.cancelled)this.seal(owner,id,true);
           return {path:parent,count:outcome.count,skipped:outcome.skipped??0,cancelled:outcome.cancelled===true};
         }
-        const top=destination==='smart'?await readdir(temporary):[];
+        this.checkpoint(id);const top=destination==='smart'?await readdir(temporary):[];
         let target:string;
         if(top.length===1){
           const extracted=join(temporary,top[0]),info=await lstat(extracted);
           if(!info.isFile()&&!info.isDirectory())throw Error('压缩包包含无法安全提交的条目');
           target=uniqueTarget(top[0],info.isFile());
+          this.seal(owner,id);
           if(info.isFile())await link(extracted,target);else await rename(extracted,target);
         }else{
           target=uniqueTarget(archiveName(source));
+          this.seal(owner,id);
           await rename(temporary,target);
         }
         return {path:target,count:result.count};

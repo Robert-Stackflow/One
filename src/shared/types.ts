@@ -44,6 +44,9 @@ export interface OneAPI {
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
   archiveRun(request:import('./archive').ArchiveRequest,id?:string):Promise<import('./archive').ArchiveListing|import('./archive').ArchiveResult>;
   archiveCancel(id:string):Promise<boolean>;
+  archiveCancelId(id:string):Promise<void>;
+  onArchiveTasksChanged(callback:()=>void):()=>void;
+  onArchiveCancelRequested(callback:(id:string)=>void):()=>void;
   archiveAssociation(operation:'status'|'register'|'remove'|'defaults'):Promise<import('./archive-preferences').ArchiveAssociationState>;
   onArchivePreferences(callback:(value:import('./archive-preferences').ArchivePreferences)=>void):()=>void;
   onArchiveProgress(callback:(value:import('./archive').ArchiveProgress)=>void):()=>void;

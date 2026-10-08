@@ -17,7 +17,7 @@ export async function archivePreferences():Promise<ArchivePreferences>{
 export function archiveSettingsPage(){return `<h2 class="settings-title">压缩与解压</h2><div class="settings-card">
  <div class="setting-row"><div class="setting-copy"><h2>双击压缩包</h2><p>用于 One 内打开文件，以及关联到 One 的压缩文件。</p></div><select id="archive-pref-double-click" aria-label="双击压缩包"><option value="smart">智能解压</option><option value="browse">打开并浏览</option></select></div>
  <div class="setting-row"><div class="setting-copy"><h2>默认压缩格式</h2></div><select id="archive-pref-format" aria-label="默认压缩格式"><option value="zip">ZIP</option><option value="7z">7Z</option><option value="tar">TAR</option><option value="tar.gz">TAR.GZ</option><option value="tar.xz">TAR.XZ</option><option value="gz">GZ · 单文件</option><option value="xz">XZ · 单文件</option></select></div>
- <div class="setting-row"><div class="setting-copy"><h2>完成后打开文件夹</h2><p>压缩或解压完成后，在资源管理器中显示结果。</p></div>${switchControl('archive-pref-open-completed','完成后打开文件夹')}</div>
+ <div class="setting-row"><div class="setting-copy"><h2>完成后打开文件夹</h2><p>默认关闭；开启后，压缩或解压完成时在资源管理器中显示结果。</p></div>${switchControl('archive-pref-open-completed','完成后打开文件夹')}</div>
  <div class="setting-row"><div class="setting-copy"><h2>解压同名文件</h2><p>用于解压至现有目录；同名文件夹合并，保留其中其他内容。</p></div><select id="archive-pref-conflict" aria-label="解压同名文件"><option value="rename">自动重命名</option><option value="skip">跳过</option><option value="replace">替换文件</option></select></div>
  </div><h3 class="settings-section-title">文件关联</h3><div class="settings-card">
  <div class="setting-row"><div class="setting-copy"><h2>压缩包打开方式</h2><p id="archive-association-status">正在读取…</p></div>${button('archive-association-toggle','注册','archive')}</div>

@@ -97,7 +97,8 @@ export function setupArchiveView(){
    });
  };
  find<HTMLButtonElement>('#archive-cancel').onclick=()=>{if(batchActive)batchCancelled=true;if(taskId)void api.archiveCancel(taskId);};
- api.onArchiveProgress((value:ArchiveProgress)=>{if(!busy||value.id!==taskId)return;if(value.operation==='commit'){status('正在保存压缩包…');return;}if(value.operation==='drag'){status(value.total?`正在传输选中内容 · ${value.done} / ${value.total}`:'拖到目标文件夹后松开鼠标；按 Esc 取消');return;}status(`${value.operation==='create'?'正在压缩':value.operation==='extract'?'正在解压':value.operation==='prepare'?'正在准备压缩包内容':value.operation==='update'?'正在校验并修改':'正在校验'} · ${value.done} / ${value.total||'…'}`,true);});
+ api.onArchiveCancelRequested(id=>{if(id===taskId){if(batchActive)batchCancelled=true;status('正在停止…',true);}});
+ api.onArchiveProgress((value:ArchiveProgress)=>{if(!busy||value.id!==taskId)return;if(value.operation==='commit'){status('正在保存结果…');return;}if(value.operation==='drag'){status(value.total?`正在传输选中内容 · ${value.done} / ${value.total}`:'拖到目标文件夹后松开鼠标；按 Esc 取消');return;}status(`${value.operation==='create'?'正在压缩':value.operation==='extract'?'正在解压':value.operation==='prepare'?'正在准备压缩包内容':value.operation==='update'?'正在校验并修改':'正在校验'} · ${value.done} / ${value.total||'…'}`,true);});
  installFileDropOverlay(root,{placement:'host',spacious:true,enabled:()=>!busy&&!batchActive,title:'压缩与解压',detail:'拖入常见压缩包浏览，或拖入文件与文件夹创建压缩包',onDrop:paths=>{if(paths.length===1&&isArchivePath(paths[0])){showMode('browse');find<HTMLInputElement>('#archive-source').value=paths[0];void load();}else{showMode('create');addPaths(paths);}}});
  const renderBatch=()=>{
   find('#archive-batch').hidden=batchItems.length<2;
