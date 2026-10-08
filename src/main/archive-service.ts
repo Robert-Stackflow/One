@@ -22,6 +22,7 @@ export class ArchiveService {
   private active=new Map<string,{child:ChildProcessWithoutNullStreams;owner:number}>();
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
+  private requests=new Set<string>();
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
@@ -29,10 +30,13 @@ export class ArchiveService {
   get pendingTasks(){return this.pending.size;}
   cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
   async stop(){for(const task of this.active.values())task.child.kill();for(const task of this.publishing.values())task.controller.abort();await Promise.allSettled([...this.pending]);await rm(this.cacheRoot,{recursive:true,force:true}).catch(()=>{});this.cached.clear();}
-  run(owner:number,request:ArchiveRequest):Promise<ArchiveListing|ArchiveResult>{
-    const task=this.perform(owner,request);
+  run(owner:number,request:ArchiveRequest,requestedId?:string):Promise<ArchiveListing|ArchiveResult>{
+    const id=requestedId??randomUUID();
+    if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
+    this.requests.add(id);
+    const task=this.perform(owner,request,id);
     this.pending.add(task);
-    void task.finally(()=>this.pending.delete(task)).catch(()=>{});
+    void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);}).catch(()=>{});
     return task;
   }
   private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test',args:string[],secret:string,progressOperation?:ArchiveProgress['operation']):Promise<Message[]> {
@@ -112,9 +116,8 @@ export class ArchiveService {
       }
     });
   }
-  private async perform(owner:number,request:ArchiveRequest):Promise<ArchiveListing|ArchiveResult> {
+  private async perform(owner:number,request:ArchiveRequest,id:string):Promise<ArchiveListing|ArchiveResult> {
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
-    const id=randomUUID();
     if(request.operation==='list'){
       const source=archiveSource(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
       const prepared=await this.acquireSource(owner,id,source);

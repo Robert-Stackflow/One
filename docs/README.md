@@ -15,6 +15,7 @@
 ## 使用说明
 
 - [桌面工具与搜索](user-guide/桌面工具与搜索.md)
+- [压缩与解压](user-guide/压缩与解压.md)
 - [文本处理](user-guide/文本处理.md)
 - [预览与外观](user-guide/预览与外观.md)
 - [系统信息与磁盘告警](user-guide/系统信息与磁盘告警.md)

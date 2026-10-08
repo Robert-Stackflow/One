@@ -23,6 +23,7 @@ export interface Settings {
   preview:import('./preview').PreviewPreferences;
   echo:import('./echo').EchoSettings;
   general: { launchAtLogin: boolean; closeToTray: boolean };
+  archive:import('./archive-preferences').ArchivePreferences;
   search:import('./search').SearchSettings;
   utilities:import('./utilities').UtilitySettings;
   keyEcho: boolean; onlyCombinations: boolean; edgeScroll: boolean; copyMenu: boolean; explorerPreview: boolean;
@@ -41,8 +42,10 @@ export interface OneAPI {
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;
   echoReady():Promise<void>;
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
-  archiveRun(request:import('./archive').ArchiveRequest):Promise<import('./archive').ArchiveListing|import('./archive').ArchiveResult>;
+  archiveRun(request:import('./archive').ArchiveRequest,id?:string):Promise<import('./archive').ArchiveListing|import('./archive').ArchiveResult>;
   archiveCancel(id:string):Promise<boolean>;
+  archiveAssociation(operation:'status'|'register'|'remove'|'defaults'):Promise<import('./archive-preferences').ArchiveAssociationState>;
+  onArchivePreferences(callback:(value:import('./archive-preferences').ArchivePreferences)=>void):()=>void;
   onArchiveProgress(callback:(value:import('./archive').ArchiveProgress)=>void):()=>void;
   fileToolsCancelId(id:string):Promise<void>;
   fileToolsCancel(kind?:import('./file-tools').FileToolKind):Promise<void>;

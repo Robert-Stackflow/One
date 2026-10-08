@@ -101,7 +101,8 @@ export function renderMain() {
   api.onDiskAlert(value=>toast(value.drive+' 剩余 '+(value.free/1024**3).toFixed(2)+' GB'));
   api.onDiskAlertOpen(()=>{void navigate('system').then(active=>{if(active)q('alerts-tab').click();}).catch(toast);});
   api.onSearchSettings(tab=>{void navigate('search').then(active=>{if(active)q(tab==='entry'?'search-tab-entry':'search-tab-menu').click();}).catch(toast);});
-  api.onNavigatePage(target=>{void (async()=>{
+  let externalNavigation=Promise.resolve();
+  api.onNavigatePage(target=>{const work=async()=>{
     const page=target.page==='locksmith'?'tools':target.page;
     if(!modules.some(item=>item[0]===page)||!await navigate(page))return;
     if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
@@ -110,9 +111,9 @@ export function renderMain() {
     else if(target.page==='tools'&&target.tool==='integrity')await toolsController!.openIntegrity(target.folder);
     else if(target.page==='tools'&&target.folder)await toolsController!.openFolder(target.folder);
     else if(target.page==='locksmith')await toolsController!.openLocksmith(target.paths||[]);
-    else if(target.page==='archive'&&target.action)archiveController!.openShell(target.action,target.paths||[]);
+    else if(target.page==='archive'&&target.action)await archiveController!.openShell(target.action,target.paths||[]);
     else if(target.page==='home'&&target.section==='tasks')q('overview-task-center').scrollIntoView({block:'start'});
-  })().catch(toast);});
+  };const next=externalNavigation.then(work,work);externalNavigation=next.catch(toast);});
   api.onLockTarget(path=>{void navigate('tools').then(active=>{if(active)return toolsController!.openLocksmith([path]);}).catch(toast);});
   api.onReceiveText(text => {void navigate('text').then(async active=>{if(active)(await import('./text-view')).receiveText(text);}).catch(toast);});
   // System information is useful immediately after opening the app, not only

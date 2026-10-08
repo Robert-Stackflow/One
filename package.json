@@ -116,6 +116,7 @@
       "dist/native/One.Shell.exe",
       "dist/native/One.LaunchNormal.exe",
       "dist/main/explorer-menu.ps1",
+      "dist/main/archive-associations.ps1",
       "dist/main/explorer-menu.xml",
       "dist/main/One.ExplorerMenu.Locksmith.msix",
       "dist/main/One.ExplorerMenu.Rename.msix",

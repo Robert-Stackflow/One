@@ -8,6 +8,8 @@ import type {ArchiveRequest} from '../shared/archive';
 import {PopupLifecycle,PopupReadiness,deferPopupBlur} from './popup-lifecycle';
 import {FileToolsService} from './file-tools-service';
 import {ArchiveService} from './archive-service';
+import {archiveAssociation} from './archive-associations';
+import {archiveLaunchPath} from './archive-launch';
 import {LauncherService} from './launcher-service';
 import {openWithApplications,openInApplication,activatePreviewWindow,showFileContextMenu} from './open-with';
 import {DiskService} from './disk-service';
@@ -47,7 +49,7 @@ import {PortService} from './port-service';
 import {ClickerService} from './clicker';
 import {elevationCommand} from './elevation-command';
 import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme } from 'electron';
-import { readFile, writeFile, mkdir, stat, readdir, rename, realpath } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, readdir, rename, realpath, lstat } from 'node:fs/promises';
 import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
@@ -200,7 +202,7 @@ function showSearch(kind:SearchContext['kind']='search',hwnd=foreground(true)?.h
  void searchBridge.context(hwnd,focus).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
 function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();if(settings.search.explorerTyping)searchPopup(true);dialogBar?.warm();}
-async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}else await searchBridge.jump(searchContext,path);}catch(error){if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure)return;error=new Error(failure);}searchWindow?.show();searchWindow?.focus();throw error;}}else{const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
+async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}else await searchBridge.jump(searchContext,path);}catch(error){if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure)return;error=new Error(failure);}searchWindow?.show();searchWindow?.focus();throw error;}}else{if(!info.isDirectory()&&/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(path)){searchWindow?.hide();await shellInvocation([`--one-archive=${path}`],'search-open');return;}const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
 function utilityState(){return {awake:awake?.state()||{...settings.utilities.awake,active:false,locked:false,remaining:0,error:''},pinned:topmost?.count()||0,shortcutError:topmost?.error||'',clicker:clicker?.state()||{running:false,clicks:0,remaining:0,error:''}};}
 function utilityChanged(){if(!awake||!topmost||!clicker)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}
 let applicationIcon: Electron.NativeImage;
@@ -258,19 +260,36 @@ const queuedShellRequests=new Set<string>();
 let shellInbox:ShellRequestInbox|undefined;
 async function shellInvocation(args:string[],source='launch'){
  const argument=args.find(value=>value.startsWith('--one-shell-request='));
- if(!argument){showMain();return;}
+ if(!argument){
+  if(!args.some(value=>value.startsWith('--one-archive='))){showMain();return;}
+  const run=async()=>{
+   try{
+    await app.whenReady();
+    if(starting)await starting;
+    const archive=archiveLaunchPath(args)!;
+    const info=await lstat(archive);if(!info.isFile()||info.isSymbolicLink())throw Error('请选择一个普通压缩文件');
+    runtimeLog(app.getPath('userData'),'archive-launch',`source=${source} action=${settings.archive.doubleClick}`);
+    navigateArchive(settings.archive.doubleClick==='smart'?'smart':'extract',[archive]);
+   }catch(error){
+    runtimeError(app.getPath('userData'),'archive-launch-error',error);if(quitting||!main||main.isDestroyed())return;showMain();
+    const detail=(error as NodeJS.ErrnoException).code==='ENOENT'?'压缩文件不存在，可能已移动或删除。':error instanceof Error?error.message:String(error);
+    await dialog.showMessageBox(main,{type:'error',message:'无法打开压缩包',detail});
+   }
+  };
+  const next=shellQueue.then(run,run);shellQueue=next;return next;
+ }
  const path=argument.slice('--one-shell-request='.length);
  if(queuedShellRequests.has(path))return;
  queuedShellRequests.add(path);
  const run=async()=>{
   try{
+   await app.whenReady();
    if(starting)await starting;
    const target=await readShellRequest(args,app.getPath('userData'));
    if(!target)return;
    runtimeLog(app.getPath('userData'),'shell-request-open',`source=${source} tool=${target.tool} count=${target.paths.length}`);
    if(target.tool==='archive-create'||target.tool==='archive-extract'){
-    const send=()=>{if(!main.isDestroyed()&&!main.webContents.isDestroyed()){showMain();main.webContents.send('one:navigate-page',{page:'archive',action:target.tool==='archive-create'?'create':'extract',paths:target.paths});}};
-    if(main.webContents.isLoadingMainFrame())main.webContents.once('did-finish-load',send);else send();
+    navigateArchive(target.tool==='archive-create'?'create':'extract',target.paths);
    }else openFileAction(target);
   }catch(error){
    if((error as NodeJS.ErrnoException).code==='ENOENT')return;
@@ -282,12 +301,16 @@ async function shellInvocation(args:string[],source='launch'){
  shellQueue=next;
  return next;
 }
+function navigateArchive(action:'create'|'extract'|'smart',paths:string[]){
+ const send=()=>{if(!quitting&&!main.isDestroyed()&&!main.webContents.isDestroyed()){showMain();main.webContents.send('one:navigate-page',{page:'archive',action,paths});}};
+ if(main.webContents.isLoadingMainFrame())main.webContents.once('did-finish-load',send);else send();
+}
 async function pickPath(mode: 'file'|'directory'|'save', title: string, name = '', initialPath?: string,owner=main) { const bounds=await pickerWindowBounds();if(quitting||finishingQuit||!owner||owner.isDestroyed())throw new Error('应用正在退出');const area=screen.getDisplayMatching(bounds||owner.getBounds()).workArea;const window = windowFor('picker', { width:Math.min(860,area.width),height:Math.min(640,area.height),...bounds,minWidth:Math.min(620,area.width),minHeight:Math.min(500,area.height),parent: owner, modal: true, skipTaskbar: true });if(bounds)restorePickerBounds(window,bounds);trackPickerWindow(window); const result = pick(window, mode, title, name, initialPath); window.once('ready-to-show', () => { if (!window.isDestroyed()){if(bounds)restorePickerBounds(window,bounds);window.show();} }); return result; }
 function echo(text:string,channel?:import('../shared/echo').EchoChannel){echoes?.show(text,channel);}
 function textValue(value: unknown, limit = 10_000_000): string { if (typeof value !== 'string' || value.length > limit) throw new Error('文本参数无效或超过长度上限'); return value; }
 function filePath(value: unknown): string { if (typeof value !== 'string' || value.length > 32768 || !isAbsolute(value) || value.includes('\0')) throw new Error('文件路径无效'); return resolve(value); }
 const fileActionIPC=new Set(['file-action-data','window-action','window-state','settings','app-info','file-icons','file-icon','shell-icons','file-tools-run','file-tools-cancel','file-tools-page','file-tools-history','lock-state','lock-scan','lock-cancel','lock-end','pick-file','pick-directory','drop-path-kinds','open-file','reveal-file','native-context-menu','preview','copy-text','file-tools-overview','appearance']);
-const auditedIPC=new Set(['patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','archive-run','archive-cancel','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate','hotkey-owner']);
+const auditedIPC=new Set(['archive-association','patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','archive-run','archive-cancel','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate','hotkey-owner']);
 function handle(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown, allowed = ['main']) {
   ipcMain.handle(`one:${name}`, async(event, ...args) => {const start=performance.now(),role=roles.get(event.sender.id)||'unknown';try{if (!(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效');const result=await handler(event,...args);if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'ok');return result;}catch(error){if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'error');runtimeError(app.getPath('userData'),`ipc:${name}`,error);throw error;} });
 }
@@ -364,6 +387,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortc
     }
     if(changed('utilities')){if(JSON.stringify(previous.utilities.awake)!==JSON.stringify(next.utilities.awake))awake?.update(next.utilities.awake);if(JSON.stringify(previous.utilities.topmost)!==JSON.stringify(next.utilities.topmost))topmost?.update(next.utilities.topmost);if(JSON.stringify(previous.utilities.clicker)!==JSON.stringify(next.utilities.clicker))clicker?.update(next.utilities.clicker);}
     if(changed('diskMonitor'))diskMonitor?.configure(next.diskMonitor);
+    if(changed('archive')&&main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:archive-preferences',next.archive);
     if(changed('appearance')){refreshWindowAppearance();if(JSON.stringify(previous.appearance.popupPlacement)!==JSON.stringify(next.appearance.popupPlacement))echoes?.reposition();}
     if(changed('colorWheelZoom'))colorWorker?.postMessage({wheelZoomEnabled:next.colorWheelZoom});
     if(['colorHistory','colorVisibleFormats','colorFormat','colorShowEditor','colorWheelZoom'].some(key=>changed(key as keyof Settings)))for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&['main','color-editor','color-picker'].includes(roles.get(w.webContents.id)||''))w.webContents.send('one:color-settings');
@@ -531,8 +555,9 @@ function registerIPC() {
   handle('file-action-data',event=>{const target=fileActions.get(event.sender.id);if(!target)throw Error('文件操作窗口无效');return target;});
   handle('file-action-open',(_event,tool,paths)=>{if(!['rename','locksmith'].includes(tool)||!Array.isArray(paths)||paths.length>(tool==='locksmith'?32:4096))throw Error('文件操作请求无效');openFileAction({tool,paths:paths.map(filePath)});});
   handle('file-tools-run',(event,task)=>fileTools.run(event.sender.id,task));
-  handle('archive-run',(event,request:ArchiveRequest)=>archiveService.run(event.sender.id,request));
+  handle('archive-run',(event,request:ArchiveRequest,id?:string)=>archiveService.run(event.sender.id,request,id));
   handle('archive-cancel',(event,id:string)=>archiveService.cancel(id,event.sender.id));
+  handle('archive-association',(_event,operation)=>archiveAssociation(operation));
   handle('file-tools-cancel',(event,kind)=>fileTools.cancel(event.sender.id,kind));
   handle('file-tools-cancel-id',(_event,id)=>{if(typeof id!=='string'||!(/^[a-f0-9-]{36}$/).test(id))throw Error('任务标识无效');return fileTools.cancelId(id);},['main']);
   handle('file-tools-page',(_event,id,page,group)=>fileTools.page(id,page,group));
@@ -749,7 +774,7 @@ function registerIPC() {
     });
     previewQueues.set(id,task); void task.finally(() => { if (previewQueues.get(id) === task) previewQueues.delete(id); }).catch(() => {}); return task;
   }, ['preview']);
-  handle('open-file', async (_event, path) => { const error = await shell.openPath(filePath(path)); if (error) throw new Error(error); }, ['main','preview','search']);
+  handle('open-file', async (_event, path) => {const file=filePath(path);if(/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(file)&&(await stat(file)).isFile())return shellInvocation([`--one-archive=${file}`],'file-open');const error=await shell.openPath(file);if(error)throw new Error(error);}, ['main','preview','search']);
   handle('reveal-file', (_event, path) => shell.showItemInFolder(filePath(path)), ['main','preview','search']);
   handle('start-file-drag',async(event,value)=>{
     const path=filePath(value),info=await stat(path);
@@ -816,7 +841,7 @@ async function start() {
   registerIPC(); main = windowFor('main');
   trayMenuPanel=new TrayMenuPanel(()=>windowFor('tray-menu',{width:296,height:356,minWidth:296,minHeight:200,frame:false,resizable:false,maximizable:false,minimizable:false,skipTaskbar:true,alwaysOnTop:true,hasShadow:true,roundedCorners:true,title:'One 菜单'}),()=>({entries:trayMenuEntries({paused:inputPaused,launchAtLogin:settings.general.launchAtLogin}),paused:inputPaused}));
   if(testMode&&process.env.ONE_TEST_TRAY_MENU==='1')(globalThis as typeof globalThis&{oneTestTrayMenu?:TrayMenuPanel}).oneTestTrayMenu=trayMenuPanel;
-  main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!process.argv.some(a=>a.startsWith('--one-shell-request=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
+  main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!process.argv.some(a=>a.startsWith('--one-shell-request=')||a.startsWith('--one-archive=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
   nativeTheme.on('updated',refreshWindowAppearance);
   main.on('blur',()=>stopShortcutRecording());
   main.on('close', event => { if(!quitting&&!testMode){event.preventDefault();if(settings.general.closeToTray)main.hide();else app.quit();} });
@@ -830,10 +855,10 @@ async function start() {
   }
 }
 if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.argv.includes('--one-quit-for-install')) app.quit(); else {
- app.on('second-instance',(_event,args)=>{if(args.includes('--one-quit-for-install')){app.quit();return;}if(args.includes(loginStartupArg)&&!args.some(value=>value.startsWith('--one-shell-request='))){runtimeLog(app.getPath('userData'),'second-instance','login-startup-already-running');return;}runtimeLog(app.getPath('userData'),'second-instance',args.some(value=>value.startsWith('--one-shell-request='))?'shell-request':'show-main');void shellInvocation(args,'second-instance');});
+ app.on('second-instance',(_event,args)=>{if(args.includes('--one-quit-for-install')){app.quit();return;}if(args.includes(loginStartupArg)&&!args.some(value=>value.startsWith('--one-shell-request=')||value.startsWith('--one-archive='))){runtimeLog(app.getPath('userData'),'second-instance','login-startup-already-running');return;}runtimeLog(app.getPath('userData'),'second-instance',args.some(value=>value.startsWith('--one-shell-request='))?'shell-request':'show-main');void shellInvocation(args,'second-instance');});
  app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;runtimeLog(app.getPath('userData'),'main-start',`version=${app.getVersion()} mode=${app.isPackaged?'packaged':'development'} platform=${process.platform} arch=${process.arch}`);starting=start();return starting.finally(()=>{starting=undefined;});}).then(async()=>{
   runtimeLog(app.getPath('userData'),'main-ready');
-  if(process.argv.some(a=>a.startsWith('--one-shell-request=')))await shellInvocation(process.argv);
+  if(process.argv.some(a=>a.startsWith('--one-shell-request=')||a.startsWith('--one-archive=')))await shellInvocation(process.argv);
   shellInbox=new ShellRequestInbox(app.getPath('userData'),path=>shellInvocation([`--one-shell-request=${path}`],'inbox'));
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });

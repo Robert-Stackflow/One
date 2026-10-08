@@ -5,6 +5,7 @@ import {defaultPreview,validatePreview} from './preview';
 import {defaultUtilities,validateUtilities} from './utilities';
 import {validFont} from './fonts';
 import {defaultSearch,validateSearch} from './search';
+import {defaultArchivePreferences,validateArchivePreferences} from './archive-preferences';
 import type { Settings, Appearance } from './types';
 import {colorFormatNames,type ColorFormat} from './colors';
 /** Merge only known preference keys; arrays are replaced as a unit. */
@@ -23,7 +24,7 @@ export function mergeSettings(current:Settings, patch:unknown):Settings {
 }
 export const defaultAppearance = (): Appearance => ({mode:'system',accent:'#303030',font:'system',density:'comfortable',radius:10,lightBackground:'#ffffff',lightForeground:'#202020',darkBackground:'#1e1e1f',darkForeground:'#f4f4f5',toastPosition:'bottom-center',popupPlacement:{x:.5,y:.86,display:'cursor'}});
 const binding = () => ({shortcut:'',command:'',args:[] as string[],cwd:''});
-export const defaultSettings = (): Settings => ({ quickActions:defaultQuickActions(),capsLock:defaultCapsPreferences(),diskMonitor:defaultDiskMonitor(),preview:defaultPreview(),echo:defaultEcho(),general:{launchAtLogin:false,closeToTray:true},search:defaultSearch(),utilities:defaultUtilities(),keyEcho: false, onlyCombinations: true, edgeScroll: false, copyMenu: false, explorerPreview: false, pauseFullscreen: true, excludedApps: '', dwellMs: 650, cornerPixels: 12, cooldownMs: 1200, copyIntervalMs: 450, volumeStep: 2, edgePixels: 8, corners: { TL: 'off', TR: 'off', BL: 'off', BR: 'off' }, edges: { top: { action: 'off', step: 2 }, right: { action: 'volume', step: 2 }, bottom: { action: 'off', step: 2 }, left: { action: 'volume', step: 2 } }, cornerBindings:{TL:binding(),TR:binding(),BL:binding(),BR:binding()},appearance:defaultAppearance(),colorShortcut:'Shift+Win+C',colorHistory:[],colorFormat:'hex',colorVisibleFormats:['hex','rgb','hsl','hsv','oklch','cmyk'],colorShowEditor:true,colorWheelZoom:false });
+export const defaultSettings = (): Settings => ({ quickActions:defaultQuickActions(),capsLock:defaultCapsPreferences(),diskMonitor:defaultDiskMonitor(),preview:defaultPreview(),echo:defaultEcho(),general:{launchAtLogin:false,closeToTray:true},archive:defaultArchivePreferences(),search:defaultSearch(),utilities:defaultUtilities(),keyEcho: false, onlyCombinations: true, edgeScroll: false, copyMenu: false, explorerPreview: false, pauseFullscreen: true, excludedApps: '', dwellMs: 650, cornerPixels: 12, cooldownMs: 1200, copyIntervalMs: 450, volumeStep: 2, edgePixels: 8, corners: { TL: 'off', TR: 'off', BL: 'off', BR: 'off' }, edges: { top: { action: 'off', step: 2 }, right: { action: 'volume', step: 2 }, bottom: { action: 'off', step: 2 }, left: { action: 'volume', step: 2 } }, cornerBindings:{TL:binding(),TR:binding(),BL:binding(),BR:binding()},appearance:defaultAppearance(),colorShortcut:'Shift+Win+C',colorHistory:[],colorFormat:'hex',colorVisibleFormats:['hex','rgb','hsl','hsv','oklch','cmyk'],colorShowEditor:true,colorWheelZoom:false });
 export function validateSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') throw new Error('设置格式无效');
   const v = value as Settings; const d = defaultSettings();d.quickActions=validateQuickActions(v.quickActions);d.capsLock=validateCapsPreferences(v.capsLock);d.diskMonitor=validateDiskMonitor(v.diskMonitor);d.echo=validateEcho(v.echo);d.preview=validatePreview(v.preview);
@@ -62,6 +63,6 @@ export function validateSettings(value: unknown): Settings {
   if(v.colorWheelZoom!==undefined){if(typeof v.colorWheelZoom!=='boolean')throw new Error('滚轮局部放大设置无效');d.colorWheelZoom=v.colorWheelZoom;}
   if(v.colorFormat!==undefined){if(!Object.hasOwn(colorFormatNames,v.colorFormat))throw new Error('颜色格式无效');d.colorFormat=v.colorFormat;}
   if(v.colorVisibleFormats!==undefined){if(!Array.isArray(v.colorVisibleFormats)||v.colorVisibleFormats.some(key=>!Object.hasOwn(colorFormatNames,key)))throw new Error('颜色格式无效');d.colorVisibleFormats=[...new Set(v.colorVisibleFormats)] as ColorFormat[];}
-  d.copyMenu=false;d.utilities=validateUtilities(v.utilities);d.search=validateSearch(v.search);
+  d.copyMenu=false;d.utilities=validateUtilities(v.utilities);d.search=validateSearch(v.search);d.archive=validateArchivePreferences(v.archive);
   return d;
 }

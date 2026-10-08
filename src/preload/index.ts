@@ -14,11 +14,12 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
+  archiveAssociation:operation=>invoke('archive-association',operation),onArchivePreferences:callback=>listen('archive-preferences',callback),
   trayMenuState:()=>invoke('tray-menu-state'),trayMenuAction:id=>invoke('tray-menu-action',id),trayMenuReady:()=>invoke('tray-menu-ready'),trayMenuHide:()=>invoke('tray-menu-hide'),onTrayMenuChanged:callback=>listen('tray-menu-changed',callback),
   explorerMenuState:()=>invoke('explorer-menu-state'),setExplorerMenu:value=>invoke('explorer-menu-set',value),fileActionData:()=>invoke('file-action-data'),openFileAction:(tool,paths)=>invoke('file-action-open',tool,paths),
   dialogBarData:()=>invoke('dialog-bar-data'),onDialogBarData:callback=>listen('dialog-bar-data',callback),onDialogBarCollapse:callback=>listen('dialog-bar-collapse',callback),dialogBarChoose:path=>invoke('dialog-bar-choose',path),dialogBarSize:(rows,active)=>invoke('dialog-bar-size',rows,active),dialogBarCollapse:()=>invoke('dialog-bar-collapse'),dialogBarSettings:()=>invoke('dialog-bar-settings'),
   fileToolsRun:task=>invoke('file-tools-run',task),fileToolsCancel:kind=>invoke('file-tools-cancel',kind),fileToolsCancelId:id=>invoke('file-tools-cancel-id',id),fileToolsPage:(id,page,group)=>invoke('file-tools-page',id,page,group),fileToolsHistory:()=>invoke('file-tools-history'),fileToolsOverview:active=>invoke('file-tools-overview',active),onFileToolsProgress:callback=>listen('file-tools-progress',callback),
-  archiveRun:request=>invoke('archive-run',request),archiveCancel:id=>invoke('archive-cancel',id),onArchiveProgress:callback=>listen('archive-progress',callback),
+  archiveRun:(request,id)=>invoke('archive-run',request,id),archiveCancel:id=>invoke('archive-cancel',id),onArchiveProgress:callback=>listen('archive-progress',callback),
   systemInformation:(kind,refresh)=>invoke('system-information',kind,refresh),onSystemInformationProgress:cb=>listen('system-information-progress',cb),onSystemInformationGroup:cb=>listen('system-information-group',cb),proxyDiagnostics:refresh=>invoke('proxy-diagnostics',refresh),dnsCheck:domain=>invoke('dns-check',domain),onProxyDiagnosticsProgress:cb=>listen('proxy-diagnostics-progress',cb),exportSystemInformation:reports=>invoke('export-system-information',reports),
   diskMonitor:(active,source)=>invoke('disk-monitor',active,source),diskTrace:enabled=>invoke('disk-trace',enabled),onDiskMonitor:cb=>listen('disk-monitor',cb),onDiskAlertOpen:cb=>listen('disk-alert-open',cb),onDiskAlert:cb=>listen('disk-alert',cb),onMaintenanceProgress:cb=>listen('maintenance-progress',cb),
   onPreviewLoading:cb=>listen('preview-loading',cb),
