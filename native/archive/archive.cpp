@@ -411,8 +411,13 @@ int wmain(int argc, wchar_t **argv) {
             if (count < 6 || count > 8) fail("Drag requires a staging directory, encoding and revision");
             archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", count >= 7 ? std::stoull(argv[6]) : 0, count == 8 ? fs::path(argv[7]) : fs::path{},folders);
         } else if (mode == L"update") {
-            if (argc != 7 || archive_format(argv[2]) != 0) fail("Update requires a ZIP archive, staging paths, encoding and revision");
-            zip_update(argv[2], argv[3], argv[4], _wtoi(argv[5]), utf8(argv[6]), password);
+            if(argc!=7)fail("Update requires an archive, staging paths, encoding and revision");
+            const auto format=archive_format(argv[2]);
+            if(format==0)zip_update(argv[2],argv[3],argv[4],_wtoi(argv[5]),utf8(argv[6]),password);
+            else if(format==7){auto extension=fs::path(argv[2]).extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
+                if(extension!=L".7z")fail("Split 7Z editing is not supported yet");
+                seven_update(argv[2],argv[3],argv[4],utf8(argv[6]),password);
+            }else fail("Editing requires a single-volume ZIP or 7Z archive");
         } else if (mode == L"list" || mode == L"browse" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             bool selected_folders=false;std::string expected_revision;

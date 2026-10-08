@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {open,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 import type {ArchiveEdit,ArchiveEncoding,ArchiveRequest,ArchiveListing,ArchiveResult} from '../shared/archive';
-import {zipEditPacket} from './archive-update';
+import {archiveEditPacket} from './archive-update';
 
 export class CliFailure extends Error {
  constructor(message:string,readonly exitCode:number=2){super(message);this.name='CliFailure';}
@@ -15,7 +15,7 @@ create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size 
 extract: --output DIRECTORY [--destination smart|folder|here] [--conflict rename|skip|replace]
          [--select 0,1,...] ARCHIVES...
 list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
-update:  --changes FILE.json ARCHIVE.zip
+update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
 
@@ -68,7 +68,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   if(select){argument(/^\d+(,\d+)*$/.test(select),'--select requires comma-separated zero-based indexes');selected=[...new Set(select.split(',').map(Number))];argument(selected.length<=10000&&selected.every(index=>Number.isSafeInteger(index)&&index<1000000),'Invalid selected indexes');}
   result.jobs=paths.map(path=>({operation,request:{operation,path,parent,destination:destination as 'folder'|'smart'|'here',conflict:conflict as 'rename'|'skip'|'replace',encoding,selected}}));
  }else if(operation==='update'){
-  argument(paths.length===1&&options.has('changes'),'update requires one ZIP and --changes');argument(/\.zip$/i.test(paths[0]),'Only single-volume ZIP editing is supported');
+  argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];
  }else result.jobs=paths.map(path=>({operation:operation as 'list'|'test',request:{operation:operation as 'list'|'test',path,encoding}}));
  return result;
@@ -82,7 +82,7 @@ async function readChanges(file:string):Promise<ArchiveEdit[]>{
  const changes=await jsonFile(file);argument(Array.isArray(changes)&&changes.length>0&&changes.length<=10000,'Supply 1–10000 changes');
  const fields:Record<string,string[]>={delete:['kind','indexes'],rename:['kind','index','name'],mkdir:['kind','name'],add:['kind','source','name','replace'],comment:['kind','text']};
  for(const item of changes){argument(item&&typeof item==='object'&&!Array.isArray(item)&&Object.hasOwn(fields,item.kind)&&Object.keys(item).every(key=>fields[item.kind].includes(key)),'Unknown change or change field');if(item.kind==='add')item.source=filePath(item.source,dirname(file));}
- try{await zipEditPacket(changes);}catch(error){if(error&&typeof error==='object'&&'code' in error)throw error;throw new CliFailure(error instanceof Error?error.message:'Invalid changes');}
+ try{await archiveEditPacket(changes);}catch(error){if(error&&typeof error==='object'&&'code' in error)throw error;throw new CliFailure(error instanceof Error?error.message:'Invalid changes');}
  return changes;
 }
 export interface CliService {run(owner:number,request:ArchiveRequest,id:string):Promise<ArchiveListing|ArchiveResult>;cancel(id:string,owner:number):boolean}

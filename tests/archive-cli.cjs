@@ -59,6 +59,14 @@ async function main(){
   await fs.writeFile(changes,JSON.stringify([{kind:'comment',text:'x',password:'NO'}]));await run(['update','--json','--changes',changes,archive],'',2);
   for(const format of ['7z','tar.gz','tar.xz']){const name=path.join(root,'roundtrip.'+format);await run(['create','--json','--output',name,input]);await run(['test','--json',name]);await run(['extract','--json','--output',outdir,name]);}
   await run(['create','--json','--password-stdin','--output','secret.7z',input],secret);await run(['test','--json',path.join(root,'secret.7z')],'',3);await run(['test','--json','--password-stdin',path.join(root,'secret.7z')],secret);
+  const seven=path.join(root,'secret.7z'),sevenBefore=await run(['list','--json','--password-stdin',seven],secret);
+  const sevenIndex=sevenBefore.records.find(item=>item.type==='entry'&&item.name.endsWith('hello.txt')).index;
+  await fs.writeFile(changes,JSON.stringify([{kind:'rename',index:sevenIndex,name:'改名.txt'},{kind:'mkdir',name:'空目录'},{kind:'add',source:'中文 & input/hello.txt',name:'新文件.txt'}]));
+  await run(['update','--json','--password-stdin','--changes',changes,seven],secret);
+  const sevenAfter=await run(['list','--json','--password-stdin',seven],secret);assert(sevenAfter.records.some(item=>item.name==='改名.txt'));assert(sevenAfter.records.some(item=>item.name==='新文件.txt'));
+  await run(['test','--json','--password-stdin',seven],secret);await run(['list','--json',seven],'',3);
+  await fs.writeFile(changes,JSON.stringify([{kind:'comment',text:'unsupported'}]));const sevenBytes=await fs.readFile(seven);
+  await run(['update','--json','--password-stdin','--changes',changes,seven],secret,1);assert.deepEqual(await fs.readFile(seven),sevenBytes);
   const volumeSource=path.join(root,'volume.bin');await fs.writeFile(volumeSource,require('node:crypto').randomBytes(3*1024**2));
   for(const format of ['zip','7z']){const archive=path.join(root,'volume.'+format);const created=await run(['create','--json','--volume-size','1MiB','--output',archive,volumeSource]);const first=created.records.find(item=>item.type==='result').path;await run(['test','--json',first]);await run(['extract','--json','--output',outdir,first]);}
   const largeDir=path.join(root,'many');await fs.mkdir(largeDir);await Promise.all(Array.from({length:425},(_,index)=>fs.writeFile(path.join(largeDir,index+'.txt'),String(index))));

@@ -6,7 +6,7 @@ import {existsSync} from 'node:fs';
 import {createReadStream,createWriteStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding} from '../shared/archive';
-import {zipEditPacket} from './archive-update';
+import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 
@@ -186,10 +186,11 @@ export class ArchiveService {
     }
     if(request.operation==='update'){
       const source=archiveSource(request.path);
-      if(!/\.zip$/i.test(source))throw Error('目前仅支持修改单卷 ZIP 压缩包');
+      if(!/\.(?:zip|7z)$/i.test(source))throw Error('目前支持修改单卷 ZIP 和 7Z 压缩包');
       if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后再保存修改');
-      const packet=await zipEditPacket(request.changes);
-      const temporary=join(dirname(source),`.one-update-${id}.zip`),backup=join(dirname(source),`.one-update-${id}.original.zip`);
+      const packet=await archiveEditPacket(request.changes);
+      if(/\.7z$/i.test(source)&&request.changes.some(change=>change.kind==='comment'))throw Error('7Z 格式不支持压缩包备注');
+      const suffix=extname(source),temporary=join(dirname(source),`.one-update-${id}${suffix}`),backup=join(dirname(source),`.one-update-${id}.original${suffix}`);
       try{
         const messages=await this.execute(owner,id,'update',[source,temporary,backup,String(encoding(request.encoding)),request.revision],password(request.password),undefined,packet);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');

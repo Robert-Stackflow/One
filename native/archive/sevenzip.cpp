@@ -1,6 +1,7 @@
 #include "common.h"
 #include "zip-common.h"
 #include "browse.h"
+#include "sevenzip-update.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -9,6 +10,7 @@
 #include <cwctype>
 #include <limits>
 #include <memory>
+#include <map>
 #include <vector>
 
 // ABI declarations for the interfaces in 7-Zip 26.04's IArchive.h and IStream.h.
@@ -179,6 +181,7 @@ public:
     }catch(...){close();throw;}}
     ~OpenArchive(){close();}
     Archive7 *get() const{return archive;}
+    bool encryptedHeaders() const{return callback->passwordRequested;}
     U32 count() const {U32 value=0;if(archive->GetNumberOfItems(&value)!=S_OK||value>1000000)fail("Archive has too many entries");return value;}
     PROPVARIANT property(U32 index,U32 prop) const {PROPVARIANT value{};PropVariantInit(&value);if(archive->GetProperty(index,prop,&value)!=S_OK)fail("Cannot read archive entry");return value;}
     std::vector<Item> items() const {
@@ -322,7 +325,8 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
     const auto revision=zip_revision(source);
     OpenArchive reader(source,password,format);
     U32 total=reader.count();
-    emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+",\"revision\":"+json(revision)+"}");
+    auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
+    emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+",\"revision\":"+json(revision)+",\"editable\":"+(format==7&&extension==L".7z"?"true":"false")+"}");
     for(size_t i=offset;i<total&&i-offset<limit;++i){
         const auto item=reader.item((U32)i);
         emit("{\"type\":\"entry\",\"index\":"+std::to_string(item.index)+",\"name\":"+json(item.name)+
@@ -335,7 +339,8 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
 void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query){
     const auto revision=zip_revision(source);OpenArchive reader(source,password,format);BrowseRows rows(query);
     const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});}
-    rows.emit_page(total,reader.comment(),revision,false,offset,limit);
+    auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
+    rows.emit_page(total,reader.comment(),revision,format==7&&extension==L".7z",offset,limit);
     if(zip_revision(source)!=revision)fail("Archive changed during browsing; reopen it");
 }
 
@@ -346,12 +351,12 @@ std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &
     return result;
 }
 
-void seven_test(const fs::path &source,const std::string &password,int format){
+void seven_test(const fs::path &source,const std::string &password,int format,bool result){
     OpenArchive reader(source,password,format);auto items=reader.items();
     auto callback=new ExtractRequest(items,{},password,(U32)items.size(),true);
     HRESULT code=reader.get()->Extract(nullptr,U32(-1),1,callback);
     const auto error=callback->errorCode;callback->Release();if(code!=S_OK)fail("Archive integrity check failed or password is incorrect",error);
-    emit("{\"type\":\"result\",\"count\":"+std::to_string(items.size())+"}");
+    if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(items.size())+"}");
 }
 
 void seven_extract(const fs::path &source,const fs::path &destination,
@@ -371,4 +376,35 @@ void seven_extract(const fs::path &source,const fs::path &destination,
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
     const auto error=archive_cancelled()?"cancelled":callback->errorCode;callback->Release();if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
+}
+
+void seven_update(const fs::path &source,const fs::path &temporary,const fs::path &backup,
+                  const std::string &revision,const std::string &password){
+    using namespace archive_update;
+    check_staging(source,temporary,backup);File original(source,GENERIC_READ,FILE_SHARE_READ);
+    if(stamp(original.handle)!=revision)fail("Archive changed; reopen it before saving changes");
+    Plan plan;std::vector<OutputEntry> nodes;std::vector<std::string> names;
+    bool encrypted=false,headers=false;
+    {
+        OpenArchive reader(source,password,7);auto items=reader.items();preflight(reader,items);headers=reader.encryptedHeaders();
+        for(const auto &item:items){auto name=canonical(item.name,item.directory);nodes.push_back({name,item.directory,false,{},item.encrypted});names.push_back(name);encrypted=encrypted||item.encrypted;}
+        seven_test(source,password,7,false);
+        apply_plan(plan,nodes,source,encrypted,nullptr);check_tree(nodes);
+        U64 needed=fs::file_size(source);
+        for(const auto &node:nodes)if(!node.removed){const auto size=node.source.empty()||node.directory?0:fs::file_size(node.source);if(size>UINT64_MAX-needed-65536)fail("7Z update size exceeds limits");needed+=size+65536;}
+        auto capacity=fs::space(source.parent_path());constexpr U64 reserve=256ull*1024*1024;
+        if(capacity.available!=UINTMAX_MAX&&(capacity.available<reserve||needed>capacity.available-reserve))fail("Not enough free disk space to update the archive","write");
+        seven_rewrite(reader.get(),temporary,nodes,names,password,encrypted,headers,[&](U32 index,U32 prop,PROPVARIANT *value){return reader.get()->GetProperty(index,prop,value);});
+    }
+    size_t count=0;
+    {
+        OpenArchive verify(temporary,password,7);auto items=verify.items();preflight(verify,items);
+        std::map<std::string,const OutputEntry*> expected;for(const auto &node:nodes)if(!node.removed)expected.emplace(node.name,&node);
+        if(items.size()!=expected.size())fail("Updated 7Z directory does not match the requested changes");
+        for(const auto &item:items){auto found=expected.find(canonical(item.name,item.directory));if(found==expected.end()||found->second->directory!=item.directory)fail("Updated 7Z directory does not match the requested changes");
+            if(item.size&&found->second->encrypt&&!item.encrypted)fail("Updated 7Z did not preserve encryption");}
+        if(headers&&!items.empty()&&!verify.encryptedHeaders())fail("Updated 7Z did not preserve encrypted headers");
+        count=items.size();
+    }
+    seven_test(temporary,password,7,false);commit(original,source,temporary,backup,revision,count);
 }

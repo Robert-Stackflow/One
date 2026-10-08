@@ -3,7 +3,7 @@ import {isAbsolute,resolve} from 'node:path';
 import type {ArchiveEdit} from '../shared/archive';
 
 /** Bounded binary plan; user paths and comments never become command arguments. */
-export async function zipEditPacket(changes:ArchiveEdit[]):Promise<Buffer>{
+export async function archiveEditPacket(changes:ArchiveEdit[]):Promise<Buffer>{
  if(!Array.isArray(changes)||!changes.length||changes.length>10000)throw Error('请选择 1–10000 项修改');
  const records:Buffer[]=[];
  const text=(value:unknown,limit=65535)=>{if(typeof value!=='string'||value.includes('\0')||Buffer.byteLength(value)>limit)throw Error('压缩包修改内容无效或过长');const bytes=Buffer.from(value),size=Buffer.alloc(4);size.writeUInt32LE(bytes.length);return Buffer.concat([size,bytes]);};

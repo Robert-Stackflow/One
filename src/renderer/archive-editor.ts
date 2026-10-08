@@ -44,6 +44,7 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
  const render=()=>{
   const listing=options.listing();find('#archive-editor').hidden=!listing?.editable;
   for(const button of root.querySelectorAll<HTMLButtonElement>('[data-archive-edit]'))button.disabled=busy||!listing?.editable;
+  find<HTMLButtonElement>('[data-archive-edit="comment"]').hidden=!!listing&&!/\.zip$/i.test(listing.path);
   find('#archive-edit-preview').hidden=!drafts.length;
   find('#archive-edit-summary').textContent=`待保存 · ${drafts.length} 项变更`;
   find('#archive-edit-changes').innerHTML=drafts.map((draft,index)=>`<li><span>${esc(draft.description)}</span><button class="icon-button quiet" data-remove-change="${index}" aria-label="移除变更">${icon('close')}</button></li>`).join('');

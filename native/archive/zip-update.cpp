@@ -10,111 +10,10 @@
 #include "mz_zip.h"
 #include "mz_zip_rw.h"
 #include "zip-common.h"
+#include "update-common.h"
 
 namespace {
-struct File {
-    HANDLE handle = INVALID_HANDLE_VALUE;
-    explicit File(const fs::path &path, DWORD access = FILE_READ_ATTRIBUTES,
-                  DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE) {
-        handle = CreateFileW(path.c_str(), access, share, nullptr, OPEN_EXISTING,
-                             FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        if (handle == INVALID_HANDLE_VALUE) fail("Cannot lock archive or input file");
-        BY_HANDLE_FILE_INFORMATION info{};
-        if (!GetFileInformationByHandle(handle, &info) ||
-            (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY))) {
-            CloseHandle(handle); handle = INVALID_HANDLE_VALUE;
-            fail("Archive or input is not a regular file");
-        }
-    }
-    ~File() { close(); }
-    void close() { if (handle != INVALID_HANDLE_VALUE) { CloseHandle(handle); handle = INVALID_HANDLE_VALUE; } }
-    File(const File &) = delete;
-    File &operator=(const File &) = delete;
-};
-std::string stamp(HANDLE handle) {
-    BY_HANDLE_FILE_INFORMATION info{};
-    if (!GetFileInformationByHandle(handle, &info)) fail("Cannot check archive revision");
-    return std::to_string(info.dwVolumeSerialNumber) + ":" + std::to_string(info.nFileIndexHigh) + ":" +
-        std::to_string(info.nFileIndexLow) + ":" + std::to_string(info.nFileSizeHigh) + ":" +
-        std::to_string(info.nFileSizeLow) + ":" + std::to_string(info.ftLastWriteTime.dwHighDateTime) + ":" +
-        std::to_string(info.ftLastWriteTime.dwLowDateTime);
-}
-std::wstring key(const std::string &name) {
-    auto value = wide(name);
-    std::replace(value.begin(), value.end(), L'\\', L'/');
-    while (!value.empty() && value.back() == L'/') value.pop_back();
-    std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch) { return std::towlower(ch); });
-    return value;
-}
-std::string canonical(std::string name, bool directory) {
-    std::replace(name.begin(), name.end(), '\\', '/');
-    while (directory && !name.empty() && name.back() == '/') name.pop_back();
-    if (directory) name += '/';
-    if (!safe_entry(name, directory)) fail("Invalid archive path: " + name);
-    wide(name); // Reject malformed UTF-8 before writing it into a ZIP header.
-    return name;
-}
-struct Plan {
-    std::vector<unsigned char> bytes;
-    size_t cursor = 0;
-    Plan() {
-        unsigned char header[4];
-        if (std::fread(header, 1, 4, stdin) != 4) fail("Missing ZIP update plan");
-        uint32_t size = uint32_t(header[0]) | (uint32_t(header[1]) << 8) |
-                        (uint32_t(header[2]) << 16) | (uint32_t(header[3]) << 24);
-        if (size < 4 || size > 4 * 1024 * 1024) fail("ZIP update plan exceeds limits");
-        bytes.resize(size);
-        if (std::fread(bytes.data(), 1, size, stdin) != size) fail("Incomplete ZIP update plan");
-    }
-    uint32_t number() {
-        if (bytes.size() - cursor < 4) fail("Incomplete ZIP update plan");
-        uint32_t value = uint32_t(bytes[cursor]) | (uint32_t(bytes[cursor+1]) << 8) |
-                         (uint32_t(bytes[cursor+2]) << 16) | (uint32_t(bytes[cursor+3]) << 24);
-        cursor += 4; return value;
-    }
-    std::string text(size_t limit = 65535) {
-        uint32_t size = number();
-        if (size > limit || size > bytes.size() - cursor) fail("Invalid ZIP update string");
-        std::string value(reinterpret_cast<const char *>(bytes.data() + cursor), size);
-        cursor += size;
-        if (value.find('\0') != std::string::npos) fail("ZIP update contains a null character");
-        wide(value); return value;
-    }
-};
-struct OutputEntry {
-    std::string name;
-    bool directory = false;
-    bool removed = false;
-    fs::path source;
-    bool encrypt = false;
-};
-void check_tree(const std::vector<OutputEntry> &nodes) {
-    std::map<std::wstring, bool> paths;
-    for (const auto &node : nodes) if (!node.removed) {
-        if (!safe_entry(node.name, node.directory)) fail("Invalid archive path: " + node.name);
-        if (!paths.emplace(key(node.name), node.directory).second) fail("Duplicate archive path: " + node.name);
-    }
-    for (const auto &[name, directory] : paths) {
-        size_t end = name.find('/');
-        while (end != std::wstring::npos) {
-            auto found = paths.find(name.substr(0, end));
-            if (found != paths.end() && !found->second) fail("A file blocks a parent directory");
-            end = name.find('/', end + 1);
-        }
-    }
-}
-void check_source(const fs::path &source) {
-    DWORD attributes = GetFileAttributesW(source.c_str());
-    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
-        (!fs::is_regular_file(source) && !fs::is_directory(source))) fail("Source is missing, a link or a special file");
-    // Checking every component also rejects a source reached through a junction.
-    fs::path current;
-    for (const auto &component : fs::absolute(source)) {
-        current /= component;
-        auto part = GetFileAttributesW(current.c_str());
-        if (part != INVALID_FILE_ATTRIBUTES && (part & FILE_ATTRIBUTE_REPARSE_POINT)) fail("Source uses a link or junction");
-    }
-}
+using namespace archive_update;
 struct RenameInfo { std::string name; std::vector<uint8_t> extra; std::string comment; Reader *reader = nullptr; };
 int32_t rename_metadata(void *, void *opaque, mz_zip_file *info) {
     auto &context = *static_cast<RenameInfo *>(opaque);
@@ -146,14 +45,10 @@ struct Writer {
 };
 }
 
-std::string zip_revision(const fs::path &source) { File file(source); return stamp(file.handle); }
 
 void zip_update(const fs::path &source, const fs::path &temporary, const fs::path &backup,
                 int encoding, const std::string &revision, const std::string &password) {
-    if (fs::absolute(source).parent_path() != fs::absolute(temporary).parent_path() ||
-        fs::absolute(source).parent_path() != fs::absolute(backup).parent_path() ||
-        fs::exists(temporary) || fs::exists(backup)) fail("ZIP staging paths must be new files beside the original");
-    check_source(source);
+    check_staging(source,temporary,backup);
     // Deny writes/deletion throughout preflight, rewrite and verification.
     File original(source, GENERIC_READ, FILE_SHARE_READ);
     if (stamp(original.handle) != revision) fail("Archive changed; reopen it before saving changes");
@@ -181,54 +76,7 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         // Verify the original too, including entries the user will remove. Never
         // silently discard corrupt/encrypted data without a successful full test.
         zip_test(reader, items, password, false);
-        uint32_t count = plan.number();
-        if (!count || count > 10000) fail("ZIP update has too many or no changes");
-        for (uint32_t action = 0; action < count; ++action) {
-            uint32_t kind = plan.number(), index = plan.number(), replace = plan.number();
-            std::string name = plan.text(), input = plan.text(131072);
-            if (replace > 1) fail("Invalid replacement mode");
-            if (kind == 1 || kind == 2) {
-                if (index >= old_count) fail("Selected ZIP entry no longer exists");
-                if (nodes[index].removed) { if (kind == 1) continue; fail("Selected ZIP entry no longer exists"); }
-                auto previous = nodes[index].name;
-                auto prefix = key(previous);
-                bool directory = nodes[index].directory;
-                std::string next = kind == 2 ? canonical(name, directory) : "";
-                for (auto &node : nodes) if (!node.removed &&
-                    (key(node.name) == prefix || (directory && key(node.name).starts_with(prefix + L'/')))) {
-                    if (kind == 1) node.removed = true;
-                    else node.name = next + node.name.substr(previous.size());
-                }
-            } else if (kind == 3) {
-                nodes.push_back({canonical(name, true), true});
-            } else if (kind == 4) {
-                fs::path input_path = fs::u8path(input);
-                if (!input_path.is_absolute()) fail("ZIP input must be an absolute path");
-                check_source(input_path);
-                bool directory = fs::is_directory(input_path);
-                auto destination = canonical(name, directory);
-                auto add = [&](const fs::path &file, std::string target) {
-                    check_source(file);
-                    bool folder = fs::is_directory(file);
-                    target = canonical(target, folder);
-                    auto match = key(target);
-                    bool encrypt = encrypted;
-                    for (auto &node : nodes) if (!node.removed && key(node.name) == match) {
-                        if (folder && node.directory) return; // Merge an existing directory.
-                        if (!replace || folder || node.directory) fail("Adding this item would overwrite an existing entry: " + target);
-                        encrypt = node.encrypt; node.removed = true;
-                    }
-                    if (fs::equivalent(file, source)) fail("Cannot add the archive to itself");
-                    nodes.push_back({target, folder, false, file, encrypt});
-                    if (nodes.size() > 1000000) fail("ZIP contains too many entries");
-                };
-                add(input_path, destination);
-                if (directory) for (const auto &entry : fs::recursive_directory_iterator(input_path, fs::directory_options::none))
-                    add(entry.path(), destination + utf8(entry.path().lexically_relative(input_path).generic_wstring()));
-            } else if (kind == 5) comment = name;
-            else fail("Unknown ZIP update action");
-        }
-        if (plan.cursor != plan.bytes.size()) fail("Unexpected trailing ZIP update data");
+        apply_plan(plan,nodes,source,encrypted,&comment);
         check_tree(nodes);
         uint64_t needed = 0;
         for (size_t i = 0; i < nodes.size(); ++i) if (!nodes[i].removed) {
@@ -296,33 +144,5 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         zip_preflight(verify, items);
         zip_test(verify, items, password, false);
     }
-    // Persist the staging bytes before the atomic same-volume replacement.
-    {
-        File flush(temporary, GENERIC_WRITE, FILE_SHARE_READ);
-        if (!FlushFileBuffers(flush.handle)) fail("Cannot flush staging ZIP");
-    }
-    if (stamp(original.handle) != revision) fail("Archive changed while saving");
-    emit("{\"type\":\"ready\"}");
-    // The host first disables cancellation, then acknowledges commit. Killing a
-    // task before this handshake can never replace the original archive.
-    if (std::fgetc(stdin) != 1) fail("ZIP update was cancelled before commit");
-    original.close();
-    if (zip_revision(source) != revision) fail("Archive changed before commit");
-    if (!ReplaceFileW(source.c_str(), temporary.c_str(), backup.c_str(), 0, nullptr, nullptr)) {
-        DWORD error = GetLastError();
-        if (!fs::exists(source) && fs::exists(backup) && !MoveFileExW(backup.c_str(), source.c_str(), MOVEFILE_WRITE_THROUGH))
-            fail("Cannot restore original; recovery copy: " + utf8(backup.wstring()));
-        if (fs::exists(backup)) fail("Cannot replace ZIP; recovery copy: " + utf8(backup.wstring()) +
-                                   " (Windows error " + std::to_string(error) + ")");
-        fail("Cannot replace ZIP; original retained (Windows error " + std::to_string(error) + ")");
-    }
-    // A concurrent rename in the final, tiny path handover must not overwrite
-    // an unseen revision. Preserve and restore the actual replaced file.
-    if (zip_revision(backup) != revision) {
-        if (!ReplaceFileW(source.c_str(), backup.c_str(), nullptr, 0, nullptr, nullptr))
-            fail("Archive changed during commit; recovery copy: " + utf8(backup.wstring()));
-        fail("Archive changed during commit; no changes saved");
-    }
-    DeleteFileW(backup.c_str()); // A failed deletion leaves a recoverable original.
-    emit("{\"type\":\"result\",\"count\":" + std::to_string(final_count) + "}");
+    commit(original,source,temporary,backup,revision,final_count);
 }

@@ -84,7 +84,7 @@ async function main(){
   const protectedInfo=await list(zip),protectedBytes=await fs.readFile(zip);await assert.rejects(run({operation:'update',path:zip,revision:protectedInfo.revision,changes:[{kind:'add',source:links,name:'links'}]}),/link|junction/i);assert.deepEqual(await fs.readFile(zip),protectedBytes);
   // Killing before the commit handshake cannot modify the original.
   const cancellationBefore=await list(zip),cancellationBytes=await fs.readFile(zip);
-  const {zipEditPacket}=await importPacket();const packet=await zipEditPacket([{kind:'mkdir',name:'never-committed'}]);
+  const {archiveEditPacket}=await importPacket();const packet=await archiveEditPacket([{kind:'mkdir',name:'never-committed'}]);
   const temp=path.join(root,'cancel-stage.zip'),backup=path.join(root,'cancel-backup.zip');
   await new Promise((resolve,reject)=>{const child=spawn(helper,['update',zip,temp,backup,'0',cancellationBefore.revision],{windowsHide:true,stdio:'pipe'});let text='',ready=false;
    const timeout=setTimeout(()=>{child.kill();reject(Error('update handshake timeout'));},30000);
