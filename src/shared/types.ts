@@ -106,6 +106,7 @@ export interface OneAPI {
   colorShortcutStatus():Promise<{active:boolean;error:string}>;retryColorShortcut():Promise<{active:boolean;error:string}>;onColorShortcutStatus(callback:(status:{active:boolean;error:string})=>void):()=>void;
   onColorSample(callback:(value:ScreenCapture)=>void):()=>void; colorFrame():Promise<void>; recordShortcut(active:boolean,token:string):Promise<void>;onShortcutCaptured(callback:(value:{token:string;vk?:number;ctrlKey?:boolean;altKey?:boolean;shiftKey?:boolean;metaKey?:boolean;released?:boolean})=>void):()=>void; onPreviewClosing(callback:()=>void):()=>void;
   hotkeyConflict(shortcut:string,field:string):Promise<{source:'one'|'external'|'none';label:string}>;
+  hotkeyOwner(shortcut:string,mode:'auto'|'manual',elevated:boolean):Promise<import('../main/hotkey-owner').HotkeyOwnerResult>;
   openFile(path: string): Promise<void>; revealFile(path: string): Promise<void>; startFileDrag(path:string):Promise<void>; searchText(text: string): Promise<void>;
   sendToWorkbench(text: string): Promise<void>; inputStatus(): Promise<{ hook: boolean; native: boolean; error: string }>;
   pickerData(path?: string): Promise<import('./picker').PickerData>; pickerChoose(path: string, overwrite?: boolean): Promise<{ overwrite: boolean }>;

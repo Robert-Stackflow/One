@@ -37,6 +37,7 @@ import {LocksmithService} from './locksmith';
 import {SearchService} from './search-service';
 import {SearchBridge} from './search-bridge';
 import {ShortcutCapture} from './shortcut-capture';
+import {locateHotkeyOwner,cancelHotkeyOwner} from './hotkey-owner';
 import type {SearchContext} from '../shared/search';
 import {AwakeService} from './awake';
 import {TopmostService} from './topmost';
@@ -119,7 +120,7 @@ const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
-let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
+let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
 let colorFreezeWindows:BrowserWindow[]=[],colorFreezeBusy=false,colorSession=0;
 let colorZoomActive=false,colorZoomCardBounds:Electron.Rectangle|undefined;
 const shortcutCapture=new ShortcutCapture();let activeShortcutToken='';
@@ -281,7 +282,7 @@ function echo(text:string,channel?:import('../shared/echo').EchoChannel){echoes?
 function textValue(value: unknown, limit = 10_000_000): string { if (typeof value !== 'string' || value.length > limit) throw new Error('文本参数无效或超过长度上限'); return value; }
 function filePath(value: unknown): string { if (typeof value !== 'string' || value.length > 32768 || !isAbsolute(value) || value.includes('\0')) throw new Error('文件路径无效'); return resolve(value); }
 const fileActionIPC=new Set(['file-action-data','window-action','window-state','settings','app-info','file-icons','file-icon','shell-icons','file-tools-run','file-tools-cancel','file-tools-page','file-tools-history','lock-state','lock-scan','lock-cancel','lock-end','pick-file','pick-directory','drop-path-kinds','open-file','reveal-file','native-context-menu','preview','copy-text','file-tools-overview','appearance']);
-const auditedIPC=new Set(['patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate']);
+const auditedIPC=new Set(['patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate','hotkey-owner']);
 function handle(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown, allowed = ['main']) {
   ipcMain.handle(`one:${name}`, async(event, ...args) => {const start=performance.now(),role=roles.get(event.sender.id)||'unknown';try{if (!(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效');const result=await handler(event,...args);if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'ok');return result;}catch(error){if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'error');runtimeError(app.getPath('userData'),`ipc:${name}`,error);throw error;} });
 }
@@ -481,7 +482,7 @@ function hotkeyConflict(shortcut:string,field:string){
  const match=own.find(([id,,value,enabled])=>id!==field&&enabled&&value&&normalize(value)===wanted);
  if(match)return {source:'one' as const,label:`One 的「${match[1]}」正在使用`};
  const accelerator=shortcut.replace(/\bCtrl\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');
- try{if(globalShortcut.isRegistered(accelerator))return {source:'external' as const,label:'热键已注册；退出录入后按下组合键，观察哪个程序响应'};if(!globalShortcut.register(accelerator,()=>{}))return {source:'external' as const,label:'被其他程序或 Windows 占用；退出录入后按下组合键查看响应'};globalShortcut.unregister(accelerator);return {source:'none' as const,label:''};}
+ try{if(globalShortcut.isRegistered(accelerator))return {source:'external' as const,label:'热键已注册'};if(!globalShortcut.register(accelerator,()=>{}))return {source:'external' as const,label:'其他程序或 Windows 已占用'};globalShortcut.unregister(accelerator);return {source:'none' as const,label:''};}
  catch{return {source:'external' as const,label:'此组合键无法注册；可能是 Windows 保留快捷键'};}
 }
 function colorShortcut(value:string){
@@ -659,6 +660,19 @@ function registerIPC() {
   handle('choose-color',async(event,value)=>{if(typeof value!=='string'||!/^#[0-9a-f]{6}$/i.test(value))throw new Error('颜色无效');await acceptColor(value.toUpperCase(),roles.get(event.sender.id)==='color-picker');},['color-picker','color-editor','main']);
     handle('record-shortcut',(_event,active,token)=>{if(typeof active!=='boolean'||typeof token!=='string'||!token||token.length>80)throw new Error('参数无效');return active?startShortcutRecording(token):stopShortcutRecording(token);},['main']);
     handle('hotkey-conflict',(_event,shortcut,field)=>hotkeyConflict(shortcut,field),['main']);
+    handle('hotkey-owner',async(_event,shortcut,mode,elevated)=>{
+      if(mode!=='auto'&&mode!=='manual'||typeof elevated!=='boolean')throw new Error('热键诊断方式无效');
+      if(hotkeyProbeRunning)return {status:'error',message:'热键诊断正在运行'};
+      hotkeyProbeRunning=true;stopShortcutRecording();
+      runtimeLog(app.getPath('userData'),'hotkey-probe-start',`mode=${mode} elevated=${elevated}`);
+      try{
+        globalShortcut.setSuspended(true);
+        const result=await locateHotkeyOwner(shortcut,mode,elevated);
+        runtimeLog(app.getPath('userData'),'hotkey-probe-result',`status=${result.status}${result.status==='found'?` pid=${result.pid}`:''}`);
+        return result;
+      }catch(error){runtimeError(app.getPath('userData'),'hotkey-probe-error',error);throw error;}
+      finally{globalShortcut.setSuspended(false);hotkeyProbeRunning=false;}
+    },['main']);
   // The default floating level reorders behind the taskbar, which can clear WS_EX_TOPMOST on Windows.
   handle('preview-preferences',async(_event,value)=>{if(value===undefined)return settings.preview;return (await saveSettings(current=>mergeSettings(current,{preview:value}))).preview;},['preview']);
   handle('preview-open-with',event=>{const data=previews.get(event.sender.id);if(!data)throw new Error('预览尚未准备');return openWithApplications(data.path);},['preview']);
@@ -816,5 +830,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop(); quitting=true;cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

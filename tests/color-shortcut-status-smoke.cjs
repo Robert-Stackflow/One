@@ -31,7 +31,7 @@ async function run() {
     await expect.poll(() => page.evaluate(async () => (await window.one.settings()).colorShortcut)).toBe('Alt+Shift+X');
     await expect.poll(() => page.evaluate(async () => (await window.one.colorShortcutStatus()).error)).toContain('已被占用');
     await expect(page.locator('#color-shortcut-notice')).toBeVisible();
-    await expect(page.locator('#color-shortcut-message')).toContainText('被其他程序或 Windows 占用');
+    await expect(page.locator('#color-shortcut-message')).toContainText('快捷键已被占用');
     await expect(page.locator('.color-shortcut-field .shortcut-conflict-hint')).toHaveCount(0);
     const messageBox = await page.locator('#color-shortcut-notice').boundingBox();
     const inputBox = await page.locator('.color-shortcut-field .shortcut-control').boundingBox();
@@ -43,6 +43,8 @@ async function run() {
     await page.screenshot({ path: path.join(output, 'conflict.png') });
     await expect(page.locator('#toast')).toBeHidden();
     await app.evaluate(({ globalShortcut }) => { globalShortcut.register = () => true; });
+    await page.locator('#color-shortcut-details').click();
+    await expect(page.locator('#color-shortcut-details-dialog [data-shortcut-status]')).toContainText('已被占用');
     await page.locator('#color-shortcut-retry').click();
     await expect(page.locator('#color-shortcut-notice')).toBeHidden();
     assert.deepEqual(await page.evaluate(() => window.one.colorShortcutStatus()), { active: true, error: '' });

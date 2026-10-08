@@ -29,6 +29,11 @@ const levelsBuild=await run('cmd.exe',['/d','/c',resolve('work/build-levels.cmd'
 const monitorBuild=await run('cmd.exe',['/d','/c',resolve('work/build-monitor.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(monitorBuild.stdout);
 const windowBuild=await run('cmd.exe',['/d','/c',resolve('work/build-window-tools.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(windowBuild.stdout);
 const shortcutBuild=await run('cmd.exe',['/d','/c',resolve('work/build-shortcut.cmd')],{cwd:resolve('.'),windowsHide:true});process.stdout.write(shortcutBuild.stdout);
+for(const arch of [64,32]){
+ const file=resolve(`work/build-hotkey${arch}.cmd`),tag=arch===64?'64':'32';
+ await writeFile(file,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars${tag}.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /LD /DUNICODE /D_UNICODE native\\hotkey-probe-hook.cpp /Fe:dist\\native\\One.HotkeyHook${tag}.dll /Fo:work\\hotkey-hook${tag}.obj /link /IMPLIB:work\\One.HotkeyHook${tag}.lib ${arch===32?'/EXPORT:OneHotkeyProbeHook=_OneHotkeyProbeHook@12 ':''}user32.lib\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE native\\hotkey-probe.cpp /Fe:dist\\native\\One.HotkeyProbe${arch===32?'32':''}.exe /Fo:work\\hotkey-probe${tag}.obj /link /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup user32.lib advapi32.lib\r\n`, 'utf8');
+ const built=await run('cmd.exe',['/d','/c',file],{cwd:resolve('.'),windowsHide:true});process.stdout.write(built.stdout);
+}
 const result=await run('cmd.exe',['/d','/c',script],{cwd:resolve('.'),windowsHide:true});process.stdout.write(result.stdout);process.stderr.write(result.stderr);
 const cargoTarget=resolve(process.env.CARGO_TARGET_DIR||'work/rust-search');
 await run('cargo',['build','--release','--locked','--manifest-path','native/search-engine/Cargo.toml'],{cwd:resolve('.'),windowsHide:true,env:{...process.env,CARGO_TARGET_DIR:cargoTarget,RUSTFLAGS:'-C target-feature=+crt-static'},maxBuffer:4*1024*1024});
