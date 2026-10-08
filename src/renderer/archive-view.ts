@@ -2,7 +2,7 @@ import {api,esc,icon} from './ui';
 import {installFileDropOverlay} from './file-drop-overlay';
 import {archivePreferences} from './archive-settings';
 import {archiveEditorMarkup,setupArchiveEditor} from './archive-editor';
-import type {ArchiveListing,ArchiveEncoding,ArchiveProgress} from '../shared/archive';
+import type {ArchiveListing,ArchiveEncoding,ArchiveProgress,ArchiveConflict} from '../shared/archive';
 import './archive-view.css';
 
 export function archivePage(){return `<div class="archive-workspace">
@@ -21,8 +21,8 @@ export function archivePage(){return `<div class="archive-workspace">
   ${archiveEditorMarkup()}
   <div id="archive-list" class="archive-list"><div class="archive-empty">选择压缩包后查看其中的内容</div></div><button id="archive-more" type="button" hidden>加载更多</button>
   <div class="archive-fields archive-destination"><label>解压到<input id="archive-parent" placeholder="选择目标文件夹"></label><button id="archive-parent-pick" type="button">选择文件夹</button></div>
-  <div class="archive-fields"><label>解压方式<select id="archive-destination-mode"><option value="folder">解压到同名文件夹</option><option value="smart">智能解压</option></select></label></div>
-  <div class="archive-actions"><p>智能解压时，单个顶层项目直接放入目标目录；多个项目放入同名文件夹。已有内容不会被覆盖。</p><button id="archive-extract-selected" type="button">解压选中项</button><button id="archive-extract-all" class="primary" type="button">全部解压</button></div>
+  <div class="archive-fields"><label>解压方式<select id="archive-destination-mode"><option value="folder">解压到同名文件夹</option><option value="smart">智能解压</option><option value="here">解压至此</option></select></label><label id="archive-conflict-row" hidden>同名文件<select id="archive-conflict"><option value="rename">自动重命名 · 保留原文件</option><option value="skip">跳过</option><option value="replace">替换文件</option></select></label></div>
+  <div class="archive-actions"><p id="archive-destination-hint">智能解压时，单个顶层项目直接放入目标目录；多个项目放入同名文件夹。已有内容不会被覆盖。</p><button id="archive-extract-selected" type="button">解压选中项</button><button id="archive-extract-all" class="primary" type="button">全部解压</button></div>
  </section>
  <div id="archive-status" class="archive-status" role="status" hidden><span id="archive-status-text"></span><button id="archive-cancel" type="button" hidden>取消</button></div>
  </div>`;}
@@ -33,7 +33,7 @@ export function setupArchiveView(){
  const field=(selector:string)=>{const input=find<HTMLInputElement>(selector);return input.type==='password'?input.value:input.value.trim();};
  let mode:'create'|'browse'='create',listing:ArchiveListing|undefined,busy=false,taskId='',creationFormat='zip';
  const openCompleted=find<HTMLInputElement>('#archive-open-completed');
- const preferencesReady=archivePreferences().then(value=>{openCompleted.checked=value.openCompleted;find<HTMLSelectElement>('#archive-format').value=value.defaultFormat;find<HTMLSelectElement>('#archive-format').dispatchEvent(new Event('change'));});
+ const preferencesReady=archivePreferences().then(value=>{openCompleted.checked=value.openCompleted;find<HTMLSelectElement>('#archive-conflict').value=value.conflict;find<HTMLSelectElement>('#archive-format').value=value.defaultFormat;find<HTMLSelectElement>('#archive-format').dispatchEvent(new Event('change'));});
  void preferencesReady.catch(error=>status(error instanceof Error?error.message:String(error)));
  api.onArchivePreferences(value=>{openCompleted.checked=value.openCompleted;if(!busy&&!field('#archive-target')&&!field('#archive-sources')){find<HTMLSelectElement>('#archive-format').value=value.defaultFormat;find<HTMLSelectElement>('#archive-format').dispatchEvent(new Event('change'));}});
  openCompleted.onchange=()=>{void api.patchSettings({archive:{openCompleted:openCompleted.checked}}).catch(error=>{status(error instanceof Error?error.message:String(error));void archivePreferences().then(value=>openCompleted.checked=value.openCompleted).catch(()=>{});});};
@@ -65,7 +65,9 @@ export function setupArchiveView(){
  find<HTMLSelectElement>('#archive-encoding').onchange=()=>{if(field('#archive-source'))void load();};
  find<HTMLButtonElement>('#archive-parent-pick').onclick=async()=>{const folder=await api.pickDirectory();if(folder)find<HTMLInputElement>('#archive-parent').value=folder;};
  find<HTMLButtonElement>('#archive-test').onclick=()=>{const source=listing?.path;if(!source)return;void run(id=>api.archiveRun({operation:'test',path:source,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value)status(`校验完成：${value.count} 项`);});};
- const extract=(selected:number[])=>{if(!listing)return;const parent=field('#archive-parent');if(!parent)return status('请选择解压目标文件夹');return run(id=>api.archiveRun({operation:'extract',path:listing!.path,parent,destination:field('#archive-destination-mode') as 'folder'|'smart',selected,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value){status(`已解压 ${value.count} 项到 ${value.path}`);if(openCompleted.checked)void api.revealFile(value.path);}});};
+ const destinationHint=()=>{const here=field('#archive-destination-mode')==='here';find('#archive-conflict-row').hidden=!here;find('#archive-destination-hint').textContent=here?(field('#archive-conflict')==='replace'?'替换已有同名文件；同名文件夹合并，保留其他内容。替换前保留恢复副本，异常时提示恢复位置。':'直接解压到上方目标目录；同名文件夹合并，已有文件按所选方式处理。'):'智能解压时，单个顶层项目直接放入目标目录；多个项目放入同名文件夹。已有内容不会被覆盖。';};
+ find<HTMLSelectElement>('#archive-destination-mode').onchange=destinationHint;find<HTMLSelectElement>('#archive-conflict').onchange=destinationHint;
+ const extract=(selected:number[])=>{if(!listing)return;const parent=field('#archive-parent');if(!parent)return status('请选择解压目标文件夹');return run(id=>api.archiveRun({operation:'extract',path:listing!.path,parent,destination:field('#archive-destination-mode') as 'folder'|'smart'|'here',conflict:field('#archive-conflict') as ArchiveConflict,selected,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value){status(value.cancelled?'已取消解压，已恢复本次改动':`已解压 ${value.count} 项${value.skipped?`，跳过 ${value.skipped} 项`:''}到 ${value.path}`);if(!value.cancelled&&openCompleted.checked)void api.revealFile(value.path);}});};
  find<HTMLButtonElement>('#archive-extract-all').onclick=()=>extract([]);
  find<HTMLButtonElement>('#archive-extract-selected').onclick=()=>{const selected=[...root.querySelectorAll<HTMLInputElement>('.archive-entry input:checked')].map(input=>Number(input.value));if(!selected.length)return status('请先选择要解压的项目');extract(selected);};
  find('#archive-list').ondragstart=event=>{
@@ -89,7 +91,7 @@ export function setupArchiveView(){
     if(action==='create'){showMode('create');find<HTMLTextAreaElement>('#archive-sources').value='';find<HTMLInputElement>('#archive-target').value='';find<HTMLSelectElement>('#archive-format').value=(await archivePreferences()).defaultFormat;find<HTMLSelectElement>('#archive-format').dispatchEvent(new Event('change'));addPaths(paths);return;}
     if(paths.length!==1)return status('请选择一个压缩包');
     showMode('browse');find<HTMLInputElement>('#archive-source').value=paths[0];find<HTMLInputElement>('#archive-password').value='';find<HTMLInputElement>('#archive-parent').value='';
-    if(action==='smart')find<HTMLSelectElement>('#archive-destination-mode').value='smart';
+    if(action==='smart'){find<HTMLSelectElement>('#archive-destination-mode').value='smart';destinationHint();}
     const opened=await load();
     if(action==='smart'&&opened&&listing)await extract([]);
    };

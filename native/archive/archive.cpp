@@ -368,6 +368,7 @@ static int archive_format(const std::wstring &path) {
 }
 
 int wmain(int argc, wchar_t **argv) {
+    std::setvbuf(stdin,nullptr,_IONBF,0);
     _setmode(_fileno(stdout), _O_BINARY);
     try {
         if (argc < 3) fail("Usage: One.Archive.exe list|create|extract|test ...");
@@ -398,6 +399,9 @@ int wmain(int argc, wchar_t **argv) {
                 if (volume_size) fail("This archive format does not support volumes");
                 seven_create(argv[2], paths, password, format);
             } else fail("This archive format is read-only");
+        } else if (mode == L"publish") {
+            if(argc!=6&&argc!=7)fail("Publish requires extraction staging, parent, recovery and conflict policy");
+            extract_publish(argv[2],argv[3],argv[4],utf8(argv[5]),argc==7?fs::path(argv[6]):fs::path{});
         } else if (mode == L"drag" || mode == L"drag-test") {
             if (argc < 6 || argc > 8) fail("Drag requires a staging directory, encoding and revision");
             archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", argc >= 7 ? std::stoull(argv[6]) : 0, argc == 8 ? fs::path(argv[7]) : fs::path{});

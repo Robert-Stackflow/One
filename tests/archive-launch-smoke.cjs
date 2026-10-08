@@ -15,11 +15,13 @@ async function main(){
   await build({entryPoints:['src/main/archive-launch.ts'],outfile:launch,bundle:true,platform:'node'});
   const {defaultSettings,validateSettings,mergeSettings}=require(prefs),{archiveLaunchPath}=require(launch);
   const old=defaultSettings();delete old.archive;
-  assert.deepEqual(validateSettings(old).archive,{doubleClick:'smart',defaultFormat:'zip',openCompleted:false});
+  assert.deepEqual(validateSettings(old).archive,{doubleClick:'smart',defaultFormat:'zip',openCompleted:false,conflict:'rename'});
+  const legacy=defaultSettings();delete legacy.archive.conflict;assert.equal(validateSettings(legacy).archive.conflict,'rename');
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{doubleClick:'delete'}}));
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{openCompleted:'true'}}));
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{defaultFormat:'rar'}}));
-  const backed=mergeSettings(defaultSettings(),{archive:{doubleClick:'browse',defaultFormat:'7z',openCompleted:true}});
+  assert.throws(()=>mergeSettings(defaultSettings(),{archive:{conflict:'erase'}}));
+  const backed=mergeSettings(defaultSettings(),{archive:{doubleClick:'browse',defaultFormat:'7z',openCompleted:true,conflict:'skip'}});
   assert.deepEqual(validateSettings(JSON.parse(JSON.stringify(backed))).archive,backed.archive);
   assert.equal(archiveLaunchPath(['One.exe','--one-login-startup']),undefined);
   assert.equal(archiveLaunchPath(['One.exe','--one-archive=D:\\压缩 测试\\test.7z.001']),'D:\\压缩 测试\\test.7z.001');

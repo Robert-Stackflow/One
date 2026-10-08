@@ -12,6 +12,7 @@ std::wstring wide(const std::string &value);
 std::string json(const std::string &value);
 void emit(const std::string &line);
 bool archive_cancelled();
+void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path &recovery,const std::string &conflict,const fs::path &archive={});
 [[noreturn]] void fail(const std::string &message);
 bool safe_entry(const std::string &name, bool directory);
 fs::path entry_path(const std::string &name);

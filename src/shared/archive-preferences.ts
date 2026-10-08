@@ -3,14 +3,16 @@ export interface ArchivePreferences {
   doubleClick:'smart'|'browse';
   defaultFormat:typeof archiveFormats[number];
   openCompleted:boolean;
+  conflict:import('./archive').ArchiveConflict;
 }
-export const defaultArchivePreferences=():ArchivePreferences=>({doubleClick:'smart',defaultFormat:'zip',openCompleted:false});
+export const defaultArchivePreferences=():ArchivePreferences=>({doubleClick:'smart',defaultFormat:'zip',openCompleted:false,conflict:'rename'});
 export function validateArchivePreferences(value:unknown):ArchivePreferences {
   const defaults=defaultArchivePreferences();
   if(value===undefined)return defaults;
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('压缩与解压设置无效');
   const input=value as ArchivePreferences;
   if(!['smart','browse'].includes(input.doubleClick)||!archiveFormats.includes(input.defaultFormat)||typeof input.openCompleted!=='boolean')throw Error('压缩与解压设置无效');
-  return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted};
+  const conflict=input.conflict??defaults.conflict;if(!['rename','skip','replace'].includes(conflict))throw Error('解压同名文件设置无效');
+  return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted,conflict};
 }
 export interface ArchiveAssociationState {registered:boolean;available:boolean}

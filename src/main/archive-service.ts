@@ -9,7 +9,7 @@ import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveR
 import {zipEditPacket} from './archive-update';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string};
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
@@ -21,7 +21,7 @@ const composite=(source:string)=>/\.(?:tar\.gz|tar\.xz|tgz|txz)$/i.test(source);
 type CachedTar={path:string;directory:string;stamp:string;users:number;used:number;stale:boolean};
 
 export class ArchiveService {
-  private active=new Map<string,{child:ChildProcessWithoutNullStreams;owner:number;committing:boolean}>();
+  private active=new Map<string,{child:ChildProcessWithoutNullStreams;owner:number;committing:boolean;cooperative:boolean}>();
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
@@ -35,9 +35,9 @@ export class ArchiveService {
     this.cacheMaintenance=this.dragCache.sweep();
   }
   get pendingTasks(){return this.pending.size;}
-  cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){if(task.committing)return false;task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
+  cancel(id:string,owner:number){const task=this.active.get(id);if(task&&task.owner===owner){if(task.cooperative){task.child.stdin.write(Buffer.from([2]));return true;}if(task.committing)return false;task.child.kill();return true;}const publishing=this.publishing.get(id);if(publishing&&publishing.owner===owner){publishing.controller.abort();return true;}return false;}
   async stop(){
-    for(const task of this.active.values())if(!task.committing)task.child.kill();
+    for(const task of this.active.values()){if(task.cooperative)task.child.stdin.write(Buffer.from([2]));else if(!task.committing)task.child.kill();}
     for(const task of this.publishing.values())task.controller.abort();
     await Promise.allSettled([...this.pending]);await this.cacheMaintenance;
     for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
@@ -55,14 +55,13 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test'|'update'|'drag',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
+  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
     return new Promise((done,reject)=>{
       const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe'});
-      const task={child,owner,committing:false};
+      const task={child,owner,committing:false,cooperative:operation==='publish'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',failed=false,settled=false;
       const finish=(reason?:Error)=>{if(settled)return;settled=true;this.active.delete(id);if(reason)reject(reason);else done(data);};
-      if(operation!=='list')this.changed(owner,{id,operation:progressOperation??operation,done:0,total:0});
       child.stdout.setEncoding('utf8');child.stdout.on('data',(chunk:string)=>{
         buffered+=chunk;
         if(buffered.length>2*1024*1024){child.kill();failed=true;error='压缩程序输出超出限制';return;}
@@ -70,10 +69,10 @@ export class ArchiveService {
         while((end=buffered.indexOf('\n'))>=0){const line=buffered.slice(0,end).trim();buffered=buffered.slice(end+1);if(!line)continue;
           try{const message=JSON.parse(line) as Message;
             if(message.type==='ready'){
-              if(!['update','drag'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
-              else{task.committing=true;this.changed(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}
+              if(!['update','drag','publish'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
+              else{task.committing=true;if(operation==='publish'){child.stdin.write(Buffer.from([1]));this.changed(owner,{id,operation:'extract',done:0,total:0});}else{this.changed(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
-            else if(message.type==='progress')this.changed(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??operation as ArchiveProgress['operation'],done:message.done,total:message.total});
+            else if(message.type==='progress')this.changed(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
             else if(message.type==='error'){failed=true;error=message.message;}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
@@ -86,7 +85,10 @@ export class ArchiveService {
       const value=Buffer.from(secret,'utf8'),header=Buffer.alloc(4);header.writeUInt32LE(value.length);
       child.stdin.on('error',()=>{});
       const input=Buffer.concat([header,value,...(packet?[packet]:[])]);
-      if(operation==='update'||operation==='drag')child.stdin.write(input);else child.stdin.end(input);
+      if(operation==='update'||operation==='drag'||operation==='publish')child.stdin.write(input);else child.stdin.end(input);
+      // Initial progress can synchronously request cancellation. Write the
+      // private request frame first so a cooperative cancel byte cannot corrupt it.
+      if(operation!=='list')this.changed(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
     });
   }
   private async acquireSource(owner:number,id:string,source:string):Promise<{path:string;release:()=>void}>{
@@ -267,7 +269,8 @@ export class ArchiveService {
       const source=archiveSource(request.path),parent=path(request.parent),parentInfo=await stat(parent);
       if(!parentInfo.isDirectory())throw Error('请选择目标文件夹');
       const destination=request.destination??'folder';
-      if(destination!=='folder'&&destination!=='smart')throw Error('解压位置模式无效');
+      if(!['folder','smart','here'].includes(destination))throw Error('解压位置模式无效');
+      const conflict=request.conflict??'rename';if(!['rename','skip','replace'].includes(conflict))throw Error('同名文件处理方式无效');
       const selected=request.selected||[];
       if(!Array.isArray(selected)||selected.length>10000||selected.some(value=>!Number.isSafeInteger(value)||value<0))throw Error('选择的条目无效');
       const uniqueTarget=(name:string,file=false)=>{const extension=file?extname(name):'',base=extension?name.slice(0,-extension.length):name;let target=join(parent,name),suffix=2;while(existsSync(target)){target=join(parent,`${base} (${suffix++})${extension}`);if(suffix>10000)throw Error('没有可用的解压目标名称');}return target;};
@@ -277,6 +280,12 @@ export class ArchiveService {
         const messages=await this.execute(owner,id,'extract',[prepared.path,temporary,selected.join(','),String(encoding(request.encoding))],password(request.password));
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认解压成功');
+        if(destination==='here'){
+          const published=await this.execute(owner,id,'publish',[temporary,parent,join(parent,`.one-recovery-${id}`),conflict,source],'');
+          const outcome=published.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
+          if(!outcome)throw Error('压缩程序未确认提交成功');
+          return {path:parent,count:outcome.count,skipped:outcome.skipped??0,cancelled:outcome.cancelled===true};
+        }
         const top=destination==='smart'?await readdir(temporary):[];
         let target:string;
         if(top.length===1){
