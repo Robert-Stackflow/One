@@ -20,6 +20,7 @@
 #include "mz_zip.h"
 #include "mz_zip_rw.h"
 #include "common.h"
+#include "browse.h"
 #include "zip-common.h"
 
 std::string utf8(const std::wstring &value) {
@@ -405,22 +406,36 @@ int wmain(int argc, wchar_t **argv) {
             if(argc!=6&&argc!=7)fail("Publish requires extraction staging, parent, recovery and conflict policy");
             extract_publish(argv[2],argv[3],argv[4],utf8(argv[5]),argc==7?fs::path(argv[6]):fs::path{});
         } else if (mode == L"drag" || mode == L"drag-test") {
-            if (argc < 6 || argc > 8) fail("Drag requires a staging directory, encoding and revision");
-            archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", argc >= 7 ? std::stoull(argv[6]) : 0, argc == 8 ? fs::path(argv[7]) : fs::path{});
+            bool folders=argc>6&&std::wstring_view(argv[argc-1])==L"--folders";
+            int count=argc-(folders?1:0);
+            if (count < 6 || count > 8) fail("Drag requires a staging directory, encoding and revision");
+            archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", count >= 7 ? std::stoull(argv[6]) : 0, count == 8 ? fs::path(argv[7]) : fs::path{},folders);
         } else if (mode == L"update") {
             if (argc != 7 || archive_format(argv[2]) != 0) fail("Update requires a ZIP archive, staging paths, encoding and revision");
             zip_update(argv[2], argv[3], argv[4], _wtoi(argv[5]), utf8(argv[6]), password);
-        } else if (mode == L"list" || mode == L"extract" || mode == L"test") {
+        } else if (mode == L"list" || mode == L"browse" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
-            if (mode == L"list") {
+            bool selected_folders=false;std::string expected_revision;
+            if (mode == L"list" || mode == L"browse") {
                 if (argc != 6) fail("List requires offset, limit and encoding");
                 encoding = _wtoi(argv[5]);
             } else if (mode == L"extract") {
-                if (argc != 6) fail("Extract requires destination, selected indexes and encoding");
+                if(argc<6||argc>8)fail("Extract requires destination, selected indexes and encoding");
+                for(int i=6;i<argc;i++){
+                    const std::wstring_view option=argv[i];
+                    if(option==L"--folders"&&!selected_folders)selected_folders=true;
+                    else if(option.starts_with(L"--revision=")&&expected_revision.empty())expected_revision=utf8(std::wstring(option.substr(11)));
+                    else fail("Invalid extraction option");
+                }
+                if(!expected_revision.empty()&&zip_revision(argv[2])!=expected_revision)fail("Archive changed; reopen it before extracting");
                 encoding = _wtoi(argv[5]);
             } else if (argc == 4) encoding = _wtoi(argv[3]);
             int format = archive_format(argv[2]);
-            if (mode == L"list") {
+            if (mode == L"browse") {
+                const auto query=read_browse_query();size_t offset=std::stoull(argv[3]),limit=std::min<size_t>(500,std::stoull(argv[4]));
+                if(format==0){const auto revision=zip_revision(argv[2]);Reader reader(argv[2],encoding);BrowseRows rows(query);const auto items=zip_entries(reader);for(const auto &entry:items)rows.add(entry);const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(items.size(),zip_comment(reader,comment),revision,disk==0,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
+                else seven_browse(argv[2],offset,limit,password,format,query);
+            } else if (mode == L"list") {
                 size_t offset = std::stoull(argv[3]), limit = std::min<size_t>(500, std::stoull(argv[4]));
                 if (format == 0) {
                     const auto revision = zip_revision(argv[2]);
@@ -439,11 +454,14 @@ int wmain(int argc, wchar_t **argv) {
                     else if (c >= L'0' && c <= L'9') part += c;
                     else fail("Invalid selected entry index");
                 }
+                const auto folders=selected_folders?read_selected_folders():std::vector<std::string>{};
                 if (format == 0) {
                     Reader reader(argv[2], encoding); auto items = zip_entries(reader);
+                    expand_folders(items,selected,folders);
                     if (!selected.empty() && *selected.rbegin() >= items.size()) fail("Selected entry index is out of range");
                     zip_extract(reader, items, argv[3], selected, password);
-                } else seven_extract(argv[2], argv[3], selected, password, format);
+                } else seven_extract(argv[2], argv[3], selected, password, format,true,folders);
+                if(!expected_revision.empty()&&zip_revision(argv[2])!=expected_revision)fail("Archive changed during extraction; reopen it");
             }
         } else fail("Unknown archive operation");
         return 0;

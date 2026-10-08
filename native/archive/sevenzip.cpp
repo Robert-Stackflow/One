@@ -1,5 +1,6 @@
 #include "common.h"
 #include "zip-common.h"
+#include "browse.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -331,6 +332,13 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
     if(zip_revision(source)!=revision)fail("Archive changed during listing; reopen it");
 }
 
+void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query){
+    const auto revision=zip_revision(source);OpenArchive reader(source,password,format);BrowseRows rows(query);
+    const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});}
+    rows.emit_page(total,reader.comment(),revision,false,offset,limit);
+    if(zip_revision(source)!=revision)fail("Archive changed during browsing; reopen it");
+}
+
 std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &password,int format){
     OpenArchive reader(source,password,format);auto items=reader.items();preflight(reader,items);
     std::vector<Entry> result;result.reserve(items.size());
@@ -347,12 +355,13 @@ void seven_test(const fs::path &source,const std::string &password,int format){
 }
 
 void seven_extract(const fs::path &source,const fs::path &destination,
-                   const std::set<size_t> &selected,const std::string &password,int format,bool result){
+                   const std::set<size_t> &selected,const std::string &password,int format,bool result,const std::vector<std::string> &folders){
     OpenArchive reader(source,password,format);auto items=reader.items();
-    if(!selected.empty()&&*selected.rbegin()>=items.size())fail("Selected entry index is out of range");
+    auto effective=selected;expand_folders(items,effective,folders);
+    if(!effective.empty()&&*effective.rbegin()>=items.size())fail("Selected entry index is out of range");
     preflight(reader,items);
     if(fs::exists(destination))fail("Extraction destination already exists");
-    auto indices=selected_indices(items,selected);
+    auto indices=selected_indices(items,effective);
     U64 expected=0;for(U32 index:indices){if(items[index].size>UINT64_MAX-expected)fail("Archive declares too much extracted data");expected+=items[index].size;}
     auto capacity=fs::space(destination.parent_path());constexpr U64 reserve=256ull*1024*1024;
     if(capacity.available!=UINTMAX_MAX&&(capacity.available<=reserve||expected>capacity.available-reserve))

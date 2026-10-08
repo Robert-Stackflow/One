@@ -23,16 +23,16 @@ async function main(){
   });
   await page.waitForSelector('[data-page="archive"]');await page.locator('[data-page="archive"]').click();await page.locator('[data-archive-mode="browse"]').click();
   await page.locator('#archive-source').fill(zip);await page.locator('#archive-password').fill(' 密 码 ');await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(200);
-  await page.locator('.archive-entry input').nth(0).check();await page.locator('#archive-more').click();await expect(page.locator('.archive-entry')).toHaveCount(202);
-  await page.locator('.archive-entry input').nth(201).check();
+  await page.locator('.archive-entry input').nth(0).check();await page.locator('#archive-more').click();await expect(page.locator('.archive-entry')).toHaveCount(2);
+  await page.locator('.archive-entry input').nth(1).check();
   const start=index=>page.locator('.archive-entry-name').nth(index).evaluate(element=>{
    const event=new DragEvent('dragstart',{bubbles:true,cancelable:true});element.dispatchEvent(event);return event.defaultPrevented;
   });
-  assert.equal(await start(201),true);await expect(page.locator('#archive-status-text')).toContainText('按 Esc 取消');await expect(page.locator('#archive-cancel')).toBeHidden();
+  assert.equal(await start(1),true);await expect(page.locator('#archive-status-text')).toContainText('按 Esc 取消');await expect(page.locator('#archive-cancel')).toBeHidden();
   let requests=await app.evaluate(()=>globalThis.dragRequests);assert.deepEqual(requests[0].selected,[0,201]);assert.equal(requests[0].path,zip);assert.equal(requests[0].password,' 密 码 ');assert.match(requests[0].revision,/^\d+(?::\d+){6}$/);
   await start(1);assert.equal(await app.evaluate(()=>globalThis.dragRequests.length),1,'do not launch another drag while transferring');
   await app.evaluate(()=>globalThis.finishArchiveDrag());await expect(page.locator('#archive-status-text')).toHaveText('拖出操作已完成');
-  await start(1);await expect(page.locator('#archive-status-text')).toContainText('按 Esc 取消');requests=await app.evaluate(()=>globalThis.dragRequests);assert.deepEqual(requests[1].selected,[1]);
+  await start(0);await expect(page.locator('#archive-status-text')).toContainText('按 Esc 取消');requests=await app.evaluate(()=>globalThis.dragRequests);assert.deepEqual(requests[1].selected,[200]);
   await expect(page.locator('.archive-entry input:checked')).toHaveCount(1);await app.evaluate(()=>{globalThis.cancelArchiveDrag=true;globalThis.finishArchiveDrag();});await expect(page.locator('#archive-status-text')).toHaveText('已取消拖出');
   await page.locator('[data-archive-edit="rename"]').click();const dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-name]').fill('renamed.txt');await dialog.locator('[data-edit-queue]').click();
   await expect(page.locator('#archive-edit-changes li')).toHaveCount(1);await start(1);await expect(page.locator('#archive-status-text')).toContainText('请先保存或放弃');assert.equal(await app.evaluate(()=>globalThis.dragRequests.length),2);

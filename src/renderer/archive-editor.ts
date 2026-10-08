@@ -37,10 +37,10 @@ async function editDialog(kind:'add'|'mkdir'|'rename'|'comment',entry?:ArchiveEn
  return new Promise(resolve=>dialog.addEventListener('close',()=>{dialog.remove();resolve(draft);},{once:true}));
 }
 
-export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>ArchiveListing|undefined;save:(changes:ArchiveEdit[])=>Promise<boolean>;saved:()=>Promise<void>;status:(message:string)=>void}){
+export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>ArchiveListing|undefined;selected?:()=>ArchiveEntry[];save:(changes:ArchiveEdit[])=>Promise<boolean>;saved:()=>Promise<void>;status:(message:string)=>void}){
  const find=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
  const entries=new Map<number,ArchiveEntry>();let drafts:Draft[]=[],busy=false;
- const selected=()=>[...root.querySelectorAll<HTMLInputElement>('.archive-entry input:checked')].map(input=>entries.get(Number(input.value))).filter((entry):entry is ArchiveEntry=>!!entry);
+ const selected=()=>options.selected?.()??[...root.querySelectorAll<HTMLInputElement>('.archive-entry input:checked')].map(input=>entries.get(Number(input.value))).filter((entry):entry is ArchiveEntry=>!!entry);
  const render=()=>{
   const listing=options.listing();find('#archive-editor').hidden=!listing?.editable;
   for(const button of root.querySelectorAll<HTMLButtonElement>('[data-archive-edit]'))button.disabled=busy||!listing?.editable;
@@ -52,6 +52,7 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
  for(const button of root.querySelectorAll<HTMLButtonElement>('[data-archive-edit]'))button.onclick=async()=>{
   if(busy||!options.listing()?.editable)return;
   const kind=button.dataset.archiveEdit as 'add'|'mkdir'|'rename'|'delete'|'comment',items=selected();
+  if((kind==='rename'||kind==='delete')&&items.some(entry=>entry.implicit))return options.status('此文件夹未单独记录在压缩包中，请进入目录后选择实际文件修改');
   if(kind==='delete'){
    if(!items.length)return options.status('请先选择要删除的项目');
    drafts.push({change:{kind:'delete',indexes:items.map(e=>e.index)},description:`删除：${items.slice(0,3).map(e=>e.name).join('、')}${items.length>3?` 等 ${items.length} 项`:''}`});
@@ -79,7 +80,7 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
  return {
   hasChanges:()=>drafts.length>0,
   async discardBeforeLoad(){if(drafts.length&&!await confirmDialog({title:'放弃未保存的修改',message:'重新打开压缩包会清除当前待保存的变更。',confirm:'放弃并打开'}))return false;drafts=[];entries.clear();render();return true;},
-  loaded(listing:ArchiveListing){if(listing.offset===0)entries.clear();for(const entry of listing.entries)entries.set(entry.index,entry);render();},
+  loaded(listing:ArchiveListing){entries.clear();for(const entry of listing.entries)if(!entry.implicit)entries.set(entry.index,entry);render();},
   setBusy(value:boolean){busy=value;render();},
   invalidate(){render();},
  };

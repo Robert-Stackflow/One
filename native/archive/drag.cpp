@@ -13,6 +13,7 @@
 #include <memory>
 #include <stdexcept>
 #include "zip-common.h"
+#include "browse.h"
 
 // The helper owns one OLE drag and stays alive until the target has finished
 // its asynchronous extraction AND released every contents stream. Electron
@@ -53,15 +54,23 @@ struct InputLink {
 };
 struct DragItem {fs::path original;std::wstring name;bool directory;uint64_t size;};
 struct Selection {std::vector<DragItem> items;std::set<size_t> indexes;size_t roots=0;};
-Selection select(const std::vector<Entry> &entries,const std::set<size_t> &selected) {
-    if(selected.empty()||*selected.rbegin()>=entries.size())fail("Invalid drag selection");
+Selection select(const std::vector<Entry> &entries,std::set<size_t> selected,const std::vector<std::string> &folders) {
+    if((selected.empty()&&folders.empty())||(!selected.empty()&&*selected.rbegin()>=entries.size()))fail("Invalid drag selection");
+    std::set<size_t> checked;expand_folders(entries,checked,folders);
+    std::vector<Entry> virtual_roots;virtual_roots.reserve(folders.size());
+    std::set<std::string> implicit_folders(folders.begin(),folders.end());
+    for(const auto &entry:entries)if(entry.directory){auto name=archive_path(entry.name);if(!name.ends_with('/'))name+='/';if(implicit_folders.erase(name))selected.insert(entry.index);}
+    for(const auto &folder:implicit_folders)virtual_roots.push_back({size_t(-1),folder,true,0,0,false});
     std::vector<const Entry*> roots;std::set<std::wstring> selected_folders;
     for(size_t index:selected)if(entries[index].directory)selected_folders.insert(key(entry_path(entries[index].name).wstring()));
+    for(const auto &entry:virtual_roots)selected_folders.insert(key(entry_path(entry.name).wstring()));
     auto inside_selected=[&](const fs::path &path){for(auto parent=path.parent_path();!parent.empty();parent=parent.parent_path())if(selected_folders.contains(key(parent.wstring())))return true;return false;};
     for(size_t index:selected){
         const auto &entry=entries[index];auto path=entry_path(entry.name);if(path.filename().empty())path=path.parent_path();
         if(!inside_selected(path))roots.push_back(&entry);
     }
+    for(const auto &entry:virtual_roots){auto path=entry_path(entry.name);if(path.filename().empty())path=path.parent_path();if(!inside_selected(path))roots.push_back(&entry);}
+    if(roots.empty())fail("Invalid drag selection");
     fs::path common=entry_path(roots.front()->name).lexically_normal();
     // entry_path preserves a trailing slash on directory entries.
     if(common.filename().empty())common=common.parent_path();
@@ -300,7 +309,7 @@ void selftest(DragData *data,bool report_entries) {
 bool archive_cancelled(){if(poll_escape&&(GetAsyncKeyState(VK_ESCAPE)&0x8000))cancelled=true;return cancelled.load();}
 
 void archive_drag(const fs::path &source,const fs::path &stage,int encoding,const std::string &revision,
-                  const std::string &password,int format,bool testing,uintptr_t owner,const fs::path &lease){
+                  const std::string &password,int format,bool testing,uintptr_t owner,const fs::path &lease,bool has_folders){
     wchar_t test_mode[2]{};GetEnvironmentVariableW(L"ONE_TEST_MODE",test_mode,2);
     if(testing&&std::wstring(test_mode)!=L"1")fail("Drag protocol test is disabled");
     if(fs::exists(stage))fail("Drag staging directory already exists");
@@ -314,11 +323,13 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
             !ReadFile(lease_lock->value,value,sizeof(value),&read,nullptr)||read!=sizeof(signature)-1||
             std::memcmp(value,signature,read))fail("Invalid drag cache lease");
     }
-    auto count=input_u32();if(!count||count>10000)fail("Select 1–10000 entries to drag");
+    auto count=input_u32();if(count>10000)fail("Select 1–10000 entries to drag");
     std::set<size_t> selected;for(uint32_t i=0;i<count;++i){auto value=input_u32();if(value>=1000000)fail("Invalid drag entry index");selected.insert(value);}
+    const auto folders=has_folders?read_selected_folders():std::vector<std::string>{};
+    if(count+folders.size()==0||count+folders.size()>10000)fail("Select 1–10000 entries to drag");
     SourceLock lock(source);if(zip_revision(source)!=revision)fail("Archive changed; reopen it before dragging");
     auto entries= [&]{if(format!=0)return seven_drag_entries(source,password,format);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
-    auto selection=select(entries,selected);
+    auto selection=select(entries,selected,folders);
     if(FAILED(OleInitialize(nullptr)))fail("Cannot initialize Windows file drag");
     auto data=new DragData(source,stage,encoding,format,password,std::move(selection));
     auto drag_source=new DragSource;

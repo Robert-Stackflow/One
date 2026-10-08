@@ -21,7 +21,7 @@ void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path
 std::vector<Entry> seven_drag_entries(const fs::path &source, const std::string &password, int format);
 void archive_drag(const fs::path &source, const fs::path &stage, int encoding,
                   const std::string &revision, const std::string &password, int format, bool testing, uintptr_t owner = 0,
-                  const fs::path &lease = {});
+                  const fs::path &lease = {}, bool folders = false);
 std::string zip_revision(const fs::path &source);
 void zip_update(const fs::path &source, const fs::path &temporary, const fs::path &backup,
                 int encoding, const std::string &revision, const std::string &password);

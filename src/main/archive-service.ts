@@ -7,9 +7,10 @@ import {createReadStream,createWriteStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding} from '../shared/archive';
 import {zipEditPacket} from './archive-update';
+import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive'){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
@@ -56,7 +57,7 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
+  private async execute(owner:number,id:string,operation:'list'|'browse'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer):Promise<Message[]> {
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
@@ -91,7 +92,7 @@ export class ArchiveService {
       if(operation==='update'||operation==='drag'||operation==='publish')child.stdin.write(input);else child.stdin.end(input);
       // Initial progress can synchronously request cancellation. Write the
       // private request frame first so a cooperative cancel byte cannot corrupt it.
-      if(operation!=='list')this.changed(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
+      if(operation!=='list'&&operation!=='browse')this.changed(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
     });
   }
   private async acquireSource(owner:number,id:string,source:string):Promise<{path:string;release:()=>void}>{
@@ -149,26 +150,30 @@ export class ArchiveService {
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
     if(request.operation==='list'){
       const source=archiveSource(request.path),offset=Math.max(0,Math.min(1000000,Math.floor(Number(request.offset)||0)));
+      const browser=request.browse===undefined?undefined:browsePacket(request.browse);
+      if(browser&&request.offset!==undefined&&(!Number.isInteger(request.offset)||request.offset<0||request.offset>1000000))throw Error('压缩包页码无效');
       const prepared=await this.acquireSource(owner,id,source);
       try{
-        const messages=await this.execute(owner,id,'list',[prepared.path,String(offset),'200',String(encoding(request.encoding))],password(request.password));
+        const messages=await this.execute(owner,id,browser?'browse':'list',[prepared.path,String(offset),'200',String(encoding(request.encoding))],password(request.password),undefined,browser?.packet);
         const meta=messages.find((item):item is Extract<Message,{type:'meta'}>=>item.type==='meta');
         if(!meta)throw Error('无法读取压缩包目录');
-        return {path:source,total:meta.total,comment:meta.comment,revision:meta.revision,editable:meta.editable===true,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
+        return {path:source,total:meta.total,matched:meta.matched,browse:browser?.query,comment:meta.comment,revision:meta.revision,editable:meta.editable===true,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
       }finally{prepared.release();}
     }
     if(request.operation==='drag'){
       const source=archiveSource(request.path),secret=password(request.password);
       if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后再拖出');
       const selected=request.selected;
-      if(!Array.isArray(selected)||!selected.length||selected.length>10000||selected.some(index=>!Number.isInteger(index)||index<0||index>=1000000))throw Error('请选择 1–10000 项拖出');
-      const packet=Buffer.alloc(4+selected.length*4);packet.writeUInt32LE(selected.length);
-      selected.forEach((value,index)=>packet.writeUInt32LE(value,4+index*4));
+      const folders=folderSelection(request.selectedFolders);
+      if(!Array.isArray(selected)||!selected.length&&!folders.folders.length||selected.length+folders.folders.length>10000||selected.some(index=>!Number.isInteger(index)||index<0||index>=1000000))throw Error('请选择 1–10000 项拖出');
+      const indexes=Buffer.alloc(4+selected.length*4);indexes.writeUInt32LE(selected.length);
+      selected.forEach((value,index)=>indexes.writeUInt32LE(value,4+index*4));
+      const packet=Buffer.concat([indexes,...(folders.packet?[folders.packet]:[])]);
       const prepared=await this.acquireSource(owner,id,source);
       let job:Awaited<ReturnType<ArchiveDragCache['create']>>|undefined;
       try{
         await this.dragCache.sweep();job=await this.dragCache.create(id);
-        const messages=await this.execute(owner,id,'drag',[prepared.path,job.payload,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner),job.lease],secret,'prepare',packet);
+        const messages=await this.execute(owner,id,'drag',[prepared.path,job.payload,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner),job.lease,...(folders.packet?['--folders']:[])],secret,'prepare',packet);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('拖出未完成');
         return {path:source,count:result.count,cancelled:result.cancelled===true};
@@ -277,12 +282,14 @@ export class ArchiveService {
       if(!['folder','smart','here'].includes(destination))throw Error('解压位置模式无效');
       const conflict=request.conflict??'rename';if(!['rename','skip','replace'].includes(conflict))throw Error('同名文件处理方式无效');
       const selected=request.selected||[];
-      if(!Array.isArray(selected)||selected.length>10000||selected.some(value=>!Number.isSafeInteger(value)||value<0))throw Error('选择的条目无效');
+      const folders=folderSelection(request.selectedFolders);
+      if(!Array.isArray(selected)||selected.length+folders.folders.length>10000||selected.some(value=>!Number.isSafeInteger(value)||value<0||value>=1000000))throw Error('选择的条目无效');
+      if(request.revision!==undefined&&(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision)))throw Error('请重新打开压缩包后再解压');
       const uniqueTarget=(name:string,file=false)=>{const extension=file?extname(name):'',base=extension?name.slice(0,-extension.length):name;let target=join(parent,name),suffix=2;while(existsSync(target)){target=join(parent,`${base} (${suffix++})${extension}`);if(suffix>10000)throw Error('没有可用的解压目标名称');}return target;};
       const temporary=join(parent,`.one-extract-${id}`);
       const prepared=await this.acquireSource(owner,id,source);
       try{
-        const messages=await this.execute(owner,id,'extract',[prepared.path,temporary,selected.join(','),String(encoding(request.encoding))],password(request.password));
+        const messages=await this.execute(owner,id,'extract',[prepared.path,temporary,selected.join(','),String(encoding(request.encoding)),...(folders.packet?['--folders']:[]),...(request.revision?[`--revision=${request.revision}`]:[])],password(request.password),undefined,folders.packet);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认解压成功');
         if(destination==='here'){
