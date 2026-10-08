@@ -40,8 +40,55 @@ async function main(){
     await page.locator('[data-page="settings"]').click();
     await expect(page.locator('#shell-archive-create')).toBeVisible();
     await expect(page.locator('#shell-archive-extract')).toBeVisible();
+    const createArchive=async(name,file=source,password='')=>{
+      const directory=path.join(root,name);await fs.mkdir(directory);const target=path.join(directory,name+'.zip');
+      const bytes=Buffer.from(password),packet=Buffer.alloc(4+bytes.length);packet.writeUInt32LE(bytes.length);bytes.copy(packet,4);
+      const result=spawnSync(path.resolve('dist/native/One.Archive.exe'),['create',target,file],{input:packet,encoding:'utf8',windowsHide:true,env});assert.equal(result.status,0,result.stdout+result.stderr);return target;
+    };
+    const hereA=await createArchive('batch-a'),hereB=await createArchive('batch-b',second),secret=await createArchive('batch-secret',source,'correct'),hereC=await createArchive('batch-c');
+    const broken=path.join(root,'broken.zip');await fs.writeFile(broken,'not an archive');
+    await page.evaluate(()=>window.one.patchSettings({archive:{conflict:'skip'}}));
+    const kept=path.join(path.dirname(hereA),path.basename(source));await fs.writeFile(kept,'keep this');
+    await request('archive-here',[hereA,broken,hereB,secret,hereC]);
+    await expect(page.locator('#archive-status-text')).toContainText('批量解压完成',{timeout:30000});
+    await expect(page.locator('#archive-batch-summary')).toHaveText('5 个压缩包 · 完成 3 · 失败 2');
+    await expect(page.locator('[data-batch-state="已完成"]')).toHaveCount(3);await expect(page.locator('[data-batch-state="失败"]')).toHaveCount(2);
+    assert.equal(await fs.readFile(kept,'utf8'),'keep this');
+    assert.equal(await fs.readFile(path.join(path.dirname(hereB),path.basename(second)),'utf8'),'Second request\n');
+    assert.equal(await fs.readFile(path.join(path.dirname(hereC),path.basename(source)),'utf8'),'Archive shell request\n');
+    await page.locator('[data-batch-open="3"]').click();
+    await expect(page.locator('#archive-source')).toHaveValue(secret);await expect(page.locator('#archive-cancel')).toBeHidden();
+    assert.equal(await page.locator('#archive-password').inputValue(),'');
+    await page.locator('#archive-password').fill('correct');await page.locator('#archive-extract-all').click();
+    await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
+    await expect(page.locator('#archive-batch-summary')).toHaveText('5 个压缩包 · 完成 4 · 失败 1');
+    assert.equal(await fs.readFile(path.join(path.dirname(secret),path.basename(source)),'utf8'),'Archive shell request\n');
+    const folder=await createArchive('named-folder'),smart=await createArchive('smart-file');
+    await request('archive-folder',[folder]);await expect(page.locator('#archive-source')).toHaveValue(folder);await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
+    assert.equal(await fs.readFile(path.join(path.dirname(folder),'named-folder',path.basename(source)),'utf8'),'Archive shell request\n');
+    await request('archive-smart',[smart]);await expect(page.locator('#archive-source')).toHaveValue(smart);await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
+    assert.equal(await fs.readFile(path.join(path.dirname(smart),path.basename(source)),'utf8'),'Archive shell request\n');
+    assert.equal(await page.locator('#archive-password').inputValue(),'','passwords must not carry between archives');
+    await request('archive-extract',[hereA,hereB]);await expect(page.locator('#archive-batch-list .archive-batch-item')).toHaveCount(2);await expect(page.locator('#archive-source')).toHaveValue(hereA);
+    await page.locator('[data-batch-open="1"]').click();await expect(page.locator('#archive-source')).toHaveValue(hereB);await expect(page.locator('.archive-entry-name')).toHaveText(path.basename(second));
+    await page.locator('[data-archive-edit="comment"]').click();let dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-comment]').fill('unsaved comment');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await request('archive-folder',[folder]);dialog=page.locator('dialog[open]');await expect(dialog).toContainText('放弃未保存的修改');await dialog.locator('[data-dialog-cancel]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await expect(page.locator('#archive-source')).toHaveValue(hereB);await expect(page.locator('#archive-edit-changes li')).toHaveCount(1);await page.locator('#archive-edit-discard').click();
+    const cancelA=await createArchive('cancel-a'),cancelB=await createArchive('cancel-b');
+    await app.evaluate(({ipcMain},file)=>{
+      const run=ipcMain._invokeHandlers.get('one:archive-run'),cancel=ipcMain._invokeHandlers.get('one:archive-cancel');
+      ipcMain.removeHandler('one:archive-run');ipcMain.handle('one:archive-run',(event,request,id)=>{
+        if(request.operation!=='extract'||request.path!==file)return run(event,request,id);
+        event.sender.send('one:archive-progress',{id,operation:'extract',done:0,total:100});
+        return new Promise((_,reject)=>globalThis.rejectBatchJob=()=>reject(Error('已取消测试任务')));
+      });
+      ipcMain.removeHandler('one:archive-cancel');ipcMain.handle('one:archive-cancel',(event,id)=>{if(globalThis.rejectBatchJob){globalThis.rejectBatchJob();delete globalThis.rejectBatchJob;return true;}return cancel(event,id);});
+    },cancelA);
+    await request('archive-folder',[cancelA,cancelB]);await expect(page.locator('#archive-status-text')).toContainText('正在解压');await page.locator('#archive-cancel').click();
+    await expect(page.locator('#archive-status-text')).toContainText('已停止批量解压');await expect(page.locator('[data-batch-state="已取消"]')).toHaveCount(2);
+    await assert.rejects(fs.stat(path.join(path.dirname(cancelB),'cancel-b')),{code:'ENOENT'});
     assert.equal(await app.evaluate(()=>globalThis.archiveExplorerCalls),0,'archive shell requests must not open Explorer');
-    console.log('Archive shell request smoke passed: create selection and archive browse through startup/inbox requests.');
+    console.log('Archive shell requests passed: startup/inbox, all extraction destinations, batch partial failure, password retry/isolation, skip policy, multi-browse, cancellation and no Explorer windows.');
   }finally{await app.close();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

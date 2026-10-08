@@ -1,5 +1,5 @@
 export type OneMenuPage='home'|'tools'|'archive'|'text'|'disk'|'system'|'hardware'|'locksmith'|'settings'|'preview';
-export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'|'archive'>}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]}|{page:'archive';action?:'create'|'extract'|'smart';paths?:string[]};
+export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'|'archive'>}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]}|{page:'archive';action?:import('./archive-actions').ArchiveOpenAction;paths?:string[]};
 export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'|'screen-ruler'}
 export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'opened',label:'已打开的文件夹',category:'文件操作',icon:'folder'},

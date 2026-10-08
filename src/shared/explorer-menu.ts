@@ -1,3 +1,3 @@
-export type FileAction='locksmith'|'rename'|'archive-create'|'archive-extract';
+export type FileAction='locksmith'|'rename'|import('./archive-actions').ArchiveShellAction;
 export interface FileActionTarget {tool:FileAction;paths:string[]}
 export interface ExplorerMenuState {locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean;modern:boolean;error?:string}

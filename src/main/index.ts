@@ -10,6 +10,7 @@ import {FileToolsService} from './file-tools-service';
 import {ArchiveService} from './archive-service';
 import {archiveAssociation} from './archive-associations';
 import {archiveLaunchPath} from './archive-launch';
+import {archiveShellAction,type ArchiveOpenAction} from '../shared/archive-actions';
 import {LauncherService} from './launcher-service';
 import {openWithApplications,openInApplication,activatePreviewWindow,showFileContextMenu} from './open-with';
 import {DiskService} from './disk-service';
@@ -288,8 +289,9 @@ async function shellInvocation(args:string[],source='launch'){
    const target=await readShellRequest(args,app.getPath('userData'));
    if(!target)return;
    runtimeLog(app.getPath('userData'),'shell-request-open',`source=${source} tool=${target.tool} count=${target.paths.length}`);
-   if(target.tool==='archive-create'||target.tool==='archive-extract'){
-    navigateArchive(target.tool==='archive-create'?'create':'extract',target.paths);
+   const archiveAction=archiveShellAction(target.tool);
+   if(archiveAction){
+    navigateArchive(archiveAction,target.paths);
    }else openFileAction(target);
   }catch(error){
    if((error as NodeJS.ErrnoException).code==='ENOENT')return;
@@ -301,7 +303,7 @@ async function shellInvocation(args:string[],source='launch'){
  shellQueue=next;
  return next;
 }
-function navigateArchive(action:'create'|'extract'|'smart',paths:string[]){
+function navigateArchive(action:ArchiveOpenAction,paths:string[]){
  const send=()=>{if(!quitting&&!main.isDestroyed()&&!main.webContents.isDestroyed()){showMain();main.webContents.send('one:navigate-page',{page:'archive',action,paths});}};
  if(main.webContents.isLoadingMainFrame())main.webContents.once('did-finish-load',send);else send();
 }
@@ -830,7 +832,7 @@ async function start() {
   search=new SearchService(join(app.getPath('userData'),'file-index.ndjson'),settings.search,searchChanged,process.env.ONE_SEARCH_BACKEND==='memory'?'memory':'disk');searchBridge=new SearchBridge(showSearch,searchChanged,echo);
   configurePicker(() => settings.search.bookmarks, async () => (await searchBridge.context(0)).folders);
   launcher=new LauncherService(items=>{search.launchers(items);searchChanged();});search.launchers(launcher.entries());launcher.refresh();
-  fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}},()=>settings.search.roots);
+  fileMenu=new FileContextMenu({create:submenu=>windowFor('file-context',{width:240,height:374,minWidth:240,minHeight:40,frame:false,resizable:false,skipTaskbar:true,hasShadow:true},submenu?'&submenu=apps':''),focus:popupFocus,active:(id,value)=>{if(value)nativeMenus.add(id);else nativeMenus.delete(id);},open:chooseSearch,preview:path=>preview(filePath(path)),archive:navigateArchive,system:async(path,owner,point)=>{if(owner.isDestroyed())return;const ownerId=owner.webContents.id;nativeMenus.add(ownerId);try{await showFileContextMenu(path,Number(owner.getNativeWindowHandle().readBigUInt64LE()),point);}finally{nativeMenus.delete(ownerId);if(!owner.isDestroyed()&&owner.isVisible())popupFocus(owner);}},changed:()=>{for(const w of cachedSearch.values())if(!w.isDestroyed())w.webContents.send('one:search-files-changed');}},()=>settings.search.roots);
   menuService=new SearchMenu(join(app.getPath('userData'),'search-history.json'),()=>settings.search,searchBridge,()=>{showMain();main.webContents.send('one:search-settings');},()=>showSearch('search',searchContext.hwnd,false,searchContext.tab),undefined,command=>menuConfirmation.request(command),favoriteCurrentFolder,async(command,context)=>{if(command.onePage){const target=await oneMenuTarget(command,context);showMain();main.webContents.send('one:navigate-page',target);}else if(command.oneAction==='pick-color')await pickColor();else if(command.oneAction==='screen-ruler')await openScreenRuler();});
   textService=new TextService((owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>w.webContents.id===owner);if(window&&!window.webContents.isDestroyed())window.webContents.send('one:text-progress',value);});
   fileTools=new FileToolsService(join(app.getPath('userData'),'file-tools'),(owner,value)=>{const window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&w.webContents.id===owner);window?.webContents.send('one:file-tools-progress',value);});

@@ -1,13 +1,14 @@
 import {BrowserWindow,clipboard,screen,shell} from 'electron';
 import {basename,dirname,join,extname} from 'node:path';
-import {stat} from 'node:fs/promises';
+import {stat,lstat} from 'node:fs/promises';
+import {archiveShellAction,isArchivePath,type ArchiveOpenAction} from '../shared/archive-actions';
 import {randomUUID} from 'node:crypto';
 import {copyShellItem,renameShellItem,openWithApplications,openInApplication} from './open-with';
 import {renameDestinationName,type FileMenuTarget,type FileMenuAction} from '../shared/file-menu';
 import type {OpenWithApp} from '../shared/preview';
 import {pathCopyText} from '../shared/path-copy';
 import {PopupReadiness,deferPopupBlur} from './popup-lifecycle';
-interface Callbacks{create(submenu:boolean):BrowserWindow;focus(window:BrowserWindow):void;active(owner:number,value:boolean):void;open(path:string):Promise<void>;preview(path:string):Promise<void>;system(path:string,owner:BrowserWindow,point:{x:number;y:number}):Promise<void>;changed():void}
+interface Callbacks{create(submenu:boolean):BrowserWindow;focus(window:BrowserWindow):void;active(owner:number,value:boolean):void;open(path:string):Promise<void>;preview(path:string):Promise<void>;archive(action:ArchiveOpenAction,paths:string[]):void;system(path:string,owner:BrowserWindow,point:{x:number;y:number}):Promise<void>;changed():void}
 export class FileContextMenu{
  private window?:BrowserWindow;private child?:BrowserWindow;private owner?:BrowserWindow;private target?:FileMenuTarget;
  private readiness=new WeakMap<BrowserWindow,PopupReadiness>();
@@ -45,7 +46,8 @@ export class FileContextMenu{
  async apps(session:string){const target=this.require(session);if(target.directory||target.launchKind)return [];const key=extname(target.path).toLowerCase(),cached=this.applications.get(key);if(cached&&Date.now()-cached.time<120000)return cached.items;const pending=this.pendingApps.get(key);if(pending)return pending;
   const task=openWithApplications(target.path).then(items=>{if(this.applications.size>=128)this.applications.delete(this.applications.keys().next().value!);this.applications.set(key,{time:Date.now(),items});return items;}).finally(()=>this.pendingApps.delete(key));this.pendingApps.set(key,task);return task;
  }
- async run(session:string,action:FileMenuAction,value?:string){const target=this.require(session),owner=this.owner!;if(!['open','preview','reveal','copy-path','copy-relative','copy-name','copy-quoted','copy','cut','rename','trash','open-with','native'].includes(action))throw new Error('菜单操作无效');if(target.launchKind&&action!=='open'&&action!=='copy-name')throw new Error('此项目不支持该操作');
+ async run(session:string,action:FileMenuAction,value?:string){const target=this.require(session),owner=this.owner!,archive=archiveShellAction(action);if(!archive&&!['open','preview','reveal','copy-path','copy-relative','copy-name','copy-quoted','copy','cut','rename','trash','open-with','native'].includes(action))throw new Error('菜单操作无效');if(target.launchKind&&action!=='open'&&action!=='copy-name')throw new Error('此项目不支持该操作');
+  if(archive){const info=await lstat(target.path);if(info.isSymbolicLink()||(!info.isFile()&&!info.isDirectory())||(archive!=='create'&&(!info.isFile()||!isArchivePath(target.path))))throw Error('请选择支持的普通压缩文件');this.require(session);this.finish(session,false);this.callbacks.archive(archive,[target.path]);return;}
   if(action==='native'){const p=screen.dipToScreenPoint(this.point);this.finish(session,true);await this.callbacks.system(target.path,owner,p);return;}
   if(action==='open'){await this.callbacks.open(target.path);this.finish(session,false);return;}
   if(action==='preview'){await this.callbacks.preview(target.path);this.finish(session,false);return;}
