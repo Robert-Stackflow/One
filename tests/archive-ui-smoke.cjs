@@ -100,8 +100,41 @@ async function main(){
       await page.locator('#archive-test').click();
       await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
     }
+    await page.locator('[data-archive-mode="create"]').click();
+    await page.locator('#archive-format').click();
+    await page.locator('#archive-format-options [role="option"][aria-label="7Z"]').click();
+    const appSeven=path.join(root,'app-created.7z');
+    await page.locator('#archive-sources').fill(source);
+    await page.locator('#archive-target').fill(appSeven);
+    await page.locator('#archive-volume').fill('');
+    await page.locator('#archive-create-password').fill('secret');
+    await page.locator('#archive-create').click();
+    await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
+    await page.locator('[data-archive-mode="browse"]').click();
+    await page.locator('#archive-source').fill(appSeven);
+    await page.locator('#archive-password').fill('secret');
+    await page.locator('#archive-open').click();
+    await expect(page.locator('.archive-entry-name')).toHaveText('源文件.txt');
+    const appSplit=path.join(root,'app-split.7z');
+    await page.locator('[data-archive-mode="create"]').click();
+    await page.locator('#archive-sources').fill(large);
+    await page.locator('#archive-target').fill(appSplit);
+    await page.locator('#archive-create-password').fill('');
+    await page.locator('#archive-volume').fill('1');
+    await page.locator('#archive-create').click();
+    await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
+    assert.equal((await fs.stat(appSplit+'.001')).isFile(),true);
+    assert.equal((await fs.stat(appSplit+'.002')).isFile(),true);
+    if(!made.error){const external=spawnSync('7z',['t','-y',appSplit+'.001'],{encoding:'utf8'});assert.equal(external.status,0,external.stdout+'\n'+external.stderr);}
+    await page.locator('[data-archive-mode="browse"]').click();
+    await page.locator('#archive-source').fill(appSplit+'.001');
+    await page.locator('#archive-password').fill('');
+    await page.locator('#archive-open').click();
+    await expect(page.locator('.archive-entry-name')).toHaveText('large.bin');
+    await page.locator('#archive-test').click();
+    await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
     assert.deepEqual(errors,[]);
-    console.log('Archive UI smoke passed: sidebar order, create, browse, extract, split ZIP, smart extract and encrypted 7Z.');
+    console.log('Archive UI smoke passed: sidebar order, ZIP and 7Z creation, encrypted and split archives, browse and extract.');
   }finally{
     await app.close();
     await fs.rm(root,{recursive:true,force:true});

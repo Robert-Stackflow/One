@@ -77,6 +77,17 @@ try{
     const volumeOut=path.join(root,'volume-out');call(['extract',firstVolume,volumeOut,'','0']);
     assert.deepEqual(fs.readFileSync(path.join(volumeOut,'large.bin')),largeData);
   }
+  const createdSeven=path.join(root,'created.7z');
+  assert.match(call(['create',path.join(root,'not-rar.rar'),folder],'',2).at(-1).message,/RAR creation/i);
+  call(['create',createdSeven,folder],'secret');
+  assert.match(call(['list',createdSeven,'0','50','0'],'',2).at(-1).message,/password|open/i);
+  const createdItems=call(['list',createdSeven,'0','50','0'],'secret').filter(line=>line.type==='entry');
+  assert(createdItems.some(item=>item.name.replaceAll('\\','/')==='中文目录/nested.txt'&&item.encrypted));
+  assert(createdItems.some(item=>item.name.replaceAll('\\','/')==='中文目录/empty'&&item.directory));
+  assert.equal(call(['test',createdSeven,'0'],'secret').at(-1).count,createdItems.length);
+  const createdOut=path.join(root,'created-out');call(['extract',createdSeven,createdOut,'','0'],'secret');
+  assert.equal(fs.readFileSync(path.join(createdOut,'中文目录','nested.txt'),'utf8'),'nested content');
+  if(!sevenZip.error){const external=spawnSync('7z',['t','-y','-psecret',createdSeven],{encoding:'utf8'});assert.equal(external.status,0,external.stdout+'\n'+external.stderr);}
   for(const [index,name] of ['../escape.txt','C:/escape.txt','CON.txt','folder/file.txt:stream'].entries()){
     const evil=path.join(root,`evil-${index}.zip`),outside=path.join(root,`evil-${index}-out`);rawZip(name,evil);
     assert.match(call(['extract',evil,outside,'','0'], '',2).at(-1).message,/unsafe/i);

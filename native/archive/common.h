@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -18,3 +19,5 @@ void seven_list(const fs::path &source, size_t offset, size_t limit, const std::
 void seven_test(const fs::path &source, const std::string &password, int format);
 void seven_extract(const fs::path &source, const fs::path &destination,
                    const std::set<size_t> &selected, const std::string &password, int format);
+void seven_create(const fs::path &destination, const std::vector<fs::path> &sources,
+                  const std::string &password);

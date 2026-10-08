@@ -325,7 +325,15 @@ int wmain(int argc, wchar_t **argv) {
             if (first_source >= argc) fail("Create requires input paths");
             std::vector<fs::path> paths;
             for (int i = first_source; i < argc; ++i) paths.emplace_back(argv[i]);
-            create(argv[2], paths, password, volume_size);
+            const int format = archive_format(argv[2]);
+            if (format == 7) {
+                auto extension = fs::path(argv[2]).extension().wstring();
+                std::transform(extension.begin(), extension.end(), extension.begin(), [](wchar_t ch) { return std::towlower(ch); });
+                if (extension != L".7z") fail("Create a 7Z archive with a .7z target path");
+                if (volume_size) fail("7Z volumes are prepared after archive verification");
+                seven_create(argv[2], paths, password);
+            } else if (format == 0) create(argv[2], paths, password, volume_size);
+            else fail("RAR creation is not supported");
         } else if (mode == L"list" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             if (mode == L"list") {
