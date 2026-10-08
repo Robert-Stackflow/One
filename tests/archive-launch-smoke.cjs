@@ -34,8 +34,9 @@ async function main(){
   const archive=path.join(root,'双击 智能.zip'),browse=path.join(root,'仅浏览.zip'),secret=path.join(root,'需要密码.zip'),queuedA=path.join(root,'连续一.zip'),queuedB=path.join(root,'连续二.zip');
   const create=(target,password='')=>{const bytes=Buffer.from(password),packet=Buffer.alloc(4+bytes.length);packet.writeUInt32LE(bytes.length);bytes.copy(packet,4);const result=spawnSync(path.resolve('dist/native/One.Archive.exe'),['create',target,first,second],{input:packet,encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stdout+'\n'+result.stderr);};
   create(archive);create(browse);create(secret,'correct-password');create(queuedA);create(queuedB);
-  const profile=path.join(root,'profile'),env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+  const profile=path.join(root,'profile'),env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,TEMP:root,TMP:root};delete env.ELECTRON_RUN_AS_NODE;
   app=await electron.launch({args:[path.resolve('.'),`--one-archive=${archive}`],env});
+  await app.evaluate(({shell})=>{globalThis.archiveExplorerCalls=0;shell.showItemInFolder=()=>globalThis.archiveExplorerCalls++;shell.openPath=async()=>{globalThis.archiveExplorerCalls++;return '';};});
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(String(error)));
   await expect(page.locator('[data-page="archive"]')).toHaveClass(/active/,{timeout:20000});
   await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
@@ -70,7 +71,8 @@ async function main(){
   await expect(page.locator('#archive-open-completed')).not.toBeChecked();
   assert.equal(await page.locator('#archive-format').evaluate(node=>node.value),'7z');
   assert.deepEqual(errors,[]);
+  assert.equal(await app.evaluate(()=>globalThis.archiveExplorerCalls),0,'archive launches must not open Explorer');
   console.log('Archive launch smoke passed: smart startup, running-instance browse, queued requests, password recovery, settings migration and persistence.');
- }finally{if(app)await app.close();await fs.rm(root,{recursive:true,force:true});}
+ }finally{if(app)await app.close();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

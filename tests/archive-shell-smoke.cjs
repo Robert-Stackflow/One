@@ -15,9 +15,10 @@ async function main(){
   await fs.writeFile(second,'Second request\n');
   const request=async(tool,paths)=>{const file=path.join(inbox,crypto.randomUUID()+'.json');await fs.writeFile(file,JSON.stringify({tool,paths}));return file;};
   const initial=await request('archive-create',[source]);
-  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,TEMP:root,TMP:root};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({args:[path.resolve('.'),`--one-shell-request=${initial}`],env});
   try{
+    await app.evaluate(({shell})=>{globalThis.archiveExplorerCalls=0;shell.showItemInFolder=()=>globalThis.archiveExplorerCalls++;shell.openPath=async()=>{globalThis.archiveExplorerCalls++;return '';};});
     const page=await app.firstWindow();
     await expect(page.locator('[data-page="archive"]')).toHaveClass(/active/,{timeout:20000});
     await expect(page.locator('[data-archive-pane="create"]')).toBeVisible();
@@ -39,7 +40,8 @@ async function main(){
     await page.locator('[data-page="settings"]').click();
     await expect(page.locator('#shell-archive-create')).toBeVisible();
     await expect(page.locator('#shell-archive-extract')).toBeVisible();
+    assert.equal(await app.evaluate(()=>globalThis.archiveExplorerCalls),0,'archive shell requests must not open Explorer');
     console.log('Archive shell request smoke passed: create selection and archive browse through startup/inbox requests.');
-  }finally{await app.close();await fs.rm(root,{recursive:true,force:true});}
+  }finally{await app.close();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

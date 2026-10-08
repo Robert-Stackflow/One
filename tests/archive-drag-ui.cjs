@@ -11,7 +11,7 @@ async function main(){
   const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:path.join(root,'profile'),TEMP:root,TMP:root};delete env.ELECTRON_RUN_AS_NODE;
   app=await electron.launch({args:[path.resolve('.')],env});const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(String(error)));
   await app.evaluate(({shell,ipcMain,BrowserWindow})=>{
-   globalThis.archiveReveals=0;globalThis.dragRequests=[];shell.showItemInFolder=()=>globalThis.archiveReveals++;
+   globalThis.archiveReveals=0;globalThis.dragRequests=[];shell.showItemInFolder=()=>globalThis.archiveReveals++;shell.openPath=async()=>{globalThis.archiveReveals++;return '';};
    const previous=ipcMain._invokeHandlers.get('one:archive-run');ipcMain.removeHandler('one:archive-run');
    ipcMain.handle('one:archive-run',async(event,request,id)=>{
     if(request.operation!=='drag')return previous(event,request,id);

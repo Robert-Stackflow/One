@@ -10,10 +10,10 @@ async function main(){
   const source=new JSZip();source.file('source.txt','contents');source.file('delete.txt','removed');source.comment='before';
   const zip=path.join(root,'edit-ui.zip');await fs.writeFile(zip,await source.generateAsync({type:'nodebuffer'}));const original=await fs.readFile(zip);
   const added=path.join(root,'added.txt');await fs.writeFile(added,'new contents');
-  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:path.join(root,'profile')};delete env.ELECTRON_RUN_AS_NODE;
+  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:path.join(root,'profile'),TEMP:root,TMP:root};delete env.ELECTRON_RUN_AS_NODE;
   app=await electron.launch({args:[path.resolve('.')],env});const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
   // Exercise explicit opt-in without ever opening a real Explorer window.
-  await app.evaluate(({shell,ipcMain},selected)=>{globalThis.archiveRevealCount=0;shell.showItemInFolder=()=>globalThis.archiveRevealCount++;ipcMain.removeHandler('one:pick-file');ipcMain.handle('one:pick-file',()=>selected);},added);
+  await app.evaluate(({shell,ipcMain},selected)=>{globalThis.archiveRevealCount=0;shell.showItemInFolder=()=>globalThis.archiveRevealCount++;shell.openPath=async()=>{globalThis.archiveRevealCount++;return '';};ipcMain.removeHandler('one:pick-file');ipcMain.handle('one:pick-file',()=>selected);},added);
   await page.waitForSelector('[data-page="archive"]');await page.locator('[data-page="archive"]').click();await page.locator('[data-archive-mode="browse"]').click();
   await page.locator('#archive-source').fill(zip);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry-name')).toHaveCount(2);
   await expect(page.locator('#archive-editor')).toBeVisible();
