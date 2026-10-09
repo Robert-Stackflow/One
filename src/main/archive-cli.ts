@@ -1,3 +1,4 @@
+import {validArchiveScan,copyArchiveScan,archiveScanText} from '../shared/archive-scan';
 import {randomUUID} from 'node:crypto';
 import {open,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
@@ -14,7 +15,7 @@ export const cliHelp=`One.Cli.exe archive <list|create|extract|test|update|batch
 
 create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size SIZE] [--level 0-9] SOURCES...
 extract: --output DIRECTORY [--destination smart|folder|here] [--conflict rename|skip|replace]
-         [--select 0,1,...] [--no-zone] ARCHIVES...
+         [--select 0,1,...] [--no-zone] [--scan|--no-scan] ARCHIVES...
 list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
@@ -24,8 +25,9 @@ resources: --threads 1-64 (compression), --memory-mib 128-8192 (per helper, defa
 Relative paths resolve from the working directory; batch job paths resolve from the jobs file.
 Update add-source paths resolve from the changes file. Passwords must be piped through stdin.
 No main window or Explorer folder is opened. Existing archive targets are never overwritten.
+Malware scanning is off by default. --scan requires a local AMSI provider; incomplete scans do not publish files.
 Exit: 0 success, 1 operation failure, 2 arguments, 3 password, 4 invalid archive,
-      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 130 cancelled, 126 runtime missing.
+      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 10 scan incomplete, 11 scan blocked, 130 cancelled, 126 runtime missing.
 `;
 function argument(condition:unknown,message:string):asserts condition {if(!condition)throw new CliFailure(message);}
 const filePath=(value:string,cwd:string)=>{argument(typeof value==='string'&&value.length>0&&value.length<=32768&&!/[\0\r\n]/.test(value),'Invalid path');return resolve(cwd,value);};
@@ -37,7 +39,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  if(!args.length||args.length===1&&['--help','-h','help'].includes(args[0]))return {json:false,progress:false,passwordStdin:false,help:true,jobs:[]};
  const operation=args.shift()!;
  argument(['list','create','extract','test','update','batch'].includes(operation),'Unknown archive command');
- const flags=new Set(['json','progress','password-stdin','help',...(operation==='extract'?['no-zone']:[])]);
+ const flags=new Set(['json','progress','password-stdin','help',...(operation==='extract'?['no-zone','scan','no-scan']:[])]);
  const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
  for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib');
  const options=new Map<string,string>(),paths:string[]=[];let literal=false;
@@ -70,11 +72,12 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  }
  argument(paths.every(path=>sourcePattern.test(path)),'Unsupported input archive format');
  if(operation==='extract'){
+  argument(!(options.has('scan')&&options.has('no-scan')),'--scan and --no-scan are mutually exclusive');
   argument(options.has('output'),'extract requires --output');const parent=filePath(options.get('output')!,cwd),destination=options.get('destination')??'folder',conflict=options.get('conflict')??'rename';
   argument(['folder','smart','here'].includes(destination),'Invalid extraction destination');argument(['rename','skip','replace'].includes(conflict),'Invalid conflict policy');
   const select=options.get('select');let selected:number[]=[];
   if(select){argument(/^\d+(,\d+)*$/.test(select),'--select requires comma-separated zero-based indexes');selected=[...new Set(select.split(',').map(Number))];argument(selected.length<=10000&&selected.every(index=>Number.isSafeInteger(index)&&index<1000000),'Invalid selected indexes');}
-  result.jobs=paths.map(path=>({operation,request:{operation,path,parent,destination:destination as 'folder'|'smart'|'here',conflict:conflict as 'rename'|'skip'|'replace',encoding,selected,propagateZone:!options.has('no-zone')}}));
+  result.jobs=paths.map(path=>({operation,request:{operation,path,parent,destination:destination as 'folder'|'smart'|'here',conflict:conflict as 'rename'|'skip'|'replace',encoding,selected,propagateZone:!options.has('no-zone'),scan:options.has('scan')}}));
  }else if(operation==='update'){
   argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];
@@ -99,7 +102,7 @@ export interface CliIO {out:(line:string)=>Promise<void>;err:(line:string)=>Prom
 export function cliExit(error:unknown,writing=false):number {
  if(error instanceof CliFailure)return error.exitCode;
  const code=error&&typeof error==='object'&&'code' in error?String(error.code):'';
- const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
+ const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,scan:10,threat:11,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
  if(['ENOENT','ENOTDIR','EISDIR'].includes(code))return 5;
  if(['EEXIST','ENOSPC','EROFS'].includes(code))return 6;
  if(['EACCES','EPERM','EBUSY'].includes(code))return writing?6:5;
@@ -145,10 +148,10 @@ export async function runCli(command:CliCommand,service:CliService,io:CliIO):Pro
     if(!('count' in value))throw new CliFailure('Archive engine returned no result',1);
     if(value.cancelled)throw new CliFailure('Cancelled; publication rolled back',130);
     counts.completed++;counts.skipped+=value.skipped??0;
-    await write('result',{...base,...value,elapsedMs:Date.now()-started},`Completed: ${value.count} items${value.skipped?`, ${value.skipped} skipped`:''} -> ${human(value.path)}`);
+    await write('result',{...base,...value,elapsedMs:Date.now()-started},`Completed: ${value.count} items${value.skipped?`, ${value.skipped} skipped`:''} -> ${human(value.path)}${value.scan?' · '+archiveScanText(value.scan):''}`);
     io.event?.(job.operation,'ok',Date.now()-started);
    }catch(error){const code=io.signal.aborted?130:cliExit(error,job.operation==='create'||job.operation==='extract'||job.operation==='update');codes.push(code);if(code===130)counts.cancelled++;else counts.failed++;
-    const message=error instanceof Error?error.message:'Operation failed';await write('error',{...base,exitCode:code,message},`Failed (${code}): ${human(message)}`);io.event?.(job.operation,`error:${code}`,Date.now()-started);
+    const report=error&&typeof error==='object'&&'scan'in error&&validArchiveScan(error.scan)?{scan:copyArchiveScan(error.scan)}:{};const message=error instanceof Error?error.message:'Operation failed';await write('error',{...base,exitCode:code,message,...report},`Failed (${code}): ${human(message)}`);io.event?.(job.operation,`error:${code}`,Date.now()-started);
    }
   }
  }finally{clearInterval(timer);io.signal.removeEventListener('abort',cancel);}

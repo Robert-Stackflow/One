@@ -15,6 +15,7 @@
 #include "zip-common.h"
 #include "browse.h"
 #include "origin.h"
+#include "scan.h"
 
 // The helper owns one OLE drag and stays alive until the target has finished
 // its asynchronous extraction AND released every contents stream. Electron
@@ -162,6 +163,7 @@ public:
             if(format==0){Reader reader(source,encoding);zip_extract(reader,zip_entries(reader),stage,selected,password,false);}
             else seven_extract(source,stage,selected,password,format,false);
             origin->apply(stage);
+            archive_scan(stage);
         }).share();
         while(prepared.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready)pump();
         prepared.get();

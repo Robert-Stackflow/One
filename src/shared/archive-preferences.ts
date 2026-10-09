@@ -5,10 +5,11 @@ export interface ArchivePreferences extends ArchiveResources {
   defaultFormat:typeof archiveFormats[number];
   openCompleted:boolean;
   propagateZone:boolean;
+  scanOnExtract:boolean;
   conflict:import('./archive').ArchiveConflict;
   compressionLevel:number;
 }
-export const defaultArchivePreferences=():ArchivePreferences=>({doubleClick:'smart',defaultFormat:'zip',openCompleted:false,propagateZone:true,conflict:'rename',compressionLevel:6,...defaultArchiveResources()});
+export const defaultArchivePreferences=():ArchivePreferences=>({doubleClick:'smart',defaultFormat:'zip',openCompleted:false,propagateZone:true,scanOnExtract:false,conflict:'rename',compressionLevel:6,...defaultArchiveResources()});
 export function validateArchivePreferences(value:unknown):ArchivePreferences {
   const defaults=defaultArchivePreferences();
   if(value===undefined)return defaults;
@@ -18,6 +19,8 @@ export function validateArchivePreferences(value:unknown):ArchivePreferences {
   const conflict=input.conflict??defaults.conflict;if(!['rename','skip','replace'].includes(conflict))throw Error('解压同名文件设置无效');
   const propagateZone=input.propagateZone===undefined?defaults.propagateZone:input.propagateZone;
   if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');
-  return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted,propagateZone,conflict,compressionLevel:archiveLevel(input.compressionLevel===undefined?defaults.compressionLevel:input.compressionLevel),...archiveResources(input)};
+  const scanOnExtract=input.scanOnExtract===undefined?defaults.scanOnExtract:input.scanOnExtract;
+  if(typeof scanOnExtract!=='boolean')throw Error('解压扫描设置无效');
+  return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted,propagateZone,scanOnExtract,conflict,compressionLevel:archiveLevel(input.compressionLevel===undefined?defaults.compressionLevel:input.compressionLevel),...archiveResources(input)};
 }
 export interface ArchiveAssociationState {registered:boolean;available:boolean}

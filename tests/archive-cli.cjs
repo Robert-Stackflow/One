@@ -49,6 +49,15 @@ async function main(){
   assert.equal(await fs.readFile(path.join(extracted.records.find(item=>item.type==='result').path,'hello.txt'),'utf8'),'hello CLI');
   assert.equal(await fs.readFile(path.join(extracted.records.find(item=>item.type==='result').path,'hello.txt')+':Zone.Identifier','utf8'),zone);
   const noZone=await run(['extract','--json','--no-zone','--output',outdir,archive]);await assert.rejects(fs.readFile(path.join(noZone.records.find(item=>item.type==='result').path,path.basename(input),'hello.txt')+':Zone.Identifier'),{code:'ENOENT'});
+  for(const [mode,exitCode,state] of [['passed',0,'passed'],['unavailable',10,'incomplete'],['failure',10,'incomplete'],['blocked',11,'blocked'],['stall',10,'incomplete']]){
+   env.ONE_ARCHIVE_SCAN_TEST=mode;env.ONE_ARCHIVE_SCAN_TIMEOUT_MS='100';const before=await fs.readdir(outdir);
+   const scanned=await run(['extract','--json','--scan','--output',outdir,archive],'',exitCode);
+   const report=scanned.records.find(item=>item.type===(exitCode?'error':'result')).scan;assert.equal(report.state,state);
+   if(!exitCode)assert.equal(report.files,2);else assert.deepEqual(await fs.readdir(outdir),before,'failed scan cannot publish output');
+  }
+  const scanOff=await run(['extract','--json','--no-scan','--output',outdir,archive]);assert.equal(scanOff.records.find(item=>item.type==='result').scan,undefined);
+  delete env.ONE_ARCHIVE_SCAN_TEST;delete env.ONE_ARCHIVE_SCAN_TIMEOUT_MS;
+  await run(['extract','--json','--scan','--no-scan','--output',outdir,archive],'',2);
   const selection=listed.records.find(item=>item.type==='entry'&&item.name.endsWith('hello.txt')).index;
   await run(['extract','--json','--destination','here','--select',String(selection),'--output',outdir,archive]);assert.equal(await fs.readFile(path.join(outdir,path.basename(input),'hello.txt'),'utf8'),'hello CLI');
   const secret='  私密 $() " spaces  ';await run(['create','--json','--output','secret.zip','--password-stdin',path.join(input,'hello.txt')],secret+'\r\n');

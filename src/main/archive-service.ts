@@ -10,10 +10,11 @@ import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 import type {ArchiveTasks} from './archive-tasks';
+import {validArchiveScan,copyArchiveScan,type ArchiveScan} from '../shared/archive-scan';
 import {archiveResources,archiveLevel,type ArchiveResources} from '../shared/archive-options';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number}|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
-export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive'){super(message);this.name='ArchiveFailure';}}
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number;phase?:'scan'}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
+export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
@@ -29,14 +30,14 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
-  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;propagateZone:boolean}>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;propagateZone:boolean;scan:boolean}>();
   private stopped=false;
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
   private dragCache:ArchiveDragCache;
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&{compressionLevel?:number;propagateZone?:boolean}=()=>archiveResources()){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources()){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
   }
@@ -64,10 +65,10 @@ export class ArchiveService {
     if(this.requests.size>=32)return Promise.reject(Error('同时运行的压缩任务过多，请等待当前任务完成'));
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
-    let resources:ArchiveResources,level:number,propagateZone:boolean;
-    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');}catch(error){return Promise.reject(error);}
+    let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean;
+    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');}catch(error){return Promise.reject(error);}
     this.requests.add(id);
-    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,propagateZone};this.jobs.set(id,job);
+    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,propagateZone,scan};this.jobs.set(id,job);
     const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown;
       try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path));
         this.checkpoint(id);result=await this.perform(owner,request,id);return result;
@@ -84,11 +85,14 @@ export class ArchiveService {
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
       const options=this.jobs.get(id)!;
-      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
+      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
       const task={child,owner,committing:false,cooperative:operation==='publish'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;
-      const finish=(reason?:Error)=>{if(settled)return;settled=true;this.active.delete(id);if(reason)reject(reason);else done(data);};
+      const scanning=!!origin&&options.scan;let scan:ArchiveScan|undefined,scanTimer:ReturnType<typeof setTimeout>|undefined,scanDone=-1,scanUiTime=0;
+      const stopScanTimer=()=>{if(scanTimer)clearTimeout(scanTimer);scanTimer=undefined;};
+      const armScanTimer=()=>{stopScanTimer();const test=process.env.ONE_TEST_MODE==='1'?Number(process.env.ONE_ARCHIVE_SCAN_TIMEOUT_MS):NaN;const timeout=Number.isInteger(test)&&test>=50&&test<=3000?test:120000;scanTimer=setTimeout(()=>{scan={state:'incomplete',files:Math.max(0,scanDone),reason:'扫描超过单文件时限'};failed=true;errorCode='scan';error='未完成恶意软件扫描：扫描超时，本次内容未发布';this.diagnostic('archive-scan',JSON.stringify({id,operation,...scan}),true);child.kill();},timeout);};
+      const finish=(reason?:Error)=>{if(settled)return;settled=true;stopScanTimer();this.active.delete(id);if(reason)reject(reason);else done(data);};
       child.stdout.setEncoding('utf8');child.stdout.on('data',(chunk:string)=>{
         buffered+=chunk;
         if(buffered.length>2*1024*1024){child.kill();failed=true;error='压缩程序输出超出限制';return;}
@@ -99,18 +103,26 @@ export class ArchiveService {
               if(!['update','drag','publish'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
               else{task.committing=true;if(operation==='publish'){child.stdin.write(Buffer.from([1]));this.notify(owner,{id,operation:'extract',done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
-            else if(message.type==='progress')this.notify(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
+            else if(message.type==='progress'){
+              if(message.phase==='scan'){if(!scanning||scan||!Number.isSafeInteger(message.done)||message.done<0||message.done<=scanDone||message.done>=1000000||message.total!==0)throw Error('扫描进度无效');scanDone=message.done;armScanTimer();const now=Date.now();if(now-scanUiTime>=100){scanUiTime=now;this.notify(owner,{id,operation:'scan',done:message.done,total:0});}}
+              else this.notify(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
+            }
+            else if(message.type==='scan'){if(scan||!validArchiveScan(message)||scanning&&message.state==='disabled'||!scanning&&message.state!=='disabled'||message.state==='passed'&&message.files!==scanDone+1||message.state==='empty'&&scanDone!==-1)throw Error('扫描结果无效');scan=copyArchiveScan(message);stopScanTimer();this.diagnostic('archive-scan',JSON.stringify({id,operation,...scan}),['incomplete','blocked'].includes(scan.state));if(scanning)data.push({type:'scan',...scan});if(scan.state==='incomplete'||scan.state==='blocked'){failed=true;errorCode=scan.state==='blocked'?'threat':'scan';error=scan.state==='blocked'?'恶意软件扫描阻止了本次解压；内容未发布':'未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';}}
             else if((message as {type:string}).type==='resources'){this.diagnostic('archive-resources',JSON.stringify({id,operation,...options.resources,level:options.level}));}
             else if((message as {type:string}).type==='origin'){const mark=message as unknown as {zone:number;stagedFiles:number};if(![3,4].includes(mark.zone)||!Number.isSafeInteger(mark.stagedFiles)||mark.stagedFiles<0||mark.stagedFiles>1000000)throw Error('来源标记结果无效');this.diagnostic('archive-source-zone',JSON.stringify({id,operation,zone:mark.zone,stagedFiles:mark.stagedFiles}));}
-            else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled','resource'].includes(message.code??''))errorCode=message.code!;if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
+            else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled','resource','scan','threat'].includes(message.code??''))errorCode=message.code!;if(errorCode==='scan')error='未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';else if(errorCode==='threat')error='恶意软件扫描阻止了本次解压；内容未发布';if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
-          }catch{failed=true;error='压缩程序返回无效数据';child.kill();}
+          }catch{failed=true;error='压缩程序返回无效数据';if(scanning&&!scan){errorCode='scan';error='未完成恶意软件扫描：扫描结果无效，内容未发布';}child.kill();}
         }
       });
       child.stderr.on('data',(chunk:Buffer)=>{if(error.length<512)error+=chunk.toString('utf8').slice(0,512);});
       child.on('error',cause=>finish(cause));
-      child.on('close',code=>{if(failed||code!==0)finish(new ArchiveFailure(error||'压缩任务已取消或失败',this.jobs.get(id)?.cancelled?'cancelled':errorCode));else finish();});
+      child.on('close',code=>{
+        const cancelled=this.jobs.get(id)?.cancelled||data.some(item=>item.type==='result'&&item.cancelled);
+        if(scanning&&!cancelled&&!scan){scan={state:'incomplete',files:Math.max(0,scanDone),reason:'归档进程未返回完整扫描结果'};this.diagnostic('archive-scan',JSON.stringify({id,operation,...scan}),true);if(!failed&&(code===0||scanDone>=0)){failed=true;errorCode='scan';error='未完成恶意软件扫描：缺少扫描结果，内容未发布';}}
+        if(failed||code!==0)finish(new ArchiveFailure(error||'压缩任务已取消或失败',this.jobs.get(id)?.cancelled?'cancelled':errorCode,scanning?scan:undefined));else finish();
+      });
       const value=Buffer.from(secret,'utf8'),header=Buffer.alloc(4);header.writeUInt32LE(value.length);
       child.stdin.on('error',()=>{});
       const input=Buffer.concat([header,value,...(packet?[packet]:[])]);
@@ -120,6 +132,7 @@ export class ArchiveService {
       if(operation!=='list'&&operation!=='browse')this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
     });
   }
+  private scanResult(messages:Message[]):{scan?:ArchiveScan}{const scan=messages.find((item):item is Extract<Message,{type:'scan'}>=>item.type==='scan');return scan?{scan:copyArchiveScan(scan)}:{};}
   private async acquireSource(owner:number,id:string,source:string):Promise<{path:string;stamp?:string;release:()=>void}>{
     if(!composite(source))return {path:source,release:()=>{}};
     const info=await stat(source,{bigint:true}),stamp=`${info.size}:${info.mtimeNs}:${info.birthtimeNs}:${info.ino}`;
@@ -202,7 +215,7 @@ export class ArchiveService {
         const messages=await this.execute(owner,id,'drag',[prepared.path,job.payload,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner),job.lease,...(folders.packet?['--folders']:[])],secret,'prepare',packet,{path:source,stamp:prepared.stamp});
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('拖出未完成');
-        return {path:source,count:result.count,cancelled:result.cancelled===true};
+        return {path:source,count:result.count,cancelled:result.cancelled===true,...this.scanResult(messages)};
       }finally{
         prepared.release();
         // The helper exits only after the target ends its async operation and
@@ -325,7 +338,7 @@ export class ArchiveService {
           const outcome=published.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
           if(!outcome)throw Error('压缩程序未确认提交成功');
           if(!outcome.cancelled)this.seal(owner,id,true);
-          return {path:parent,count:outcome.count,skipped:outcome.skipped??0,cancelled:outcome.cancelled===true};
+          return {path:parent,count:outcome.count,skipped:outcome.skipped??0,cancelled:outcome.cancelled===true,...this.scanResult(messages)};
         }
         this.checkpoint(id);const top=destination==='smart'?await readdir(temporary):[];
         let target:string;
@@ -340,7 +353,7 @@ export class ArchiveService {
           this.seal(owner,id);
           await rename(temporary,target);
         }
-        return {path:target,count:result.count};
+        return {path:target,count:result.count,...this.scanResult(messages)};
       }finally{prepared.release();await rm(temporary,{recursive:true,force:true}).catch(()=>{});}
     }
     throw Error('未知压缩操作');

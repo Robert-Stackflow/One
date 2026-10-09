@@ -1,5 +1,6 @@
 import {api,esc,icon} from './ui';
 import {installFileDropOverlay} from './file-drop-overlay';
+import {archiveScanText} from '../shared/archive-scan';
 import {archivePreferences,archiveLevelOptions} from './archive-settings';
 import {archiveEditorMarkup,setupArchiveEditor} from './archive-editor';
 import {archiveBrowserMarkup,setupArchiveBrowser} from './archive-browser';
@@ -83,7 +84,7 @@ export function setupArchiveView(){
  find<HTMLButtonElement>('#archive-test').onclick=()=>{const source=listing?.path;if(!source)return;void run(id=>api.archiveRun({operation:'test',path:source,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value)status(`校验完成：${value.count} 项`);});};
  const destinationHint=()=>{const here=field('#archive-destination-mode')==='here';find('#archive-conflict-row').hidden=!here;find('#archive-destination-hint').textContent=here?(field('#archive-conflict')==='replace'?'替换已有同名文件；同名文件夹合并，保留其他内容。替换前保留恢复副本，异常时提示恢复位置。':'直接解压到上方目标目录；同名文件夹合并，已有文件按所选方式处理。'):'智能解压时，单个顶层项目直接放入目标目录；多个项目放入同名文件夹。已有内容不会被覆盖。';};
  find<HTMLSelectElement>('#archive-destination-mode').onchange=destinationHint;find<HTMLSelectElement>('#archive-conflict').onchange=destinationHint;
- const extract=(selected:number[],selectedFolders:string[]=[])=>{lastResult=undefined;if(!listing)return;const parent=field('#archive-parent');if(!parent)return status('请选择解压目标文件夹');return run(id=>api.archiveRun({operation:'extract',path:listing!.path,revision:listing!.revision,parent,destination:field('#archive-destination-mode') as 'folder'|'smart'|'here',conflict:field('#archive-conflict') as ArchiveConflict,selected,selectedFolders,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value){lastResult=value;if(!batchActive){const item=batchItems.find(item=>item.path.toLowerCase()===listing!.path.toLowerCase());if(item){item.state=value.cancelled?'已取消':'已完成';item.detail=`已解压 ${value.count} 项${value.skipped?`，跳过 ${value.skipped} 项`:''}到 ${value.path}`;renderBatch();}}status(value.cancelled?'已取消解压，已恢复本次改动':`已解压 ${value.count} 项${value.skipped?`，跳过 ${value.skipped} 项`:''}到 ${value.path}`);if(!value.cancelled&&openCompleted.checked)void api.revealFile(value.path);}});};
+ const extract=(selected:number[],selectedFolders:string[]=[])=>{lastResult=undefined;if(!listing)return;const parent=field('#archive-parent');if(!parent)return status('请选择解压目标文件夹');return run(id=>api.archiveRun({operation:'extract',path:listing!.path,revision:listing!.revision,parent,destination:field('#archive-destination-mode') as 'folder'|'smart'|'here',conflict:field('#archive-conflict') as ArchiveConflict,selected,selectedFolders,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value){lastResult=value;if(!batchActive){const item=batchItems.find(item=>item.path.toLowerCase()===listing!.path.toLowerCase());if(item){item.state=value.cancelled?'已取消':'已完成';item.detail=`已解压 ${value.count} 项${value.skipped?`，跳过 ${value.skipped} 项`:''}到 ${value.path}`;renderBatch();}}status(value.cancelled?'已取消解压，已恢复本次改动':`已解压 ${value.count} 项${value.skipped?`，跳过 ${value.skipped} 项`:''}到 ${value.path}${value.scan?' · '+archiveScanText(value.scan):''}`);if(!value.cancelled&&openCompleted.checked)void api.revealFile(value.path);}});};
  find<HTMLButtonElement>('#archive-extract-all').onclick=()=>extract([]);
  find<HTMLButtonElement>('#archive-extract-selected').onclick=()=>{const {selected,selectedFolders}=browser.selection();if(!selected.length&&!selectedFolders.length)return status('请先选择要解压的项目');extract(selected,selectedFolders);};
  find('#archive-list').ondragstart=event=>{
@@ -95,12 +96,12 @@ export function setupArchiveView(){
    const {selected,selectedFolders}=browser.selection();
    const source=listing;
    void run(id=>api.archiveRun({operation:'drag',path:source.path,revision:source.revision!,selected,selectedFolders,password:field('#archive-password'),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{
-     if('count' in value)status(value.cancelled?'已取消拖出':'拖出操作已完成');
+     if('count' in value)status(value.cancelled?'已取消拖出':`拖出操作已完成${value.scan?' · '+archiveScanText(value.scan):''}`);
    });
  };
  find<HTMLButtonElement>('#archive-cancel').onclick=()=>{if(batchActive)batchCancelled=true;if(taskId)void api.archiveCancel(taskId);};
  api.onArchiveCancelRequested(id=>{if(id===taskId){if(batchActive)batchCancelled=true;status('正在停止…',true);}});
- api.onArchiveProgress((value:ArchiveProgress)=>{if(!busy||value.id!==taskId)return;if(value.operation==='commit'){status('正在保存结果…');return;}if(value.operation==='drag'){status(value.total?`正在传输选中内容 · ${value.done} / ${value.total}`:'拖到目标文件夹后松开鼠标；按 Esc 取消');return;}status(`${value.operation==='create'?'正在压缩':value.operation==='extract'?'正在解压':value.operation==='prepare'?'正在准备压缩包内容':value.operation==='update'?'正在校验并修改':'正在校验'} · ${value.done} / ${value.total||'…'}`,true);});
+ api.onArchiveProgress((value:ArchiveProgress)=>{if(!busy||value.id!==taskId)return;if(value.operation==='scan'){status(`正在扫描恶意软件 · 已检查 ${value.done} 个文件`,true);return;}if(value.operation==='commit'){status('正在保存结果…');return;}if(value.operation==='drag'){status(value.total?`正在传输选中内容 · ${value.done} / ${value.total}`:'拖到目标文件夹后松开鼠标；按 Esc 取消');return;}status(`${value.operation==='create'?'正在压缩':value.operation==='extract'?'正在解压':value.operation==='prepare'?'正在准备压缩包内容':value.operation==='update'?'正在校验并修改':'正在校验'} · ${value.done} / ${value.total||'…'}`,true);});
  installFileDropOverlay(root,{placement:'host',spacious:true,enabled:()=>!busy&&!batchActive,title:'压缩与解压',detail:'拖入常见压缩包浏览，或拖入文件与文件夹创建压缩包',onDrop:paths=>{if(paths.length===1&&isArchivePath(paths[0])){showMode('browse');find<HTMLInputElement>('#archive-source').value=paths[0];void load();}else{showMode('create');addPaths(paths);}}});
  const renderBatch=()=>{
   find('#archive-batch').hidden=batchItems.length<2;

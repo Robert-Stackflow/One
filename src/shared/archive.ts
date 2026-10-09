@@ -1,13 +1,14 @@
+import type {ArchiveScan} from './archive-scan';
 export type ArchiveEncoding = 0|437|932|936|950|65001;
 export type ArchiveConflict = 'rename'|'skip'|'replace';
 export type ArchiveBrowse = {directory:string;search:string;flat:boolean};
 export type ArchiveEntry = {index:number;name:string;directory:boolean;size:number;compressed:number;encrypted:boolean;implicit?:boolean};
 export type ArchiveListing = {path:string;total:number;comment:string;offset:number;entries:ArchiveEntry[];revision?:string;editable?:boolean;matched?:number;browse?:ArchiveBrowse};
-export type ArchiveProgress = {id:string;operation:'create'|'extract'|'test'|'prepare'|'update'|'commit'|'drag';done:number;total:number};
-export type ArchiveResult = {path:string;count:number;skipped?:number;cancelled?:boolean};
+export type ArchiveProgress = {id:string;operation:'create'|'extract'|'test'|'prepare'|'update'|'commit'|'drag'|'scan';done:number;total:number};
+export type ArchiveResult = {path:string;count:number;skipped?:number;cancelled?:boolean;scan?:ArchiveScan};
 export type ArchiveTaskOperation='create'|'extract'|'test'|'update'|'drag';
 export type ArchiveTaskState='running'|'completed'|'failed'|'cancelled'|'interrupted';
-export type ArchiveTask = {id:string;operation:ArchiveTaskOperation;state:ArchiveTaskState;path:string;started:number;finished?:number;phase:ArchiveProgress['operation'];done:number;total:number;cancellable:boolean;result?:ArchiveResult;message?:string};
+export type ArchiveTask = {id:string;operation:ArchiveTaskOperation;state:ArchiveTaskState;path:string;started:number;finished?:number;phase:ArchiveProgress['operation'];done:number;total:number;cancellable:boolean;result?:ArchiveResult;scan?:ArchiveScan;message?:string};
 export type ArchiveTaskOverview={active:ArchiveTask[];recent:ArchiveTask[];error:string};
 export type ArchiveEdit =
   | {kind:'delete';indexes:number[]}
@@ -18,7 +19,7 @@ export type ArchiveEdit =
 export type ArchiveRequest = Partial<import('./archive-options').ArchiveResources> & (
   | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding;password?:string;browse?:ArchiveBrowse}
   | {operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number;level?:number}
-  | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart'|'here';conflict?:ArchiveConflict;selected?:number[];selectedFolders?:string[];revision?:string;password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean}
+  | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart'|'here';conflict?:ArchiveConflict;selected?:number[];selectedFolders?:string[];revision?:string;password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean;scan?:boolean}
   | {operation:'update';path:string;revision:string;changes:ArchiveEdit[];password?:string;encoding?:ArchiveEncoding}
-  | {operation:'drag';path:string;revision:string;selected:number[];selectedFolders?:string[];password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean}
+  | {operation:'drag';path:string;revision:string;selected:number[];selectedFolders?:string[];password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean;scan?:boolean}
   | {operation:'test';path:string;password?:string;encoding?:ArchiveEncoding});

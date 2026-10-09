@@ -1,15 +1,16 @@
+import {validArchiveScan,copyArchiveScan} from '../shared/archive-scan';
 import {open,readFile,mkdir,rename,rm,lstat} from 'node:fs/promises';
 import {dirname,isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {ArchiveTask,ArchiveTaskOperation,ArchiveTaskOverview,ArchiveProgress,ArchiveResult} from '../shared/archive';
 
 const operations:ArchiveTaskOperation[]=['create','extract','test','update','drag'];
-const phases=['create','extract','test','prepare','update','commit','drag'];
+const phases=['create','extract','test','prepare','update','commit','drag','scan'];
 const states=['running','completed','failed','cancelled','interrupted'];
 const integer=(value:unknown)=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
 const taskPath=(value:unknown)=>typeof value==='string'&&value.length<=32768&&isAbsolute(value)&&!value.includes('\0');
-const valid=(value:ArchiveTask)=>value&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value.id)&&operations.includes(value.operation)&&states.includes(value.state)&&taskPath(value.path)&&integer(value.started)&&integer(value.done)&&integer(value.total)&&phases.includes(value.phase)&&typeof value.cancellable==='boolean'&&(value.finished===undefined||integer(value.finished))&&(value.message===undefined||typeof value.message==='string'&&value.message.length<=2048)&&(value.result===undefined||taskPath(value.result.path)&&integer(value.result.count)&&(value.result.skipped===undefined||integer(value.result.skipped))&&(value.result.cancelled===undefined||typeof value.result.cancelled==='boolean'));
-const copy=(task:ArchiveTask):ArchiveTask=>({...task,...(task.result?{result:{...task.result}}:{})});
+const valid=(value:ArchiveTask)=>value&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value.id)&&operations.includes(value.operation)&&states.includes(value.state)&&taskPath(value.path)&&integer(value.started)&&integer(value.done)&&integer(value.total)&&phases.includes(value.phase)&&typeof value.cancellable==='boolean'&&(value.finished===undefined||integer(value.finished))&&(value.message===undefined||typeof value.message==='string'&&value.message.length<=2048)&&(value.scan===undefined||validArchiveScan(value.scan))&&(value.result===undefined||taskPath(value.result.path)&&integer(value.result.count)&&(value.result.skipped===undefined||integer(value.result.skipped))&&(value.result.cancelled===undefined||typeof value.result.cancelled==='boolean'));
+const copy=(task:ArchiveTask):ArchiveTask=>({...task,...(task.scan?{scan:copyArchiveScan(task.scan)}:{}),...(task.result?{result:{...task.result}}:{})});
 
 /** Bounded task summaries, without request arguments, passwords or per-entry data. */
 export class ArchiveTasks {
@@ -22,7 +23,7 @@ export class ArchiveTasks {
   const interrupted=data.tasks.some((task:ArchiveTask)=>task.state==='running');
   const unique=new Set<string>();this.recent=data.tasks.filter((task:ArchiveTask)=>{if(unique.has(task.id))return false;unique.add(task.id);return true;}).map((task:ArchiveTask)=>{
    // Reconstruct only known summary fields; never retain unknown request data.
-   const value:ArchiveTask={id:task.id,operation:task.operation,state:task.state,path:task.path,started:task.started,finished:task.finished,phase:task.phase,done:task.done,total:task.total,cancellable:false,result:task.result?{path:task.result.path,count:task.result.count,skipped:task.result.skipped,cancelled:task.result.cancelled}:undefined,message:task.message};
+   const value:ArchiveTask={id:task.id,operation:task.operation,state:task.state,path:task.path,started:task.started,finished:task.finished,phase:task.phase,done:task.done,total:task.total,cancellable:false,result:task.result?{path:task.result.path,count:task.result.count,skipped:task.result.skipped,cancelled:task.result.cancelled}:undefined,message:task.message,scan:task.scan?copyArchiveScan(task.scan):undefined};
    if(value.state==='running'){value.state='interrupted';value.finished=Date.now();value.message='上次运行异常结束，任务结果尚未确认；请检查输出。';}return value;
   }).sort((a:ArchiveTask,b:ArchiveTask)=>(b.finished??b.started)-(a.finished??a.started)).slice(0,100);
   if(interrupted)await this.persist();
@@ -36,6 +37,7 @@ export class ArchiveTasks {
  async finish(id:string,result?:ArchiveResult,error?:unknown,cancelled=false){await this.ready;const task=this.live.get(id);if(!task)return;
   this.live.delete(id);task.finished=Date.now();task.cancellable=false;task.state=cancelled||result?.cancelled?'cancelled':error?'failed':'completed';
   if(result)task.result={path:result.path,count:result.count,skipped:result.skipped,cancelled:result.cancelled};
+  const scan=result?.scan??(error&&typeof error==='object'&&'scan'in error?error.scan:undefined);if(validArchiveScan(scan))task.scan=copyArchiveScan(scan);
   if(error&&!cancelled)task.message=(error instanceof Error?error.message:String(error)).slice(0,2048);
   this.recent.unshift(task);this.recent.length=Math.min(this.recent.length,100);this.changed();await this.persist();
  }
