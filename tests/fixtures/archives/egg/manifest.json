@@ -1024,6 +1024,11 @@
       "sha256": "d3092eda2cdd748e52e4f2e68c37577510f6930fdce53203338a9d71f20b0a76",
       "password": "password12345!",
       "result": {
+        "error": "InvalidDataException",
+        "message": "Reference CRC mismatch: test.txt"
+      },
+      "oracleStatus": "known-crc-failure",
+      "upstreamResult": {
         "solid": false,
         "split": false,
         "entries": [
@@ -1037,7 +1042,7 @@
           }
         ]
       },
-      "oracleStatus": "decoded"
+      "note": "Pinned upstream LeaStream returns 15 zero bytes for a 15-byte stream; original hash is not a correct plaintext expectation. Oracle now independently checks the EGG CRC."
     },
     {
       "name": "test_lea256_store.egg",
@@ -1045,6 +1050,11 @@
       "sha256": "0e1d174fe89191089312a6d9522a41316ad762b823f855633e306c20618d3b7e",
       "password": "password12345!",
       "result": {
+        "error": "InvalidDataException",
+        "message": "Reference CRC mismatch: test.txt"
+      },
+      "oracleStatus": "known-crc-failure",
+      "upstreamResult": {
         "solid": false,
         "split": false,
         "entries": [
@@ -1058,7 +1068,7 @@
           }
         ]
       },
-      "oracleStatus": "decoded"
+      "note": "Pinned upstream LeaStream returns 15 zero bytes for a 15-byte stream; original hash is not a correct plaintext expectation. Oracle now independently checks the EGG CRC."
     },
     {
       "name": "testzipenc.egg",

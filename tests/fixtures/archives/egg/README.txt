@@ -14,20 +14,29 @@ dependency into One. The runner extracts/builds under work/archive-build,
 verifies source/fixture hashes and hashes streams without publishing files
 using archive names. Public fixture passwords are recorded in the manifest.
 The modified test harness registers CP932/949 encoding providers, records full
-entry paths and actual decoded byte counts, and caps each output at 64 MiB.
+entry paths and actual decoded byte counts, checks the EGG CRC independently
+(combined contents for the corpus's single-block solid archive), and caps each
+output at 64 MiB. The original library sources remain unchanged.
 
-24 positive datasets decode through this independent oracle, covering Store,
+22 positive datasets decode with valid CRC through this independent oracle,
+covering Store,
 raw Deflate, BZip2, LZMA and AZO; AES128/256, ZipCrypto and LEA128/256; Korean and
 Japanese filenames; encrypted headers, solid contents and a real two-volume
 archive. Expected hashes refer to decoded bytes, not source code assertions.
 number.vol2.egg is an additional volume, not a separate first-volume case.
 
-Two outcomes are explicitly not positive product or oracle coverage:
+Four outcomes are explicitly not positive product or oracle coverage:
 - extattr.egg triggers a NullReferenceException in the pinned reference parser.
   Preserve it for independent header analysis and the future native parser.
 - zeros.egg reports 197540460 expanded bytes from 338 compressed payload bytes
   in the upstream test. The oracle stops after 64 MiB; no complete-output hash
   is claimed. Preserve it for future EGG resource/risk refusal checks.
+- test_lea128_store.egg and test_lea256_store.egg each return 15 zero bytes from
+  the pinned upstream LeaStream; that matches the advertised length but fails
+  the actual EGG CRC. The original incorrect hashes are retained separately
+  as upstreamResult, not used as expected plaintext. Larger LEA128/256 files
+  decode correctly and pass CRC. Native LEA must verify short/partial blocks
+  independently, rather than copy this upstream bug.
 
 The reference parser is not the production parser: its source acknowledges a
 one-block-per-entry assumption. The C++ implementation must support multiple
