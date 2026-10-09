@@ -1,6 +1,7 @@
 import {archiveResources,archiveLevel,archiveBudget,defaultArchiveResources,type ArchiveResources,type ArchiveBudget} from './archive-options';
+import {archiveCompression,defaultArchiveCompression,type ArchiveCompression} from './archive-compression';
 export const archiveFormats=['zip','7z','tar','tar.gz','tar.xz','gz','xz'] as const;
-export interface ArchivePreferences extends ArchiveResources,ArchiveBudget {
+export interface ArchivePreferences extends ArchiveResources,ArchiveBudget,ArchiveCompression {
   doubleClick:'smart'|'browse';
   defaultFormat:typeof archiveFormats[number];
   openCompleted:boolean;
@@ -9,7 +10,7 @@ export interface ArchivePreferences extends ArchiveResources,ArchiveBudget {
   conflict:import('./archive').ArchiveConflict;
   compressionLevel:number;
 }
-export const defaultArchivePreferences=():ArchivePreferences=>({doubleClick:'smart',defaultFormat:'zip',openCompleted:false,propagateZone:true,scanOnExtract:false,conflict:'rename',compressionLevel:6,...defaultArchiveResources(),...archiveBudget()});
+export const defaultArchivePreferences=():ArchivePreferences=>({doubleClick:'smart',defaultFormat:'zip',openCompleted:false,propagateZone:true,scanOnExtract:false,conflict:'rename',compressionLevel:6,...defaultArchiveResources(),...archiveBudget(),...defaultArchiveCompression()});
 export function validateArchivePreferences(value:unknown):ArchivePreferences {
   const defaults=defaultArchivePreferences();
   if(value===undefined)return defaults;
@@ -22,6 +23,6 @@ export function validateArchivePreferences(value:unknown):ArchivePreferences {
   const scanOnExtract=input.scanOnExtract===undefined?defaults.scanOnExtract:input.scanOnExtract;
   if(typeof scanOnExtract!=='boolean')throw Error('解压扫描设置无效');
   const resources=archiveResources(input);
-  return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted,propagateZone,scanOnExtract,conflict,compressionLevel:archiveLevel(input.compressionLevel===undefined?defaults.compressionLevel:input.compressionLevel),...resources,...archiveBudget(input,resources)};
+  return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted,propagateZone,scanOnExtract,conflict,compressionLevel:archiveLevel(input.compressionLevel===undefined?defaults.compressionLevel:input.compressionLevel),...resources,...archiveBudget(input,resources),...archiveCompression(input)};
 }
 export interface ArchiveAssociationState {registered:boolean;available:boolean;needsUpdate?:boolean}

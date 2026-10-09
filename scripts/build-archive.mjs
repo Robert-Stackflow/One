@@ -15,6 +15,9 @@ const zlibSource=resolve('work/archive-source/zlib');
 const zlibBuild=resolve('work/archive-build/zlib');
 const minizipBuild=resolve('work/archive-build/minizip-ng');
 const minizipSource=resolve('vendor/archive/minizip-ng');
+const lzmaSource=resolve('vendor/archive/xz');
+const lzmaBuild=resolve('work/archive-build/xz');
+const lzmaLib=join(lzmaBuild,'Release/lzma.lib');
 const zlibLib=join(zlibBuild,'Release/zlibstatic.lib');
 const minizipLib=join(minizipBuild,'Release/minizip-ng.lib');
 await mkdir('work/archive-build',{recursive:true});
@@ -24,13 +27,15 @@ if(!existsSync(zlibSource))await cp(resolve('vendor/archive/zlib'),zlibSource,{r
 const call=async(args)=>{const result=await run(cmake,args,{cwd:root,windowsHide:true,maxBuffer:4*1024*1024});process.stdout.write(result.stdout);};
 await call(['-S',zlibSource,'-B',zlibBuild,'-G','Visual Studio 17 2022','-A','x64','-DBUILD_SHARED_LIBS=OFF','-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded']);
 await call(['--build',zlibBuild,'--config','Release','--target','zlibstatic','--parallel','8']);
+await call(['-S',lzmaSource,'-B',lzmaBuild,'-G','Visual Studio 17 2022','-A','x64','-DBUILD_SHARED_LIBS=OFF','-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded','-DXZ_NLS=OFF','-DXZ_TOOL_XZ=OFF','-DXZ_TOOL_XZDEC=OFF','-DXZ_TOOL_LZMADEC=OFF','-DXZ_TOOL_LZMAINFO=OFF','-DXZ_DOC=OFF','-DBUILD_TESTING=OFF']);
+await call(['--build',lzmaBuild,'--config','Release','--target','liblzma','--parallel','8']);
 await call(['-S',minizipSource,'-B',minizipBuild,'-G','Visual Studio 17 2022','-A','x64','-DCMAKE_POLICY_DEFAULT_CMP0091=NEW','-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
-  '-DMZ_FETCH_LIBS=OFF','-DMZ_ZLIB_FLAVOR=zlib','-DMZ_BZIP2=OFF','-DMZ_LZMA=OFF','-DMZ_PPMD=OFF','-DMZ_ZSTD=OFF',
+  '-DMZ_FETCH_LIBS=OFF','-DMZ_ZLIB_FLAVOR=zlib','-DMZ_BZIP2=OFF','-DMZ_LZMA=ON','-DMZ_PPMD=OFF','-DMZ_ZSTD=OFF',
   '-DMZ_COMPAT=OFF','-DMZ_BUILD_TESTS=OFF','-DMZ_PKCRYPT=ON','-DMZ_WZAES=ON',
-  `-DZLIB_INCLUDE_DIR=${zlibSource};${zlibBuild}`,`-DZLIB_LIBRARY=${zlibLib}`]);
+  `-DZLIB_INCLUDE_DIR=${zlibSource};${zlibBuild}`,`-DZLIB_LIBRARY=${zlibLib}`,`-DLIBLZMA_INCLUDE_DIR=${lzmaSource}/src/liblzma/api`,`-DLIBLZMA_LIBRARY=${lzmaLib}`]);
 await call(['--build',minizipBuild,'--config','Release','--target','minizip-ng','--parallel','8']);
 const command=resolve('work/archive-build/build-helper.cmd');
-await writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE /I"${minizipSource}" /I"${minizipBuild}" /I"${zlibSource}" /I"${zlibBuild}" native\\archive\\archive.cpp native\\archive\\resources.cpp native\\archive\\shared-budget.cpp native\\archive\\extract-space.cpp native\\archive\\extract-risk.cpp native\\archive\\heartbeat.cpp native\\archive\\origin.cpp native\\archive\\scan.cpp native\\archive\\browse.cpp native\\archive\\extract-publish.cpp native\\archive\\extract-recover.cpp native\\archive\\zip-update.cpp native\\archive\\update-common.cpp native\\archive\\volume-stage.cpp native\\archive\\stage-ownership.cpp native\\archive\\stage-recovery.cpp native\\archive\\volume-publish.cpp native\\archive\\volume-recover.cpp native\\archive\\revision.cpp native\\archive\\drag.cpp native\\archive\\sevenzip.cpp native\\archive\\rar-comment.cpp native\\archive\\sevenzip-create.cpp /Fe:dist\\native\\One.Archive.exe /Fo:work\\archive-build\\ /link "${minizipLib}" "${zlibLib}" advapi32.lib bcrypt.lib crypt32.lib ole32.lib oleaut32.lib shell32.lib shlwapi.lib uuid.lib user32.lib\r\n`, 'utf8');
+await writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE /I"${minizipSource}" /I"${minizipBuild}" /I"${zlibSource}" /I"${zlibBuild}" native\\archive\\archive.cpp native\\archive\\resources.cpp native\\archive\\shared-budget.cpp native\\archive\\extract-space.cpp native\\archive\\extract-risk.cpp native\\archive\\heartbeat.cpp native\\archive\\origin.cpp native\\archive\\scan.cpp native\\archive\\browse.cpp native\\archive\\extract-publish.cpp native\\archive\\extract-recover.cpp native\\archive\\zip-create-parallel.cpp native\\archive\\zip-update.cpp native\\archive\\update-common.cpp native\\archive\\volume-stage.cpp native\\archive\\stage-ownership.cpp native\\archive\\stage-recovery.cpp native\\archive\\volume-publish.cpp native\\archive\\volume-recover.cpp native\\archive\\revision.cpp native\\archive\\drag.cpp native\\archive\\sevenzip.cpp native\\archive\\rar-comment.cpp native\\archive\\sevenzip-create.cpp /Fe:dist\\native\\One.Archive.exe /Fo:work\\archive-build\\ /link "${minizipLib}" "${zlibLib}" "${lzmaLib}" advapi32.lib bcrypt.lib crypt32.lib ole32.lib oleaut32.lib shell32.lib shlwapi.lib uuid.lib user32.lib\r\n`, 'utf8');
 const budgetCommand=resolve('work/archive-build/build-budget.cmd');
 await writeFile(budgetCommand,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE /DONE_BUDGET_DLL /LD native\\archive\\shared-budget.cpp /Fe:dist\\native\\One.ArchiveBudget.dll /Fo:work\\archive-build\\budget.obj /link /IMPLIB:work\\archive-build\\One.ArchiveBudget.lib advapi32.lib bcrypt.lib\r\n`,'utf8');
 const budgetResult=await run('cmd.exe',['/d','/c',budgetCommand],{cwd:root,windowsHide:true,maxBuffer:1024*1024});process.stdout.write(budgetResult.stdout);

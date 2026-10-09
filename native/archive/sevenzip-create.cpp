@@ -283,10 +283,16 @@ void seven_create(const fs::path &destination,const std::vector<fs::path> &sourc
         if(format!=0xee){
             if(archive->QueryInterface(property_id,reinterpret_cast<void**>(&properties))!=S_OK||!properties)fail("Archive writer does not support compression options");
             const auto &resources=archive_resources();
-            const wchar_t *names[]={L"x",L"mt",L"he"};PROPVARIANT values[3]{};
+            const wchar_t *names[]={L"x",L"mt",L"he",L"0",L"s"};PROPVARIANT values[5]{};
             values[0].vt=VT_UI4;values[0].ulVal=resources.level;values[1].vt=VT_UI4;values[1].ulVal=resources.threads;
             values[2].vt=VT_BOOL;values[2].boolVal=password.empty()?VARIANT_FALSE:VARIANT_TRUE;
-            if(properties->SetProperties(names,values,format==7?3:format==0x0c?2:1)!=S_OK)fail("Cannot apply archive compression options");
+            const auto method=resources.seven_method==1?L"LZMA":L"LZMA2";
+            const auto solid=resources.seven_solid==0?std::wstring(L"off"):resources.seven_solid==2048?std::wstring(L"on"):std::to_wstring(resources.seven_solid)+L"m";
+            values[3].vt=VT_BSTR;values[3].bstrVal=SysAllocString(method);
+            values[4].vt=VT_BSTR;values[4].bstrVal=SysAllocString(solid.c_str());
+            const auto applied=values[3].bstrVal&&values[4].bstrVal?properties->SetProperties(names,values,format==7?(resources.level==0?3:5):format==0x0c?2:1):E_OUTOFMEMORY;
+            PropVariantClear(&values[3]);PropVariantClear(&values[4]);
+            if(applied!=S_OK)fail("Cannot apply archive compression options");
         }
         output=new Output(destination);if(!output->valid())fail("Cannot create archive target");created=true;
         callback=new Request(items,password);

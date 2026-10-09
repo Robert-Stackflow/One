@@ -21,6 +21,13 @@ ArchiveResourceJob::ArchiveResourceJob(){
     options.level=option(L"ONE_ARCHIVE_LEVEL",6,0,9);
     options.threads=option(L"ONE_ARCHIVE_THREADS",2,1,64);
     options.memory_mib=option(L"ONE_ARCHIVE_MEMORY_MIB",1024,128,8192);
+    options.zip_method=option(L"ONE_ARCHIVE_ZIP_METHOD",8,8,95);
+    options.zip_aes=option(L"ONE_ARCHIVE_ZIP_AES",1,0,1);
+    options.seven_method=option(L"ONE_ARCHIVE_7Z_METHOD",2,1,2);
+    options.seven_solid=option(L"ONE_ARCHIVE_7Z_SOLID",64,0,2048);
+    if(options.zip_method!=8&&options.zip_method!=95)fail("Invalid ZIP compression method");
+    if(options.seven_solid!=0&&options.seven_solid!=2048&&
+       (options.seven_solid>1024||(options.seven_solid&(options.seven_solid-1))))fail("Invalid 7Z solid block size");
     job=CreateJobObjectW(nullptr,nullptr);
     if(!job)fail("Cannot create archive memory budget","resource");
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit{};

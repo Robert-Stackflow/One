@@ -1,5 +1,7 @@
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
+import {availableParallelism} from 'node:os';
+import {archiveCompression,type ArchiveCompression} from '../shared/archive-compression';
 import {lstat,link,mkdir,readdir,rename,rm,stat} from 'node:fs/promises';
 import {join,dirname,basename,extname,isAbsolute,resolve,relative} from 'node:path';
 import {existsSync} from 'node:fs';
@@ -85,7 +87,7 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ScheduledResult>>();
   private requests=new Set<string>();
-  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;passwordEncoding:ArchivePasswordEncoding;riskApproval?:ArchiveRiskApproval;extractionLimits:ExtractionBudget;source:string;extractionStarted?:number;propagateZone:boolean;scan:boolean;controller:AbortController;shared?:ArchiveSharedLease}>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;compression:ArchiveCompression;level:number;passwordEncoding:ArchivePasswordEncoding;riskApproval?:ArchiveRiskApproval;extractionLimits:ExtractionBudget;source:string;extractionStarted?:number;propagateZone:boolean;scan:boolean;controller:AbortController;shared?:ArchiveSharedLease}>();
   private scheduler=new ArchiveScheduler();
   private shared:ArchiveSharedBudget|undefined;
   private budgetOverride:ArchiveBudget|undefined;
@@ -98,7 +100,7 @@ export class ArchiveService {
   private inspections=new Map<string,{owner:number;controller:AbortController;task:Promise<import('../shared/archive-recovery').ArchiveRecoveryInspection>}>();
   private stageSnapshots=new Map<string,{owner:number;token:string;record:string}>();
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery')){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&Partial<ArchiveCompression>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery')){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
     this.recovery=new ArchiveRecoveryRegistry(recoveryDirectory);
@@ -175,12 +177,12 @@ export class ArchiveService {
     if(this.requests.size>=32)return Promise.reject(Error('进行中或等待的压缩任务过多，请等待当前任务完成'));
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
-    let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget,passwordEncoding:ArchivePasswordEncoding,approved:ArchiveRiskApproval|undefined,limits:ExtractionBudget;
+    let resources:ArchiveResources,compression:ArchiveCompression,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget,passwordEncoding:ArchivePasswordEncoding,approved:ArchiveRiskApproval|undefined,limits:ExtractionBudget;
     try{approved=riskApproval(request?.riskApproval);limits=extractionBudget(approved??request?.extractionLimits);passwordEncoding=archivePasswordEncoding(request?.passwordEncoding);if(passwordEncoding!==65001&&(typeof request?.path!=='string'||!/\.zip$/i.test(request.path)))throw Error('密码编码选项仅适用于 ZIP；其他格式请使用默认 UTF-8');password(request?.password);}catch(error){return Promise.reject(error);}
-    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=this.budgetOverride??archiveBudget(defaults,resources);}catch(error){return Promise.reject(error);}
+    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=this.budgetOverride??archiveBudget(defaults,resources);compression=archiveCompression(request.operation==='create'?request:{},archiveCompression(defaults));if(compression.autoThreads&&(request.operation==='create'||request.operation==='update'))resources.threads=Math.max(1,Math.min(availableParallelism(),64,budget.totalThreads));}catch(error){return Promise.reject(error);}
     try{this.scheduler.configure(budget);this.shared??=new ArchiveSharedBudget(budget);this.shared.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
-    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,passwordEncoding,riskApproval:approved,extractionLimits:limits,source:request.path,extractionStarted:undefined as number|undefined,propagateZone,scan,controller:new AbortController(),shared:undefined as ArchiveSharedLease|undefined};this.jobs.set(id,job);
+    const job={owner,cancelled:false,committing:false,finishing:false,resources,compression,level,passwordEncoding,riskApproval:approved,extractionLimits:limits,source:request.path,extractionStarted:undefined as number|undefined,propagateZone,scan,controller:new AbortController(),shared:undefined as ArchiveSharedLease|undefined};this.jobs.set(id,job);
     const task=(async()=>{let result:ScheduledResult|undefined,error:unknown,release:(()=>void)|undefined;
       try{if(request&&['create','extract','test','update','drag','recover','cleanup'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
         this.checkpoint(id);release=await this.scheduler.acquire(resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
@@ -203,7 +205,7 @@ export class ArchiveService {
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
       const options=this.jobs.get(id)!;
-      const child=spawn(helper(),[nativeOperation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,...options.shared!.environment,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
+      const child=spawn(helper(),[nativeOperation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,...options.shared!.environment,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_ZIP_METHOD:options.compression.zipMethod==='xz'?'95':'8',ONE_ARCHIVE_ZIP_AES:options.compression.zipEncryption==='aes256'?'1':'0',ONE_ARCHIVE_7Z_METHOD:options.compression.sevenMethod==='lzma'?'1':'2',ONE_ARCHIVE_7Z_SOLID:String(options.compression.sevenSolid==='off'?0:options.compression.sevenSolid==='solid'?2048:options.compression.sevenSolid),ONE_ARCHIVE_ZIP_WORK_DIR:nativeOperation==='create'&&/\.zip$/i.test(args[0])?join(dirname(args[0]),`.one-archive-${id}-stage`):'',ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
       const task={child,owner,committing:false,cooperative:operation==='publish'||operation==='recover'||operation==='cleanup'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;
@@ -234,7 +236,7 @@ export class ArchiveService {
               else this.notify(owner,{id,operation:operation==='drag'&&task.committing?'drag':progressOperation??(operation==='publish'?'extract':operation) as ArchiveProgress['operation'],done:message.done,total:message.total});
             }
             else if(message.type==='scan'){if(scan||!validArchiveScan(message)||scanning&&message.state==='disabled'||!scanning&&message.state!=='disabled'||message.state==='passed'&&message.files!==scanDone+1||message.state==='empty'&&scanDone!==-1)throw Error('扫描结果无效');scan=copyArchiveScan(message);stopScanTimer();this.diagnostic('archive-scan',JSON.stringify({id,operation,...scan}),['incomplete','blocked'].includes(scan.state));if(scanning)data.push({type:'scan',...scan});if(scan.state==='incomplete'||scan.state==='blocked'){failed=true;errorCode=scan.state==='blocked'?'threat':'scan';error=scan.state==='blocked'?'恶意软件扫描阻止了本次解压；内容未发布':'未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';}}
-            else if((message as {type:string}).type==='resources'){this.diagnostic('archive-resources',JSON.stringify({id,operation,...options.resources,level:options.level}));}
+            else if((message as {type:string}).type==='resources'){this.diagnostic('archive-resources',JSON.stringify({id,operation,...options.resources,level:options.level,...options.compression}));}
             else if((message as {type:string}).type==='origin'){const mark=message as unknown as {zone:number;stagedFiles:number};if(![3,4].includes(mark.zone)||!Number.isSafeInteger(mark.stagedFiles)||mark.stagedFiles<0||mark.stagedFiles>1000000)throw Error('来源标记结果无效');this.diagnostic('archive-source-zone',JSON.stringify({id,operation,zone:mark.zone,stagedFiles:mark.stagedFiles}));}
             else if(message.type==='risk'){if(risk||!validArchiveRisk(message))throw Error('解压风险数据无效');risk={revision:message.revision,entries:message.entries,bytes:message.bytes,compressed:message.compressed,nested:message.nested,highRatio:message.highRatio};this.diagnostic('archive-extraction-risk',JSON.stringify({id,operation,...risk}),true);}
             else if(message.type==='error'){failed=true;if(operation==='recover'||operation==='cleanup')this.diagnostic('archive-recovery-error',JSON.stringify({id,operation,message:message.message}),true);error=operation==='recover'||operation==='cleanup'?recoveryDiagnostic(message.message,operation==='cleanup'):archiveDiagnostic(message.message);if(['password','archive','read','write','safety','cancelled','resource','scan','threat','risk','timeout'].includes(message.code??''))errorCode=message.code!;if(errorCode==='scan')error='未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';else if(errorCode==='threat')error='恶意软件扫描阻止了本次解压；内容未发布';if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
@@ -449,7 +451,8 @@ export class ArchiveService {
       const suffix=basename(target).slice(archiveName(target).length);
       const temporary=join(dirname(target),`.one-archive-${id}${suffix}`);
       const temporaryStem=temporary.slice(0,-4),targetStem=target.slice(0,-4);
-      const stage=join(dirname(target),`.one-archive-${id}-stage`);
+      const stage=join(dirname(target),`.one-archive-${id}-stage`);let stageOwned=false;
+      const createStage=async()=>{try{await mkdir(stage);stageOwned=true;}catch(error){this.diagnostic('archive-create-staging-failed',JSON.stringify({id,message:String(error)}),true);throw new ArchiveFailure('无法创建压缩暂存目录，请检查保存位置与写入权限','write');}};
       const zipParts=async()=>{
         const prefix=basename(temporaryStem)+'.z';
         return (await readdir(dirname(temporary))).filter(name=>name.startsWith(prefix)&&/^\d{2,}$/.test(name.slice(prefix.length)))
@@ -462,12 +465,12 @@ export class ArchiveService {
       try{
         let messages:Message[];
         if(composite(target)){
-          await mkdir(stage);
+          await createStage();
           const inner=join(stage,archiveName(target)+'.tar');
           await this.execute(owner,id,'create',[inner,...checked],'');
           await this.execute(owner,id,'test',[inner,'0'],'');
           messages=await this.execute(owner,id,'create',[temporary,inner],'');
-        }else messages=await this.execute(owner,id,'create',[temporary,...(zip&&volumeBytes?[`--volume=${volumeBytes}`]:[]),...checked],secret);
+        }else{if(zip&&this.jobs.get(id)!.resources.threads>1)await createStage();messages=await this.execute(owner,id,'create',[temporary,...(zip&&volumeBytes?[`--volume=${volumeBytes}`]:[]),...checked],secret);}
         await this.execute(owner,id,'test',[temporary,'0'],secret);this.checkpoint(id);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认创建成功');
@@ -495,7 +498,7 @@ export class ArchiveService {
         this.seal(owner,id);if(!seven||!volumeBytes)await link(temporary,target);
         return {path:seven&&volumeBytes?target+'.001':target,count:composite(target)?checked.length:result.count};
       }catch(error){await Promise.allSettled(published.map(item=>rm(item,{force:true})));throw error;}
-      finally{this.publishing.delete(id);await rm(temporary,{force:true}).catch(()=>{});for(const item of seven?sevenParts:zip?await zipParts().catch(()=>[]):[])await rm(item.temporary,{force:true}).catch(()=>{});await rm(stage,{recursive:true,force:true}).catch(()=>{});}
+      finally{this.publishing.delete(id);await rm(temporary,{force:true}).catch(()=>{});for(const item of seven?sevenParts:zip?await zipParts().catch(()=>[]):[])await rm(item.temporary,{force:true}).catch(()=>{});if(stageOwned)await rm(stage,{recursive:true,force:true}).catch(()=>{});}
     }
     if(request.operation==='extract'){
       const source=archiveSource(request.path),parent=path(request.parent),parentInfo=await stat(parent);

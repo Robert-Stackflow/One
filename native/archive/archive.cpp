@@ -361,9 +361,11 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
     return done;
 }
 
+#include "zip-create-parallel.h"
 static void create(const fs::path &destination, const std::vector<fs::path> &sources,
                    const std::string &password, int64_t volume_size) {
     if (sources.empty() || fs::exists(destination)) fail("Archive target already exists or has no input");
+    if(zip_create_parallel(destination,sources,password,volume_size))return;
     void *writer = mz_zip_writer_create();
     if (!writer) fail("Cannot initialize ZIP writer","resource");
     try {
@@ -371,8 +373,9 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
         mz_zip_writer_set_follow_links(writer, 0);
         mz_zip_writer_set_store_links(writer, 0);
         mz_zip_writer_set_compress_level(writer, (int16_t)archive_resources().level);
-        if(archive_resources().level==0)mz_zip_writer_set_compress_method(writer,MZ_COMPRESS_METHOD_STORE);
-        if (!password.empty()) { mz_zip_writer_set_password(writer, password.c_str()); mz_zip_writer_set_aes(writer, 1); }
+        mz_zip_writer_set_compress_method(writer,archive_resources().level==0?MZ_COMPRESS_METHOD_STORE:archive_resources().zip_method);
+        mz_zip_writer_set_aes(writer,archive_resources().zip_aes);
+        if (!password.empty()) mz_zip_writer_set_password(writer, password.c_str());
         if (mz_zip_writer_open_file(writer, utf8(destination.wstring()).c_str(), volume_size, 0) != MZ_OK) fail("Cannot create ZIP file","write");
         for (size_t i = 0; i < sources.size(); ++i) {
             const auto &path = sources[i];

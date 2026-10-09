@@ -129,8 +129,11 @@ int32_t mz_stream_lzma_open(void *stream, const char *path, int32_t mode) {
 #endif
     }
 
-    if (lzma->error != LZMA_OK)
-        return MZ_OPEN_ERROR;
+    if (lzma->error != LZMA_OK) {
+        /* One: preserve allocation failures for the helper's resource policy. */
+        lzma_end(&lzma->lstream);
+        return lzma->error == LZMA_MEM_ERROR || lzma->error == LZMA_MEMLIMIT_ERROR ? MZ_MEM_ERROR : MZ_OPEN_ERROR;
+    }
 
     lzma->initialized = 1;
     lzma->mode = mode;
@@ -234,7 +237,7 @@ int32_t mz_stream_lzma_read(void *stream, void *buf, int32_t size) {
     MZ_UNUSED(total_in);
 
     if (lzma->error != 0)
-        return MZ_DATA_ERROR;
+        return lzma->error == LZMA_MEM_ERROR || lzma->error == LZMA_MEMLIMIT_ERROR ? MZ_MEM_ERROR : MZ_DATA_ERROR;
 
     return total_out;
 #endif
@@ -297,7 +300,7 @@ static int32_t mz_stream_lzma_code(void *stream, int32_t flush) {
 
         if (err != LZMA_OK && err != LZMA_STREAM_END) {
             lzma->error = err;
-            return MZ_DATA_ERROR;
+            return err == LZMA_MEM_ERROR || err == LZMA_MEMLIMIT_ERROR ? MZ_MEM_ERROR : MZ_DATA_ERROR;
         }
 
         lzma->buffer_len += out_bytes;
@@ -368,7 +371,7 @@ int32_t mz_stream_lzma_close(void *stream) {
     lzma->initialized = 0;
 
     if (lzma->error != LZMA_OK)
-        return MZ_CLOSE_ERROR;
+        return lzma->error == LZMA_MEM_ERROR || lzma->error == LZMA_MEMLIMIT_ERROR ? MZ_MEM_ERROR : MZ_CLOSE_ERROR;
     return MZ_OK;
 }
 

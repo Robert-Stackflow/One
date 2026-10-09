@@ -24,7 +24,7 @@ export type ArchiveEdit =
 export type ArchiveRequest = Partial<import('./archive-options').ArchiveResources> & {passwordEncoding?:ArchivePasswordEncoding;riskApproval?:import('./archive-risk').ArchiveRiskApproval;extractionLimits?:import('./archive-risk').ExtractionBudget} & (
   | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding;password?:string;browse?:ArchiveBrowse}
   | {operation:'details';path:string;index:number;revision:string;encoding?:ArchiveEncoding;password?:string}
-  | {operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number;level?:number}
+  | ({operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number;level?:number}&Partial<import('./archive-compression').ArchiveCompression>)
   | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart'|'here';conflict?:ArchiveConflict;selected?:number[];selectedFolders?:string[];revision?:string;password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean;scan?:boolean}
   | {operation:'update';path:string;revision:string;changes:ArchiveEdit[];password?:string;encoding?:ArchiveEncoding}
   | {operation:'drag';path:string;revision:string;selected:number[];selectedFolders?:string[];password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean;scan?:boolean}

@@ -4,6 +4,7 @@ import {open,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 import type {ArchiveEdit,ArchiveEncoding,ArchivePasswordEncoding,ArchiveRequest,ArchiveListing,ArchiveResult} from '../shared/archive';
 import {archiveEditPacket} from './archive-update';
+import {archiveCompression} from '../shared/archive-compression';
 import {archiveLevel,archiveResources,archiveBudget,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
 import {archiveCliDependencies} from './archive-cli-plan';
@@ -27,7 +28,7 @@ ZIP password: --password-encoding utf8|system|437|932|936|950|65001 (default utf
 extraction risk: --allow-risk [--max-extract-gib 1-8388607] [--max-extract-minutes 1-1440]
          Available for list/test/extract (composite listing may unpack a TAR wrapper).
          Default actual output limit: 64 GiB per stage, 30 minutes; risk approval is never implicit.
-resources: --threads 1-64 (compression), --memory-mib 128-8192 (per helper, default 1024)
+create options: --zip-method deflate|xz, --zip-encryption aes256|zipcrypto\n                --seven-method lzma|lzma2, --solid off|1|2|4|8|16|32|64|128|256|512|1024|solid (MiB)\nresources: --threads auto|1-64 (auto: create only), --memory-mib 128-8192 (per helper, default 1024)
 queue: --concurrency 1-8 (default 1), --total-memory-mib 128-32768, --total-threads 1-64
        Queue options belong to this invocation, not individual batch jobs.
 
@@ -52,7 +53,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  const operation=args.shift()!;
  argument(['list','create','extract','test','update','batch'].includes(operation),'Unknown archive command');
  const flags=new Set(['json','progress','password-stdin','help',...(['list','test','extract'].includes(operation)?['allow-risk']:[]),...(operation==='extract'?['no-zone','scan','no-scan']:[])]);
- const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
+ const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level','zip-method','zip-encryption','seven-method','solid'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
  for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib','password-encoding');
  for(const operation of ['list','test','extract'])allowed[operation].push('max-extract-gib','max-extract-minutes');
  for(const options of Object.values(allowed))options.push('concurrency','total-memory-mib','total-threads');
@@ -79,8 +80,9 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   try{archiveBudget(result.queue);}catch(error){throw new CliFailure(error instanceof Error?error.message:'Invalid queue options');}
  }
  if(operation==='batch'){argument(paths.length===0&&options.has('jobs'),'batch requires --jobs and no paths');result.jobsFile=filePath(options.get('jobs')!,cwd);return result;}
+ const autoThreads=options.get('threads')==='auto';argument(!autoThreads||operation==='create','Automatic threads are supported for create');
  let resources:ReturnType<typeof archiveResources>;
- try{resources=archiveResources({threads:number('threads'),memoryMiB:number('memory-mib')});}catch(error){if(error instanceof CliFailure)throw error;throw new CliFailure(error instanceof Error?error.message:'Invalid resources');}
+ try{resources=archiveResources({threads:autoThreads?undefined:number('threads'),memoryMiB:number('memory-mib')});}catch(error){if(error instanceof CliFailure)throw error;throw new CliFailure(error instanceof Error?error.message:'Invalid resources');}
  argument(paths.length>0&&paths.length<=128,'Supply 1–128 paths');
  if(operation==='create'){
   argument(options.has('output'),'create requires --output');const path=filePath(options.get('output')!,cwd);argument(targetPattern.test(path),'Unsupported output archive format');
@@ -89,7 +91,11 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   let volumeBytes=0;const volume=options.get('volume-size');if(volume){const match=/^(\d+)(KiB|MiB|GiB)?$/i.exec(volume);argument(match,'Volume size requires integer bytes or KiB/MiB/GiB');const unit=match[2]?.toLowerCase();volumeBytes=Number(match[1])*(unit==='kib'?1024:unit==='mib'?1024**2:unit==='gib'?1024**3:1);argument(Number.isSafeInteger(volumeBytes)&&volumeBytes>=1024**2&&volumeBytes<=64*1024**3,'Volume size must be 1 MiB–64 GiB');argument(/\.(zip|7z)$/i.test(path),'Only ZIP and 7Z support volumes');}
   let level:number|undefined;try{level=options.has('level')?archiveLevel(number('level')):undefined;}catch{throw new CliFailure('--level must be an integer from 0 to 9');}
   argument(!/\.tar$/i.test(path)||level===undefined||level===0,'TAR stores files without compression; only --level 0 is valid');
-  result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,passwordEncoding,...resources}}];return result;
+  argument(/\.zip$/i.test(path)||!options.has('zip-method')&&!options.has('zip-encryption'),'ZIP options require a ZIP output');
+  argument(/\.7z$/i.test(path)||!options.has('seven-method')&&!options.has('solid'),'7Z options require a 7Z output');
+  const solid=options.get('solid');let compression:ReturnType<typeof archiveCompression>;
+  try{compression=archiveCompression({zipMethod:options.get('zip-method') as 'deflate'|'xz'|undefined,zipEncryption:options.get('zip-encryption') as 'aes256'|'zipcrypto'|undefined,sevenMethod:options.get('seven-method') as 'lzma'|'lzma2'|undefined,sevenSolid:(solid===undefined?undefined:solid==='off'||solid==='solid'?solid:Number(solid)) as import('../shared/archive-compression').ArchiveCompression['sevenSolid']|undefined,autoThreads});}catch(error){throw new CliFailure(error instanceof Error?error.message:'Invalid compression options');}
+  result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,passwordEncoding,...resources,...compression}}];return result;
  }
  argument(paths.every(path=>sourcePattern.test(path)),'Unsupported input archive format');
  argument(passwordEncoding===65001||paths.every(path=>/\.zip$/i.test(path)),'Password encoding options apply only to ZIP archives');

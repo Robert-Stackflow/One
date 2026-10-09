@@ -28,6 +28,7 @@ for(const [name,version,source] of [
   output+=`\n===== Native archive: ${name} ${version} =====\nSource: ${source}\nLicense: zlib\n`;
   output+=await readFile(`vendor/archive/${name}/LICENSE`,'utf8')+'\n';
 }
+output+='\n===== Native archive: liblzma (XZ Utils) 5.8.2 =====\nSource: https://github.com/tukaani-project/xz/releases/tag/v5.8.2\nLicense: 0BSD\n'+await readFile('vendor/archive/xz/COPYING.0BSD','utf8')+'\n';
 output+='\n===== Native archive: 7-Zip 26.04 (7z.dll) =====\nSource: https://www.7-zip.org/download.html\n';
 output+=await readFile('vendor/archive/7zip/License.txt','utf8')+'\n';
 output+='\n===== vscode-icons artwork =====\nSource: https://github.com/vscode-icons/vscode-icons\n'+await readFile('assets/file-icons/LICENSE','utf8');

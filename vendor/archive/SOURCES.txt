@@ -26,12 +26,23 @@ flushes the real handle identity before allowing payload writes; callback errors
 close the handle and return MZ_WRITE_ERROR without crossing C with an exception.
 The callback is process-scoped (one native operation/writer) and unset on exit;
 ordinary create/update operations do not install it.
+One local LZMA adapter fix: allocation and decoder memory-limit errors preserve
+MZ_MEM_ERROR through open/read/write/close instead of generic I/O/data errors.
 
 zlib 1.3.1
 Source: https://github.com/madler/zlib/releases/tag/v1.3.1
 Commit: 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
 License: vendor/archive/zlib/LICENSE (zlib)
 
-Both dependencies are built statically with the MSVC x64 runtime. The archive
-helper is a separate process. Optional bzip2, LZMA, PPMd, and Zstd codecs are
-not enabled in this first ZIP implementation.
+liblzma (XZ Utils) 5.8.2
+Source: https://github.com/tukaani-project/xz/releases/tag/v5.8.2
+Archive: xz-5.8.2.tar.gz
+SHA-256: CE09C50A5962786B83E5DA389C90DD2C15ECD0980A258DD01F70F9E7CE58A8F1
+License: vendor/archive/xz/COPYING.0BSD (0BSD)
+The static liblzma target enables minizip LZMA/XZ methods. XZ tools are disabled;
+GNU getopt sources are only present for upstream CMake configuration and are not
+linked into One.Archive. See vendor/archive/xz/ONE-SOURCE.md.
+
+zlib, minizip-ng and liblzma are built statically with the MSVC x64 runtime.
+The archive helper is a separate process. Optional bzip2, PPMd and Zstd codecs
+are not enabled. 7-Zip remains an independently loaded DLL.

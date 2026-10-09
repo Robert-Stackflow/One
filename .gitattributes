@@ -10,3 +10,5 @@
 .gitignore text eol=lf
 *.cmd text eol=crlf
 *.bat text eol=crlf
+# Preserve upstream liblzma source formatting and line endings.
+vendor/archive/xz/** text eol=lf -whitespace
