@@ -100,7 +100,7 @@ export function setupArchiveView(){
   const meter=find<HTMLProgressElement>('#archive-loading-progress');if(total>0&&Number.isFinite(total)&&Number.isFinite(done)&&done>=0){meter.max=total;meter.value=Math.min(done,total);}else meter.removeAttribute('value');
   find('#archive-loading-count').textContent=total?`${done.toLocaleString()} / ${total.toLocaleString()}`:message.includes(' · ')?message.split(' · ').slice(1).join(' · '):'';
   cancelAllowed=cancellable;const cancel=find<HTMLButtonElement>('#archive-cancel');cancel.hidden=!cancellable;cancel.disabled=stopping;cancel.innerHTML=stopping?'正在停止…':`${icon('stop')}停止`;
-  find('#archive-loading-hint').textContent=stopping?'正在结束任务并清理，请稍候':cancellable?'停止后会清理本次未完成的内容':message.includes('传输')||message.includes('拖到')?'拖到目标文件夹后松开鼠标；按 Esc 取消':'正在完成最终保存，请稍候';
+  find('#archive-loading-hint').textContent=stopping?'正在结束任务，请稍候':cancellable?message.includes('修改')?'停止后保留原包；需要检查的资料会列在“恢复资料”中':'停止后会清理本次未完成的内容':message.includes('传输')||message.includes('拖到')?'拖到目标文件夹后松开鼠标；按 Esc 取消':'正在完成最终保存，请稍候';
  };
  const status=(message:string,running=false,detail='')=>{if(running){loading(message);return;}const node=find('#archive-status'),state=detail?'error':/^(已创建|已解压|校验完成|已保存)/.test(message)?'success':'info';
   node.hidden=/^已读取/.test(message);node.dataset.state=state;node.setAttribute('role',detail?'alert':'status');find('#archive-status-icon').innerHTML=icon(state==='success'?'check':'info');find('#archive-status-text').textContent=message;
@@ -127,7 +127,9 @@ export function setupArchiveView(){
   const source=listing;
   void run(id=>archiveRun({operation:'details',path:source.path,index:entry.index,revision:source.revision!,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if(!('details'in value)||!value.details)throw Error('无法读取文件信息');showArchiveDetails(value.details);status('已读取文件信息');},'正在读取文件信息…');
  }});
- const editor=setupArchiveEditor(root,{listing:()=>listing,selected:()=>browser.entries(),status,save:changes=>run(id=>archiveRun({operation:'update',path:listing!.path,revision:listing!.revision!,changes,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),()=>status('已保存压缩包修改')),saved:async()=>{if(await load())status('已保存压缩包修改');}});
+ let savedRecovery='';
+ const savedMessage=()=>savedRecovery?'已保存压缩包修改；恢复副本待清理，请打开“恢复资料”检查。':'已保存压缩包修改';
+ const editor=setupArchiveEditor(root,{listing:()=>listing,selected:()=>browser.entries(),status,save:changes=>run(id=>archiveRun({operation:'update',path:listing!.path,revision:listing!.revision!,changes,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{savedRecovery='recovery'in value?value.recovery??'':'';status(savedMessage());}),saved:async()=>{if(await load())status(savedMessage());}});
  const invalidateListing=(message?:string)=>{listing=undefined;editor.invalidate();browser.clear(message);find('#archive-list-head').hidden=true;find('#archive-count').textContent='';find('#archive-comment').textContent='';find('#archive-comment-open').hidden=true;};
  const render=()=>{if(!listing)return;find('#archive-list-head').hidden=false;find('#archive-count').textContent=`${listing.total.toLocaleString()} 项`;
    find('#archive-comment').textContent=listing.comment;find('#archive-comment-open').hidden=!listing.comment;

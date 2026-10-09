@@ -29,7 +29,7 @@ async function main(){
   for(const format of ['zip','7z'])for(const password of ['','secret 密码']){
    const target=path.join(root,`${format}-${password?'encrypted':'plain'}.${format==='zip'?'ZIP':'7z'}`),created=await run({operation:'create',path:target,sources:[dir],volumeBytes:1024**2,level:0,password});
    const source=created.path,listing=await run({operation:'list',path:source,password}),at=value=>listing.entries.find(item=>name(item.name)===value).index;
-   assert(!listing.editable,'UI remains read-only until transactional family publication is connected');assert.match(listing.revision,/^v2:/);
+   assert(listing.editable,'Transactional family publication is available');assert.match(listing.revision,/^v2:/);
    const members=(await fs.readdir(root)).filter(file=>format==='zip'?file.toLowerCase()===path.basename(source).toLowerCase()||file.startsWith(path.basename(target).slice(0,-4)+'.z'):file.startsWith(path.basename(target)+'.')).map(file=>path.join(root,file));assert(members.length>=3);
    const before=await sourceHashes(members);
    const renamed=await prepare(source,listing,[{kind:'rename',index:at('原目录/keep.bin'),name:'原目录/renamed.bin'}],password);

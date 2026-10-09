@@ -52,7 +52,7 @@ async function main(){
   // independently reads the final family; no Explorer is opened by these tests.
   for(const format of ['zip','7z'])for(const kind of ['grow','shrink','empty'])for(const password of ['','publish secret']){
    const job=await fixture(format,kind,password),rows=publish(job),result=rows.find(row=>row.type==='result');assert(result.committed&&!result.cleanupPending);assert.equal(result.volumes,Object.keys(job.next).length);assert.equal(result.removedVolumes,Object.keys(job.old).filter(name=>!job.next[name]).length);
-   await published(job);assert.deepEqual(await fs.readdir(job.stage),[]);assert(!await exists(job.recovery));native(['test',job.source,'0'],secret(password));seven(['t',job.source,...(password?['-p'+password]:[])]);
+   await published(job);assert(!await exists(job.stage));assert(!await exists(job.recovery));native(['test',job.source,'0'],secret(password));seven(['t',job.source,...(password?['-p'+password]:[])]);
    const final=await run({operation:'list',path:job.source,password});assert.equal(final.total,kind==='grow'?2:kind==='shrink'?1:0);
    if(kind!=='empty'){const out=await run({operation:'extract',path:job.source,parent:root,password});assert.deepEqual(await fs.readFile(path.join(out.path,kind==='grow'?'added.bin':'small.txt')),await fs.readFile(kind==='grow'?grow:small));}
   }
@@ -62,7 +62,7 @@ async function main(){
   // No ACK, negative ACK and normal exceptions restore all originals AND the
   // prepared family by identity. Removed tails are not discarded on rollback.
   for(const format of ['zip','7z'])for(const point of ['prepared','backup:0','published:0','commit']){
-   job=await fixture(format,point==='backup:0'?'shrink':'grow');publish(job,2,{ONE_TEST_MODE:'1',ONE_ARCHIVE_VOLUME_FAIL_POINT:point});await original(job);await staged(job);assert(!await exists(job.recovery));
+   job=await fixture(format,point==='backup:0'?'shrink':'grow');const messages=publish(job,2,{ONE_TEST_MODE:'1',ONE_ARCHIVE_VOLUME_FAIL_POINT:point});try{await original(job);await staged(job);assert(!await exists(job.recovery));}catch(error){throw new Error(`Rollback failed (${format}, ${point}): ${JSON.stringify(messages)}`,{cause:error});}
   }
   // An early queued cancel can arrive during read-only planning or at ACK;
   // both paths must report cancellation and preserve every original/staged file.

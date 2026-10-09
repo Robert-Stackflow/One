@@ -21,7 +21,8 @@ import {ArchiveSharedBudget,type ArchiveSharedLease} from './archive-shared-budg
 import {ArchiveRecoveryRegistry,inspectArchiveRecovery,archiveRecoveryId} from './archive-recovery';
 import type {ArchiveRecoveryRecord} from '../shared/archive-recovery';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean;retainCache?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
+type NativeResult={type:'result';count:number;skipped?:number;cancelled?:boolean;retainCache?:boolean;staged?:boolean;path?:string;revision?:string;volumes?:number;committed?:boolean;cleanupPending?:boolean;recovery?:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|NativeResult|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
@@ -164,8 +165,8 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'volume-recover'|'volume-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
-    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'?'cleanup':nativeOperation;
+  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'update-stage'|'volume-publish'|'volume-recover'|'volume-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'?'cleanup':nativeOperation==='volume-publish'?'publish':nativeOperation==='update-stage'?'update':nativeOperation;
     this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
@@ -193,8 +194,8 @@ export class ArchiveService {
           try{const message=JSON.parse(line) as Message;
             if(message.type==='heartbeat'){watchdog.heartbeat(message.activity);}
             else if(message.type==='ready'){
-              if(!['update','drag','publish','recover','cleanup'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
-              else{task.committing=true;if(operation==='publish'||operation==='recover'||operation==='cleanup'){child.stdin.write(Buffer.from([this.jobs.get(id)?.cancelled?2:1]));this.notify(owner,{id,operation:operation==='publish'?'extract':operation,done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
+              if(nativeOperation==='update-stage'||!['update','drag','publish','recover','cleanup'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
+              else{task.committing=true;if(operation==='publish'||operation==='recover'||operation==='cleanup'){child.stdin.write(Buffer.from([this.jobs.get(id)?.cancelled?2:1]));this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
             else if(message.type==='progress'){
               const current=`${message.phase??''}:${message.done}:${message.total}`;if(current!==lastProgress){lastProgress=current;watchdog.progress();}
@@ -359,10 +360,11 @@ export class ArchiveService {
     }
     if(request.operation==='update'){
       const source=archiveSource(request.path);
-      if(!/\.(?:zip|7z)$/i.test(source))throw Error('目前支持修改单卷 ZIP 和 7Z 压缩包');
+      if(!/\.(?:zip|7z|7z\.001)$/i.test(source))throw Error('目前支持修改 ZIP 和 7Z 压缩包');
       if(!validArchiveRevision(request.revision))throw Error('请重新打开压缩包后再保存修改');
       const packet=await archiveEditPacket(request.changes);
-      if(/\.7z$/i.test(source)&&request.changes.some(change=>change.kind==='comment'))throw Error('7Z 格式不支持压缩包备注');
+      if(/\.7z(?:\.001)?$/i.test(source)&&request.changes.some(change=>change.kind==='comment'))throw Error('7Z 格式不支持压缩包备注');
+      if(/\.7z\.001$/i.test(source)||/\.zip$/i.test(source)&&request.revision.startsWith('v2:'))return this.updateVolumes(owner,id,source,request,packet);
       const suffix=extname(source),temporary=join(dirname(source),`.one-update-${id}${suffix}`),backup=join(dirname(source),`.one-update-${id}.original${suffix}`);
       try{
         const messages=await this.execute(owner,id,'update',[source,temporary,backup,String(encoding(request.encoding)),request.revision],password(request.password),undefined,packet);
@@ -505,5 +507,35 @@ export class ArchiveService {
       }finally{prepared.release();await rm(temporary,{recursive:true,force:true}).catch(()=>{});}
     }
     throw Error('未知压缩操作');
+  }
+  private async updateVolumes(owner:number,id:string,source:string,request:Extract<ArchiveRequest,{operation:'update'}>,packet:Buffer):Promise<ArchiveResult>{
+    const parent=dirname(source),stage=join(parent,`.one-update-${randomUUID()}`),primary=join(stage,basename(source));
+    // Register before even staging. A killed rewriter has not touched originals,
+    // but its partially written directory must remain discoverable after restart.
+    const recovery=await this.recovery.register(id,source,parent,{kind:'volume-update',stage});
+    try{
+      const prepared=await this.execute(owner,id,'update-stage',[source,stage,String(encoding(request.encoding)),request.revision],password(request.password),'update',packet);
+      const staged=prepared.find((item):item is NativeResult=>item.type==='result');
+      if(!staged||staged.staged!==true||typeof staged.path!=='string'||staged.path.toLowerCase()!==primary.toLowerCase()||!validArchiveRevision(staged.revision)||!Number.isSafeInteger(staged.count)||staged.count<0||staged.count>1000000||typeof staged.volumes!=='number'||!Number.isSafeInteger(staged.volumes)||staged.volumes<1||staged.volumes>4096)throw Error('压缩程序未返回有效的新卷组，请保留暂存资料');
+      this.checkpoint(id);
+      const published=await this.execute(owner,id,'volume-publish',[source,primary,recovery.path,String(encoding(request.encoding)),request.revision,staged.revision!],password(request.password),'update');
+      const result=published.find((item):item is NativeResult=>item.type==='result');
+      if(result?.cancelled)throw new ArchiveFailure('修改已取消，原卷组已还原；新卷暂存已保留','cancelled');
+      if(!result||result.committed!==true||result.count!==staged.volumes||result.volumes!==staged.volumes||typeof result.cleanupPending!=='boolean'||result.recovery!==(result.cleanupPending?recovery.path:''))throw Error('压缩程序未确认整组保存结果，请检查恢复资料');
+      // A flushed native commit is final, including cancellation received while
+      // old copies were being cleaned. Do not report a successful save as cancelled.
+      this.seal(owner,id,true);
+      let retained=result.cleanupPending;
+      try{retained=!await this.recovery.clearIfAbsent(id);}catch(error){retained=true;this.diagnostic('archive-volume-index-cleanup',JSON.stringify({id,message:String(error)}),true);}
+      if(retained)this.diagnostic('archive-volume-cleanup-pending',JSON.stringify({id,recovery:recovery.path}),true);
+      return{path:source,count:staged.count,...(retained?{recovery:recovery.path}:{})};
+    }catch(error){
+      // Never recursively remove a stage or recovery tree: files can change
+      // after a helper exits. The immutable index and native journal govern
+      // later restore/cleanup; a partial stage with no journal is kept explicitly.
+      const retained=await this.recovery.clearIfAbsent(id).then(cleared=>!cleared).catch(()=>true);
+      if(retained){this.diagnostic('archive-volume-recovery-retained',JSON.stringify({id,recovery:recovery.path,stage}),true);throw new ArchiveFailure(`${error instanceof Error?error.message:'分卷修改未完成'}。恢复资料已保留，请在“恢复资料”中检查；暂存目录：${stage}`,error instanceof ArchiveFailure?error.code:'archive');}
+      throw error;
+    }
   }
 }

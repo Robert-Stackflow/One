@@ -9,8 +9,7 @@
 #include "update-common.h"
 #include "heartbeat.h"
 
-// Private second half of update-stage. The public editing routes stay closed
-// until restart recovery and the owning host's lifecycle are connected.
+// Private second half of update-stage, called by the owning save lifecycle.
 namespace {
 using archive_update::File;
 using archive_update::stamp;
@@ -33,8 +32,8 @@ bool private_name(const fs::path &path,const std::wstring &prefix){
 }
 struct Directory {
     HANDLE handle=INVALID_HANDLE_VALUE;
-    explicit Directory(const fs::path &path){
-        handle=CreateFileW(path.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
+    explicit Directory(const fs::path &path,DWORD access=FILE_READ_ATTRIBUTES){
+        handle=CreateFileW(path.c_str(),access,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
             FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
         BY_HANDLE_FILE_INFORMATION info{};
         if(handle==INVALID_HANDLE_VALUE||!GetFileInformationByHandle(handle,&info)||
@@ -51,7 +50,7 @@ struct Directory {
 };
 struct Directories {
     std::map<std::wstring,std::unique_ptr<Directory>> held;
-    void hold(const fs::path &path){if(!held.contains(key(path)))held.emplace(key(path),std::make_unique<Directory>(path));}
+    void hold(const fs::path &path,DWORD access=FILE_READ_ATTRIBUTES){if(!held.contains(key(path)))held.emplace(key(path),std::make_unique<Directory>(path,access));}
     void ancestors(const fs::path &path){auto current=path.root_path();hold(current);size_t depth=0;
         for(const auto &part:path.relative_path()){if(++depth>512)fail("Volume directory is too deep","safety");current/=part;hold(current);}}
     void release(const fs::path &path){held.erase(key(path));}
@@ -273,7 +272,20 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
         for(size_t i=0;i<items.size();++i){auto &item=items[i];if(!item.saved)continue;
             fault_at("cleanup:"+std::to_string(i));same(*item.old_file,item.target_stamp);erase(item.old_file->handle);item.old_file->close();item.saved=false;
             crash_at("cleanup:"+std::to_string(i));archive_activity();}
-        recovery_contents(recovery,items);log->remove();dirs.release(recovery);if(!RemoveDirectoryW(recovery.c_str()))fail("Cannot remove empty volume recovery directory","write");
+        recovery_contents(recovery,items);
+        // Remove the now-empty stage by its locked identity before discarding
+        // the manifest. Unknown contents make this fail without recursive loss;
+        // the committed journal remains available for explicit cleanup.
+        // DELETE access while publishing prevents Win32 from opening this
+        // directory as a rollback rename destination. Upgrade only after the
+        // durable commit, and verify identity again across the handle switch.
+        const auto stage_identity=dirs.identity(stage);dirs.release(stage);
+        dirs.hold(stage,FILE_READ_ATTRIBUTES|DELETE);
+        if(dirs.identity(stage)!=stage_identity)fail("Volume staging directory identity changed during cleanup","safety");
+        fault_at("cleanup-stage-directory");
+        erase(dirs.held.at(key(stage))->handle);dirs.release(stage);
+        crash_at("cleanup-stage-directory");
+        log->remove();dirs.release(recovery);if(!RemoveDirectoryW(recovery.c_str()))fail("Cannot remove empty volume recovery directory","write");
     }catch(...){cleanup_pending=true;}
     emit("{\"type\":\"result\",\"count\":"+std::to_string(next.size())+",\"volumes\":"+std::to_string(next.size())+
         ",\"removedVolumes\":"+std::to_string(removed)+",\"committed\":true,\"cleanupPending\":"+(cleanup_pending?"true":"false")+

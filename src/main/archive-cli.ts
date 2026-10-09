@@ -101,7 +101,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   if(select){argument(/^\d+(,\d+)*$/.test(select),'--select requires comma-separated zero-based indexes');selected=[...new Set(select.split(',').map(Number))];argument(selected.length<=10000&&selected.every(index=>Number.isSafeInteger(index)&&index<1000000),'Invalid selected indexes');}
   result.jobs=paths.map(path=>({operation,request:{operation,path,parent,destination:destination as 'folder'|'smart'|'here',conflict:conflict as 'rename'|'skip'|'replace',encoding,selected,propagateZone:!options.has('no-zone'),scan:options.has('scan')}}));
  }else if(operation==='update'){
-  argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
+  argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z|7z\.001)$/i.test(paths[0]),'Only ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];
  }else result.jobs=paths.map(path=>({operation:operation as 'list'|'test',request:{operation:operation as 'list'|'test',path,encoding}}));
  if(options.has('allow-risk')){const gib=number('max-extract-gib')??64,minutes=number('max-extract-minutes')??30;argument(Number.isSafeInteger(gib)&&gib>=1&&gib<=8388607&&Number.isSafeInteger(minutes)&&minutes>=1&&minutes<=1440,'Invalid extraction limits');for(const job of result.jobs)job.allowRisk={maxBytes:gib*1024**3,maxMilliseconds:minutes*60000};}
@@ -185,13 +185,13 @@ export async function runCli(command:CliCommand,service:CliService,io:CliIO):Pro
      value={path:job.request.path,count};
     }else if(job.request.operation==='update'){
      const changes=await readChanges(job.changesFile!);const listing=await call({operation:'list',path:job.request.path,encoding:job.request.encoding,passwordEncoding:job.request.passwordEncoding}) as ArchiveListing;
-     if(!listing.editable||!listing.revision)throw new CliFailure('Archive is not an editable single-volume ZIP or 7Z',2);
+     if(!listing.editable||!listing.revision)throw new CliFailure('Archive is not an editable ZIP or 7Z',2);
      value=await call({...job.request,changes,revision:listing.revision});
     }else value=await call(job.request);
     if(!('count' in value))throw new CliFailure('Archive engine returned no result',1);
     if(value.cancelled)throw new CliFailure('Cancelled; publication rolled back',130);
     counts.completed++;counts.skipped+=value.skipped??0;
-    await write('result',{...base,...value,elapsedMs:Date.now()-started},`Completed: ${value.count} items${value.skipped?`, ${value.skipped} skipped`:''} -> ${human(value.path)}${value.scan?' · '+archiveScanText(value.scan):''}`);
+    await write('result',{...base,...value,elapsedMs:Date.now()-started},`Completed: ${value.count} items${value.skipped?`, ${value.skipped} skipped`:''} -> ${human(value.path)}${value.scan?' · '+archiveScanText(value.scan):''}${value.recovery?' · Saved; recovery copies retained: '+human(value.recovery):''}`);
     io.event?.(job.operation,'ok',Date.now()-started);
    }catch(error){const code=controller.signal.aborted?130:cliExit(error,job.operation==='create'||job.operation==='extract'||job.operation==='update');codes.push(code);if(code===130)counts.cancelled++;else counts.failed++;
     const report=error&&typeof error==='object'&&'scan'in error&&validArchiveScan(error.scan)?{scan:copyArchiveScan(error.scan)}:{};const message=error instanceof Error?error.message:'Operation failed';await write('error',{...base,exitCode:code,message,...report,...(error&&typeof error==='object'&&'risk'in error?{risk:error.risk}:{})},`Failed (${code}): ${human(message)}`);io.event?.(job.operation,`error:${code}`,Date.now()-started);

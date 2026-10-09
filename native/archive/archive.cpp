@@ -222,7 +222,7 @@ static void list(Reader &reader, const std::string &revision, size_t offset, siz
     uint32_t disk = 0;
     if (mz_zip_get_disk_number_with_cd(zip_handle, &disk) != MZ_OK) fail("Cannot read ZIP volume information");
     emit("{\"type\":\"meta\",\"total\":" + std::to_string(total) + ",\"comment\":" + json(zip_comment(reader, comment)) +
-         ",\"revision\":" + json(revision) + ",\"editable\":" + (disk == 0 ? "true" : "false") + "}");
+         ",\"revision\":" + json(revision) + ",\"editable\":true}");
     if (offset >= total || !limit) return;
     int err = mz_zip_reader_goto_first_entry(reader.value);
     for (size_t i = 0; i < offset + limit && i < total; ++i) {
@@ -555,7 +555,7 @@ int wmain(int argc, wchar_t **argv) {
             lock_archive_source(argv[2]);
             if (mode == L"browse") {
                 const auto query=read_browse_query();size_t offset=std::stoull(argv[3]),limit=std::min<size_t>(500,std::stoull(argv[4]));
-                if(format==0){Reader reader(argv[2],encoding);const auto revision=zip_revision(argv[2]);BrowseRows rows(query);const auto items=zip_entries(reader);for(const auto &entry:items)rows.add(entry);const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(items.size(),zip_comment(reader,comment),revision,disk==0,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
+                if(format==0){Reader reader(argv[2],encoding);const auto revision=zip_revision(argv[2]);BrowseRows rows(query);const auto items=zip_entries(reader);for(const auto &entry:items)rows.add(entry);const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(items.size(),zip_comment(reader,comment),revision,true,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
                 else seven_browse(argv[2],offset,limit,password,format,query);
             } else if (mode == L"list") {
                 size_t offset = std::stoull(argv[3]), limit = std::min<size_t>(500, std::stoull(argv[4]));

@@ -35,7 +35,7 @@ async function main(){
   const add=path.join(root,'grow.bin'),small=path.join(root,'small.txt');await fs.writeFile(add,randomBytes(4*1024**2));await fs.writeFile(small,'small payload');
   for(const format of ['zip','7z'])for(const password of ['','stage secret']){
    const target=path.join(root,`${format}-${password?'encrypted':'plain'}.${format==='zip'?'ZIP':'7z'}`),created=await run({operation:'create',path:target,sources:[dir],volumeBytes:1024**2,level:0,password});
-   const source=created.path,listing=await run({operation:'list',path:source,password});assert.match(listing.revision,/^v2:/);assert(!listing.editable);
+   const source=created.path,listing=await run({operation:'list',path:source,password});assert.match(listing.revision,/^v2:/);assert(listing.editable);
    const members=(await fs.readdir(root)).filter(file=>format==='zip'?file===path.basename(source)||file.startsWith(path.basename(target).slice(0,-4)+'.z'):file.startsWith(path.basename(target)+'.')).map(file=>path.join(root,file));assert(members.length>=3);const before=await sourceHashes(members);
    const at=value=>listing.entries.find(item=>item.name.replaceAll('\\','/').replace(/\/$/,'')===value).index;
    const grow=await stage(source,listing,[{kind:'rename-folder',folder:'原目录',name:'移动后'},{kind:'add',source:add,name:'added.bin'},...(format==='zip'?[{kind:'comment',text:'新的分卷备注'}]:[])],password);
@@ -74,11 +74,11 @@ async function main(){
   const encodedTarget=path.join(root,'cp936.zip'),encodedPassword='中文密码',encoded=await run({operation:'create',path:encodedTarget,sources:[dir],volumeBytes:1024**2,level:0,password:encodedPassword,passwordEncoding:936}),encodedList=await run({operation:'list',path:encoded.path,password:encodedPassword,passwordEncoding:936});
   const encodedDirectory=stagePath(),encodedMessages=native(['update-stage',encoded.path,encodedDirectory,'0',encodedList.revision],Buffer.concat([secret(encodedPassword),await archiveEditPacket([{kind:'add',source:small,name:'新增.txt'}])]),0,{ONE_ARCHIVE_PASSWORD_ENCODING:'936'}),encodedResult=encodedMessages.find(item=>item.type==='result');assert(encodedResult.staged);
   await run({operation:'test',path:encodedResult.path,password:encodedPassword,passwordEncoding:936});const encodedOut=await run({operation:'extract',path:encodedResult.path,parent:root,password:encodedPassword,passwordEncoding:936});assert.equal(await fs.readFile(path.join(encodedOut.path,'新增.txt'),'utf8'),'small payload');assert.deepEqual(await fs.readFile(path.join(encodedOut.path,'原目录','keep.bin')),data);
-  // An empty split ZIP can have a four-byte data disk. Growing such an archive
-  // must stop at the writer's disk cap instead of creating an unbounded family.
+  // An empty split ZIP can have a four-byte data disk. Regrowing it uses the
+  // public minimum, rather than treating four bytes as the configured limit.
   const tiny=await run({operation:'list',path:tinyZip}),tinyMembers=(await fs.readdir(path.dirname(tinyZip))).map(file=>path.join(path.dirname(tinyZip),file)),tinyBefore=await sourceHashes(tinyMembers);
-  assert.match(tiny.revision,/^v2:/);const capped=await stage(tinyZip,tiny,[{kind:'add',source:add,name:'too-many-volumes.bin'}],'',2,path.join(path.dirname(tinyZip),'.one-update-'+randomUUID()));
-  assert(capped.messages.some(item=>item.type==='error'));assert((await fs.readdir(capped.directory)).length<=4096,'Exclusive ZIP writer bounds its disk count');assert.deepEqual(await sourceHashes(tinyMembers),tinyBefore);
+  assert.match(tiny.revision,/^v2:/);const regrown=await stage(tinyZip,tiny,[{kind:'add',source:add,name:'regrown.bin'}],'',0,path.join(path.dirname(tinyZip),'.one-update-'+randomUUID()));
+  assert.equal(regrown.result.volumeBytes,1024**2);assert(regrown.result.volumes<10);native(['test',regrown.result.path,'0'],secret(''));assert.deepEqual(await sourceHashes(tinyMembers),tinyBefore);
   const alias=path.join(root,'parent-alias');await fs.symlink(root,alias,'junction');
   // Use the alias of the actual input parent, not just a differently spelled
   // source name; reparse ancestors are rejected before a directory is created.

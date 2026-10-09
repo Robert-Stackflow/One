@@ -99,7 +99,9 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         mz_zip_writer_set_store_links(writer.value, 0);
         mz_zip_writer_set_compress_level(writer.value, 6);
         const auto output_name=utf8(temporary.wstring());
-        const int opened=group?mz_zip_writer_open_file_exclusive(writer.value,output_name.c_str(),(int64_t)source_volume_bytes(source)):
+        // An empty/small split ZIP reveals only its physical disk size, not
+        // the configured split limit. Apply the public 1 MiB minimum on save.
+        const int opened=group?mz_zip_writer_open_file_exclusive(writer.value,output_name.c_str(),(int64_t)std::max<uint64_t>(source_volume_bytes(source),1024*1024)):
             mz_zip_writer_open_file(writer.value,output_name.c_str(),0,0);
         if (opened != MZ_OK)
             fail("Cannot create staging ZIP");

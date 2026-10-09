@@ -133,9 +133,9 @@ void flush_prepared_zip(const fs::path &temporary){for(const auto &member:zip_fi
 void finish_volume_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,
                                size_t count,const std::string &password,int format){
     auto limit=source_volume_bytes(source);if(!limit)fail("Volume staging requires a split source","safety");
-    // A one-part .7z.001 only reveals total size, not its configured limit.
-    // Keep the public minimum rather than creating thousands of tiny parts.
-    if(format==7&&archive_source_members(source).size()==1)limit=std::max<uint64_t>(limit,1024*1024);
+    // Small ZIP disks and a one-part .7z.001 do not reveal their configured
+    // limit. Keep the public minimum rather than creating tiny output parts.
+    if(format==0||archive_source_members(source).size()==1)limit=std::max<uint64_t>(limit,1024*1024);
     const auto primary=format==7?split_seven(temporary,limit,password):temporary;
     const auto members=archive_source_members(primary);exact_members(temporary.parent_path(),members);
     if(zip_revision(source)!=revision)fail("Archive volume set changed during staging","safety");

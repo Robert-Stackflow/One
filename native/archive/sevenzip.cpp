@@ -382,7 +382,7 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
     const auto revision=zip_revision(source);
     U32 total=reader.count();
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
-    emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+",\"revision\":"+json(revision)+",\"editable\":"+(format==7&&extension==L".7z"?"true":"false")+"}");
+    emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+",\"revision\":"+json(revision)+",\"editable\":"+(format==7&&(extension==L".7z"||extension==L".001")?"true":"false")+"}");
     for(size_t i=offset;i<total&&i-offset<limit;++i){
         const auto item=reader.item((U32)i);
         emit("{\"type\":\"entry\",\"index\":"+std::to_string(item.index)+",\"name\":"+json(item.name)+
@@ -420,7 +420,7 @@ void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::s
     OpenArchive reader(source,password,format);const auto revision=zip_revision(source);BrowseRows rows(query);
     const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});}
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
-    rows.emit_page(total,reader.comment(),revision,format==7&&extension==L".7z",offset,limit);
+    rows.emit_page(total,reader.comment(),revision,format==7&&(extension==L".7z"||extension==L".001"),offset,limit);
     if(zip_revision(source)!=revision)fail("Archive changed during browsing; reopen it");
 }
 
