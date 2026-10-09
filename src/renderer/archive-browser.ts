@@ -2,8 +2,7 @@ import {esc,icon} from './ui';
 import type {ArchiveBrowse,ArchiveEntry,ArchiveListing} from '../shared/archive';
 
 export function archiveBrowserMarkup(){return `<div id="archive-browser" class="archive-browser" hidden>
- <div class="archive-browser-tools"><nav id="archive-breadcrumb" aria-label="包内路径"></nav><label class="archive-flat"><input id="archive-flat" type="checkbox">全部文件</label></div>
- <div class="archive-browser-search"><input id="archive-search" type="search" maxlength="1024" placeholder="搜索当前目录及子目录的文件名" aria-label="搜索包内文件名"><button id="archive-search-run" type="button">搜索</button></div>
+ <div class="archive-browser-tools"><nav id="archive-breadcrumb" aria-label="包内路径"></nav><div class="archive-browser-search"><input id="archive-search" type="search" maxlength="1024" placeholder="搜索当前目录及子目录" aria-label="搜索包内文件名"><button id="archive-search-run" type="button" class="icon-button quiet" aria-label="搜索包内文件">${icon('search')}</button></div><label class="archive-flat"><input id="archive-flat" type="checkbox">全部文件</label></div>
  <div class="archive-browser-content"><nav id="archive-tree" aria-label="包内目录"></nav><div id="archive-list" class="archive-list"><div class="archive-empty">选择压缩包后查看其中的内容</div></div></div>
  <div class="archive-browser-footer"><span id="archive-browser-summary" aria-live="polite"></span><button id="archive-selection-clear" type="button" class="quiet">清除选择</button><div><button id="archive-previous" type="button" hidden>上一页</button><button id="archive-more" type="button" hidden>下一页</button></div></div>
  </div><div id="archive-browser-empty" class="archive-empty">选择压缩包后查看其中的内容</div>`;}
@@ -12,13 +11,14 @@ const folderPath=(name:string)=>name.replaceAll('\\','/').replace(/\/?$/,'/');
 const entryKey=(entry:ArchiveEntry)=>entry.implicit?'folder:'+folderPath(entry.name):'index:'+entry.index;
 const bytes=(value:number)=>value<1024?`${value} B`:value<1024**2?`${(value/1024).toLocaleString(undefined,{maximumFractionDigits:1})} KB`:`${(value/1024**2).toLocaleString(undefined,{maximumFractionDigits:1})} MB`;
 
-export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:number)=>void;status:(message:string)=>void}){
+export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:number)=>void;status:(message:string)=>void;selectionChanged?:(count:number)=>void}){
  const find=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
  let query:ArchiveBrowse={directory:'',search:'',flat:false},listing:ArchiveListing|undefined,busy=false;
  const selected=new Map<string,ArchiveEntry>(),folderPages=new Map<string,string[]>();
  const summary=()=>{if(!listing)return;const matched=listing.matched??listing.total;
   find('#archive-browser-summary').textContent=`${matched?`${listing.offset+1}–${listing.offset+listing.entries.length} / ${matched.toLocaleString()}`:'没有匹配的项目'} · 已选择 ${selected.size} 项`;
   find('#archive-selection-clear').hidden=!selected.size;
+  options.selectionChanged?.(selected.size);
  };
  const syncChecks=()=>{for(const input of root.querySelectorAll<HTMLInputElement>('.archive-entry input'))input.checked=selected.has(input.dataset.archiveKey!);summary();};
  const nav=(directory:string)=>{if(busy)return;query={...query,directory:directory?folderPath(directory):'',search:''};find<HTMLInputElement>('#archive-search').value='';options.navigate(0);};
@@ -50,7 +50,7 @@ export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:n
   query:()=>({...query}),entries:()=>[...selected.values()],
   selection:()=>({selected:[...selected.values()].filter(entry=>!entry.implicit).map(entry=>entry.index),selectedFolders:[...selected.values()].filter(entry=>entry.implicit).map(entry=>folderPath(entry.name))}),
   setBusy(value:boolean){busy=value;controls();},
-  clear(message='选择压缩包后查看其中的内容'){listing=undefined;query={directory:'',search:'',flat:false};selected.clear();folderPages.clear();find('#archive-browser').hidden=true;find('#archive-browser-empty').hidden=false;find('#archive-browser-empty').textContent=message;find<HTMLInputElement>('#archive-search').value='';controls();},
+  clear(message='选择压缩包后查看其中的内容'){listing=undefined;query={directory:'',search:'',flat:false};selected.clear();options.selectionChanged?.(0);folderPages.clear();find('#archive-browser').hidden=true;find('#archive-list').replaceChildren();find('#archive-tree').replaceChildren();find('#archive-breadcrumb').replaceChildren();find('#archive-browser-summary').textContent='';find('#archive-browser-empty').hidden=false;find('#archive-browser-empty').textContent=message;find<HTMLInputElement>('#archive-search').value='';controls();},
   loading(){find('#archive-browser-empty').hidden=false;find('#archive-browser-empty').textContent='正在读取压缩包…';find('#archive-browser').hidden=true;},
   loaded(value:ArchiveListing){listing=value;query=value.browse??query;find('#archive-browser').hidden=false;find('#archive-browser-empty').hidden=true;
    if(!query.search&&!query.flat){folderPages.delete(query.directory);folderPages.set(query.directory,value.entries.filter(entry=>entry.directory).map(entry=>folderPath(entry.name)));while(folderPages.size>5)folderPages.delete(folderPages.keys().next().value!);}

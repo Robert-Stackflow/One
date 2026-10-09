@@ -1,3 +1,4 @@
+const {fillArchiveSources,openArchiveEditor}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -18,10 +19,12 @@ async function main(){
   });
   await page.waitForSelector('[data-page="archive"]');await page.locator('[data-page="archive"]').click();await expect(page.locator('#archive-open-completed')).not.toBeChecked();
   const content=path.join(root,'created.txt'),created=path.join(root,'created.zip');await fs.writeFile(content,'create test');
-  await page.locator('#archive-sources').fill(content);await page.locator('#archive-target').fill(created);await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包');
+  await fillArchiveSources(page,content);await page.locator('#archive-target').fill(created);await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包');
   await page.locator('[data-archive-mode="browse"]').click();await page.locator('#archive-source').fill(zip);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(200);
   const row=name=>page.locator('.archive-entry').filter({has:page.locator('.archive-entry-name',{hasText:name})});
+  await expect(page.locator('#archive-extract-selected')).toBeDisabled();
   await row('隐含目录').locator('input').check();await row('root-000').locator('input').check();
+  await expect(page.locator('#archive-extract-selected')).toHaveText('解压选中项 · 2');
   await page.locator('#archive-more').click();await expect(page.locator('.archive-entry')).toHaveCount(200);await row('root-200').locator('input').check();await expect(page.locator('#archive-browser-summary')).toContainText('已选择 3 项');
   await page.locator('#archive-search').fill('ROOT-404');await page.locator('#archive-search-run').click();await expect(page.locator('.archive-entry-name')).toHaveText(['root-404.txt']);await row('root-404').locator('input').check();await expect(page.locator('#archive-browser-summary')).toContainText('已选择 4 项');
   await page.locator('#archive-parent').fill(root);await page.locator('#archive-extract-selected').click();await expect(page.locator('#archive-status-text')).toContainText('已解压');
@@ -32,7 +35,7 @@ async function main(){
   await page.locator('#archive-selection-clear').click();await row('隐含目录').locator('button').click();await expect(page.locator('.archive-entry-name')).toHaveText(['deep','other.txt']);
   await page.locator('#archive-search').fill('data');await page.locator('#archive-search').press('Enter');await expect(page.locator('.archive-entry-name')).toHaveText(['隐含目录/deep/data.txt']);
   await page.locator('#archive-breadcrumb [data-archive-directory="隐含目录/"]').click();await expect(page.locator('.archive-entry')).toHaveCount(2);await row('deep').locator('button').click();await expect(page.locator('.archive-entry-name')).toHaveText(['data.txt']);await row('data.txt').locator('input').check();
-  await page.locator('[data-archive-edit="rename"]').click();let dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-name]').fill('隐含目录/deep/renamed.txt');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('#archive-edit-changes li')).toHaveCount(1);
+  await openArchiveEditor(page);await page.locator('[data-archive-edit="rename"]').click();let dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-name]').fill('隐含目录/deep/renamed.txt');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('#archive-edit-changes li')).toHaveCount(1);
   await page.locator('#archive-breadcrumb [data-archive-directory=""]').click();await expect(page.locator('.archive-entry')).toHaveCount(200);await expect(page.locator('#archive-edit-changes li')).toHaveCount(1);
   await page.locator('#archive-edit-save').click();dialog=page.locator('dialog[open]');await dialog.locator('[data-dialog-confirm]').click();await expect(page.locator('#archive-status-text')).toHaveText('已保存压缩包修改',{timeout:30000});
   assert.equal(await (await JSZip.loadAsync(await fs.readFile(zip))).file('隐含目录/deep/renamed.txt').async('string'),'nested');

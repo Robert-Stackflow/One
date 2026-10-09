@@ -3,7 +3,7 @@ import {closeDialog,confirmDialog,dialogMarkup,openDialog} from './dialog';
 import type {ArchiveEdit,ArchiveEntry,ArchiveListing} from '../shared/archive';
 
 export function archiveEditorMarkup(){return `<div id="archive-editor" class="archive-editor" hidden>
- <div class="archive-edit-tools" aria-label="修改压缩包"><button data-archive-edit="add">${icon('plus')}添加内容</button><button data-archive-edit="mkdir">${icon('folder')}新建目录</button><button data-archive-edit="rename">${icon('rename')}重命名</button><button data-archive-edit="delete">${icon('trash')}删除选中项</button><button data-archive-edit="comment">${icon('text')}备注</button></div>
+ <details class="archive-edit-options"><summary>修改压缩包</summary><div class="archive-edit-tools" aria-label="修改压缩包"><button data-archive-edit="add">${icon('plus')}添加内容</button><button data-archive-edit="mkdir">${icon('folder')}新建目录</button><button data-archive-edit="rename">${icon('rename')}重命名</button><button data-archive-edit="delete">${icon('trash')}删除选中项</button><button data-archive-edit="comment">${icon('text')}备注</button></div></details>
  <div id="archive-edit-preview" class="archive-edit-preview" hidden><div class="archive-edit-heading"><span id="archive-edit-summary"></span><div><button id="archive-edit-discard" class="quiet">放弃修改</button><button id="archive-edit-save" class="primary">保存修改</button></div></div><ol id="archive-edit-changes"></ol><p>保存前会校验原包和修改结果。文件夹的重命名、删除包括其中的全部内容。</p></div>
  </div>`;}
 

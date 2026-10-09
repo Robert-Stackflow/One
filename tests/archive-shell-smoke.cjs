@@ -1,3 +1,4 @@
+const {openArchiveEditor}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -71,7 +72,7 @@ async function main(){
     assert.equal(await page.locator('#archive-password').inputValue(),'','passwords must not carry between archives');
     await request('archive-extract',[hereA,hereB]);await expect(page.locator('#archive-batch-list .archive-batch-item')).toHaveCount(2);await expect(page.locator('#archive-source')).toHaveValue(hereA);
     await page.locator('[data-batch-open="1"]').click();await expect(page.locator('#archive-source')).toHaveValue(hereB);await expect(page.locator('.archive-entry-name')).toHaveText(path.basename(second));
-    await page.locator('[data-archive-edit="comment"]').click();let dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-comment]').fill('unsaved comment');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await openArchiveEditor(page);await page.locator('[data-archive-edit="comment"]').click();let dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-comment]').fill('unsaved comment');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
     await request('archive-folder',[folder]);dialog=page.locator('dialog[open]');await expect(dialog).toContainText('放弃未保存的修改');await dialog.locator('[data-dialog-cancel]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
     await expect(page.locator('#archive-source')).toHaveValue(hereB);await expect(page.locator('#archive-edit-changes li')).toHaveCount(1);await page.locator('#archive-edit-discard').click();
     const cancelA=await createArchive('cancel-a'),cancelB=await createArchive('cancel-b');

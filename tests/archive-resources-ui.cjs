@@ -1,3 +1,4 @@
+const {fillArchiveSources}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -18,7 +19,7 @@ async function main(){
   assert.equal(await page.locator('#archive-level').evaluate(node=>node.value),'0');assert.equal(await page.locator('.archive-advanced').evaluate(node=>node.open),false);
   await page.locator('.archive-advanced summary').click();await page.locator('#archive-level').evaluate(node=>{node.value='9';node.dispatchEvent(new Event('change',{bubbles:true}));});
   await page.locator('#archive-threads').fill('2');await page.locator('#archive-memory').fill('256');
-  const source=path.join(root,'input.txt'),target=path.join(root,'created.zip');await fs.writeFile(source,'resource UI\n'.repeat(50000));await page.locator('#archive-sources').fill(source);await page.locator('#archive-target').fill(target);await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包');
+  const source=path.join(root,'input.txt'),target=path.join(root,'created.zip');await fs.writeFile(source,'resource UI\n'.repeat(50000));await fillArchiveSources(page,source);await page.locator('#archive-target').fill(target);await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包');
   const request=(await app.evaluate(()=>globalThis.archiveRequests)).find(value=>value.operation==='create');assert.equal(request.level,9);assert.equal(request.threads,2);assert.equal(request.memoryMiB,256);
   assert.equal((await page.evaluate(()=>window.one.settings())).archive.compressionLevel,0,'Task override must not change saved defaults');
   await page.reload();await page.locator('[data-page="archive"]').click();await expect(page.locator('#archive-memory')).toHaveValue('192');assert.equal(await page.locator('#archive-level').evaluate(node=>node.value),'0');

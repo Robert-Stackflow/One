@@ -1,3 +1,4 @@
+const {fillArchiveSources}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -20,7 +21,7 @@ async function main(){
     }return child;
    };
   });
-  const create=async target=>{await page.locator('[data-page="archive"]').click();await page.locator('[data-archive-mode="create"]').click();await page.locator('#archive-sources').fill(input);await page.locator('#archive-target').fill(target);await app.evaluate(()=>{globalThis.holdNextArchive=true;});await page.locator('#archive-create').click();await expect.poll(()=>app.evaluate(()=>typeof globalThis.releaseArchive)).toBe('function');};
+  const create=async target=>{await page.locator('[data-page="archive"]').click();await page.locator('[data-archive-mode="create"]').click();await fillArchiveSources(page,input);await page.locator('#archive-target').fill(target);await app.evaluate(()=>{globalThis.holdNextArchive=true;});await page.locator('#archive-create').click();await expect.poll(()=>app.evaluate(()=>typeof globalThis.releaseArchive)).toBe('function');};
   await create(path.join(root,'cancelled.zip'));await page.locator('[data-page="home"]').click();await expect(page.locator('#overview-active')).toContainText('创建压缩包');
   const stop=page.locator('[data-overview-cancel][data-overview-archive]');await expect(stop).toBeEnabled();await stop.click();
   await expect(page.locator('#overview-active')).not.toContainText('创建压缩包');await expect(page.locator('#overview-history')).toContainText('已取消');await assert.rejects(fs.stat(path.join(root,'cancelled.zip')),{code:'ENOENT'});

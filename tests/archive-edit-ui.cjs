@@ -1,3 +1,4 @@
+const {openArchiveEditor}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -23,7 +24,7 @@ async function verify(format){
   await page.locator('#archive-source').fill(zip);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry-name')).toHaveCount(2);
   await expect(page.locator('#archive-editor')).toBeVisible();
   const select=name=>page.locator('.archive-entry').filter({has:page.locator('.archive-entry-name',{hasText:name})}).locator('input');
-  await select('source.txt').check();await page.locator('[data-archive-edit="rename"]').click();
+  await select('source.txt').check();await openArchiveEditor(page);await page.locator('[data-archive-edit="rename"]').click();
   let dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-name]').fill('renamed.txt');await dialog.locator('[data-edit-queue]').click();await expect(dialog).toHaveCount(0);
   await page.locator('[data-archive-edit="mkdir"]').click();dialog=page.locator('dialog[open]');await dialog.locator('[data-edit-name]').fill('empty');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
   await page.locator('[data-archive-edit="add"]').click();dialog=page.locator('dialog[open]');await dialog.locator('[data-pick-file]').click();await expect(dialog.locator('[data-edit-source]')).toHaveValue(added);await dialog.locator('[data-edit-name]').fill('added/new.txt');await dialog.locator('[data-edit-queue]').click();await expect(page.locator('dialog[open]')).toHaveCount(0);
