@@ -1,0 +1,25 @@
+.archive-recovery-dialog{width:min(760px,calc(100vw - 40px))}
+.archive-recovery-dialog .one-dialog-body{max-height:min(68vh,680px);overflow:auto}
+.archive-recovery-heading,.archive-recovery-item-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.archive-recovery-heading{margin-bottom:16px}
+.archive-recovery-heading p{margin:0;color:var(--muted);font-size:12px;line-height:1.6}
+.archive-recovery-heading button{flex:none}
+.archive-recovery-item{border-top:1px solid var(--line);padding:16px 0}
+.archive-recovery-item-heading>div:first-child{display:grid;gap:5px;min-width:0}
+.archive-recovery-item-heading strong{font-size:13px;font-weight:550;overflow-wrap:anywhere}
+.archive-recovery-item time,.archive-recovery-path{font-size:12px;color:var(--muted)}
+.archive-recovery-path{margin:8px 0 0;overflow-wrap:anywhere;line-height:1.6}
+.archive-recovery-item-actions{display:flex;align-items:center;gap:6px;flex:none}
+.archive-recovery-item-actions .icon-button{width:30px;height:30px}
+.archive-recovery-error{font-size:12px;color:var(--muted);overflow-wrap:anywhere;line-height:1.7}
+.archive-recovery-inspection{margin-top:12px;padding:14px;border-radius:10px;background:var(--soft);font-size:12px;line-height:1.7}
+.archive-recovery-inspection>strong{font-size:13px;font-weight:550}
+.archive-recovery-inspection p{margin:7px 0}
+.archive-recovery-inspection small{display:block;margin-top:10px;color:var(--muted);font-size:11px}
+.archive-recovery-inspection button{margin-left:16px}
+.archive-recovery-stats{display:flex;flex-wrap:wrap;gap:5px 18px;color:var(--muted);margin:8px 0}
+.archive-recovery-inspection details{margin-top:10px}
+.archive-recovery-inspection ul{margin:8px 0;padding-left:18px;overflow-wrap:anywhere}
+.archive-recovery-empty{display:grid;place-items:center;min-height:180px;color:var(--muted);font-size:13px}
+.archive-recovery-dialog .one-dialog-actions>[data-recovery-count]{margin-right:auto;font-size:12px;color:var(--muted)}
+@media(max-width:650px){.archive-recovery-item-heading{align-items:flex-start;gap:6px}.archive-recovery-item-actions{gap:2px}}

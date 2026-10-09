@@ -38,7 +38,7 @@ async function main(){
   const now=Date.now();if(command.progress&&!progressPending.has(progress.id)&&(now-(lastProgress.get(progress.id)??0)>=200||progress.done===progress.total&&progress.total>0)){
    lastProgress.set(progress.id,now);progressPending.add(progress.id);void err(JSON.stringify({schema:1,type:'progress',...progress})+'\n').catch(()=>abort.abort()).finally(()=>{progressPending.delete(progress.id);});
   }
- },()=> '0',()=>{},true);
+ },()=> '0',()=>{},true,undefined,undefined,join(profile,'tasks','archive-recovery'));
  runtimeCli(profile,'archive-cli-start','started');
  return runCli(command,service,{out,err,signal:abort.signal,password,budget:value=>runtimeCli(profile,'archive-cli-budget',JSON.stringify(value)),event:(operation,outcome,duration)=>runtimeCli(profile,'archive-cli-operation',`operation=${operation} outcome=${outcome}`,duration,outcome!=='ok')});
 }

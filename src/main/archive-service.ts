@@ -18,6 +18,8 @@ import {extractionBudget,riskApproval,validArchiveRisk,type ArchiveRisk,type Arc
 import {archiveEntryDetails} from '../shared/archive-details';
 import {validArchiveRevision} from '../shared/archive-revision';
 import {ArchiveSharedBudget,type ArchiveSharedLease} from './archive-shared-budget';
+import {ArchiveRecoveryRegistry,inspectArchiveRecovery,archiveRecoveryId} from './archive-recovery';
+import type {ArchiveRecoveryRecord} from '../shared/archive-recovery';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean;retainCache?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
@@ -52,16 +54,40 @@ export class ArchiveService {
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
   private dragCache:ArchiveDragCache;
+  private recovery:ArchiveRecoveryRegistry;
+  private inspections=new Map<string,{owner:number;controller:AbortController;task:Promise<import('../shared/archive-recovery').ArchiveRecoveryInspection>}>();
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources()){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery')){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
+    this.recovery=new ArchiveRecoveryRegistry(recoveryDirectory);
+  }
+  private recoveryActive(id:string,value?:ArchiveRecoveryRecord){
+    if([...this.requests].some(value=>value.toLowerCase()===id.toLowerCase()))return true;
+    if(value&&value.ownerPid!==process.pid)try{process.kill(value.ownerPid,0);return true;}catch(error){return (error as NodeJS.ErrnoException).code!=='ESRCH';}
+    return false;
+  }
+  recoveryPage(offset=0){return this.recovery.list(offset,(id,value)=>this.recoveryActive(id,value));}
+  async inspectRecovery(owner:number,id:string){
+    id=archiveRecoveryId(id);
+    if(this.stopped)throw Error('压缩服务正在关闭');if(this.inspections.size>=2||this.inspections.has(id))throw Error('已有恢复资料正在检查，请稍候');
+    const controller=new AbortController();
+    const task=(async()=>{const value=await this.recovery.read(id);controller.signal.throwIfAborted();if(this.recoveryActive(id,value))throw Error('该任务可能仍在运行，请等待结束后检查');return inspectArchiveRecovery(value,controller.signal);})();
+    this.inspections.set(id,{owner,controller,task});
+    try{const result=await task;this.diagnostic('archive-recovery-inspected',JSON.stringify({id,state:result.state,items:result.items}),result.state==='invalid');return result;}finally{this.inspections.delete(id);}
+  }
+  cancelRecoveryInspection(owner:number,id:string){const task=this.inspections.get(archiveRecoveryId(id));if(task?.owner===owner)task.controller.abort();}
+  async forgetRecovery(id:string){
+    id=archiveRecoveryId(id);
+    if(this.stopped||this.inspections.has(id)||this.requests.has(id))throw Error('任务仍在进行，请稍后处理');
+    const value=await this.recovery.read(id).catch(()=>undefined);if(this.recoveryActive(id,value))throw Error('该任务可能仍在其他实例中运行');
+    await this.recovery.forget(id);this.diagnostic('archive-recovery-forgotten',JSON.stringify({id}));
   }
   get pendingTasks(){return this.pending.size;}
   setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.shared?.configure(budget);this.budgetOverride=budget;}
   taskOverview(){return this.tasks?.overview()??Promise.resolve({active:[],recent:[],error:''});}
   cancelId(id:string){const job=this.jobs.get(id);if(!job)throw Error('任务已结束');if(!this.cancel(id,job.owner))throw Error('正在完成最终保存，请等待任务结束');return job.owner;}
-  cancelOwner(owner:number){for(const [id,job] of this.jobs)if(job.owner===owner)this.cancel(id,owner);}
+  cancelOwner(owner:number){for(const [id,job] of this.jobs)if(job.owner===owner)this.cancel(id,owner);for(const task of this.inspections.values())if(task.owner===owner)task.controller.abort();}
   private checkpoint(id:string){if(this.jobs.get(id)?.cancelled)throw new ArchiveFailure('压缩任务已取消','cancelled');}
   private seal(owner:number,id:string,confirmed=false){const job=this.jobs.get(id);if(confirmed&&job)job.cancelled=false;this.checkpoint(id);if(job)job.committing=true;this.notify(owner,{id,operation:'commit',done:0,total:0});}
   private notify(owner:number,value:ArchiveProgress){const job=this.jobs.get(value.id);this.tasks?.progress(value,!!job&&!job.cancelled&&!job.finishing&&!job.committing);this.changed(owner,value);}
@@ -71,6 +97,7 @@ export class ArchiveService {
     this.publishing.get(id)?.controller.abort();return true;}
   async stop(){
     this.stopped=true;for(const [id,job] of this.jobs)this.cancel(id,job.owner);
+    for(const task of this.inspections.values())task.controller.abort();await Promise.allSettled([...this.inspections.values()].map(value=>value.task));
     await Promise.allSettled([...this.pending]);await this.shared?.close();await this.tasks?.flush();await this.cacheMaintenance;
     for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
     this.cached.clear();await this.dragCache.sweep();
@@ -398,6 +425,7 @@ export class ArchiveService {
         if(!result)throw Error('压缩程序未确认解压成功');
         if(destination==='here'){
           const recovery=join(parent,`.one-recovery-${id}`);
+          await this.recovery.register(id,source,parent);
           let published:Message[];
           try{published=await this.execute(owner,id,'publish',[temporary,parent,recovery,conflict,source],'');}
           catch(error){
@@ -410,7 +438,7 @@ export class ArchiveService {
               throw new ArchiveFailure(`解压发布异常结束，请检查目标目录。恢复资料保留在：${recovery}。请勿删除该目录。\n${error instanceof Error?error.message:String(error)}`,error instanceof ArchiveFailure?error.code:'archive',error instanceof ArchiveFailure?error.scan:undefined);
             }
             throw error;
-          }
+          }finally{await this.recovery.clearIfAbsent(id).catch(error=>this.diagnostic('archive-recovery-index',String(error),true));}
           const outcome=published.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
           if(!outcome)throw Error('压缩程序未确认提交成功');
           if(!outcome.cancelled)this.seal(owner,id,true);
