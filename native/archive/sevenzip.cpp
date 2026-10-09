@@ -26,6 +26,7 @@ using I64 = int64_t;
 constexpr U32 path_prop=3, dir_prop=6, size_prop=7, packed_prop=8, attributes_prop=9;
 constexpr U32 encrypted_prop=15, comment_prop=28, posix_prop=53, symlink_prop=54;
 constexpr U32 reparse_prop=89, hardlink_prop=90;
+constexpr U32 name_prop=4, split_before_prop=16, error_prop=55, error_flags_prop=71, volume_index_prop=80;
 
 GUID iid(U32 group, U32 number) { return {0x23170f69,0x40c1,0x278a,{0,0,0,(BYTE)group,0,(BYTE)number,0,0}}; }
 GUID clsid(U32 format) { return {0x23170f69,0x40c1,0x278a,{0x10,0,0,1,0x10,(BYTE)format,0,0}}; }
@@ -114,10 +115,11 @@ public:
 class OpenRequest final: public OpenCallback7,public Password7,public Volume7 {
     std::atomic<ULONG> refs{1};
     fs::path directory;
-    std::wstring password;
+    std::wstring password,filename;
+    unsigned volumes=0;
 public:
     bool passwordRequested=false;
-    OpenRequest(const fs::path &source,const std::string &secret):directory(source.parent_path()),password(wide(secret)){}
+    OpenRequest(const fs::path &source,const std::string &secret):directory(source.parent_path()),password(wide(secret)),filename(source.filename().wstring()){}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
         if(matches(id,IID_IUnknown)||matches(id,iid(6,0x10)))*out=static_cast<OpenCallback7*>(this);
@@ -133,11 +135,17 @@ public:
         passwordRequested=true;if(!out)return E_POINTER;*out=nullptr;if(password.empty())return E_ABORT;
         *out=SysAllocStringLen(password.data(),(UINT)password.size());return *out?S_OK:E_OUTOFMEMORY;
     }
-    HRESULT STDMETHODCALLTYPE GetProperty(U32,PROPVARIANT *value) override {
-        if(!value)return E_POINTER;PropVariantInit(value);return S_OK;
+    HRESULT STDMETHODCALLTYPE GetProperty(U32 prop,PROPVARIANT *value) override {
+        if(!value)return E_POINTER;PropVariantInit(value);
+        // IArchiveOpenVolumeCallback requires kpidName to derive the next RAR
+        // volume. VT_EMPTY silently stops discovery even when later parts exist.
+        if(prop==name_prop){value->vt=VT_BSTR;value->bstrVal=SysAllocStringLen(filename.data(),(UINT)filename.size());if(!value->bstrVal)return E_OUTOFMEMORY;}
+        return S_OK;
     }
     HRESULT STDMETHODCALLTYPE GetStream(const wchar_t *name,InStream7 **stream) override {
         if(!stream)return E_POINTER;*stream=nullptr;
+        if(archive_cancelled())return E_ABORT;
+        if(++volumes>4096)return E_OUTOFMEMORY;
         if(!name||!name[0]||wcslen(name)>260||wcschr(name,L'/')||wcschr(name,L'\\')||wcschr(name,L':')||
            wcscmp(name,L".")==0||wcscmp(name,L"..")==0)return E_INVALIDARG;
         auto input=new FileInput(directory/name);
@@ -157,6 +165,37 @@ class OpenArchive final {
     int format;
     static std::vector<int> formats(int format){return format==3?std::vector<int>{0xcc,3}:std::vector<int>{format};}
     void close(){if(archive){archive->Close();archive->Release();archive=nullptr;}if(callback){callback->Release();callback=nullptr;}if(input){input->Release();input=nullptr;}if(library){FreeLibrary(library);library=nullptr;}}
+    void checkRar() const {
+        auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
+        if(extension==L".r00")fail("Open the first RAR volume, not a later part");
+        // Open may succeed with only a prefix of a volume set. Check the SDK's
+        // archive diagnostics before exposing rows or starting an extraction.
+        PROPVARIANT value{};PropVariantInit(&value);
+        std::string error;
+        if(archive->GetArchiveProperty(error_prop,&value)==S_OK&&value.vt==VT_BSTR){
+            if(SysStringLen(value.bstrVal)>4096){PropVariantClear(&value);fail("RAR archive diagnostic is too long");}
+            error=utf8(std::wstring(value.bstrVal,SysStringLen(value.bstrVal)));
+        }
+        PropVariantClear(&value);
+        if(!error.empty())fail(error);
+        if(archive->GetArchiveProperty(volume_index_prop,&value)==S_OK&&
+           ((value.vt==VT_UI4&&value.ulVal!=0)||(value.vt==VT_UI8&&value.uhVal.QuadPart!=0))){
+            PropVariantClear(&value);fail("Open the first RAR volume, not a later part");
+        }
+        PropVariantClear(&value);
+        U32 flags=0;
+        if(archive->GetArchiveProperty(error_flags_prop,&value)==S_OK&&value.vt==VT_UI4)flags=value.ulVal;
+        PropVariantClear(&value);
+        // DataAfterEnd alone can be an otherwise valid archive with a trailer.
+        if(flags&~(1u<<6))fail("RAR archive headers are damaged, incomplete or unsupported");
+        U32 count=0;if(archive->GetNumberOfItems(&count)!=S_OK)fail("Cannot read RAR archive entries");
+        if(count){
+            if(archive->GetProperty(0,split_before_prop,&value)==S_OK&&value.vt==VT_BOOL&&value.boolVal==VARIANT_TRUE){
+                PropVariantClear(&value);fail("Open the first RAR volume, not a later part");
+            }
+            PropVariantClear(&value);
+        }
+    }
 public:
     OpenArchive(const fs::path &source,const std::string &password,int format):source(source),format(format){try{
         wchar_t exe[32768]{};
@@ -175,7 +214,7 @@ public:
         for(int candidate:formats(format)){
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);
             if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)continue;
-            const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK)return;
+            const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){if(format==3)checkRar();return;}
             if(opened==E_OUTOFMEMORY)fail("Opening the archive exceeded the memory budget","resource");
             archive->Close();archive->Release();archive=nullptr;
             input->Seek(0,FILE_BEGIN,nullptr);

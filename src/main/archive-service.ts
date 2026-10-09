@@ -27,6 +27,9 @@ const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z|
 const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(source))throw Error('暂不支持该压缩格式');return source;};
 const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|tar\.gz|tar\.xz|zip|7z|rar|r00|tar|tgz|txz|gz|xz)$/i,'');
 const composite=(source:string)=>/\.(?:tar\.gz|tar\.xz|tgz|txz)$/i.test(source);
+const archiveDiagnostic=(message:string)=>message.startsWith('Missing volume : ')?`缺少 RAR 分卷：${message.slice('Missing volume : '.length)}。请将所有分卷放在同一文件夹后重新打开首卷。`:
+  message==='Open the first RAR volume, not a later part'?'请选择 RAR 的第一个分卷（通常为 .part1.rar、.part01.rar 或 .rar），并将全部分卷放在同一文件夹。':
+  message==='RAR archive headers are damaged, incomplete or unsupported'?'RAR 头部损坏、分卷不完整或使用了暂不支持的特性。请检查压缩包和全部分卷后重试。':message;
 type CachedTar={path:string;directory:string;stamp:string;users:number;used:number;stale:boolean};
 
 export class ArchiveService {
@@ -132,7 +135,7 @@ export class ArchiveService {
             else if((message as {type:string}).type==='resources'){this.diagnostic('archive-resources',JSON.stringify({id,operation,...options.resources,level:options.level}));}
             else if((message as {type:string}).type==='origin'){const mark=message as unknown as {zone:number;stagedFiles:number};if(![3,4].includes(mark.zone)||!Number.isSafeInteger(mark.stagedFiles)||mark.stagedFiles<0||mark.stagedFiles>1000000)throw Error('来源标记结果无效');this.diagnostic('archive-source-zone',JSON.stringify({id,operation,zone:mark.zone,stagedFiles:mark.stagedFiles}));}
             else if(message.type==='risk'){if(risk||!validArchiveRisk(message))throw Error('解压风险数据无效');risk={revision:message.revision,entries:message.entries,bytes:message.bytes,compressed:message.compressed,nested:message.nested,highRatio:message.highRatio};this.diagnostic('archive-extraction-risk',JSON.stringify({id,operation,...risk}),true);}
-            else if(message.type==='error'){failed=true;error=message.message;if(['password','archive','read','write','safety','cancelled','resource','scan','threat','risk','timeout'].includes(message.code??''))errorCode=message.code!;if(errorCode==='scan')error='未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';else if(errorCode==='threat')error='恶意软件扫描阻止了本次解压；内容未发布';if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
+            else if(message.type==='error'){failed=true;error=archiveDiagnostic(message.message);if(['password','archive','read','write','safety','cancelled','resource','scan','threat','risk','timeout'].includes(message.code??''))errorCode=message.code!;if(errorCode==='scan')error='未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';else if(errorCode==='threat')error='恶意软件扫描阻止了本次解压；内容未发布';if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
           }catch{failed=true;errorCode='archive';error='压缩程序返回无效数据';if(scanning&&!scan){errorCode='scan';error='未完成恶意软件扫描：扫描结果无效，内容未发布';}child.kill();}
