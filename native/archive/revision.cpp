@@ -78,3 +78,4 @@ std::vector<fs::path> archive_source_members(const fs::path &source){
     std::lock_guard guard(source_mutex);const auto found=sources.find(key(source));
     return found!=sources.end()&&!found->second.members.empty()?found->second.members:std::vector<fs::path>{source};
 }
+void release_archive_source(const fs::path &source){std::lock_guard guard(source_mutex);sources.erase(key(source));}

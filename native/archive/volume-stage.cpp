@@ -121,7 +121,7 @@ fs::path split_seven(const fs::path &temporary,uint64_t limit,const std::string 
 
 namespace archive_update {
 uint64_t source_volume_bytes(const fs::path &source){
-    const auto members=archive_source_members(source);if(members.size()==1)return 0;
+    const auto members=archive_source_members(source);if(members.size()==1&&!path_key(source.filename()).ends_with(L".7z.001"))return 0;
     const bool zip=key(utf8(source.extension().wstring()))==L".zip";
     // ZIP does not store its configured split limit; record boundaries can
     // make physical disks slightly smaller. This is an observed size only.
@@ -132,7 +132,10 @@ uint64_t source_volume_bytes(const fs::path &source){
 void flush_prepared_zip(const fs::path &temporary){for(const auto &member:zip_files(temporary))flush_file(member);}
 void finish_volume_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,
                                size_t count,const std::string &password,int format){
-    const auto limit=source_volume_bytes(source);if(!limit)fail("Volume staging requires a split source","safety");
+    auto limit=source_volume_bytes(source);if(!limit)fail("Volume staging requires a split source","safety");
+    // A one-part .7z.001 only reveals total size, not its configured limit.
+    // Keep the public minimum rather than creating thousands of tiny parts.
+    if(format==7&&archive_source_members(source).size()==1)limit=std::max<uint64_t>(limit,1024*1024);
     const auto primary=format==7?split_seven(temporary,limit,password):temporary;
     const auto members=archive_source_members(primary);exact_members(temporary.parent_path(),members);
     if(zip_revision(source)!=revision)fail("Archive volume set changed during staging","safety");
@@ -144,7 +147,7 @@ void finish_volume_preparation(const fs::path &source,const fs::path &temporary,
 
 void update_volume_stage(const fs::path &source,const fs::path &stage,int encoding,
                          const std::string &revision,const std::string &password,int format){
-    if((format!=0&&format!=7)||!revision.starts_with("v2:"))fail("Volume staging requires a split ZIP or 7Z source","safety");
+    if((format!=0&&format!=7)||(format==0&&!revision.starts_with("v2:"))||revision.empty()||revision.size()>256)fail("Volume staging requires a split ZIP or 7Z source","safety");
     Stage guard(source,stage);auto name=source.filename().wstring();
     if(format==7){if(!path_key(source.filename()).ends_with(L".7z.001"))fail("Volume staging requires the first 7Z volume","safety");name.resize(name.size()-4);}
     const auto temporary=stage/name,backup=stage/L".unused-original";

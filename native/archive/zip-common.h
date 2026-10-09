@@ -27,5 +27,6 @@ void lock_archive_source(const fs::path &source);
 void expect_archive_revision(const fs::path &source,const std::string &expected);
 void bind_archive_members(const fs::path &source,const std::vector<fs::path> &members);
 std::vector<fs::path> archive_source_members(const fs::path &source);
+void release_archive_source(const fs::path &source);
 void zip_update(const fs::path &source, const fs::path &temporary, const fs::path &backup,
                 int encoding, const std::string &revision, const std::string &password,bool prepare=false,bool group=false);
