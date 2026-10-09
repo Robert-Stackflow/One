@@ -88,6 +88,12 @@ async function main(){
   await run(['create','--json','--output','many.zip',largeDir]);const many=await run(['list','--json',path.join(root,'many.zip')]);assert.equal(many.records.filter(item=>item.type==='entry').length,426);
   const plan=path.join(root,'jobs.json');await fs.writeFile(plan,JSON.stringify([['create','--output','batch.zip','中文 & input'],['test','batch.zip'],['extract','--output','out','--destination','folder','batch.zip'],['list','missing.zip']]));
   const batch=await run(['batch','--json','--jobs',plan],'',8);assert.equal(batch.records.at(-1).completed,3);assert.equal(batch.records.at(-1).failed,1);
+  await fs.writeFile(plan,JSON.stringify([['create','--output','parallel.zip','--memory-mib','128','--threads','1','中文 & input'],['test','--memory-mib','128','--threads','1','parallel.zip'],['create','--output','independent.zip','--memory-mib','128','--threads','1','中文 & input'],['extract','--output','out','--memory-mib','128','--threads','1','parallel.zip'],['list','--memory-mib','128','--threads','1','independent.zip']]));
+  const parallel=await run(['batch','--json','--progress','--concurrency','3','--total-memory-mib','384','--total-threads','3','--jobs',plan]);assert.equal(parallel.records.at(-1).completed,5);
+  const createDone=parallel.records.findIndex(item=>item.type==='result'&&item.job===0),testStart=parallel.records.findIndex(item=>item.type==='start'&&item.job===1);assert(testStart>createDone);
+  const startIds=new Set(parallel.records.filter(item=>item.type==='start').map(item=>item.id));assert.equal(startIds.size,5);assert(parallel.err.trim().split(/\r?\n/).filter(Boolean).map(JSON.parse).every(item=>startIds.has(item.id)));
+  await run(['test','--json','--concurrency','2','--memory-mib','256','--total-memory-mib','128',archive,stored],'',9);
+  await run(['test','--json','--memory-mib','8192','--threads','64',stored]);
   await fs.writeFile(plan,JSON.stringify([['create','--output','should-not-exist.zip','中文 & input'],['batch','--jobs','jobs.json']]));await run(['batch','--json','--jobs',plan],'',2);await assert.rejects(()=>fs.stat(path.join(root,'should-not-exist.zip')));
 
   // Verify installed file layout and ASAR resolution without installing or
@@ -100,6 +106,7 @@ async function main(){
   for(const file of ['One.Archive.exe','7z.dll'])await fs.copyFile(path.resolve('dist/native',file),path.join(source,'dist/native',file));
   await asar.createPackageWithOptions(source,path.join(packaged,'resources/app.asar'),{unpackDir:'dist/native'});await fs.copyFile(cli,path.join(packaged,'One.Cli.exe'));
   await run(['create','--json','--output','packaged.zip',input],'',0,path.join(packaged,'One.Cli.exe'));await run(['test','--json',path.join(root,'packaged.zip')],'',0,path.join(packaged,'One.Cli.exe'));
+  const packagedParallel=await run(['test','--json','--progress','--concurrency','2','--memory-mib','128',path.join(root,'packaged.zip'),stored],'',0,path.join(packaged,'One.Cli.exe'));assert.equal(packagedParallel.records.at(-1).completed,2);
   const candidate=path.join(root,'release-check');await fs.mkdir(candidate);await fs.rename(packaged,path.join(candidate,'win-unpacked'));await fs.copyFile(cli,path.join(source,'dist/native/One.Cli.exe'));
   const {validateRelease}=await import('../scripts/release.mjs');assert.equal((await validateRelease(candidate,source,'0.16.20')).checked,4);
 
@@ -112,6 +119,12 @@ async function main(){
    const captured=path.join(root,`cancel-${event}.jsonl`),errors=path.join(root,`cancel-${event}.stderr`),target=path.join(root,`cancel-${event}.zip`);
    const interrupted=spawn(harness,[captured,errors,cli,'archive','create','--json','--progress','--output',target,big],{env:{...env,ONE_TEST_CONSOLE_EVENT:event},windowsHide:true,stdio:'pipe'});const exit=await new Promise((resolve,reject)=>{interrupted.on('error',reject);interrupted.on('close',resolve);});
    assert.equal(exit,130,await fs.readFile(captured,'utf8')+'\n'+await fs.readFile(errors,'utf8'));await assert.rejects(()=>fs.stat(target));assert(!(await fs.readdir(root)).some(name=>name.startsWith('.one-archive-')));
+  }
+  const parallelCancelPlan=path.join(root,'parallel-cancel.json'),parallelTargets=Array.from({length:3},(_,index)=>path.join(root,`parallel-cancel-${index}.zip`));await fs.writeFile(parallelCancelPlan,JSON.stringify(parallelTargets.map(target=>['create','--output',target,big])));
+  for(const event of ['break','c']){
+   const captured=path.join(root,`parallel-cancel-${event}.jsonl`),errors=path.join(root,`parallel-cancel-${event}.stderr`);
+   const interrupted=spawn(harness,[captured,errors,cli,'archive','batch','--json','--progress','--concurrency','2','--jobs',parallelCancelPlan],{env:{...env,ONE_TEST_CONSOLE_EVENT:event,ONE_TEST_CONSOLE_PROGRESS_JOBS:'2'},windowsHide:true,stdio:'pipe'});const exit=await new Promise((resolve,reject)=>{interrupted.on('error',reject);interrupted.on('close',resolve);});
+   const records=(await fs.readFile(captured,'utf8')).trim().split(/\r?\n/).map(JSON.parse);assert.equal(exit,130,JSON.stringify(records)+'\n'+await fs.readFile(errors,'utf8'));assert.equal(records.at(-1).cancelled,3);for(const target of parallelTargets)await assert.rejects(()=>fs.stat(target));assert(!(await fs.readdir(root)).some(name=>name.startsWith('.one-archive-')));
   }
   const sessions=await fs.readdir(path.join(profile,'archive-cli/temp'));assert.deepEqual(sessions,[]);
   const log=await fs.readFile(path.join(profile,'logs/cli.jsonl'),'utf8');assert(log.includes('archive-cli-operation'));assert(!log.includes(secret));assert(!log.includes('hello.txt'));

@@ -349,7 +349,7 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
                 } else if (fs::is_regular_file(item)) {
                     err = mz_zip_writer_add_file(writer, utf8(item.wstring()).c_str(), name.c_str());
                 } else fail("Source contains an unsupported file");
-                if (err != MZ_OK) fail("Cannot add source to ZIP: " + utf8(item.wstring()),err==MZ_MEM_ERROR?"resource":"archive");
+                if (err != MZ_OK) fail("Cannot add source to ZIP (engine " + std::to_string(err) + "): " + utf8(item.wstring()),err==MZ_MEM_ERROR?"resource":err==MZ_OPEN_ERROR||err==MZ_READ_ERROR?"read":err==MZ_WRITE_ERROR?"write":"archive");
             };
             if (fs::is_directory(path)) {
                 add(path, path.parent_path());

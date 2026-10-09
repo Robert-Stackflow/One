@@ -13,6 +13,8 @@ minizip-ng 4.1.2
 Source: https://github.com/zlib-ng/minizip-ng/releases/tag/4.1.2
 Commit: 9826cbd4355af856b38bf8d863b29653b90c6b7f
 License: vendor/archive/minizip-ng/LICENSE (zlib)
+One local source modification: mz_os_win32.c size queries use shared read/write
+access, matching the input stream, so concurrent readers cannot block one another.
 
 zlib 1.3.1
 Source: https://github.com/madler/zlib/releases/tag/v1.3.1

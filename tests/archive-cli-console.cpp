@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <set>
+#include <sstream>
 static std::wstring quote(const std::wstring &value){std::wstring out=L"\"";size_t slashes=0;for(auto ch:value){if(ch==L'\\'){slashes++;continue;}out.append(ch==L'"'?slashes*2+1:slashes,L'\\');out+=ch;slashes=0;}out.append(slashes*2,L'\\');return out+L'"';}
 static BOOL WINAPI ignore(DWORD){return TRUE;}
 // Send a real console Ctrl+Break after the CLI reports native task progress.
@@ -13,8 +15,11 @@ int wmain(int argc,wchar_t **argv){
  STARTUPINFOW start{};start.cb=sizeof(start);start.dwFlags=STARTF_USESTDHANDLES|STARTF_USESHOWWINDOW;start.wShowWindow=SW_HIDE;start.hStdInput=input;start.hStdOutput=output;start.hStdError=errors;
  std::wstring command;for(int i=3;i<argc;i++){if(i>3)command+=L' ';command+=quote(argv[i]);}
  PROCESS_INFORMATION child{};if(!CreateProcessW(argv[3],command.data(),nullptr,nullptr,TRUE,CREATE_NEW_CONSOLE|CREATE_NEW_PROCESS_GROUP,nullptr,nullptr,&start,&child))return 124;
+ wchar_t requiredText[8]{};GetEnvironmentVariableW(L"ONE_TEST_CONSOLE_PROGRESS_JOBS",requiredText,8);const auto requested=_wtoi(requiredText);const auto required=requested>=1&&requested<=8?requested:1;
  bool ready=false;for(int i=0;i<500;i++){
-  std::ifstream file(argv[2],std::ios::binary);std::string data((std::istreambuf_iterator<char>(file)),{});if(data.find("\"type\":\"progress\"")!=std::string::npos){ready=true;break;}
+  std::ifstream file(argv[2],std::ios::binary);std::string data((std::istreambuf_iterator<char>(file)),{});std::istringstream lines(data);std::string line;std::set<std::string> ids;
+  while(std::getline(lines,line)){if(line.find("\"type\":\"progress\"")==std::string::npos||line.find("\"operation\":\"queue\"")!=std::string::npos)continue;const auto start=line.find("\"id\":\"");if(start==std::string::npos)continue;const auto end=line.find('"',start+6);if(end!=std::string::npos)ids.insert(line.substr(start+6,end-start-6));}
+  if(ids.size()>=size_t(required)){ready=true;break;}
   if(WaitForSingleObject(child.hProcess,10)==WAIT_OBJECT_0)break;
  }
  wchar_t mode[8]{};GetEnvironmentVariableW(L"ONE_TEST_CONSOLE_EVENT",mode,8);bool ctrlC=wcscmp(mode,L"c")==0;

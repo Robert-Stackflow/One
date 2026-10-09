@@ -202,10 +202,12 @@ int64_t mz_os_get_file_size(const char *path) {
     path_wide = mz_os_unicode_string_create(path, MZ_ENCODING_UTF8);
     if (!path_wide)
         return MZ_PARAM_ERROR;
+    /* One local change: size queries share access like the input stream.
+       Exclusive metadata opens race with parallel readers of the same source. */
 #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
-    handle = CreateFile2(path_wide, GENERIC_READ, 0, OPEN_EXISTING, NULL);
+    handle = CreateFile2(path_wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING, NULL);
 #else
-    handle = CreateFileW(path_wide, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    handle = CreateFileW(path_wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 #endif
     mz_os_unicode_string_delete(&path_wide);
 

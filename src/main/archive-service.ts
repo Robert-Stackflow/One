@@ -33,6 +33,7 @@ export class ArchiveService {
   private requests=new Set<string>();
   private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;propagateZone:boolean;scan:boolean;controller:AbortController}>();
   private scheduler=new ArchiveScheduler();
+  private budgetOverride:ArchiveBudget|undefined;
   private stopped=false;
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
@@ -44,6 +45,7 @@ export class ArchiveService {
     this.cacheMaintenance=this.dragCache.sweep();
   }
   get pendingTasks(){return this.pending.size;}
+  setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.budgetOverride=budget;}
   taskOverview(){return this.tasks?.overview()??Promise.resolve({active:[],recent:[],error:''});}
   cancelId(id:string){const job=this.jobs.get(id);if(!job)throw Error('任务已结束');if(!this.cancel(id,job.owner))throw Error('正在完成最终保存，请等待任务结束');return job.owner;}
   private checkpoint(id:string){if(this.jobs.get(id)?.cancelled)throw new ArchiveFailure('压缩任务已取消','cancelled');}
@@ -68,7 +70,7 @@ export class ArchiveService {
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
     let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget;
-    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=archiveBudget(defaults,resources);}catch(error){return Promise.reject(error);}
+    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=this.budgetOverride??archiveBudget(defaults,resources);}catch(error){return Promise.reject(error);}
     try{this.scheduler.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
     const job={owner,cancelled:false,committing:false,finishing:false,resources,level,propagateZone,scan,controller:new AbortController()};this.jobs.set(id,job);

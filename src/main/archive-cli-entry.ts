@@ -32,16 +32,15 @@ async function main(){
  const command=parseCli(args,process.cwd());json=command.json;
  if(command.help){return runCli(command,{} as ArchiveService,{out,err,signal:abort.signal,password});}
  await mkdir(cacheParent,{recursive:true});session=await mkdtemp(join(cacheParent,'session-'));process.env.TEMP=session;process.env.TMP=session;
- let lastProgress=0;
- let progressPending=false;
+ const lastProgress=new Map<string,number>(),progressPending=new Set<string>();
  service=new ArchiveService(session,(_owner,progress)=>{
   if(abort.signal.aborted)service?.cancel(progress.id,0);
-  const now=Date.now();if(command.progress&&!progressPending&&(now-lastProgress>=200||progress.done===progress.total&&progress.total>0)){
-   lastProgress=now;progressPending=true;void err(JSON.stringify({schema:1,type:'progress',...progress})+'\n').catch(()=>abort.abort()).finally(()=>{progressPending=false;});
+  const now=Date.now();if(command.progress&&!progressPending.has(progress.id)&&(now-(lastProgress.get(progress.id)??0)>=200||progress.done===progress.total&&progress.total>0)){
+   lastProgress.set(progress.id,now);progressPending.add(progress.id);void err(JSON.stringify({schema:1,type:'progress',...progress})+'\n').catch(()=>abort.abort()).finally(()=>{progressPending.delete(progress.id);});
   }
  },()=> '0',()=>{},true);
  runtimeCli(profile,'archive-cli-start','started');
- return runCli(command,service,{out,err,signal:abort.signal,password,event:(operation,outcome,duration)=>runtimeCli(profile,'archive-cli-operation',`operation=${operation} outcome=${outcome}`,duration,outcome!=='ok')});
+ return runCli(command,service,{out,err,signal:abort.signal,password,budget:value=>runtimeCli(profile,'archive-cli-budget',JSON.stringify(value)),event:(operation,outcome,duration)=>runtimeCli(profile,'archive-cli-operation',`operation=${operation} outcome=${outcome}`,duration,outcome!=='ok')});
 }
 void (async()=>{
  let code=1;try{code=await main();}catch(error){code=abort.signal.aborted?130:cliExit(error);const message=error instanceof Error?error.message:'CLI failed';if(json)await out(JSON.stringify({schema:1,type:'error',exitCode:code,message})+'\n');else await err(message+'\n');}
