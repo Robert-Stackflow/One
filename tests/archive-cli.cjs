@@ -50,6 +50,11 @@ async function main(){
    const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));
    await run(['test','--json',...options,source],password);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',...options,source],password);assert((await fs.readdir(output)).length>0);
   }
+  for(const [name,password] of [['azomulti.egg',''],['solid.egg',''],['number.vol2.egg',''],['small_kor.egg',''],['small_shift.egg',''],['test256.egg','password12345!'],['test_lea128_store.egg','password12345!']]){
+   const source=path.resolve('tests/fixtures/archives/egg',name),options=password?['--password-stdin']:[];
+   const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));
+   await run(['test','--json',...options,source],password);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',...options,source],password);assert((await fs.readdir(output)).length>0);
+  }
   const input=path.join(root,'中文 & input');await fs.mkdir(input);await fs.writeFile(path.join(input,'hello.txt'),'hello CLI');await fs.writeFile(path.join(input,'-leading $().txt'),'literal');
   const stored=path.join(root,'store-only.zip');await run(['create','--json','--output',stored,'--level','0','--threads','1','--memory-mib','128',path.join(input,'hello.txt')]);
   const storedZip=await JSZip.loadAsync(await fs.readFile(stored));assert.equal(storedZip.file('hello.txt')._data.compressedSize,Buffer.byteLength('hello CLI'));

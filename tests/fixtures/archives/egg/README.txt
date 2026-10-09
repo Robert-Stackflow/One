@@ -90,8 +90,18 @@ native allocation limits, decoded
 output limits and cancellation. Synthetic Unicode-password archives use UTF-8;
 other real-writer password encodings are not claimed. --asan instruments the
 new native modules and BZip2; zlib/liblzma remain the existing release libraries.
-Framing/crypto completion does not expose EGG in One until the product adapter,
-staging/path/risk checks, revisions, browser/extraction/drag/CLI are integrated.
+The C++ product adapter now exposes read-only browse/details/test/extraction,
+preview, drag and CLI. Run npm run test:archive-egg for 274 product checks over
+25 external datasets, exact hashes, solid selection, linked volumes/revisions,
+passwords, path collisions/traversal, risk confirmation and failed-publication
+cleanup. All numbered sibling volumes from the same family must be present;
+the entry volume may be a later one. Extra unrelated/cyclic/missing volumes
+are rejected. Native resource/output/time limits remain in force. Filename
+encoding is declared per entry (CP932/949 verified); passwords use UTF-8.
+Links, special files, parent-name flags, encrypted names/solid streams and
+unknown metadata are rejected for extraction. Real AZO x86-filtered executables
+and additional writer variants remain unverified. The .NET oracle is test-only.
+Desktop and standalone CLI verification use the normal application paths.
 An Encrypt Info field preceding a File Header applies to that following entry
 only, including when it occurs between completed files. Tests use distinct
 AES128/256 keys and MACs in two consecutive prefix-header entries. This does

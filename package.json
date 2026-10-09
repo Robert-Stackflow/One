@@ -65,6 +65,8 @@
     "test:archive-egg-azo": "node tests/archive-egg-azo.cjs",
     "test:archive-egg-container": "node tests/archive-egg-container.cjs",
     "test:archive-egg-codecs": "node tests/archive-egg-codecs.cjs",
+    "test:archive-egg": "node tests/archive-egg.cjs",
+    "test:archive-egg-ui": "node tests/archive-egg-ui.cjs",
     "test:archive-ads-update": "node tests/archive-ads-update.cjs",
     "test:archive-edit-recovery": "node tests/archive-edit-recovery.cjs",
     "test:archive-edit-launch": "node tests/archive-edit-launch.cjs",

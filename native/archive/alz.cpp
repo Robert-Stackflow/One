@@ -14,7 +14,7 @@
 // BZ_NO_STDIO asks the embedding program to handle invariant failures. Each
 // archive runs in a disposable helper, so terminate with a protocol error.
 extern "C" void bz_internal_error(int){
-    emit("{\"type\":\"error\",\"code\":\"archive\",\"message\":\"ALZ BZip2 decoder invariant failed\"}");
+    emit("{\"type\":\"error\",\"code\":\"archive\",\"message\":\"Archive BZip2 decoder invariant failed\"}");
     ExitProcess(1);
 }
 
