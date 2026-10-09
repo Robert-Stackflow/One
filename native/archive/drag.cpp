@@ -16,6 +16,7 @@
 #include "browse.h"
 #include "origin.h"
 #include "scan.h"
+#include "extract-risk.h"
 
 // The helper owns one OLE drag and stays alive until the target has finished
 // its asynchronous extraction AND released every contents stream. Electron
@@ -349,6 +350,7 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
     SourceLock lock(source);if(zip_revision(source)!=revision)fail("Archive changed; reopen it before dragging");
     auto entries= [&]{if(format!=0)return seven_drag_entries(source,password,format);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
     auto selection=select(entries,selected,folders);
+    ExtractionRisk risk;for(auto index:selection.indexes){const auto &item=entries[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();
     auto origin=std::make_shared<ArchiveOrigin>(source);
     if(FAILED(OleInitialize(nullptr)))fail("Cannot initialize Windows file drag");
     auto data=new DragData(source,stage,encoding,format,password,std::move(selection),std::move(origin));

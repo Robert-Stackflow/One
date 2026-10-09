@@ -32,7 +32,7 @@ int main(){
     }
     {
         Fixture state;state.free=UINT64_MAX;
-        bool refused=false;try{ExtractionSpace space(L"unused",UINT64_MAX,probe,clock_value,&state);}catch(const ArchiveError &error){refused=error.code=="write";}assert(refused);
+        bool refused=false;try{ExtractionSpace space(L"unused",UINT64_MAX,probe,clock_value,&state);}catch(const ArchiveError &error){refused=error.code=="safety";}assert(refused);
     }
     {
         Fixture state;ExtractionSpace space(L"unused",65536,probe,clock_value,&state);
@@ -48,6 +48,17 @@ int main(){
         Fixture state;ExtractionSpace space(L"unused",4*mib,probe,clock_value,&state);std::vector<std::thread> writers;
         for(unsigned i=0;i<4;i++)writers.emplace_back([&]{for(unsigned n=0;n<16;n++)assert(space.write(65536));});
         for(auto &writer:writers)writer.join();space.finish();assert(!space.failed());
+    }
+    {
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_BYTES",L"16");
+        bool refused=false;try{Fixture state;ExtractionSpace space(L"unused",17,probe,clock_value,&state);}catch(const ArchiveError &error){refused=error.code=="safety";}assert(refused);
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_BYTES",nullptr);
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_MS",L"100");
+        Fixture state;ExtractionSpace space(L"unused",16,probe,clock_value,&state);assert(space.write(8));state.time=100;
+        assert(!space.write(1));assert(std::string(space.code())=="timeout");
+        Fixture end;ExtractionSpace finished(L"unused",0,probe,clock_value,&end);end.time=100;
+        refused=false;try{finished.finish();}catch(const ArchiveError &error){refused=error.code=="timeout";}assert(refused);
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_MS",nullptr);
     }
     std::puts("Extraction space policy passed: quota/free-space changes, byte/time cadence, metadata, finish, overflow, terminal errors and shared streams.");
 }

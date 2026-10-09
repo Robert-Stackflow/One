@@ -21,10 +21,10 @@ public:
     const char *message()const noexcept;
     const char *code()const noexcept;
 private:
-    enum class Failure {none,query,space,expanded};
+    enum class Failure {none,query,space,expanded,budget,time};
     fs::path directory;
     uint64_t expected=0,written=0,available=0,since_query=0;
-    ULONGLONG last_query=0;
+    ULONGLONG last_query=0,started=0;uint64_t maximum_bytes=0,maximum_ms=0;
     Probe probe;Clock clock;void *context;
     std::mutex mutex;
     std::atomic<Failure> failure{Failure::none};

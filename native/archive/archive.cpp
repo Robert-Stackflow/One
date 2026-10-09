@@ -27,6 +27,7 @@
 #include "browse.h"
 #include "zip-common.h"
 #include "extract-space.h"
+#include "extract-risk.h"
 
 std::string utf8(const std::wstring &value) {
     if (value.empty()) return {};
@@ -252,7 +253,6 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
                     const std::set<size_t> &selected, const std::string &password, bool result) {
     zip_preflight(reader, items);
     if (fs::exists(destination)) fail("Extraction destination already exists");
-    fs::create_directory(destination);
     mz_zip_reader_set_password(reader.value, password.empty() ? nullptr : password.c_str());
     int err = mz_zip_reader_goto_first_entry(reader.value);
     std::vector<std::string> selected_directories;
@@ -279,7 +279,9 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
             expected_bytes += item.size;
         }
     }
+    ExtractionRisk risk;for(const auto &item:items)if(included(item))risk.add(item.name,item.directory,item.size,item.compressed);risk.check();
     ExtractionSpace space(destination.parent_path(),expected_bytes);
+    fs::create_directory(destination);
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during extraction");
         if (archive_cancelled()) fail("Archive drag cancelled","cancelled");
@@ -425,6 +427,7 @@ int wmain(int argc, wchar_t **argv) {
     _setmode(_fileno(stdout), _O_BINARY);
     try {
         if (argc < 3) fail("Usage: One.Archive.exe list|create|extract|test ...");
+        if(!GetEnvironmentVariableW(L"ONE_ARCHIVE_RISK_SOURCE",nullptr,0))SetEnvironmentVariableW(L"ONE_ARCHIVE_RISK_SOURCE",argv[2]);
         ArchiveResourceJob resources;
         ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];

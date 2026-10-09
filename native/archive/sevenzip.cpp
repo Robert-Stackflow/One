@@ -4,6 +4,7 @@
 #include "browse.h"
 #include "sevenzip-update.h"
 #include "extract-space.h"
+#include "extract-risk.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -374,6 +375,7 @@ size_t seven_extract(const fs::path &source,const fs::path &destination,
     if(fs::exists(destination))fail("Extraction destination already exists");
     auto indices=selected_indices(items,effective);
     U64 expected=0;for(U32 index:indices)if(!items[index].directory){if(items[index].size>UINT64_MAX-expected)fail("Archive declares too much extracted data","safety");expected+=items[index].size;}
+    ExtractionRisk risk;for(U32 index:indices){const auto &item=items[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();
     ExtractionSpace space(destination.parent_path(),expected);
     fs::create_directory(destination);
     auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false,&space);

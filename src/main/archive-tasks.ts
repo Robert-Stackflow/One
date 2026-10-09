@@ -41,6 +41,9 @@ export class ArchiveTasks {
  }
  cancelling(id:string){const task=this.live.get(id);if(task){task.cancellable=false;this.changed();}}
  async finish(id:string,result?:ArchiveResult,error?:unknown,cancelled=false){await this.ready;const task=this.live.get(id);if(!task)return;
+  // Preflight needs user input; it is neither a failed nor a completed transfer.
+  // Remove it before a confirmed retry reuses the same request id.
+  if(error&&typeof error==='object'&&'code'in error&&error.code==='risk'){this.live.delete(id);this.changed();await this.persist();return;}
   this.live.delete(id);task.finished=Date.now();task.cancellable=false;task.state=cancelled||result?.cancelled?'cancelled':error?'failed':'completed';
   if(result)task.result={path:result.path,count:result.count,skipped:result.skipped,cancelled:result.cancelled};
   const scan=result?.scan??(error&&typeof error==='object'&&'scan'in error?error.scan:undefined);if(validArchiveScan(scan))task.scan=copyArchiveScan(scan);

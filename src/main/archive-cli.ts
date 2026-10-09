@@ -7,11 +7,12 @@ import {archiveEditPacket} from './archive-update';
 import {archiveLevel,archiveResources,archiveBudget,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
 import {archiveCliDependencies} from './archive-cli-plan';
+import {archiveRiskReasons,type ArchiveRiskApproval} from '../shared/archive-risk';
 
 export class CliFailure extends Error {
  constructor(message:string,readonly exitCode:number=2){super(message);this.name='CliFailure';}
 }
-type Job={operation:'list'|'create'|'extract'|'test'|'update';request:ArchiveRequest;changesFile?:string};
+type Job={operation:'list'|'create'|'extract'|'test'|'update';request:ArchiveRequest;changesFile?:string;allowRisk?:{maxBytes:number;maxMilliseconds:number}};
 export type CliCommand={json:boolean;progress:boolean;passwordStdin:boolean;help:boolean;jobs:Job[];jobsFile?:string;queue?:Partial<ArchiveBudget>};
 export const cliHelp=`One.Cli.exe archive <list|create|extract|test|update|batch> [options] [--] paths
 
@@ -23,6 +24,9 @@ update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
 ZIP password: --password-encoding utf8|system|437|932|936|950|65001 (default utf8; separate from filename encoding)
+extraction risk: --allow-risk [--max-extract-gib 1-8388607] [--max-extract-minutes 1-1440]
+         Available for list/test/extract (composite listing may unpack a TAR wrapper).
+         Default actual output limit: 64 GiB per stage, 30 minutes; risk approval is never implicit.
 resources: --threads 1-64 (compression), --memory-mib 128-8192 (per helper, default 1024)
 queue: --concurrency 1-8 (default 1), --total-memory-mib 128-32768, --total-threads 1-64
        Queue options belong to this invocation, not individual batch jobs.
@@ -34,7 +38,7 @@ Malware scanning is off by default. --scan requires a local AMSI provider; incom
 Parallel results may interleave; JSON records include the original job index and request id.
 Overlapping reads/writes keep plan order; update jobs are ordered barriers. Independent CLI instances have separate budgets.
 Exit: 0 success, 1 operation failure, 2 arguments, 3 password, 4 invalid archive,
-      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 10 scan incomplete, 11 scan blocked, 12 timed out, 130 cancelled, 126 runtime missing.
+      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 10 scan incomplete, 11 scan blocked, 12 timed out, 13 risk confirmation required, 130 cancelled, 126 runtime missing.
 `;
 function argument(condition:unknown,message:string):asserts condition {if(!condition)throw new CliFailure(message);}
 const filePath=(value:string,cwd:string)=>{argument(typeof value==='string'&&value.length>0&&value.length<=32768&&!/[\0\r\n]/.test(value),'Invalid path');return resolve(cwd,value);};
@@ -46,9 +50,10 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  if(!args.length||args.length===1&&['--help','-h','help'].includes(args[0]))return {json:false,progress:false,passwordStdin:false,help:true,jobs:[]};
  const operation=args.shift()!;
  argument(['list','create','extract','test','update','batch'].includes(operation),'Unknown archive command');
- const flags=new Set(['json','progress','password-stdin','help',...(operation==='extract'?['no-zone','scan','no-scan']:[])]);
+ const flags=new Set(['json','progress','password-stdin','help',...(['list','test','extract'].includes(operation)?['allow-risk']:[]),...(operation==='extract'?['no-zone','scan','no-scan']:[])]);
  const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
  for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib','password-encoding');
+ for(const operation of ['list','test','extract'])allowed[operation].push('max-extract-gib','max-extract-minutes');
  for(const options of Object.values(allowed))options.push('concurrency','total-memory-mib','total-threads');
  const options=new Map<string,string>(),paths:string[]=[];let literal=false;
  for(let i=0;i<args.length;i++){
@@ -98,6 +103,8 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];
  }else result.jobs=paths.map(path=>({operation:operation as 'list'|'test',request:{operation:operation as 'list'|'test',path,encoding}}));
+ if(options.has('allow-risk')){const gib=number('max-extract-gib')??64,minutes=number('max-extract-minutes')??30;argument(Number.isSafeInteger(gib)&&gib>=1&&gib<=8388607&&Number.isSafeInteger(minutes)&&minutes>=1&&minutes<=1440,'Invalid extraction limits');for(const job of result.jobs)job.allowRisk={maxBytes:gib*1024**3,maxMilliseconds:minutes*60000};}
+ else argument(!options.has('max-extract-gib')&&!options.has('max-extract-minutes'),'Extraction limits require --allow-risk');
  for(const job of result.jobs)Object.assign(job.request,resources,{passwordEncoding});
  return result;
 }
@@ -118,7 +125,7 @@ export interface CliIO {out:(line:string)=>Promise<void>;err:(line:string)=>Prom
 export function cliExit(error:unknown,writing=false):number {
  if(error instanceof CliFailure)return error.exitCode;
  const code=error&&typeof error==='object'&&'code' in error?String(error.code):'';
- const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,scan:10,threat:11,timeout:12,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
+ const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,scan:10,threat:11,timeout:12,risk:13,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
  if(['ENOENT','ENOTDIR','EISDIR'].includes(code))return 5;
  if(['EEXIST','ENOSPC','EROFS'].includes(code))return 6;
  if(['EACCES','EPERM','EBUSY'].includes(code))return writing?6:5;
@@ -144,7 +151,18 @@ export async function runCli(command:CliCommand,service:CliService,io:CliIO):Pro
  const cancel=()=>{controller.abort(io.signal.reason);for(const id of activeIds)service.cancel(id,0);};io.signal.addEventListener('abort',cancel);if(io.signal.aborted)cancel();const timer=setInterval(()=>{if(controller.signal.aborted)cancel();},40);
  const runJob=async(index:number)=>{
    const job=jobs[index],id=randomUUID(),started=Date.now(),base={job:index,id,operation:job.operation,source:job.request.path};let release:(()=>void)|undefined;
-   const call=async(request:ArchiveRequest)=>{if(controller.signal.aborted)throw new CliFailure('Cancelled',130);activeIds.add(id);try{return await service.run(0,{...request,...resources[index],password:secret},id);}finally{activeIds.delete(id);}};
+   let approval:ArchiveRiskApproval|undefined;
+   const call=async(request:ArchiveRequest)=>{
+    for(let attempt=0;attempt<3;attempt++){
+     if(controller.signal.aborted)throw new CliFailure('Cancelled',130);activeIds.add(id);let result:ArchiveListing|ArchiveResult;
+     try{result=await service.run(0,{...request,...resources[index],password:secret,riskApproval:approval,extractionLimits:job.allowRisk},id);}finally{activeIds.delete(id);}
+     if(!('risk' in result)||!result.risk)return result;
+     if(!job.allowRisk)throw Object.assign(new CliFailure(archiveRiskReasons(result.risk).join('; ')+'; confirm with --allow-risk and explicit extraction limits',13),{risk:result.risk});
+     if(job.allowRisk.maxBytes<result.risk.bytes)throw new CliFailure('Declared expanded size exceeds --max-extract-gib; no content was published',7);
+     approval={revision:result.risk.revision,...job.allowRisk};await write('risk-approved',{...base,risk:result.risk,limits:job.allowRisk},'Confirmed extraction risk: '+archiveRiskReasons(result.risk).join('; '));
+    }
+    throw new CliFailure('Archive changed repeatedly during risk confirmation',4);
+   };
    if(controller.signal.aborted){counts.cancelled++;codes.push(130);await write('error',{...base,exitCode:130,message:'Cancelled before start'},'Cancelled: '+human(job.request.path));return;}
    await write('start',base,`${job.operation}: ${human(job.request.path)}`);
    try{
@@ -175,7 +193,7 @@ export async function runCli(command:CliCommand,service:CliService,io:CliIO):Pro
     await write('result',{...base,...value,elapsedMs:Date.now()-started},`Completed: ${value.count} items${value.skipped?`, ${value.skipped} skipped`:''} -> ${human(value.path)}${value.scan?' · '+archiveScanText(value.scan):''}`);
     io.event?.(job.operation,'ok',Date.now()-started);
    }catch(error){const code=controller.signal.aborted?130:cliExit(error,job.operation==='create'||job.operation==='extract'||job.operation==='update');codes.push(code);if(code===130)counts.cancelled++;else counts.failed++;
-    const report=error&&typeof error==='object'&&'scan'in error&&validArchiveScan(error.scan)?{scan:copyArchiveScan(error.scan)}:{};const message=error instanceof Error?error.message:'Operation failed';await write('error',{...base,exitCode:code,message,...report},`Failed (${code}): ${human(message)}`);io.event?.(job.operation,`error:${code}`,Date.now()-started);
+    const report=error&&typeof error==='object'&&'scan'in error&&validArchiveScan(error.scan)?{scan:copyArchiveScan(error.scan)}:{};const message=error instanceof Error?error.message:'Operation failed';await write('error',{...base,exitCode:code,message,...report,...(error&&typeof error==='object'&&'risk'in error?{risk:error.risk}:{})},`Failed (${code}): ${human(message)}`);io.event?.(job.operation,`error:${code}`,Date.now()-started);
    }finally{release?.();}
  };
  try{

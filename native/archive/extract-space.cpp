@@ -1,4 +1,5 @@
 #include "extract-space.h"
+#include "extract-limits.h"
 #include <algorithm>
 #include <string_view>
 
@@ -24,6 +25,8 @@ bool test_number(const wchar_t *key,uint64_t &result){
 
 ExtractionSpace::ExtractionSpace(const fs::path &path,uint64_t expected,Probe probe,Clock clock,void *context):
     directory(path),expected(expected),probe(probe?probe:disk_space),clock(clock?clock:ticks),context(context){
+    const auto limits=extraction_limits();maximum_bytes=limits.bytes;maximum_ms=limits.milliseconds;started=this->clock(context);
+    if(expected>maximum_bytes)fail("声明展开量超过本次解压上限，请提高上限后重试。","safety");
     // Fault injection can only reduce the real available space; it never makes
     // a full disk appear writable and is inert outside the isolated test mode.
     wchar_t mode[4]{};
@@ -50,8 +53,10 @@ bool ExtractionSpace::write(uint64_t bytes) noexcept {
     try{
         std::lock_guard lock(mutex);
         if(failed())return false;
-        if(bytes>expected-written){failure=Failure::expanded;return false;}
         const auto now=clock(context);
+        if(bytes>maximum_bytes-written){failure=Failure::budget;return false;}
+        if(now-started>=maximum_ms){failure=Failure::time;return false;}
+        if(bytes>expected-written){failure=Failure::expanded;return false;}
         if(since_query>=query_bytes||bytes>=query_bytes-since_query||now-last_query>=query_ms)
             if(!refresh())return false;
         if(available<reserve||bytes>available-reserve){failure=Failure::space;return false;}
@@ -59,12 +64,14 @@ bool ExtractionSpace::write(uint64_t bytes) noexcept {
     }catch(...){failure=Failure::query;return false;}
 }
 void ExtractionSpace::require(uint64_t bytes){if(!write(bytes))fail(message(),code());}
-void ExtractionSpace::finish(){std::lock_guard lock(mutex);if(failed()||!refresh())fail(message(),code());}
+void ExtractionSpace::finish(){std::lock_guard lock(mutex);if(!failed()&&clock(context)-started>=maximum_ms)failure=Failure::time;if(failed()||!refresh())fail(message(),code());}
 const char *ExtractionSpace::message()const noexcept {
     switch(failure.load()){
     case Failure::space:return "目标磁盘可用空间不足，已停止解压；请释放空间后重试。";
+    case Failure::budget:return "实际解压内容超过本次上限，已停止解压。";
+    case Failure::time:return "解压超过本次时间上限，已停止解压。";
     case Failure::expanded:return "实际解压内容超过声明大小，已停止解压。";
     default:return "无法检查目标磁盘可用空间，已停止解压；请检查磁盘或网络连接。";
     }
 }
-const char *ExtractionSpace::code()const noexcept{return failure.load()==Failure::expanded?"safety":"write";}
+const char *ExtractionSpace::code()const noexcept{const auto value=failure.load();return value==Failure::time?"timeout":value==Failure::expanded||value==Failure::budget?"safety":"write";}
