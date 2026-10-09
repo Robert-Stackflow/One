@@ -173,23 +173,28 @@ std::string zip_comment(Reader &reader, const char *comment) {
     return zip_name(reader, comment, unicode ? MZ_ZIP_FLAG_UTF8 : 0);
 }
 
-std::vector<Entry> zip_entries(Reader &reader) {
-    std::vector<Entry> result;
+template<class Visitor>size_t visit_zip_entries(Reader &reader,Visitor visit) {
+    size_t count=0;
     int err = mz_zip_reader_goto_first_entry(reader.value);
-    if (err == MZ_END_OF_LIST) return result;
+    if (err == MZ_END_OF_LIST) return count;
     if (err != MZ_OK) fail("Cannot read ZIP directory");
     while (err == MZ_OK) {
         mz_zip_file *info = nullptr;
         if (mz_zip_reader_entry_get_info(reader.value, &info) != MZ_OK || !info) fail("Cannot read ZIP entry");
         bool directory = mz_zip_reader_entry_is_dir(reader.value) == MZ_OK;
         if (info->filename && std::strlen(info->filename) != info->filename_size) fail("ZIP path contains a null character");
-        result.push_back({result.size(), zip_name(reader, info->filename, info->flag, info->extrafield, info->extrafield_size), directory,
+        if(count>=1000000)fail("ZIP contains too many entries");
+        visit(Entry{count++, zip_name(reader, info->filename, info->flag, info->extrafield, info->extrafield_size), directory,
             (uint64_t)std::max<int64_t>(0, info->uncompressed_size), (uint64_t)std::max<int64_t>(0, info->compressed_size),
             (info->flag & MZ_ZIP_FLAG_ENCRYPTED) != 0});
-        if (result.size() > 1000000) fail("ZIP contains too many entries");
         archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);
     }
     if (err != MZ_END_OF_LIST) fail("Cannot finish reading ZIP directory");
+    return count;
+}
+std::vector<Entry> zip_entries(Reader &reader) {
+    std::vector<Entry> result;
+    visit_zip_entries(reader,[&](Entry entry){result.push_back(std::move(entry));});
     return result;
 }
 
@@ -589,7 +594,7 @@ int wmain(int argc, wchar_t **argv) {
             lock_archive_source(argv[2]);
             if (mode == L"browse") {
                 const auto query=read_browse_query();size_t offset=std::stoull(argv[3]),limit=std::min<size_t>(500,std::stoull(argv[4]));
-                if(format==0){Reader reader(argv[2],encoding);const auto revision=zip_revision(argv[2]);BrowseRows rows(query);const auto items=zip_entries(reader);for(const auto &entry:items)rows.add(entry);const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(items.size(),zip_comment(reader,comment),revision,true,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
+                if(format==0){Reader reader(argv[2],encoding);const auto revision=zip_revision(argv[2]);BrowseRows rows(query);const auto total=visit_zip_entries(reader,[&](Entry entry){rows.add(std::move(entry));});const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(total,zip_comment(reader,comment),revision,true,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
                 else if(format==alz_format)alz_list(argv[2],offset,limit,encoding,&query);
                 else if(format==egg_format)egg_list(argv[2],offset,limit,encoding,&query);
                 else seven_browse(argv[2],offset,limit,password,format,query);

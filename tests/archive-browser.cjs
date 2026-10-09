@@ -5,6 +5,22 @@ const Module=require('node:module');
 const {spawnSync}=require('node:child_process');
 const {build}=require('esbuild');
 const JSZip=require('jszip');
+const zlib=require('node:zlib');
+
+function duplicateZip(entries){
+ const local=[],central=[];let offset=0;
+ for(const [name,payload=Buffer.alloc(0)] of entries){const raw=Buffer.from(name),crc=zlib.crc32(payload),header=Buffer.alloc(30),directory=Buffer.alloc(46);header.writeUInt32LE(0x04034b50);header.writeUInt16LE(20,4);header.writeUInt16LE(0x800,6);header.writeUInt32LE(crc,14);header.writeUInt32LE(payload.length,18);header.writeUInt32LE(payload.length,22);header.writeUInt16LE(raw.length,26);
+  directory.writeUInt32LE(0x02014b50);directory.writeUInt16LE(20,4);directory.writeUInt16LE(20,6);directory.writeUInt16LE(0x800,8);directory.writeUInt32LE(crc,16);directory.writeUInt32LE(payload.length,20);directory.writeUInt32LE(payload.length,24);directory.writeUInt16LE(raw.length,28);directory.writeUInt32LE(offset,42);local.push(header,raw,payload);central.push(directory,raw);offset+=header.length+raw.length+payload.length;
+ }const end=Buffer.alloc(22),cd=Buffer.concat(central);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(cd.length,12);end.writeUInt32LE(offset,16);return Buffer.concat([...local,cd,end]);
+}
+function referenceRows(entries,query){
+ const rows=new Map();entries.forEach(([name,payload=Buffer.alloc(0)],index)=>{let normalized=name.replaceAll('\\','/');const directory=normalized.endsWith('/');if(query.directory&&(!normalized.startsWith(query.directory)||normalized.length<=query.directory.length))return;if(query.search&&!normalized.toLowerCase().includes(query.search.toLowerCase()))return;
+  const entry={type:'entry',index,name,directory,size:payload.length,compressed:payload.length,encrypted:false,implicit:false};
+  if(query.flat||query.search){rows.set(normalized+'\0'+index,entry);return;}
+  const rest=normalized.slice(query.directory.length),slash=rest.indexOf('/');if(slash<0){if(!rows.has(normalized))rows.set(normalized,entry);return;}
+  const folder=query.directory+rest.slice(0,slash+1);if(directory&&slash===rest.length-1)rows.set(folder,entry);else if(!rows.has(folder))rows.set(folder,{type:'entry',index:-1,name:folder,directory:true,size:0,compressed:0,encrypted:false,implicit:true});
+ });return [...rows].sort(([a,x],[b,y])=>Number(y.directory)-Number(x.directory)||Buffer.compare(Buffer.from(a),Buffer.from(b))).map(([,entry])=>entry);
+}
 
 async function main(){
  await fs.mkdir('work/temp',{recursive:true});const root=await fs.mkdtemp(path.resolve('work/temp/one-archive-browser-'));let service;
@@ -57,7 +73,15 @@ async function main(){
   for(const format of ['rar4','rar5']){const listed=await run({operation:'list',path:path.resolve(`tests/fixtures/${format}-sample.rar`),browse:query('','',true)});assert.equal(listed.matched,listed.total);}
   const snapshot=await browse();await fs.appendFile(zip,'changed');await assert.rejects(run({operation:'extract',path:zip,parent:root,selected:[0],revision:snapshot.revision}),/changed; reopen/);assert(!(await fs.readdir(root)).some(name=>name.startsWith('.one-extract-')));
   const unsafe=new JSZip();unsafe.file('../escape.txt','unsafe',{createFolders:false});const bad=path.join(root,'unsafe.zip');await fs.writeFile(bad,await unsafe.generateAsync({type:'nodebuffer'}));await assert.rejects(run({operation:'list',path:bad,browse:query()}),/unsafe browser/);
-  console.log('Archive browser passed: implicit folders, stable original indexes, Unicode recursive search, bounded pages, selective folder extraction/drag, legacy list compatibility, format coverage and invalid requests.');
+  const duplicateEntries=[...Array.from({length:15},()=>['same.txt']),['bucket/child.txt'],['bucket/'],['bucket/'],['slash\\deep\\doc.txt'],['slash/deep/doc.txt'],['Äpfel/FILE.txt'],...Array.from({length:431},(_,i)=>['file-'+String(i*97%431).padStart(4,'0')+'.txt'])];
+  const duplicatePath=path.join(root,'duplicates.zip');await fs.writeFile(duplicatePath,duplicateZip(duplicateEntries));
+  for(const value of [query(),query('','',true),query('','same'),query('slash/','',true),query('','äPFEL'),query('bucket/')]){
+   const expected=referenceRows(duplicateEntries,value),packet=Buffer.concat([text(value.directory),text(value.search),u32(Number(value.flat))]);
+   for(const [offset,limit] of [[0,200],[7,200],[200,200],[400,200],[1000,200],[0,0]]){const records=native(['browse',duplicatePath,String(offset),String(limit),'0'],packet),meta=records.find(item=>item.type==='meta');assert.equal(meta.total,duplicateEntries.length);assert.equal(meta.matched,expected.length);assert.deepEqual(records.filter(item=>item.type==='entry'),expected.slice(offset,offset+limit));}
+  }
+  const unsafeTail=path.join(root,'unsafe-tail.zip');await fs.writeFile(unsafeTail,duplicateZip([...duplicateEntries,['../unsafe.txt']]));
+  const tail=native(['browse',unsafeTail,'0','200','0'],Buffer.concat([text(''),text(''),u32(1)]),'',2);assert.equal(tail.filter(item=>item.type==='entry').length,0);assert.equal(tail.at(-1).code,'safety');
+  console.log('Archive browser passed: implicit folders, stable original indexes, Unicode recursive search, bounded pages, selective folder extraction/drag, legacy list compatibility, format coverage, duplicates/normalization, 36 independent page comparisons and unsafe tail rejection.');
  }finally{if(service)await service.stop();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

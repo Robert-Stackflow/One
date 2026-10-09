@@ -1,0 +1,174 @@
+{
+  "date": "2026-10-09T21:38:18.304Z",
+  "baselineCommit": "68543d05c5b1681e3e3eb5b0f5b4d8f4fe020399",
+  "optimizedSource": "native/archive/archive.cpp and browse.cpp/.h changes in the same commit as this measurement",
+  "baselineHelperSha256": "ff8ab3d36c58a86f32cad0568f11f63910f90f03dbb8aa364089e19fc8a6d9b4",
+  "optimizedHelperSha256": "96146603bffe8cfbf7b32fea8a7d2002da24e3cbc617ddc9e2cac3eff1fc1015",
+  "engine": "One native ZIP browser; minizip-ng 4.1.2 with existing local patches; bundled 7-Zip 26.04 unchanged",
+  "machine": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+    "logicalCpus": 32,
+    "drive": "D:",
+    "permissions": "Current developer process; no elevation requested",
+    "cache": "Fresh helper per request; first observed and repeated process; OS file cache not purged",
+    "cpuName": "AMD Ryzen 9 7940HX with Radeon Graphics",
+    "physicalCores": 16,
+    "fileSystem": "NTFS",
+    "driveType": "Fixed",
+    "uiIntegrity": [
+      {
+        "type": "Browser",
+        "integrity": "medium"
+      },
+      {
+        "type": "GPU",
+        "integrity": "low"
+      },
+      {
+        "type": "Utility",
+        "integrity": "medium"
+      },
+      {
+        "type": "Tab",
+        "integrity": "untrusted"
+      }
+    ]
+  },
+  "settings": {
+    "type": "resources",
+    "level": 6,
+    "threads": 2,
+    "memoryMiB": 1024
+  },
+  "datasets": [
+    {
+      "entries": 1000000,
+      "bytes": 110000098,
+      "generator": "Original streaming ZIP/ZIP64, empty stored regular files, permuted insertion order; no extraction workload",
+      "nested": false,
+      "step": 999983,
+      "generatedSeconds": 1.081998300000123,
+      "sha256": "26e6b6e1306c198be9fddff0e422eae83e26a20cc7184875febf2331d1f9c4dd"
+    },
+    {
+      "entries": 1000000,
+      "bytes": 148000098,
+      "generator": "Original streaming ZIP/ZIP64, empty stored regular files, permuted insertion order; no extraction workload",
+      "nested": true,
+      "step": 999983,
+      "generatedSeconds": 1.4808503999993263,
+      "sha256": "2b8985099179604fd537d36f031505755a9e2fa036a29aec60d74d1fcf7e1df1"
+    }
+  ],
+  "method": "Two fresh-helper observations per scenario, same two generated million-entry empty Store ZIP64 archives, 200-row pages. OS file cache not purged. Working/commit OS peaks and 10ms sampled private memory are distinct. Full output/meta equality for 14 baseline/optimized requests; original indexes independently checked against the generation permutation.",
+  "scenarios": [
+    {
+      "case": "root",
+      "beforeSeconds": 1.856827899999189,
+      "afterSeconds": 1.9220522499999788,
+      "beforeMetaSeconds": 1.5256597999996302,
+      "afterMetaSeconds": 1.6292547499997454,
+      "beforePeakWorkingBytes": 369467392,
+      "afterPeakWorkingBytes": 249106432,
+      "beforePeakCommitBytes": 378777600,
+      "afterPeakCommitBytes": 251899904
+    },
+    {
+      "case": "flat",
+      "beforeSeconds": 1.8267932500002644,
+      "afterSeconds": 0.9632222000000183,
+      "beforeMetaSeconds": 1.493488799998886,
+      "afterMetaSeconds": 0.915355549999731,
+      "beforePeakWorkingBytes": 369430528,
+      "afterPeakWorkingBytes": 187523072,
+      "beforePeakCommitBytes": 378699776,
+      "afterPeakCommitBytes": 220233728
+    },
+    {
+      "case": "last-page",
+      "beforeSeconds": 2.0034309000002395,
+      "afterSeconds": 0.9340705499980686,
+      "beforeMetaSeconds": 1.5405350500004715,
+      "afterMetaSeconds": 0.8839893999993365,
+      "beforePeakWorkingBytes": 369475584,
+      "afterPeakWorkingBytes": 187551744,
+      "beforePeakCommitBytes": 378765312,
+      "afterPeakCommitBytes": 220270592
+    },
+    {
+      "case": "search",
+      "beforeSeconds": 1.0251229499990586,
+      "afterSeconds": 0.8822487999987061,
+      "beforeMetaSeconds": 0.9686919499999931,
+      "afterMetaSeconds": 0.8716640999991796,
+      "beforePeakWorkingBytes": 142725120,
+      "afterPeakWorkingBytes": 8843264,
+      "beforePeakCommitBytes": 164081664,
+      "afterPeakCommitBytes": 1986560
+    },
+    {
+      "case": "nested-root",
+      "beforeSeconds": 1.1095644000015454,
+      "afterSeconds": 0.9798731000009866,
+      "beforeMetaSeconds": 1.0486791000021185,
+      "afterMetaSeconds": 0.97313369999938,
+      "beforePeakWorkingBytes": 154046464,
+      "afterPeakWorkingBytes": 8769536,
+      "beforePeakCommitBytes": 175169536,
+      "afterPeakCommitBytes": 1630208
+    },
+    {
+      "case": "nested-flat",
+      "beforeSeconds": 2.2818385000009584,
+      "afterSeconds": 1.225492249999661,
+      "beforeMetaSeconds": 1.7849655499994697,
+      "afterMetaSeconds": 1.14817204999963,
+      "beforePeakWorkingBytes": 417419264,
+      "afterPeakWorkingBytes": 198864896,
+      "beforePeakCommitBytes": 424656896,
+      "afterPeakCommitBytes": 231153664
+    },
+    {
+      "case": "nested-navigation",
+      "beforeSeconds": 1.0176830500004144,
+      "afterSeconds": 0.9249651499994798,
+      "beforeMetaSeconds": 0.9652694500000507,
+      "afterMetaSeconds": 0.9144046999990678,
+      "beforePeakWorkingBytes": 154009600,
+      "afterPeakWorkingBytes": 8798208,
+      "beforePeakCommitBytes": 175120384,
+      "afterPeakCommitBytes": 1974272
+    }
+  ],
+  "ui": {
+    "flows": 10,
+    "cancelMilliseconds": 50.31789999999819,
+    "maxRendererTimerGapMilliseconds": 44.600000001490116,
+    "maxDomNodes": 4149,
+    "peakWorkingBytes": {
+      "Browser": 144896000,
+      "Tab": 205926400
+    }
+  },
+  "verification": {
+    "fullBuild": "passed",
+    "browseStrictCompile": "/W4 /WX passed",
+    "archiveCompile": "/W4 passed; pre-existing C4996 at entry_path and two C4244 warnings in creation settings remain",
+    "pageOracle": "36 independent page comparisons plus unsafe off-page tail rejection passed",
+    "formats": 168,
+    "alz": 138,
+    "alzSplit": 94,
+    "alzVariants": 151,
+    "egg": 274,
+    "nativeSmoke": "passed",
+    "zipUpdate": "passed",
+    "folderEdit": "passed",
+    "standaloneCli": "passed",
+    "browserUiRegression": "passed; corrected a stale test that clicked the intentionally hidden root breadcrumb",
+    "typecheck": "passed",
+    "docs": "70 documents / 303 links passed"
+  },
+  "limits": "Synthetic empty-file browsing only, two observations per case, no whole-app baseline comparison. Hundred-thousand file extraction, huge solid archives, slow/network disks, cold OS cache and installed Explorer/privilege/system matrices remain separate.",
+  "cleanup": "Two owned generator spool deletions rejected by automatic policy review; retained without retry. Existing unrelated blocked cleanup paths untouched."
+}

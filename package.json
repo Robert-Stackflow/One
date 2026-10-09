@@ -57,6 +57,8 @@
     "test:archive-formats": "node tests/archive-formats.cjs",
     "test:archive-formats-ui": "node tests/archive-formats-ui.cjs",
     "test:archive-alz": "node tests/archive-alz.cjs",
+    "bench:archive-browser": "python tests/archive-browser-benchmark.py --label current",
+    "bench:archive-browser-ui": "node tests/archive-browser-benchmark-ui.cjs",
     "test:archive-alz-ui": "node tests/archive-alz-ui.cjs",
     "test:archive-alz-split": "node tests/archive-alz-split.cjs",
     "test:archive-alz-variants": "node tests/archive-alz-variants.cjs",

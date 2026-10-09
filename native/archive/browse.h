@@ -24,10 +24,13 @@ template<class Entries> void expand_folders(const Entries &entries,std::set<size
 
 class BrowseRows {
     BrowseQuery query;std::wstring foldedSearch;
+    struct Row {Entry entry;std::string path;};
     std::map<std::string,Entry> rows;
+    std::vector<Row> recursiveRows;
+    static const std::string &path_of(const Row &row){return row.path.empty()?row.entry.name:row.path;}
 public:
     explicit BrowseRows(const BrowseQuery &value);
-    void add(const Entry &entry);
+    void add(Entry entry);
     void emit_page(size_t total,const std::string &comment,const std::string &revision,bool editable,size_t offset,size_t limit);
 };
 void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query);
