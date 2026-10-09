@@ -31,7 +31,11 @@ const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d
 const composite=(source:string)=>/\.(?:tar\.gz|tar\.xz|tgz|txz)$/i.test(source);
 const archiveDiagnostic=(message:string)=>message.startsWith('Missing volume : ')?`缺少 RAR 分卷：${message.slice('Missing volume : '.length)}。请将所有分卷放在同一文件夹后重新打开首卷。`:
   message==='Open the first RAR volume, not a later part'?'请选择 RAR 的第一个分卷（通常为 .part1.rar、.part01.rar 或 .rar），并将全部分卷放在同一文件夹。':
-  message==='RAR archive headers are damaged, incomplete or unsupported'?'RAR 头部损坏、分卷不完整或使用了暂不支持的特性。请检查压缩包和全部分卷后重试。':message;
+  message==='RAR archive headers are damaged, incomplete or unsupported'?'RAR 头部损坏、分卷不完整或使用了暂不支持的特性。请检查压缩包和全部分卷后重试。':
+  message==='RAR archive comment is damaged or unsupported'?'RAR 压缩包备注损坏或使用了暂不支持的格式，无法读取或完成校验。':
+  message==='RAR archive comment exceeds the size limit'?'RAR 压缩包备注超过 256 KiB 的读取上限。':
+  message==='RAR archive comment exceeded the memory budget'?'读取 RAR 压缩包备注时超出内存预算。':
+  message==='RAR comment search exceeds the header limit'?'RAR 压缩包备注搜索超过头部读取上限。':message;
 type CachedTar={path:string;directory:string;stamp:string;users:number;used:number;stale:boolean};
 
 export class ArchiveService {

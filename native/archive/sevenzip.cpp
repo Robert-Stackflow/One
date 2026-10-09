@@ -6,6 +6,7 @@
 #include "extract-space.h"
 #include "extract-risk.h"
 #include "entry-details.h"
+#include "rar-comment.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -166,6 +167,7 @@ class OpenArchive final {
     OpenRequest *callback=nullptr;
     fs::path source;
     int format;
+    int openedFormat=0;
     static std::vector<int> formats(int format){return format==3?std::vector<int>{0xcc,3}:std::vector<int>{format};}
     void close(){if(archive){archive->Close();archive->Release();archive=nullptr;}if(callback){callback->Release();callback=nullptr;}if(input){input->Release();input=nullptr;}if(library){FreeLibrary(library);library=nullptr;}}
     void checkRar() const {
@@ -218,6 +220,7 @@ public:
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);
             if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)continue;
             const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){
+                openedFormat=candidate;
                 if(format==3)checkRar();auto members=input->members();members.insert(members.end(),callback->members.begin(),callback->members.end());bind_archive_members(source,members);return;
             }
             if(opened==E_OUTOFMEMORY)fail("Opening the archive exceeded the memory budget","resource");
@@ -263,7 +266,7 @@ public:
         std::string result;
         if(archive->GetArchiveProperty(comment_prop,&value)==S_OK&&value.vt==VT_BSTR)
             result=utf8(std::wstring(value.bstrVal,SysStringLen(value.bstrVal)));
-        PropVariantClear(&value);return result;
+        PropVariantClear(&value);if(result.empty()&&openedFormat==3)result=rar4_comment(source,library);return result;
     }
 };
 
@@ -430,6 +433,7 @@ std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &
 
 void seven_test(const fs::path &source,const std::string &password,int format,bool result){
     OpenArchive reader(source,password,format);auto items=reader.items();
+    if(format==3)reader.comment(); // Include CMT integrity, which the RAR4 handler omits.
     auto callback=new ExtractRequest(items,{},password,(U32)items.size(),true);
     HRESULT code=reader.get()->Extract(nullptr,U32(-1),1,callback);
     const auto error=callback->errorCode;callback->Release();if(code==E_OUTOFMEMORY)fail("Archive integrity check exceeded the memory budget","resource");if(code!=S_OK)fail("Archive integrity check failed or password is incorrect",error);
