@@ -19,6 +19,8 @@ void extract_recover(const fs::path &parent,const fs::path &recovery);
 void extract_cleanup(const fs::path &parent,const fs::path &recovery);
 void recover_volume_update(const fs::path &parent,const fs::path &recovery);
 void cleanup_volume_update(const fs::path &parent,const fs::path &recovery);
+void inspect_volume_stage(const fs::path &source,const fs::path &stage,const fs::path &recovery);
+void cleanup_volume_stage(const fs::path &source,const fs::path &stage,const fs::path &recovery,const std::string &token);
 class ArchiveError final:public std::runtime_error {
 public:
     std::string code;

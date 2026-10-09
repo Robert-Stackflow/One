@@ -514,6 +514,12 @@ int wmain(int argc, wchar_t **argv) {
         } else if(mode==L"volume-publish"){
             if(argc!=8)fail("Volume publishing requires source, staged primary, recovery, encoding and both revisions");
             publish_volume_update(argv[2],argv[3],argv[4],_wtoi(argv[5]),utf8(argv[6]),utf8(argv[7]),password,archive_format(argv[2]));
+        } else if(mode==L"stage-inspect"){
+            if(argc!=5)fail("Staging inspection requires source, stage and recovery");
+            inspect_volume_stage(argv[2],argv[3],argv[4]);
+        } else if(mode==L"stage-cleanup"){
+            if(argc!=6)fail("Staging cleanup requires source, stage, recovery and inspection token");
+            cleanup_volume_stage(argv[2],argv[3],argv[4],utf8(argv[5]));
         } else if(mode==L"update-recorded-stage"){
             if(argc!=7)fail("Recorded staging requires source, new stage, recovery, encoding and revision");
             update_volume_stage(argv[2],argv[3],_wtoi(argv[5]),utf8(argv[6]),password,archive_format(argv[2]),argv[4]);
