@@ -49,9 +49,11 @@ function recoveryDiagnostic(message:string,cleanup=false){
     if(message.includes('cancelled')||message.includes('stopped'))return '清理已停止，已删除的副本无法撤销；剩余资料可检查后继续清理';
     return '恢复资料无法验证、被占用或无法清理；剩余资料已保留，请查看运行日志';
   }
-  if(message.startsWith('Target was modified'))return '目标文件在解压后发生变化，还原已停止；文件与恢复资料均已保留';
+  if(message.startsWith('Target was modified'))return '目标文件发生变化，还原已停止；文件与恢复资料均已保留';
   if(message.startsWith('Original recovery copy is missing'))return '缺少原文件副本，还原已停止；现有内容已保留';
   if(message.startsWith('Extraction was committed'))return '原解压已确认完成，不能按中断任务还原；恢复副本已保留';
+  if(message.includes('committed'))return '分卷保存已确认完成，不能按中断任务还原；可检查后清理原卷副本';
+  if(message.includes('missing'))return '缺少必要的分卷或原卷副本，还原已停止；现有内容已保留';
   if(message.startsWith('Cannot lock recovery path'))return '文件或目录被占用、无法访问或类型已变化，请关闭相关程序后检查';
   if(message.startsWith('Recovery stopped')||message.startsWith('Recovery cancelled'))return '还原已停止；已处理的部分和恢复资料均已保留，可以检查后重试';
   if(message.includes('changed')||message.includes('appeared')||message.includes('Both '))return '文件身份发生变化或目标位置已有内容，还原已停止；现有资料已保留';
@@ -93,7 +95,7 @@ export class ArchiveService {
     const controller=new AbortController();
     const task=(async()=>{const value=await this.recovery.read(id);controller.signal.throwIfAborted();if(this.recoveryActive(id,value))throw Error('该任务可能仍在运行，请等待结束后检查');return inspectArchiveRecovery(value,controller.signal);})();
     this.inspections.set(id,{owner,controller,task});
-    try{const result=await task;this.diagnostic('archive-recovery-inspected',JSON.stringify({id,state:result.state,items:result.items}),result.state==='invalid');return result;}finally{this.inspections.delete(id);}
+    try{const result=await task;this.diagnostic('archive-recovery-inspected',JSON.stringify({id,kind:result.kind??'extract',state:result.state,items:result.items}),result.state==='invalid');return result;}finally{this.inspections.delete(id);}
   }
   cancelRecoveryInspection(owner:number,id:string){const task=this.inspections.get(archiveRecoveryId(id));if(task?.owner===owner)task.controller.abort();}
   restoreRecovery(owner:number,id:string):Promise<ArchiveResult>{return this.recoveryOperation(owner,id,'recover');}
@@ -162,13 +164,14 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'volume-recover'|'volume-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'?'cleanup':nativeOperation;
     this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
       const options=this.jobs.get(id)!;
-      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,...options.shared!.environment,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
+      const child=spawn(helper(),[nativeOperation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,...options.shared!.environment,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
       const task={child,owner,committing:false,cooperative:operation==='publish'||operation==='recover'||operation==='cleanup'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;
@@ -293,11 +296,12 @@ export class ArchiveService {
     if(request.operation==='recover'||request.operation==='cleanup'){
       const current=await this.recovery.read(id);
       if(JSON.stringify(current)!==JSON.stringify(request.record))throw Error('恢复记录已变化，请重新检查');
-      const messages=await this.execute(owner,id,request.operation,[current.parent,current.path],'');
+      const nativeOperation=current.kind==='volume-update'?(request.operation==='recover'?'volume-recover':'volume-cleanup'):request.operation;
+      const messages=await this.execute(owner,id,nativeOperation,[current.parent,current.path],'');
       const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
       if(!result||!Number.isSafeInteger(result.count)||result.count<0||result.count>1000000)throw Error('恢复处理进程未返回有效结果，请保留剩余资料');
-      if(request.operation==='cleanup'){await this.recovery.clearIfAbsent(id);this.diagnostic('archive-recovery-cleaned',JSON.stringify({id,count:result.count}));return {path:current.parent,count:result.count,cancelled:result.cancelled};}
-      this.diagnostic('archive-recovery-restored',JSON.stringify({id,count:result.count,retained:current.path}));
+      if(request.operation==='cleanup'){if(!await this.recovery.clearIfAbsent(id))throw Error('恢复目录或分卷暂存目录仍存在，记录已保留；请检查剩余资料');this.diagnostic('archive-recovery-cleaned',JSON.stringify({id,kind:current.kind??'extract',count:result.count}));return {path:current.parent,count:result.count,cancelled:result.cancelled};}
+      this.diagnostic('archive-recovery-restored',JSON.stringify({id,kind:current.kind??'extract',count:result.count,retained:current.path}));
       return {path:current.path,count:result.count,cancelled:result.cancelled};
     }
     if(request.operation==='list'){

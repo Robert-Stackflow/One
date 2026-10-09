@@ -41,7 +41,7 @@ async function main(){
    const saving=service.run(1,{operation:'create',path:path.join(root,'protected.zip'),sources:[source]});await sleep(350);assert(!last.killed,'protected publication must never be killed by watchdog');last.finish();await saving;
    // Identity-driven recovery can resume after a hard exit. Unlike final
    // publication, its ready handshake must not disable liveness monitoring.
-   for(const operation of ['recover','cleanup']){
+   for(const operation of ['recover','cleanup','volume-recover','volume-cleanup']){
     service.perform=async(owner,request,id)=>{await service.execute(owner,id,operation,[], '');return {path:request.path,count:1};};
     await assert.rejects(service.run(1,{operation:'create',path:path.join(root,operation+'.zip'),sources:[source]}),error=>error.code==='timeout');assert(last.killed,'Unresponsive recovery/cleanup must remain under watchdog after ready');
    }service.perform=perform;

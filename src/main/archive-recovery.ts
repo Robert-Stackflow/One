@@ -1,10 +1,11 @@
 import {lstat,open,mkdir,opendir,unlink,link} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
-import {join,resolve,isAbsolute,parse,relative} from 'node:path';
+import {join,resolve,isAbsolute,parse,relative,dirname} from 'node:path';
 import type {BigIntStats} from 'node:fs';
 import {crc32} from 'node:zlib';
 import {createRequire} from 'node:module';
 import type {ArchiveRecoveryRecord,ArchiveRecoverySummary,ArchiveRecoveryPage,ArchiveRecoveryInspection} from '../shared/archive-recovery';
+import {volumeJournalInspector} from './archive-volume-journal';
 
 const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 export function archiveRecoveryId(value:unknown){if(typeof value!=='string'||!uuid.test(value))throw Error('恢复记录标识无效');return value.toLowerCase();}
@@ -48,8 +49,12 @@ async function ordinaryAncestors(path:string){
  }
 }
 function record(value:unknown,id:string):ArchiveRecoveryRecord{
- if(!fields(value,['version','id','created','archive','parent','path','ownerPid'])||value.version!==1||value.id!==id||!uuid.test(id)||!integer(value.created,Number.MAX_SAFE_INTEGER)||!integer(value.ownerPid,0xffffffff)||!value.ownerPid||!absolute(value.archive)||!absolute(value.parent)||!absolute(value.path)||!same(value.path,join(value.parent,`.one-recovery-${id}`)))throw Error('恢复记录无效，资料已保留');
- return{id,created:value.created,archive:value.archive,parent:value.parent,path:value.path,ownerPid:value.ownerPid};
+ const volume=!!value&&typeof value==='object'&&(value as {version?:unknown}).version===2;
+ if(!fields(value,volume?['version','id','created','archive','parent','path','ownerPid','kind','stage']:['version','id','created','archive','parent','path','ownerPid'])||value.version!==(volume?2:1)||value.id!==id||!uuid.test(id)||!integer(value.created,Number.MAX_SAFE_INTEGER)||!integer(value.ownerPid,0xffffffff)||!value.ownerPid||!absolute(value.archive)||!absolute(value.parent)||!absolute(value.path)||!same(value.path,join(value.parent,`${volume?'.one-volume-recovery-':'.one-recovery-'}${id}`)))throw Error('恢复记录无效，资料已保留');
+ const base={id,created:value.created,archive:value.archive,parent:value.parent,path:value.path,ownerPid:value.ownerPid};
+ if(!volume)return base;
+ if(value.kind!=='volume-update'||!absolute(value.stage)||!same(dirname(value.stage),value.parent)||!/^\.one-update-[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(relative(value.parent,value.stage))||!same(dirname(value.archive),value.parent)||!/(?:\.zip|\.7z\.001)$/i.test(value.archive))throw Error('分卷恢复记录范围无效，资料已保留');
+ return{...base,kind:'volume-update',stage:value.stage};
 }
 
 /** One immutable, exclusive record per operation, shared safely by GUI/CLI.
@@ -64,9 +69,9 @@ export class ArchiveRecoveryRegistry{
   for await(const entry of handle){if(!/^[a-f0-9-]{36}\.json$/i.test(entry.name)||!uuid.test(entry.name.slice(0,-5)))continue;if(names.length===maxRecords)return{names,truncated:true};names.push(entry.name);}
   return {names,truncated:false};
  }
- async register(id:string,archive:string,parent:string){
+ async register(id:string,archive:string,parent:string,volume?:{kind:'volume-update';stage:string}){
   id=archiveRecoveryId(id);
-  const value={version:1,id:id.toLowerCase(),created:Date.now(),archive,parent,path:join(parent,`.one-recovery-${id}`),ownerPid:process.pid};
+  const value={version:volume?2:1,id:id.toLowerCase(),created:Date.now(),archive,parent,path:join(parent,`${volume?'.one-volume-recovery-':'.one-recovery-'}${id}`),ownerPid:process.pid,...volume};
   const checked=record(value,value.id);await mkdir(this.directory,{recursive:true});await ordinaryAncestors(this.directory);
   if((await this.names()).names.length>=maxRecords)throw Error('待处理恢复记录已满，请先检查恢复资料');
   const bytes=Buffer.from(JSON.stringify(value));if(bytes.length>maxRecordBytes)throw Error('恢复记录过大');
@@ -109,37 +114,52 @@ export class ArchiveRecoveryRegistry{
  }
  async clearIfAbsent(id:string){
   const value=await this.read(id),info=await lstat(value.path).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
-  if(!info)await this.forget(id);
+  if(info)return false;
+  // A publisher can exit before creating its journal, leaving staged data.
+  // Losing the index here would hide that data; no manifest means no authority
+  // to delete it. The owning save flow may remove a verified empty stage first.
+  if(value.kind==='volume-update'&&await lstat(value.stage).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;}))return false;
+  await this.forget(id);return true;
  }
 }
 
 /** Streaming, read-only validation. A valid journal is evidence about a past
  * decision, never authority to overwrite a file or to delete a recovery copy. */
 export async function inspectArchiveRecovery(value:ArchiveRecoveryRecord,signal?:AbortSignal):Promise<ArchiveRecoveryInspection>{
- const result:ArchiveRecoveryInspection={id:value.id,state:'invalid',message:'',items:0,files:0,directories:0,replaced:0,published:0,skipped:0,samples:[]};
+ const result:ArchiveRecoveryInspection={id:value.id,kind:value.kind??'extract',state:'invalid',message:'',items:0,files:0,directories:0,replaced:0,published:0,skipped:0,samples:[]};
+ const volume=value.kind==='volume-update',journalLimit=volume?64*1024**2:maxJournalBytes;
  let handle;
  try{
   signal?.throwIfAborted();await ordinaryAncestors(value.parent);
   const directory=await lstat(value.path,{bigint:true}).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
-  if(!directory)return{...result,state:'missing',message:'未找到恢复目录。它可能已完成清理或被移动，请检查目标目录。'};
+  if(!directory){
+   if(volume&&await lstat(value.stage).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;}))return{...result,state:'incomplete',message:'未找到分卷恢复清单，但暂存目录仍存在。无法确认保存阶段，请保留压缩包与暂存资料。'};
+   return{...result,state:'missing',message:'未找到恢复目录。它可能已完成清理或被移动，请检查目标目录。'};
+  }
   if(!directory.isDirectory()||directory.isSymbolicLink())throw Error('恢复目录被替换为链接或非文件夹，未读取其中内容');
   const parent=await lstat(value.parent,{bigint:true}),manifest=join(value.path,'manifest.jsonl'),before=await lstat(manifest,{bigint:true}).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
   if(!before){
    const contents=await opendir(value.path);for await(const _entry of contents)throw Error('恢复清单缺失且目录中仍有内容，请保留资料');
    signal?.throwIfAborted();const after=await lstat(value.path,{bigint:true});
    if(!sameFile(directory,after)||!after.isDirectory()||after.isSymbolicLink())throw Error('恢复目录已经变化');
+   if(volume&&await lstat(value.stage).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;}))return{...result,state:'incomplete',message:'恢复目录已无清单，但分卷暂存目录仍存在。无法核对其所有权，请保留压缩包与暂存资料。'};
    return{...result,state:'empty',message:'恢复目录已无清单和副本，可继续清理空目录。'};
   }
-  if(!before.isFile()||before.isSymbolicLink()||before.size>BigInt(maxJournalBytes))throw Error('恢复清单无效或超过读取上限');
-  handle=await open(manifest,'r');const initial=await handle.stat({bigint:true});if(!sameFile(initial,before)||!initial.isFile()||initial.size>BigInt(maxJournalBytes))throw Error('恢复清单已经变化');
+  if(!before.isFile()||before.isSymbolicLink()||before.size>BigInt(journalLimit))throw Error('恢复清单无效或超过读取上限');
+  handle=await open(manifest,'r');const initial=await handle.stat({bigint:true});if(!sameFile(initial,before)||!initial.isFile()||initial.size>BigInt(journalLimit))throw Error('恢复清单已经变化');
   const parentIdentity=await nativeDirectoryIdentity(value.parent),recoveryIdentity=await nativeDirectoryIdentity(value.path);
-  const flags=new Uint8Array(1000000);let crc=0,sequence=0,lastIndex=-1,prepared=false,phase='plan',seenHeader=false,skipped=0;
+  const stageBefore=volume?await lstat(value.stage,{bigint:true}).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;}):undefined;
+  if(stageBefore&&(!stageBefore.isDirectory()||stageBefore.isSymbolicLink()))throw Error('分卷暂存目录包含链接或类型已经变化');
+  const stageIdentity=stageBefore&&volume?await nativeDirectoryIdentity(value.stage):undefined;
+  const volumeParser=volume?volumeJournalInspector(value,result,parentIdentity,recoveryIdentity,stageIdentity):undefined;
+  const flags=new Uint8Array(volume?0:1000000);let crc=0,sequence=0,lastIndex=-1,prepared=false,phase='plan',seenHeader=false,skipped=0;
   const stage=join(value.parent,`.one-extract-${value.id}`),decode=new TextDecoder('utf-8',{fatal:true});
   const line=(bytes:Buffer)=>{
    if(bytes.length>maxLineBytes)throw Error('恢复清单单条记录过大');const text=decode.decode(bytes),envelope=JSON.parse(text),cut=text.lastIndexOf(',"crc32":');
-   if(!fields(envelope,['sequence','record','crc32'])||envelope.sequence!==sequence||sequence>3000010||cut<0||typeof envelope.crc32!=='string'||!/^[a-f0-9]{8}$/.test(envelope.crc32)||JSON.stringify(envelope)!==text)throw Error('恢复清单顺序或格式损坏');
+   if(!fields(envelope,['sequence','record','crc32'])||envelope.sequence!==sequence||sequence>=(volume?12300:3000011)||cut<0||typeof envelope.crc32!=='string'||!/^[a-f0-9]{8}$/.test(envelope.crc32)||JSON.stringify(envelope)!==text)throw Error('恢复清单顺序或格式损坏');
    crc=crc32(bytes.subarray(0,Buffer.byteLength(text.slice(0,cut))),crc);if(envelope.crc32!==crc.toString(16).padStart(8,'0'))throw Error('恢复清单校验失败');++sequence;
    const row=envelope.record as Record<string,unknown>;if(!row||typeof row!=='object'||typeof row.type!=='string')throw Error('恢复清单记录无效');
+   if(volumeParser){volumeParser.line(row);return;}
    if(row.type==='header'){
     if(seenHeader||sequence!==1||!fields(row,['type','version','parent','stage','recovery','parentIdentity','stageIdentity','recoveryIdentity','conflict'])||row.version!==2||!absolute(row.parent)||!same(row.parent,value.parent)||!absolute(row.stage)||!same(row.stage,stage)||!absolute(row.recovery)||!same(row.recovery,value.path)||!idStamp(row.parentIdentity)||!idStamp(row.stageIdentity)||!idStamp(row.recoveryIdentity)||!['rename','skip','replace'].includes(String(row.conflict)))throw Error('恢复清单不属于本次任务或版本不受支持');
     if(row.parentIdentity!==parentIdentity||row.recoveryIdentity!==recoveryIdentity)throw Error('目标目录或恢复目录的身份已经变化');seenHeader=true;return;
@@ -173,12 +193,17 @@ export async function inspectArchiveRecovery(value:ArchiveRecoveryRecord,signal?
   let pending=Buffer.alloc(0),read=0;
   signal?.throwIfAborted();
   const stream=handle.createReadStream({autoClose:false,highWaterMark:64*1024,signal});
-  for await(const chunk of stream){signal?.throwIfAborted();read+=chunk.length;if(read>maxJournalBytes)throw Error('恢复清单超过读取上限');const data=pending.length?Buffer.concat([pending,chunk]):chunk;let start=0,end;
+  for await(const chunk of stream){signal?.throwIfAborted();read+=chunk.length;if(read>journalLimit)throw Error('恢复清单超过读取上限');const data=pending.length?Buffer.concat([pending,chunk]):chunk;let start=0,end;
    while((end=data.indexOf(10,start))>=0){line(data.subarray(start,end));start=end+1;}pending=Buffer.from(data.subarray(start));if(pending.length>maxLineBytes)throw Error('恢复清单单条记录过大');
   }
-  if(pending.length||!seenHeader)throw Error('恢复清单被截断或没有完整头部');
+  if(pending.length||!seenHeader&&!volumeParser)throw Error('恢复清单被截断或没有完整头部');
   const after=await handle.stat({bigint:true}),nowDirectory=await lstat(value.path,{bigint:true}),nowParent=await lstat(value.parent,{bigint:true}),nowManifest=await lstat(manifest,{bigint:true});
   if(after.size!==initial.size||after.mtimeNs!==initial.mtimeNs||read!==Number(initial.size)||!nowDirectory.isDirectory()||nowDirectory.isSymbolicLink()||!nowParent.isDirectory()||nowParent.isSymbolicLink()||!sameFile(nowDirectory,directory)||!sameFile(nowParent,parent)||!sameFile(nowManifest,initial)||nowManifest.isSymbolicLink()||await nativeDirectoryIdentity(value.parent)!==parentIdentity||await nativeDirectoryIdentity(value.path)!==recoveryIdentity)throw Error('检查期间恢复资料正在变化，请稍后重试');
+  if(volume){
+   const stageAfter=await lstat(value.stage,{bigint:true}).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
+   if(!!stageAfter!==!!stageBefore||stageAfter&&(!stageAfter.isDirectory()||stageAfter.isSymbolicLink()||!sameFile(stageAfter,stageBefore!)||await nativeDirectoryIdentity(value.stage)!==stageIdentity))throw Error('检查期间分卷暂存目录已经变化');
+   volumeParser!.finish();return result;
+  }
   result.state=phase==='committed'?'committed':phase==='rolled-back'?'rolled-back':prepared?'pending':'incomplete';
   result.message=result.state==='committed'?'清单确认发布已完成，保留的副本可能来自清理中断。':result.state==='rolled-back'?'清单确认已回滚，仍需检查保留的资料。':result.state==='pending'?'发布或回滚尚未确认完成，请保留原件和恢复资料。':'写入计划未完成，清单没有授权开始发布。请检查目标目录。';
   return result;
