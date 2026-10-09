@@ -38,6 +38,7 @@
 
 - [空间分析调研](research/SpaceSniffer调研.md)
 - [屏幕取色调研](research/取色实现调研.md)
+- [Power Display 显示器管理调研](research/PowerDisplay显示器管理调研.md)
 - [文件索引内存与驻留](research/文件索引内存调研.md)
 - [Bandizip 功能与设置调研](research/Bandizip功能与设置调研.md)
 - [归档功能缺口与原生引擎调研](research/归档功能缺口与原生引擎调研.md)
