@@ -11,8 +11,9 @@ export type ArchiveTaskState='running'|'completed'|'failed'|'cancelled'|'interru
 export type ArchiveTask = {id:string;operation:ArchiveTaskOperation;state:ArchiveTaskState;path:string;started:number;finished?:number;phase:ArchiveProgress['operation'];done:number;total:number;queuePosition?:number;cancellable:boolean;result?:ArchiveResult;scan?:ArchiveScan;message?:string};
 export type ArchiveTaskOverview={active:ArchiveTask[];recent:ArchiveTask[];error:string};
 export type ArchiveEdit =
-  | {kind:'delete';indexes:number[]}
+  | {kind:'delete';indexes:number[];folders?:string[]}
   | {kind:'rename';index:number;name:string}
+  | {kind:'rename-folder';folder:string;name:string}
   | {kind:'mkdir';name:string}
   | {kind:'add';source:string;name:string;replace?:boolean}
   | {kind:'comment';text:string};

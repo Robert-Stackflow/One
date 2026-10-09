@@ -62,21 +62,60 @@ void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &sourc
     const size_t old_count=nodes.size();
     uint32_t count = plan.number();
     if (!count || count > 10000) fail("Archive update has too many or no changes");
+    // Resolve path selectors against the opened revision before any rename.
+    // Internal directory anchors follow parent/child edits like real entries,
+    // but are removed from the output: implicit folders stay implicit.
+    const auto start=plan.cursor;
+    std::map<std::wstring,size_t> folders;
+    std::vector<size_t> anchors;
+    for(uint32_t action=0;action<count;++action){
+        const auto kind=plan.number();plan.number();plan.number();plan.text();const auto input=plan.text(131072);
+        if(kind!=6&&kind!=7)continue;
+        const auto folder=canonical(input,true);const auto prefix=key(folder);
+        if(folders.contains(prefix))continue;
+        bool found=false;size_t index=old_count;
+        for(size_t i=0;i<old_count;++i){
+            const auto candidate=key(nodes[i].name);
+            if(candidate==prefix){if(!nodes[i].directory)fail("A file is not an archive folder");index=i;found=true;break;}
+            if(candidate.starts_with(prefix+L'/'))found=true;
+        }
+        if(!found)fail("Selected archive folder no longer exists");
+        if(index==old_count){index=nodes.size();nodes.push_back({folder,true});anchors.push_back(index);}
+        folders.emplace(prefix,index);
+    }
+    if(plan.cursor!=plan.bytes.size())fail("Unexpected trailing archive update data");
+    plan.cursor=start;
     for (uint32_t action = 0; action < count; ++action) {
         uint32_t kind = plan.number(), index = plan.number(), replace = plan.number();
         std::string name = plan.text(), input = plan.text(131072);
         if (replace > 1) fail("Invalid replacement mode");
-        if (kind == 1 || kind == 2) {
-            if (index >= old_count) fail("Selected archive entry no longer exists");
+        if (kind == 1 || kind == 2 || kind == 6 || kind == 7) {
+            if(kind==6||kind==7){index=static_cast<uint32_t>(folders.at(key(canonical(input,true))));kind=kind==6?1:2;}
+            else if (index >= old_count) fail("Selected archive entry no longer exists");
             if (nodes[index].removed) { if (kind == 1) continue; fail("Selected archive entry no longer exists"); }
             auto previous = nodes[index].name;
             auto prefix = key(previous);
             bool directory = nodes[index].directory;
             std::string next = kind == 2 ? canonical(name, directory) : "";
+            if(kind==2&&directory&&key(next)!=prefix){
+                const auto target=key(next);
+                for(const auto &node:nodes)if(!node.removed){
+                    const auto candidate=key(node.name);
+                    const bool moving=candidate==prefix||candidate.starts_with(prefix+L'/');
+                    if(!moving&&(candidate==target||candidate.starts_with(target+L'/')))
+                        fail("Renaming this folder would merge or overwrite an existing archive path: "+next);
+                }
+            }
             for (auto &node : nodes) if (!node.removed &&
                 (key(node.name) == prefix || (directory && key(node.name).starts_with(prefix + L'/')))) {
                 if (kind == 1) node.removed = true;
-                else node.name = next + node.name.substr(previous.size());
+                else {
+                    // Case folding can match spellings with different UTF-8
+                    // lengths. Slice directory suffixes by path components.
+                    size_t offset=node.name.size();
+                    if(directory){offset=0;for(const auto c:previous)if(c=='/'){const auto slash=node.name.find('/',offset);offset=slash==std::string::npos?node.name.size():slash+1;}}
+                    node.name = next + node.name.substr(offset);
+                }
             }
         } else if (kind == 3) {
             nodes.push_back({canonical(name, true), true});
@@ -108,7 +147,7 @@ void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &sourc
         else fail("Unknown archive update action");
     }
     if (plan.cursor != plan.bytes.size()) fail("Unexpected trailing archive update data");
-
+    for(const auto index:anchors)nodes[index].removed=true;
 }
 void check_staging(const fs::path &source,const fs::path &temporary,const fs::path &backup){
     const auto parent=fs::absolute(source).parent_path();

@@ -13,8 +13,14 @@ export async function archiveEditPacket(changes:ArchiveEdit[]):Promise<Buffer>{
  for(const change of changes){
   if(!change||typeof change!=='object')throw Error('压缩包修改无效');
   switch(change.kind){
-   case 'delete':if(!Array.isArray(change.indexes)||!change.indexes.length||change.indexes.length>10000)throw Error('请选择要删除的条目');for(const entry of new Set(change.indexes))add(1,index(entry),'');break;
+   case 'delete':{
+    const folders=change.folders??[];
+    if(!Array.isArray(change.indexes)||!Array.isArray(folders)||!change.indexes.length&&!folders.length||change.indexes.length+folders.length>10000)throw Error('请选择要删除的条目');
+    for(const entry of new Set(change.indexes))add(1,index(entry),'');
+    for(const folder of new Set(folders))add(6,0,'',name(folder));break;
+   }
    case 'rename':add(2,index(change.index),name(change.name));break;
+   case 'rename-folder':add(7,0,name(change.name),name(change.folder));break;
    case 'mkdir':add(3,0,name(change.name));break;
    case 'comment':add(5,0,change.text);break;
    case 'add':{

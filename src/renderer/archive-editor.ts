@@ -29,7 +29,7 @@ async function editDialog(kind:'add'|'mkdir'|'rename'|'comment',entry?:ArchiveEn
   if(kind==='add'){
    const source=input('[data-edit-source]').value;if(!source)return toast('请先选择文件或文件夹');
    const replace=input('[data-edit-replace]').checked;draft={change:{kind:'add',source,name,replace},description:`${replace?'添加并替换同名文件':'添加'}：${name}`};
-  }else if(kind==='rename')draft={change:{kind:'rename',index:entry!.index,name},description:`重命名：${entry!.name} → ${name}`};
+  }else if(kind==='rename')draft={change:entry!.implicit?{kind:'rename-folder',folder:entry!.name,name}:{kind:'rename',index:entry!.index,name},description:`重命名：${entry!.name} → ${name}`};
   else if(kind==='mkdir')draft={change:{kind:'mkdir',name},description:`新建目录：${name}`};
   else{const text=input('[data-edit-comment]').value;draft={change:{kind:'comment',text},description:text?'更新压缩包备注':'清空压缩包备注'};}
   void closeDialog(dialog);
@@ -53,10 +53,9 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
  for(const button of root.querySelectorAll<HTMLButtonElement>('[data-archive-edit]'))button.onclick=async()=>{
   if(busy||!options.listing()?.editable)return;
   const kind=button.dataset.archiveEdit as 'add'|'mkdir'|'rename'|'delete'|'comment',items=selected();
-  if((kind==='rename'||kind==='delete')&&items.some(entry=>entry.implicit))return options.status('此文件夹未单独记录在压缩包中，请进入目录后选择实际文件修改');
   if(kind==='delete'){
    if(!items.length)return options.status('请先选择要删除的项目');
-   drafts.push({change:{kind:'delete',indexes:items.map(e=>e.index)},description:`删除：${items.slice(0,3).map(e=>e.name).join('、')}${items.length>3?` 等 ${items.length} 项`:''}`});
+   drafts.push({change:{kind:'delete',indexes:items.filter(e=>!e.implicit).map(e=>e.index),folders:items.filter(e=>e.implicit).map(e=>e.name)},description:`删除：${items.slice(0,3).map(e=>e.name).join('、')}${items.length>3?` 等 ${items.length} 项`:''}`});
   }else{
    if(kind==='rename'&&items.length!==1)return options.status('请选择一个项目重命名');
    const listing=options.listing();

@@ -103,7 +103,7 @@ async function jsonFile(file:string):Promise<unknown>{
 }
 async function readChanges(file:string):Promise<ArchiveEdit[]>{
  const changes=await jsonFile(file);argument(Array.isArray(changes)&&changes.length>0&&changes.length<=10000,'Supply 1–10000 changes');
- const fields:Record<string,string[]>={delete:['kind','indexes'],rename:['kind','index','name'],mkdir:['kind','name'],add:['kind','source','name','replace'],comment:['kind','text']};
+ const fields:Record<string,string[]>={delete:['kind','indexes','folders'],rename:['kind','index','name'],'rename-folder':['kind','folder','name'],mkdir:['kind','name'],add:['kind','source','name','replace'],comment:['kind','text']};
  for(const item of changes){argument(item&&typeof item==='object'&&!Array.isArray(item)&&Object.hasOwn(fields,item.kind)&&Object.keys(item).every(key=>fields[item.kind].includes(key)),'Unknown change or change field');if(item.kind==='add')item.source=filePath(item.source,dirname(file));}
  try{await archiveEditPacket(changes);}catch(error){if(error&&typeof error==='object'&&'code' in error)throw error;throw new CliFailure(error instanceof Error?error.message:'Invalid changes');}
  return changes;
