@@ -145,7 +145,7 @@ class DragData final:public IDataObject,public IDataObjectAsyncCapability {
     fs::path source,stage;int encoding,format;std::string password;
     std::shared_ptr<ArchiveOrigin> origin;
     std::atomic<HRESULT> outcome{S_OK};std::atomic<DWORD> effect{DROPEFFECT_NONE};
-    std::string failure;
+    std::string failure,failure_code="archive";
 public:
     Selection selection;std::shared_ptr<Lifetime> lifetime=std::make_shared<Lifetime>();
     CLIPFORMAT descriptors=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_FILEDESCRIPTORW);
@@ -168,9 +168,10 @@ public:
         while(prepared.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready)pump();
         prepared.get();
     }
-    void drain(){if(prepared.valid()){while(prepared.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready)pump();try{prepared.get();}catch(const std::exception &e){failure=e.what();}}}
+    void drain(){if(prepared.valid()){while(prepared.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready)pump();try{prepared.get();}catch(const ArchiveError &e){failure=e.what();failure_code=e.code;}catch(const std::exception &e){failure=e.what();failure_code="archive";}}}
     bool pending() const{return running||lifetime->streams>0;}
     std::string error()const{return failure;}
+    std::string error_code()const{return failure_code;}
     HRESULT result() const{return outcome;}
     DWORD result_effect() const{return effect;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
@@ -212,7 +213,8 @@ public:
                 }
             }
             GlobalUnlock(memory);out->tymed=TYMED_HGLOBAL;out->hGlobal=memory;return S_OK;
-        }catch(const std::exception &error){failure=error.what();return STG_E_READFAULT;}
+        }catch(const ArchiveError &error){failure=error.what();failure_code=error.code;return STG_E_READFAULT;}
+        catch(const std::exception &error){failure=error.what();failure_code="archive";return STG_E_READFAULT;}
         catch(...){failure="Cannot prepare archive drag contents";return E_FAIL;}
     }
     HRESULT STDMETHODCALLTYPE GetDataHere(FORMATETC*,STGMEDIUM*) override{return DATA_E_FORMATETC;}
@@ -308,7 +310,7 @@ void selftest(DragData *data,bool report_entries) {
         const auto &item=data->selection.items[i];
         if(item.directory){if(report_entries)emit("{\"type\":\"drag-entry\",\"name\":"+json(utf8(item.name))+",\"directory\":true}");continue;}
         format={data->contents,nullptr,DVASPECT_CONTENT,(LONG)i,TYMED_ISTREAM};
-        if(FAILED(data->GetData(&format,&medium)))fail(data->error().empty()?"Cannot read drag contents":data->error());
+        if(FAILED(data->GetData(&format,&medium)))fail(data->error().empty()?"Cannot read drag contents":data->error(),data->error_code());
         uint64_t bytes=0,hash=14695981039346656037ull;unsigned char buffer[65536];ULONG got=0;HRESULT code;
         STATSTG info{};if(FAILED(medium.pstm->Stat(&info,STATFLAG_NONAME))||info.cbSize.QuadPart!=item.size)fail("Invalid stream size");
         while((code=medium.pstm->Read(buffer,sizeof(buffer),&got))==S_OK||code==S_FALSE){for(ULONG j=0;j<got;++j){hash^=buffer[j];hash*=1099511628211ull;}bytes+=got;if(code==S_FALSE||!got)break;}
@@ -362,7 +364,7 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
         if(was_cancelled)cancelled=true;
         while(data->pending())pump();
         data->drain();
-        if(!was_cancelled){if(!data->error().empty())fail(data->error());if(FAILED(code)||FAILED(data->result()))fail("Target failed to copy archive contents");}
+        if(!was_cancelled){if(!data->error().empty())fail(data->error(),data->error_code());if(FAILED(code)||FAILED(data->result()))fail("Target failed to copy archive contents");}
         emit("{\"type\":\"result\",\"count\":"+std::to_string(was_cancelled?0:data->selection.roots)+",\"cancelled\":"+(was_cancelled?"true":"false")+"}");
         data->Release();drag_source->Release();OleUninitialize();
     }catch(...){poll_escape=false;cancelled=true;data->drain();data->Release();drag_source->Release();OleUninitialize();throw;}

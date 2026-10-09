@@ -3,6 +3,7 @@
 #include "zip-common.h"
 #include "browse.h"
 #include "sevenzip-update.h"
+#include "extract-space.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -242,10 +243,10 @@ void preflight(OpenArchive &reader,const std::vector<Item> &items){
 }
 
 class FileOutput final:public OutStream7 {
-    std::atomic<ULONG> refs{1};HANDLE file=INVALID_HANDLE_VALUE;U64 limit=0,written=0;
+    std::atomic<ULONG> refs{1};HANDLE file=INVALID_HANDLE_VALUE;U64 limit=0,written=0;ExtractionSpace &space;
 public:
-    FileOutput(const fs::path &path,U64 expected):file(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
-        FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr)),limit(expected){}
+    FileOutput(const fs::path &path,U64 expected,ExtractionSpace &space):file(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
+        FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr)),limit(expected),space(space){}
     ~FileOutput(){if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);}
     bool valid()const{return file!=INVALID_HANDLE_VALUE;}
     bool complete()const{return written==limit;}
@@ -257,6 +258,7 @@ public:
     HRESULT STDMETHODCALLTYPE Write(const void *data,U32 size,U32 *done) override {
         if(archive_cancelled())return E_ABORT;
         if(!done)return E_POINTER;*done=0;if(size>limit-written)return E_FAIL;
+        if(!space.write(size))return HRESULT_FROM_WIN32(ERROR_DISK_FULL);
         if(!WriteFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr))return HRESULT_FROM_WIN32(GetLastError());
         written+=*done;if(*done)archive_activity();return *done==size?S_OK:E_FAIL;
     }
@@ -265,11 +267,11 @@ public:
 class ExtractRequest final:public ExtractCallback7,public Password7 {
     std::atomic<ULONG> refs{1};
     const std::vector<Item> &items;fs::path destination;std::wstring password;FileOutput *active=nullptr;
-    U32 done=0,total=0;U64 completed=0;bool testing=false;ULONGLONG last_progress=0;
+    U32 done=0,total=0;U64 completed=0;bool testing=false;ULONGLONG last_progress=0;ExtractionSpace *space=nullptr;
 public:
     std::string errorCode="archive";
-    ExtractRequest(const std::vector<Item> &entries,const fs::path &path,const std::string &secret,U32 expected,bool test):
-        items(entries),destination(path),password(wide(secret)),total(expected),testing(test){}
+    ExtractRequest(const std::vector<Item> &entries,const fs::path &path,const std::string &secret,U32 expected,bool test,ExtractionSpace *space=nullptr):
+        items(entries),destination(path),password(wide(secret)),total(expected),testing(test),space(space){}
     ~ExtractRequest(){if(active)active->Release();}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
@@ -290,10 +292,11 @@ public:
         if(archive_cancelled())return E_ABORT;
         if(!stream||index>=items.size())return E_INVALIDARG;*stream=nullptr;
         if(testing||mode!=0)return S_OK;
+        if(!space||!space->write(0)){errorCode="write";return E_FAIL;}
         const auto &item=items[index];const auto target=destination/entry_path(item.name);
         try{if(item.directory){fs::create_directories(target);return S_OK;}fs::create_directories(target.parent_path());}
         catch(...){errorCode="write";return E_FAIL;}
-        auto output=new FileOutput(target,item.size);
+        auto output=new FileOutput(target,item.size,*space);
         if(!output->valid()){errorCode="write";output->Release();return E_FAIL;}
         active=output;active->AddRef();*stream=output;return S_OK;
     }
@@ -370,14 +373,13 @@ size_t seven_extract(const fs::path &source,const fs::path &destination,
     preflight(reader,items);
     if(fs::exists(destination))fail("Extraction destination already exists");
     auto indices=selected_indices(items,effective);
-    U64 expected=0;for(U32 index:indices){if(items[index].size>UINT64_MAX-expected)fail("Archive declares too much extracted data");expected+=items[index].size;}
-    auto capacity=fs::space(destination.parent_path());constexpr U64 reserve=256ull*1024*1024;
-    if(capacity.available!=UINTMAX_MAX&&(capacity.available<=reserve||expected>capacity.available-reserve))
-        fail("Not enough free disk space to extract the archive","write");
+    U64 expected=0;for(U32 index:indices)if(!items[index].directory){if(items[index].size>UINT64_MAX-expected)fail("Archive declares too much extracted data","safety");expected+=items[index].size;}
+    ExtractionSpace space(destination.parent_path(),expected);
     fs::create_directory(destination);
-    auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false);
+    auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false,&space);
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
-    const auto error=archive_cancelled()?"cancelled":callback->errorCode;callback->Release();if(code==E_OUTOFMEMORY)fail("Archive extraction exceeded the memory budget","resource");if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
+    const auto cancelled=archive_cancelled();const auto error=cancelled?"cancelled":callback->errorCode;callback->Release();if(!cancelled&&space.failed())fail(space.message(),space.code());if(code==E_OUTOFMEMORY)fail("Archive extraction exceeded the memory budget","resource");if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
+    space.finish();
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
     return indices.size();
 }

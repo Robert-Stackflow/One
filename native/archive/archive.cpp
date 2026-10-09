@@ -26,6 +26,7 @@
 #include "scan.h"
 #include "browse.h"
 #include "zip-common.h"
+#include "extract-space.h"
 
 std::string utf8(const std::wstring &value) {
     if (value.empty()) return {};
@@ -273,18 +274,17 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
     uint64_t expected_bytes = 0;
     for (const auto &item : items) if (included(item)) {
         ++total;
-        if (item.size > UINT64_MAX - expected_bytes) fail("Archive declares too much extracted data","safety");
-        expected_bytes += item.size;
+        if (!item.directory) {
+            if (item.size > UINT64_MAX - expected_bytes) fail("Archive declares too much extracted data","safety");
+            expected_bytes += item.size;
+        }
     }
-    const auto capacity = fs::space(destination.parent_path());
-    constexpr uint64_t reserve = 256ull * 1024 * 1024;
-    if (capacity.available != UINTMAX_MAX &&
-        (capacity.available <= reserve || expected_bytes > capacity.available - reserve))
-        fail("Not enough free disk space to extract the archive","write");
+    ExtractionSpace space(destination.parent_path(),expected_bytes);
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during extraction");
         if (archive_cancelled()) fail("Archive drag cancelled","cancelled");
         if (included(item)) {
+            space.require(0);
             if (item.encrypted && password.empty()) fail("Password required","password");
             fs::path target = destination / entry_path(item.name);
             if (item.directory) fs::create_directories(target);
@@ -305,6 +305,7 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
                 while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {
                     if (archive_cancelled()) fail("Archive drag cancelled","cancelled");
                     if ((uint64_t)count > item.size - written) fail("ZIP entry expanded beyond its declared size: " + item.name,"safety");
+                    space.require((uint64_t)count);
                     DWORD actual = 0;
                     if (!WriteFile(output.handle, buffer, (DWORD)count, &actual, nullptr) || actual != (DWORD)count)
                         fail("Cannot write extracted file: " + item.name,"write");
@@ -322,6 +323,7 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
         }
         archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);
     }
+    space.finish();
     if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(done) + "}");
     return done;
 }
