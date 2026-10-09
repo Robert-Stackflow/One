@@ -31,7 +31,7 @@ async function main(){
   const bin=path.join(installation,'VC/Tools/MSVC',versions[0],'bin/Hostx64/x64');await fs.access(path.join(bin,'clang_rt.asan_dynamic-x86_64.dll'));
   const key=Object.keys(env).find(x=>x.toLowerCase()==='path')||'PATH';env[key]=bin+';'+(env[key]||'');
  }
- await fs.writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT ${sanitizer?'/O1 /Zi /fsanitize=address':'/O2'} /W4 /WX /utf-8 "${path.resolve('native/archive/egg-azo.cpp')}" "${path.resolve('tests/archive-egg-azo-native.cpp')}" /Fe:"${probe}" /Fo:"${root}/"\r\n`);
+ await fs.writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT ${sanitizer?`/O1 /Zi /fsanitize=address /Fd:"${root}/azo.pdb"`:'/O2'} /W4 /WX /utf-8 "${path.resolve('native/archive/egg-azo.cpp')}" "${path.resolve('tests/archive-egg-azo-native.cpp')}" /Fe:"${probe}" /Fo:"${root}/"\r\n`);
  try{const built=await run('cmd.exe',['/d','/c',command],{windowsHide:true,maxBuffer:65536});await fs.writeFile(path.join(root,'build.log'),built.stdout+built.stderr);}
  catch(error){await fs.writeFile(path.join(root,'build.log'),(error.stdout||'')+(error.stderr||''));throw Error('AZO probe build failed; see '+path.join(root,'build.log'));}
  let checks=0,sequence=0;const results=[],rawBlocks=[];
@@ -73,6 +73,7 @@ async function main(){
  unused.writeUInt32BE(86,6);unused.writeUInt32BE(128^86,10);await invoke(unused,128,{error:/unused bytes/});
  const badReduce=Buffer.concat([malformed(20,15),Buffer.alloc(15),Buffer.alloc(12)]);await invoke(badReduce,20,{error:/archive:/});
  const cancelled=await invoke(rawBlocks[1].data,rawBlocks[1].expanded,{cancel:2,error:/cancelled:/});assert.equal(cancelled.length,0);checks++;
+ const filterCancelled=await invoke(stored(Buffer.alloc(1024*1024,0x90),1),1024*1024,{cancel:2,error:/cancelled:/});assert.equal(filterCancelled.length,0);checks++;
  // Corrupted entropy may still decode: its enclosing EGG CRC must reject it.
  // Here assert bounded output, finite completion and no native/sanitizer crash.
  for(let at=14;at<original.length-12;++at)for(const bit of [1,8,128]){

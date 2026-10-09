@@ -59,3 +59,14 @@ The x86 vectors are synthetic: the reference oracle ignores the filter flag,
 so no independent real filtered-executable coverage is claimed yet.
 AZO itself has no content checksum. Product integration must also verify the
 enclosing EGG block's CRC, exact output length and packed-byte consumption.
+
+Run: npm run test:archive-egg-container
+The C++ bounded directory parser matches 24 reference metadata datasets (the
+two CRC-invalid short LEA files are metadata coverage only). It also reads all
+five attribute entries and the 197,540,460-byte output-limit entry without
+allocating their expanded contents. 370 checks cover multiple blocks, solid
+file maps, arbitrary cross-volume header/payload boundaries, reversed input
+volume order, missing/duplicate/unrelated/cyclic volumes, truncated archives,
+metadata memory/name/count limits and cancellation. Both native suites support
+--asan. The container records raw name encoding and parent IDs; production path
+preflight, payload CRC/decoding/crypto and product entry points are still pending.

@@ -82,7 +82,9 @@ void block(const std::vector<unsigned char> &input,std::vector<unsigned char> &o
     entropy.finish();
 }
 U be(const unsigned char *p){return U(p[0])<<24|U(p[1])<<16|U(p[2])<<8|p[3];}
-void x86(std::vector<unsigned char> &buffer){for(size_t i=0;i+4<buffer.size();){if(buffer[i]==0xe8||buffer[i]==0xe9){if(buffer[i+4]==0||buffer[i+4]==255){
+void x86(std::vector<unsigned char> &buffer,const std::function<void()> &checkpoint){uint64_t next_checkpoint=16384;for(size_t i=0;i+4<buffer.size();){
+    if(i>=next_checkpoint){checkpoint();next_checkpoint=uint64_t(i)+16384;}
+    if(buffer[i]==0xe8||buffer[i]==0xe9){if(buffer[i+4]==0||buffer[i+4]==255){
     U address=U(buffer[i+1])|U(buffer[i+2])<<8|U(buffer[i+3])<<16|U(buffer[i+4])<<24;address-=(U)i;address=(address&0x1000000)?address|0xff000000:address&0xffffff;
     for(unsigned j=0;j<4;++j)buffer[i+1+j]=(unsigned char)(address>>(j*8));}i+=5;}else ++i;}}
 }
@@ -92,6 +94,6 @@ void egg_azo_decode(const EggRead &read,const EggWrite &write,uint64_t expected,
         if(!expanded&&!packed){if(total!=expected)bad();break;}if(!expanded||!packed||expanded>expected-total)bad();
         // Probability models use about 400 KiB in addition to the two buffers.
         if(uint64_t(expanded)+packed+1024*1024>allocation_limit)fail("EGG AZO block exceeds the memory budget","resource");
-        std::vector<unsigned char> input(packed),output(expanded);read(input.data(),input.size());block(input,output,checkpoint);if(filter)x86(output);write(output.data(),output.size());total+=expanded;
+        std::vector<unsigned char> input(packed),output(expanded);read(input.data(),input.size());block(input,output,checkpoint);if(filter)x86(output,checkpoint);write(output.data(),output.size());total+=expanded;
     }
 }
