@@ -5,7 +5,7 @@ export const archiveShellActions={
 export type ArchiveShellAction=keyof typeof archiveShellActions;
 export function archiveShellAction(value:string):ArchiveOpenAction|undefined{return Object.hasOwn(archiveShellActions,value)?archiveShellActions[value as ArchiveShellAction]:undefined;}
 // Reading is deliberately separate from the supported creation formats.
-const archiveSuffix=/\.(?:7z\.001|part\d+\.rar|tar\.(?:gz|xz|bz2|zst|zstd)|zip|zipx|jar|apk|7z|rar|r00|tar|tgz|txz|tbz2?|tzst|gz|xz|bz2|bzip2|zst|zstd|cab|lha|lzh|iso|wim)$/i;
+const archiveSuffix=/\.(?:7z\.001|part\d+\.rar|tar\.(?:gz|xz|bz2|zst|zstd)|zip|zipx|jar|apk|7z|rar|r00|tar|tgz|txz|tbz2?|tzst|gz|xz|bz2|bzip2|zst|zstd|cab|lha|lzh|iso|wim|alz)$/i;
 export function isArchivePath(path:string){return archiveSuffix.test(path);}
 export function archiveBaseName(path:string){return path.replace(archiveSuffix,'');}
 export function isCompositeArchive(path:string){return /\.(?:tar\.(?:gz|xz|bz2|zst|zstd)|tgz|txz|tbz2?|tzst)$/i.test(path);}

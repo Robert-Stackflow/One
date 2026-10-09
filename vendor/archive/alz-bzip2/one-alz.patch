@@ -1,0 +1,172 @@
+--- a/bzlib.c
++++ b/bzlib.c
+@@ -509,6 +509,7 @@
+    if (s == NULL) return BZ_MEM_ERROR;
+    s->strm                  = strm;
+    strm->state              = s;
++   s->alz                   = False;
+    s->state                 = BZ_X_MAGIC_1;
+    s->bsLive                = 0;
+    s->bsBuff                = 0;
+@@ -532,6 +533,16 @@
+ /* Return  True iff data corruption is discovered.
+    Returns False if there is no problem.
+ */
++/* One: ALZ's DLZ framing has no bzip2 CRC; caller MUST verify entry CRC32. */
++int BZ_API(BZ2_alzDecompressInit) (bz_stream* strm) {
++   int result = BZ2_bzDecompressInit(strm, 0, 0);
++   if (result == BZ_OK) {
++      ((DState*)strm->state)->alz = True;
++      ((DState*)strm->state)->state = BZ_X_ALZ_START;
++   }
++   return result;
++}
++
+ static
+ Bool unRLE_obuf_to_output_FAST ( DState* s )
+ {
+@@ -827,7 +838,7 @@
+                VPrintf2 ( " {0x%08x, 0x%08x}", s->storedBlockCRC, 
+                           s->calculatedBlockCRC );
+             if (s->verbosity >= 2) VPrintf0 ( "]" );
+-            if (s->calculatedBlockCRC != s->storedBlockCRC)
++            if (!s->alz && s->calculatedBlockCRC != s->storedBlockCRC)
+                return BZ_DATA_ERROR;
+             s->calculatedCombinedCRC 
+                = (s->calculatedCombinedCRC << 1) | 
+@@ -844,7 +855,7 @@
+             if (s->verbosity >= 3)
+                VPrintf2 ( "\n    combined CRCs: stored = 0x%08x, computed = 0x%08x", 
+                           s->storedCombinedCRC, s->calculatedCombinedCRC );
+-            if (s->calculatedCombinedCRC != s->storedCombinedCRC)
++            if (!s->alz && s->calculatedCombinedCRC != s->storedCombinedCRC)
+                return BZ_DATA_ERROR;
+             return r;
+          }
+--- a/bzlib.h
++++ b/bzlib.h
+@@ -113,6 +113,9 @@
+       bz_stream* strm 
+    );
+ 
++/* One ALZ variant: mandatory outer CRC32 verification. */
++BZ_EXTERN int BZ_API(BZ2_alzDecompressInit) (bz_stream* strm);
++
+ BZ_EXTERN int BZ_API(BZ2_bzDecompressInit) ( 
+       bz_stream *strm, 
+       int       verbosity, 
+--- a/bzlib_private.h
++++ b/bzlib_private.h
+@@ -332,6 +332,7 @@
+ #define BZ_X_CCRC_2      48
+ #define BZ_X_CCRC_3      49
+ #define BZ_X_CCRC_4      50
++#define BZ_X_ALZ_START   51
+ 
+ 
+ 
+@@ -386,6 +387,8 @@
+ 
+       /* stored and calculated CRCs */
+       UInt32   storedBlockCRC;
++      /* One ALZ variant; see MODIFICATIONS.txt. */
++      Bool     alz;
+       UInt32   storedCombinedCRC;
+       UInt32   calculatedBlockCRC;
+       UInt32   calculatedCombinedCRC;
+--- a/decompress.c
++++ b/decompress.c
+@@ -136,7 +136,7 @@
+    Int32* gBase;
+    Int32* gPerm;
+ 
+-   if (s->state == BZ_X_MAGIC_1) {
++   if (s->state == BZ_X_MAGIC_1 || s->state == BZ_X_ALZ_START) {
+       /*initialise the save area*/
+       s->save_i           = 0;
+       s->save_j           = 0;
+@@ -194,6 +194,11 @@
+ 
+    switch (s->state) {
+ 
++      /* One: ALZ omits BZh and fixes the block limit to 900k. */
++      case BZ_X_ALZ_START:
++      s->blockSize100k = 9;
++      goto allocate_block;
++
+       GET_UCHAR(BZ_X_MAGIC_1, uc);
+       if (uc != BZ_HDR_B) RETURN(BZ_DATA_ERROR_MAGIC);
+ 
+@@ -208,6 +213,7 @@
+           s->blockSize100k > (BZ_HDR_0 + 9)) RETURN(BZ_DATA_ERROR_MAGIC);
+       s->blockSize100k -= BZ_HDR_0;
+ 
++      allocate_block:
+       if (s->smallDecompress) {
+          s->ll16 = BZALLOC( s->blockSize100k * 100000 * sizeof(UInt16) );
+          s->ll4  = BZALLOC( 
+@@ -220,25 +226,28 @@
+       }
+ 
+       GET_UCHAR(BZ_X_BLKHDR_1, uc);
+-
+-      if (uc == 0x17) goto endhdr_2;
+-      if (uc != 0x31) RETURN(BZ_DATA_ERROR);
++      if (!s->alz && uc == 0x17) goto endhdr_2;
++      if (uc != (s->alz ? 'D' : 0x31)) RETURN(BZ_DATA_ERROR);
+       GET_UCHAR(BZ_X_BLKHDR_2, uc);
+-      if (uc != 0x41) RETURN(BZ_DATA_ERROR);
++      if (uc != (s->alz ? 'L' : 0x41)) RETURN(BZ_DATA_ERROR);
+       GET_UCHAR(BZ_X_BLKHDR_3, uc);
+-      if (uc != 0x59) RETURN(BZ_DATA_ERROR);
++      if (uc != (s->alz ? 'Z' : 0x59)) RETURN(BZ_DATA_ERROR);
+       GET_UCHAR(BZ_X_BLKHDR_4, uc);
+-      if (uc != 0x26) RETURN(BZ_DATA_ERROR);
+-      GET_UCHAR(BZ_X_BLKHDR_5, uc);
+-      if (uc != 0x53) RETURN(BZ_DATA_ERROR);
+-      GET_UCHAR(BZ_X_BLKHDR_6, uc);
+-      if (uc != 0x59) RETURN(BZ_DATA_ERROR);
++      if (s->alz && uc == 2) goto endhdr_2;
++      if (uc != (s->alz ? 1 : 0x26)) RETURN(BZ_DATA_ERROR);
++      if (!s->alz) {
++         GET_UCHAR(BZ_X_BLKHDR_5, uc);
++         if (uc != 0x53) RETURN(BZ_DATA_ERROR);
++         GET_UCHAR(BZ_X_BLKHDR_6, uc);
++         if (uc != 0x59) RETURN(BZ_DATA_ERROR);
++      }
+ 
+       s->currBlockNo++;
+       if (s->verbosity >= 2)
+          VPrintf1 ( "\n    [%d: huff+mtf ", s->currBlockNo );
+  
+       s->storedBlockCRC = 0;
++      if (!s->alz) {
+       GET_UCHAR(BZ_X_BCRC_1, uc);
+       s->storedBlockCRC = (s->storedBlockCRC << 8) | ((UInt32)uc);
+       GET_UCHAR(BZ_X_BCRC_2, uc);
+@@ -249,6 +258,8 @@
+       s->storedBlockCRC = (s->storedBlockCRC << 8) | ((UInt32)uc);
+ 
+       GET_BITS(BZ_X_RANDBIT, s->blockRandomised, 1);
++
++      } else s->blockRandomised = False;
+ 
+       s->origPtr = 0;
+       GET_UCHAR(BZ_X_ORIGPTR_1, uc);
+@@ -587,6 +598,7 @@
+ 
+     endhdr_2:
+ 
++      if (!s->alz) {
+       GET_UCHAR(BZ_X_ENDHDR_2, uc);
+       if (uc != 0x72) RETURN(BZ_DATA_ERROR);
+       GET_UCHAR(BZ_X_ENDHDR_3, uc);
+@@ -607,6 +619,8 @@
+       s->storedCombinedCRC = (s->storedCombinedCRC << 8) | ((UInt32)uc);
+       GET_UCHAR(BZ_X_CCRC_4, uc);
+       s->storedCombinedCRC = (s->storedCombinedCRC << 8) | ((UInt32)uc);
++
++      }
+ 
+       s->state = BZ_X_IDLE;
+       RETURN(BZ_STREAM_END);

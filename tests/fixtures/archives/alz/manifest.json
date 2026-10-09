@@ -1,0 +1,216 @@
+{
+  "files": [
+    {
+      "name": "methods.alz",
+      "sha256": "5d0b9c00f49858843444b1e2337af72827b993dc3e8d0502c5c10251293e0bb4",
+      "bytes": 398,
+      "expected": [
+        {
+          "name": "folder/stored.txt",
+          "bytes": 7,
+          "sha256": "d5d52eb1da8d32a33d92da2151eccf790a297de64217094d16475a4962d1a0ed"
+        },
+        {
+          "name": "folder/한글.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        },
+        {
+          "name": "dlz.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        },
+        {
+          "name": "plain-bzip2.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        }
+      ],
+      "encoding": 0,
+      "password": ""
+    },
+    {
+      "name": "dlz-multiblock.alz",
+      "sha256": "39fb9ee9b8c87e4da3e325d5469947475c80351eebc99c8aa78b3fe2d387b01b",
+      "bytes": 419733,
+      "expected": [
+        {
+          "name": "large.bin",
+          "bytes": 416000,
+          "sha256": "759d2d4831b526aa4ca80772f138a86fed38b95802e7d00d4a0f3294714d991a"
+        }
+      ],
+      "encoding": 0,
+      "password": ""
+    },
+    {
+      "name": "encrypted.alz",
+      "sha256": "e96af3f072d4c3167cc9883519d9b1a63bc5bd20a9e4c5019881dc4f223e47c7",
+      "bytes": 3484,
+      "expected": [
+        {
+          "name": "method-0.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        },
+        {
+          "name": "method-1.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        },
+        {
+          "name": "method-2.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        }
+      ],
+      "encoding": 0,
+      "password": "secret"
+    },
+    {
+      "name": "korean-password.alz",
+      "sha256": "c6fafc9e07ab6f3bd861064e811fc9b3c823ac4719bafa35038ea9e022177324",
+      "bytes": 114,
+      "expected": [
+        {
+          "name": "비밀.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        }
+      ],
+      "encoding": 0,
+      "password": "비밀"
+    },
+    {
+      "name": "utf8.alz",
+      "sha256": "a111b59113b905113814eb86e0719491f8727ac23a7ecee24a340d582e35a833",
+      "bytes": 104,
+      "expected": [
+        {
+          "name": "文件.txt",
+          "bytes": 3200,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        }
+      ],
+      "encoding": 65001,
+      "password": ""
+    },
+    {
+      "name": "bzip2.alz",
+      "bytes": 435,
+      "sha256": "454b66bd7a8a9070f9dd10f0c53ac219879b853784f673b3a8452afc658dfc69",
+      "expected": [
+        {
+          "name": "test.txt",
+          "bytes": 11,
+          "sha256": "aa97300b9f5a303c685fde0703d3b6887d212e7e354f41aeb3408a56acd2262b"
+        },
+        {
+          "name": "4/test.txt",
+          "bytes": 13,
+          "sha256": "2af0a98f32720a8f3c0f54f423af1cfcafb6a1503ba140810f6cd286beee8a60"
+        },
+        {
+          "name": "2/test.txt",
+          "bytes": 13,
+          "sha256": "3a864f247a3d6d6608a84573d42a1584e2f432e6e4f951fd54a3b5160bc04799"
+        },
+        {
+          "name": "3/test.txt",
+          "bytes": 13,
+          "sha256": "ea4a426f7193a97d6224989ca76d12db04301aa96ca5e7d39238ca3a5426e983"
+        },
+        {
+          "name": "1/test.txt",
+          "bytes": 13,
+          "sha256": "a295ad6307dbd80e4d56310a4ba9957d54a6645c15cd086af25a217e27863e16"
+        }
+      ],
+      "encoding": 0,
+      "password": ""
+    },
+    {
+      "name": "deflate.alz",
+      "bytes": 274,
+      "sha256": "468344d4dd3f1d1edd1a40259e51518b5ffaafdafdc13ae381483e56fde9bb5d",
+      "expected": [
+        {
+          "name": "1/test.txt",
+          "bytes": 16,
+          "sha256": "4fe988db827674092ee8a21567443c1505aadbd5ae75d9618348ace52eae4901"
+        },
+        {
+          "name": "2/test.txt",
+          "bytes": 16,
+          "sha256": "ea5096c2449e25d76601fdebaf7d26b658fc9f0dc0b70071a0859ce86580544b"
+        },
+        {
+          "name": "3/test.txt",
+          "bytes": 16,
+          "sha256": "73c523bb292514257a3b9f5c94ff9bd57ddad2c274d73b5c5bba05c469043e1e"
+        },
+        {
+          "name": "4/test.txt",
+          "bytes": 16,
+          "sha256": "b3cc092340590059e2d95bdfdfa2da5360513f1edfc1a429e2477f6aeee2afe1"
+        },
+        {
+          "name": "test.txt",
+          "bytes": 13,
+          "sha256": "e4e4c0e163a958da66a948e4e4435229f6362fb1a280941ed8d15946b2404fc3"
+        }
+      ],
+      "encoding": 0,
+      "password": ""
+    },
+    {
+      "name": "uncompressed.alz",
+      "bytes": 240,
+      "sha256": "8c119c61a82ae13d68a804f2622dfbbfdad2fab5a1a4a7e2f32357cea65c1b05",
+      "expected": [
+        {
+          "name": "test.txt",
+          "bytes": 11,
+          "sha256": "aa97300b9f5a303c685fde0703d3b6887d212e7e354f41aeb3408a56acd2262b"
+        },
+        {
+          "name": "4/test.txt",
+          "bytes": 13,
+          "sha256": "2af0a98f32720a8f3c0f54f423af1cfcafb6a1503ba140810f6cd286beee8a60"
+        },
+        {
+          "name": "2/test.txt",
+          "bytes": 13,
+          "sha256": "3a864f247a3d6d6608a84573d42a1584e2f432e6e4f951fd54a3b5160bc04799"
+        },
+        {
+          "name": "3/test.txt",
+          "bytes": 13,
+          "sha256": "ea4a426f7193a97d6224989ca76d12db04301aa96ca5e7d39238ca3a5426e983"
+        },
+        {
+          "name": "1/test.txt",
+          "bytes": 13,
+          "sha256": "a295ad6307dbd80e4d56310a4ba9957d54a6645c15cd086af25a217e27863e16"
+        }
+      ],
+      "encoding": 0,
+      "password": ""
+    },
+    {
+      "name": "patool.alz",
+      "bytes": 58,
+      "sha256": "c82bfcc64e549ba1ff428022ec0c682597191a7c7f6d9d413062ca8d89f74b55",
+      "expected": [
+        {
+          "name": "t/t.txt",
+          "bytes": 2,
+          "sha256": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049"
+        }
+      ],
+      "encoding": 0,
+      "password": ""
+    }
+  ],
+  "dlzBlocks": 5
+}

@@ -21,12 +21,12 @@ export const cliHelp=`One.Cli.exe archive <list|create|extract|test|update|batch
 create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size SIZE] [--level 0-9] SOURCES...
 extract: --output DIRECTORY [--destination smart|folder|here] [--conflict rename|skip|replace]
          [--select 0,1,...] [--no-zone] [--scan|--no-scan] ARCHIVES...
-list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
+list/test: [--encoding auto|437|932|936|949|950|65001] ARCHIVES...
 read-only: ZIPX/JAR/APK, CAB, ISO, LHA/LZH, WIM, BZ2/ZSTD, TAR.BZ2/TAR.ZST
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
-ZIP password: --password-encoding utf8|system|437|932|936|950|65001 (default utf8; separate from filename encoding)
+ZIP password: --password-encoding utf8|system|437|932|936|949|950|65001 (default utf8; separate from filename encoding)
 extraction risk: --allow-risk [--max-extract-gib 1-8388607] [--max-extract-minutes 1-1440]
          Available for list/test/extract (composite listing may unpack a TAR wrapper).
          Default actual output limit: 64 GiB per stage, 30 minutes; risk approval is never implicit.
@@ -71,9 +71,9 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  }
  const result:CliCommand={json:options.has('json'),progress:options.has('progress'),passwordStdin:options.has('password-stdin'),help:options.has('help'),jobs:[]};
  if(result.help)return result;
- const encodingText=options.get('encoding')??'auto';argument(['auto','437','932','936','950','65001'].includes(encodingText),'Invalid code page');
+ const encodingText=options.get('encoding')??'auto';argument(['auto','437','932','936','949','950','65001'].includes(encodingText),'Invalid code page');
  const encoding=(encodingText==='auto'?0:Number(encodingText)) as ArchiveEncoding;
- const passwordEncodingText=options.get('password-encoding')??'utf8';argument(['utf8','system','437','932','936','950','65001'].includes(passwordEncodingText),'Invalid ZIP password encoding');
+ const passwordEncodingText=options.get('password-encoding')??'utf8';argument(['utf8','system','437','932','936','949','950','65001'].includes(passwordEncodingText),'Invalid ZIP password encoding');
  const passwordEncoding=(passwordEncodingText==='utf8'?65001:passwordEncodingText==='system'?0:Number(passwordEncodingText)) as ArchivePasswordEncoding;
  const number=(key:string)=>{const value=options.get(key);if(value===undefined)return undefined;argument(/^\d+$/.test(value),`--${key} requires an integer`);return Number(value);};
  if(['concurrency','total-memory-mib','total-threads'].some(key=>options.has(key))){

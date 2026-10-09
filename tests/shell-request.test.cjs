@@ -9,7 +9,7 @@ test('system menu requests consume only fresh, bounded selections in the owning 
  await t.test('invalid selection limits, types and path data are rejected',async()=>{for(const value of [{tool:'delete',paths:[file]},{tool:'rename',paths:[]},{tool:'locksmith',paths:Array(33).fill(file)},{tool:'rename',paths:Array(4097).fill(file)},{tool:'rename',paths:['relative.txt']},{tool:'rename',paths:[file+'\n']},{tool:'rename',paths:[17]}]){const p=await request(value);await assert.rejects(invoke(p),/选择无效/);assert.ok((await fs.stat(p)).isFile());}});
  await t.test('expired and oversized requests do not run',async()=>{const stale=await request({tool:'rename',paths:[file]});await fs.utimes(stale,new Date(0),new Date(0));await assert.rejects(invoke(stale),/失效/);const large=await request({tool:'rename',paths:[file]});await fs.writeFile(large,' '.repeat(4*1024*1024+1));await assert.rejects(invoke(large),/失效/);});
  await t.test('every archive action validates all files, bounds batches and folds Windows case duplicates',async()=>{
-  const files=['a.ZIP','b.7z.001','c.tar.gz','d.ZIPX','e.CAB','f.LHA','g.ISO','h.WIM','i.tar.ZSTD','j.JAR','k.APK'].map(name=>path.join(profile,name));
+  const files=['a.ZIP','b.7z.001','c.tar.gz','d.ZIPX','e.CAB','f.LHA','g.ISO','h.WIM','i.tar.ZSTD','j.JAR','k.APK','l.ALZ'].map(name=>path.join(profile,name));
   for(const tool of ['archive-extract','archive-smart','archive-here','archive-folder']){
    const p=await request({tool,paths:[...files,files[0].toLowerCase()]});assert.deepEqual(await invoke(p),{tool,paths:files});
    const mixed=await request({tool,paths:[...files,file]});await assert.rejects(invoke(mixed),/不是支持的压缩包/);assert.ok((await fs.stat(mixed)).isFile());

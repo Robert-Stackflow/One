@@ -1,0 +1,28 @@
+One ALZ decoder support, 2026-10-10
+
+Base: bzip2 1.0.8, Julian Seward, copyright 1996-2019.
+Source: https://deb.debian.org/debian/pool/main/b/bzip2/bzip2_1.0.8.orig.tar.gz
+SHA256: ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269
+The original LICENSE is retained. This is an altered version.
+
+The minimal framing changes follow Kippler's zlib-licensed UnAlz 0.65:
+https://deb.debian.org/debian/pool/main/u/unalz/unalz_0.65.orig.tar.gz
+SHA256: 4c26699eb7545072de2ef7de79b4fff1f01c4db09cebff2d8d50ec03d5d74db0
+Its original permission notice is retained in UNALZ-LICENSE.txt.
+No old UnAlz parser, path writer, bundled zlib, or bundled bzip2 is shipped.
+
+one-alz.patch records every change to the upstream C source and headers:
+- Per-stream ALZ mode and BZ2_alzDecompressInit; standard BZh mode remains.
+- Separate initial coroutine state; ALZ implies a 900k block limit.
+- DLZ01/DLZ02 framing replaces the standard block/end markers.
+- ALZ omits block CRCs, combined CRC, and the randomisation bit.
+- Standard mode retains its original CRC and bitstream validation.
+
+The caller MUST verify the ALZ container CRC32 and exact expanded size.
+One does so for every decoded file, including encrypted files, with bounded
+input/output buffers, global output/time limits and checked file writes.
+BZ_NO_STDIO disables the library's filesystem/stdout wrappers. Invariant
+failures terminate the disposable archive helper with a protocol error.
+
+Do not use the ALZ mode to decode ordinary .bz2 streams. One's existing
+BZIP2 archive support continues to use the packaged 7-Zip handler.

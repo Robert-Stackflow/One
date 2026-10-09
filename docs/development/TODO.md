@@ -14,13 +14,13 @@
 
 | 编号 | 状态 | 剩余范围 |
 | --- | --- | --- |
-| ARCH-FMT | 首批只读已实现，待扩展兼容 | ZIPX、CAB、BZ2/ZSTD、LHA/LZH、ISO/WIM、JAR/APK 及 TAR.BZ2/TAR.ZST 已接通浏览、测试和解压；样本、方法和限制见用户指南及 `tests/fixtures/archives/`。ALZ/EGG、加密 ZIPX、LHA level 3/旧编码、更多 ISO/UDF、CAB/WIM 分卷及安装版仍待推进。 |
+| ARCH-FMT | 首批只读已实现，待扩展兼容 | ZIPX、CAB、BZ2/ZSTD、LHA/LZH、ISO/WIM、JAR/APK 及 TAR.BZ2/TAR.ZST 已接通浏览、测试和解压；样本、方法和限制见用户指南及 `tests/fixtures/archives/`。ALZ 单卷 v10 的存储/Deflate/BZip2-DLZ、加密及 CP949 已接通；分卷/其他变体、EGG、加密 ZIPX、LHA level 3/旧编码、更多 ISO/UDF、CAB/WIM 分卷及安装版仍待推进。 |
 | ARCH-EDIT | 已实现，待兼容验收 | 自动打开副本、变化检测、连续确认写回、原包冲突核对、另存、中断恢复和暂存回收已通过开发版检查；继续验证真实 Office/图片编辑器、复用窗口、跨权限及安装版。 |
 | ARCH-RECOVERY | 已实现，待系统矩阵验收 | 生成新卷暂存与正式保存的记录式交接已验证；硬件断电、更多文件系统与权限组合仍待验收。损坏、未知或未登记资料保留。 |
 | ARCH-PERF | 待完整基准与针对性优化 | 百万条目、十万小文件、超大固实包、混合并发、慢盘及网络盘；已有分页、流式处理和预算不代表全部性能目标达成。 |
 | ARCH-COMPAT | 待扩展验收及修复 | 旧 ZIP 编码、跨工具非英文密码、RAR 加密/分卷组合、实际 Explorer/第三方拖出、安装升级卸载。 |
 
-格式选型与能力依据见[原生引擎调研](../research/归档功能缺口与原生引擎调研.md)。最新外部编辑验证为 96 项服务检查、24 项恢复检查及原生进程/界面回归，摘要对应提交 `86abdae`，精选证据位于 `verification/archive-edit-sessions/`。新增格式阶段通过 168 项格式检查、8 类真实界面样本及独立 CLI 回归；下载标记/自定义数据流保存和同大小同时间篡改恢复检查通过，摘要见 `verification/archive-formats/latest.json`。这些结果不替代上表的真实环境验收。
+格式选型与能力依据见[原生引擎调研](../research/归档功能缺口与原生引擎调研.md)。最新外部编辑验证为 96 项服务检查、24 项恢复检查及原生进程/界面回归，摘要对应提交 `86abdae`，精选证据位于 `verification/archive-edit-sessions/`。新增格式阶段通过 168 项格式检查、8 类真实界面样本及独立 CLI 回归；下载标记/自定义数据流保存和同大小同时间篡改恢复检查通过，摘要见 `verification/archive-formats/latest.json`。 ALZ 阶段通过 138 项检查、9 个固定/生成样本及桌面、拖出和独立 CLI 验证；三种加密方法及五块 DLZ 经独立参考解码重复核对，摘要见 `verification/archive-alz/latest.json`。这些结果不替代上表的真实环境验收。
 
 ## 跨功能的剩余验收
 

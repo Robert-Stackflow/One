@@ -7,7 +7,7 @@
 namespace {
 bool nested(const std::string &name){
     auto suffix=fs::path(wide(name)).extension().wstring();std::transform(suffix.begin(),suffix.end(),suffix.begin(),[](wchar_t c){return std::towlower(c);});
-    for(const auto extension:{L".zip",L".zipx",L".jar",L".apk",L".7z",L".rar",L".tar",L".gz",L".xz",L".tgz",L".txz",L".bz2",L".bzip2",L".tbz",L".tbz2",L".zst",L".zstd",L".tzst",L".cab",L".lha",L".lzh",L".iso",L".wim",L".001"})if(suffix==extension)return true;
+    for(const auto extension:{L".zip",L".zipx",L".jar",L".apk",L".7z",L".rar",L".tar",L".gz",L".xz",L".tgz",L".txz",L".bz2",L".bzip2",L".tbz",L".tbz2",L".zst",L".zstd",L".tzst",L".cab",L".lha",L".lzh",L".iso",L".wim",L".alz",L".001"})if(suffix==extension)return true;
     return false;
 }
 }

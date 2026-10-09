@@ -1,5 +1,5 @@
 import type {ArchiveScan} from './archive-scan';
-export type ArchiveEncoding = 0|437|932|936|950|65001;
+export type ArchiveEncoding = 0|437|932|936|949|950|65001;
 // Unlike filename encoding, 0 explicitly means the Windows system code page.
 export type ArchivePasswordEncoding = ArchiveEncoding;
 export type ArchiveConflict = 'rename'|'skip'|'replace';

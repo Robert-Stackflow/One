@@ -29,6 +29,7 @@ for(const [name,version,source] of [
   output+=await readFile(`vendor/archive/${name}/LICENSE`,'utf8')+'\n';
 }
 output+='\n===== Native archive: liblzma (XZ Utils) 5.8.2 =====\nSource: https://github.com/tukaani-project/xz/releases/tag/v5.8.2\nLicense: 0BSD\n'+await readFile('vendor/archive/xz/COPYING.0BSD','utf8')+'\n';
+output+='\n===== Native archive: bzip2 1.0.8 with One ALZ framing =====\nSource: https://deb.debian.org/debian/pool/main/b/bzip2/bzip2_1.0.8.orig.tar.gz\nLicense: bzip2 license, altered version; see vendor/archive/alz-bzip2/MODIFICATIONS.txt\n'+await readFile('vendor/archive/alz-bzip2/LICENSE','utf8')+'\n===== ALZ framing reference: UnAlz 0.65 =====\nSource: https://deb.debian.org/debian/pool/main/u/unalz/unalz_0.65.orig.tar.gz\nLicense: zlib\n'+await readFile('vendor/archive/alz-bzip2/UNALZ-LICENSE.txt','utf8')+'\n';
 output+='\n===== Native archive: 7-Zip 26.04 (7z.dll) =====\nSource: https://www.7-zip.org/download.html\n';
 output+=await readFile('vendor/archive/7zip/License.txt','utf8')+'\n';
 output+='\n===== vscode-icons artwork =====\nSource: https://github.com/vscode-icons/vscode-icons\n'+await readFile('assets/file-icons/LICENSE','utf8');

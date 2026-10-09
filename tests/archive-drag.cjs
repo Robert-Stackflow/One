@@ -27,6 +27,10 @@ async function main(){
    return native(['drag-test',file,path.join(root,`stage-${sequence++}`),'0',revision],secret,packet,expected,test);
   };
   const entries=lines=>lines.filter(m=>m.type==='drag-entry');
+  const alz=path.resolve('tests/fixtures/archives/alz/methods.alz'),alzRow=listing(alz).entries.find(entry=>entry.name==='dlz.txt');
+  assert.deepEqual(entries(drag(alz,[alzRow.index])),[{type:'drag-entry',name:'dlz.txt',directory:false,bytes:3200,hash:hash(Buffer.from('One ALZ fixture\n'.repeat(200)))}]);
+  const encryptedAlz=path.resolve('tests/fixtures/archives/alz/korean-password.alz');
+  assert.deepEqual(entries(drag(encryptedAlz,[0],'비밀')),[{type:'drag-entry',name:'비밀.txt',directory:false,bytes:3200,hash:hash(Buffer.from('One ALZ fixture\n'.repeat(200)))}]);
   const one=drag(zip,[at('parent/folder/a.txt')]);assert.deepEqual(entries(one),[{type:'drag-entry',name:'a.txt',directory:false,bytes:Buffer.byteLength('内容'),hash:hash(Buffer.from('内容'))}]);assert.equal(one.at(-1).count,1);assert.deepEqual(one.find(m=>m.type==='drag-paths'),{type:'drag-paths',count:1});assert.equal(one.at(-1).retainCache,true);
   const folder=drag(zip,[at('parent/folder/'),at('parent/folder/a.txt')]);assert.equal(folder.at(-1).count,1);assert.deepEqual(entries(folder).map(e=>e.name),['folder','folder\\a.txt','folder\\empty']);
   assert(entries(folder).find(e=>e.name==='folder\\empty').directory);

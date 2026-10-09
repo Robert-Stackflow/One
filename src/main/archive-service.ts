@@ -31,7 +31,7 @@ type Message = {type:'meta';total:number;comment:string;revision?:string;editabl
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
-const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
+const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,949,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
 const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||value.includes('\0')||Buffer.byteLength(value,'utf8')>1024||Buffer.from(value,'utf8').toString('utf8')!==value)throw Error('密码无效或过长');return value;};
 const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(target))throw Error('不支持该压缩包格式');return target;};
 const archiveSource=(value:unknown)=>{const source=path(value);if(!isArchivePath(source))throw Error('暂不支持该压缩格式');return source;};

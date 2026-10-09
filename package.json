@@ -56,6 +56,8 @@
     "test:archive-edit-sessions": "node tests/archive-edit-sessions.cjs",
     "test:archive-formats": "node tests/archive-formats.cjs",
     "test:archive-formats-ui": "node tests/archive-formats-ui.cjs",
+    "test:archive-alz": "node tests/archive-alz.cjs",
+    "test:archive-alz-ui": "node tests/archive-alz-ui.cjs",
     "test:archive-ads-update": "node tests/archive-ads-update.cjs",
     "test:archive-edit-recovery": "node tests/archive-edit-recovery.cjs",
     "test:archive-edit-launch": "node tests/archive-edit-launch.cjs",
