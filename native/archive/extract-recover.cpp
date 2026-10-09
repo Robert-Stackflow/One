@@ -26,6 +26,7 @@ struct Locked {
         }
     }
     ~Locked(){if(value!=INVALID_HANDLE_VALUE)CloseHandle(value);}
+    void close(){if(value!=INVALID_HANDLE_VALUE){CloseHandle(value);value=INVALID_HANDLE_VALUE;}}
     Locked(const Locked&)=delete;
 };
 std::string stamp(HANDLE handle,bool identity=false){
@@ -38,7 +39,7 @@ std::wstring key(const fs::path &path){auto text=path.wstring();std::transform(t
 DWORD attributes(const fs::path &path){auto value=GetFileAttributesW(path.c_str());if(value==INVALID_FILE_ATTRIBUTES&&GetLastError()!=ERROR_FILE_NOT_FOUND&&GetLastError()!=ERROR_PATH_NOT_FOUND)fail("Cannot inspect recovery path","safety");return value;}
 struct Directories {
     std::map<std::wstring,std::unique_ptr<Locked>> held;
-    void hold(const fs::path &path){auto name=key(path);if(!held.contains(name))held.emplace(name,std::make_unique<Locked>(path,true));}
+    void hold(const fs::path &path,DWORD access=FILE_READ_ATTRIBUTES){auto name=key(path);if(!held.contains(name))held.emplace(name,std::make_unique<Locked>(path,true,access));}
     // Lock each ancestor before opening a descendant; never traverse a junction.
     bool ancestors(const fs::path &path,bool missing=false){
         if(!path.is_absolute()||path!=path.lexically_normal())fail("Recovery path must be absolute and normalized","safety");
@@ -156,6 +157,28 @@ State inspect(const Item &item,Directories &dirs){
     }
     if(!exists&&!state.backup.empty())fail("Original target directory is missing; recovery copy was retained","safety");return state;
 }
+void erase(HANDLE handle){FILE_DISPOSITION_INFO value{TRUE};if(!SetFileInformationByHandle(handle,FileDispositionInfo,&value,sizeof(value)))fail("Cannot remove verified recovery data; remaining files retained","safety");archive_activity();}
+void check_contents(const fs::path &recovery,const std::set<std::wstring> &allowed){
+    size_t count=0;for(const auto &entry:fs::directory_iterator(recovery)){
+        check_cancel();archive_activity();if(++count>2000001||!allowed.contains(key(entry.path().filename())))fail("Recovery directory contains unknown files; nothing unknown was removed","safety");
+        const auto attr=attributes(entry.path());if(attr==INVALID_FILE_ATTRIBUTES||(attr&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT)))fail("Recovery directory contains a link or incompatible file","safety");
+    }
+}
+// Require the entire target to be in its final state before discarding any
+// recovery copy. The second pass rechecks each file immediately before deletion.
+fs::path cleanup_candidate(const Item &item,bool committed,Directories &dirs){
+    if(item.directory){inspect(item,dirs);return {};}
+    const bool parent_exists=dirs.ancestors(item.target.parent_path(),true);
+    const auto target=parent_exists?file_stamp(item.target):std::string{},backup=file_stamp(item.backup),displaced=file_stamp(item.displaced);
+    if(committed){
+        if(target!=item.source_stamp)fail("Cleanup target changed after committed extraction; recovery copies retained","safety");
+        if(!displaced.empty()||(!backup.empty()&&(!item.existing||backup!=item.target_stamp)))fail("Cleanup recovery copy changed; files retained","safety");
+        return backup.empty()?fs::path{}:item.backup;
+    }
+    if(!backup.empty()||(item.existing?target!=item.target_stamp:!target.empty()))fail("Recovery has not finished restoring original files; cleanup refused","safety");
+    if(!displaced.empty()&&displaced!=item.source_stamp)fail("Cleanup displaced copy changed; files retained","safety");
+    return displaced.empty()?fs::path{}:item.displaced;
+}
 }
 
 void extract_recover(const fs::path &parent,const fs::path &recovery){
@@ -189,4 +212,48 @@ void extract_recover(const fs::path &parent,const fs::path &recovery){
     // Re-running is safe from the current identities, without a second write log
     // whose torn tail could prevent completing a previously interrupted restore.
     emit("{\"type\":\"result\",\"count\":"+std::to_string(restored)+",\"displaced\":"+std::to_string(displaced)+",\"retained\":true,\"cancelled\":false}");
+}
+
+void extract_cleanup(const fs::path &parent,const fs::path &recovery){
+    const auto name=recovery.filename().wstring();if(!name.starts_with(L".one-recovery-")||!uuid(name.substr(14))||recovery.parent_path()!=parent)fail("Invalid explicit recovery cleanup scope","safety");
+    Directories dirs;dirs.ancestors(parent);
+    if(attributes(recovery)==INVALID_FILE_ATTRIBUTES){emit("{\"type\":\"result\",\"count\":0,\"cancelled\":false}");return;}
+    dirs.hold(recovery,FILE_READ_ATTRIBUTES|DELETE);
+    const auto manifest_path=recovery/L"manifest.jsonl";
+    // A crash after deleting the final manifest may leave only the empty folder.
+    // Removing that explicitly named empty folder needs no untrusted plan. The
+    // kernel refuses directory deletion if a new child appears in the meantime.
+    if(attributes(manifest_path)==INVALID_FILE_ATTRIBUTES){
+        check_contents(recovery,{});emit("{\"type\":\"ready\"}");if(std::fgetc(stdin)!=1)fail("Recovery cleanup cancelled","cancelled");check_cancel();check_contents(recovery,{});
+        erase(dirs.held.at(key(recovery))->value);dirs.held.erase(key(recovery));emit("{\"type\":\"result\",\"count\":0,\"cancelled\":false}");return;
+    }
+    Locked manifest(manifest_path,false,GENERIC_READ|DELETE);const auto before=stamp(manifest.value);
+    auto plan=read_plan(manifest,parent,recovery,parent/(L".one-extract-"+name.substr(14)));
+    if(plan.parent_identity!=stamp(dirs.held.at(key(parent))->value,true)||plan.recovery_identity!=stamp(dirs.held.at(key(recovery))->value,true))fail("Cleanup directory identity changed; files retained","safety");
+    const bool committed=plan.committed&&!plan.rollback;
+    std::set<std::wstring> allowed{L"manifest.jsonl"};for(const auto &item:plan.items)if(!item.directory){if(item.existing)allowed.insert(key(item.backup.filename()));allowed.insert(key(item.displaced.filename()));}
+    check_contents(recovery,allowed);
+    for(const auto &item:plan.items){check_cancel();cleanup_candidate(item,committed,dirs);}
+    if(stamp(manifest.value)!=before)fail("Cleanup journal changed; files retained","safety");
+    emit("{\"type\":\"ready\"}");if(std::fgetc(stdin)!=1)fail("Recovery cleanup cancelled","cancelled");
+    check_cancel();check_contents(recovery,allowed);
+    size_t removed=0,done=0;ULONGLONG last=0;
+    for(const auto &item:plan.items){
+        check_cancel();
+        // Keep the validated target unmodifiable until its recovery copy has
+        // been removed. A transient stamp check alone leaves a write race.
+        std::unique_ptr<Locked> target_guard;
+        if(!item.directory&&attributes(item.target)!=INVALID_FILE_ATTRIBUTES)target_guard=std::make_unique<Locked>(item.target,false);
+        const auto candidate=cleanup_candidate(item,committed,dirs);
+        if(!candidate.empty()){
+            Locked file(candidate,false,GENERIC_READ|DELETE);const auto expected=committed?item.target_stamp:item.source_stamp;
+            if(stamp(file.value)!=expected)fail("Cleanup recovery file changed before removal; remaining files retained","safety");
+            erase(file.value);file.close();++removed;crash("cleanup:"+std::to_string(item.index));
+        }
+        ++done;const auto now=GetTickCount64();if(!last||now-last>=100||done==plan.items.size()){emit("{\"type\":\"progress\",\"done\":"+std::to_string(done)+",\"total\":"+std::to_string(plan.items.size())+"}");last=now;}
+    }
+    check_cancel();check_contents(recovery,{L"manifest.jsonl"});
+    erase(manifest.value);manifest.close();crash("cleanup-manifest");
+    erase(dirs.held.at(key(recovery))->value);dirs.held.erase(key(recovery));crash("cleanup-directory");
+    emit("{\"type\":\"result\",\"count\":"+std::to_string(removed)+",\"cancelled\":false}");
 }

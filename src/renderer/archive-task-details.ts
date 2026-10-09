@@ -4,7 +4,7 @@ import {dialogMarkup,openDialog,closeDialog} from './dialog';
 import {isArchivePath} from '../shared/archive-actions';
 import type {ArchiveTask,ArchiveTaskOperation} from '../shared/archive';
 
-export const archiveTaskTitles:Record<ArchiveTaskOperation,string>={create:'创建压缩包',extract:'解压压缩包',test:'校验压缩包',update:'修改压缩包',drag:'拖出压缩内容',recover:'还原解压前的文件'};
+export const archiveTaskTitles:Record<ArchiveTaskOperation,string>={create:'创建压缩包',extract:'解压压缩包',test:'校验压缩包',update:'修改压缩包',drag:'拖出压缩内容',recover:'还原解压前的文件',cleanup:'清理解压恢复资料'};
 const stateTitles={running:'进行中',completed:'已完成',failed:'失败',cancelled:'已取消',interrupted:'上次异常中断'};
 export const archiveTaskSummary=(task:ArchiveTask)=>`${stateTitles[task.state]} · ${task.path.split(/[\\/]/).pop()}${task.result&&!task.result.cancelled?' · '+task.result.count.toLocaleString()+' 项':''}`;
 export function archiveTaskDetails(task:ArchiveTask,browse:(path:string)=>void){

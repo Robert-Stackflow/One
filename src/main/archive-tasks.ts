@@ -4,8 +4,8 @@ import {dirname,isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {ArchiveTask,ArchiveTaskOperation,ArchiveTaskOverview,ArchiveProgress,ArchiveResult} from '../shared/archive';
 
-const operations:ArchiveTaskOperation[]=['create','extract','test','update','drag','recover'];
-const phases=['create','extract','test','prepare','update','commit','drag','scan','queue','recover'];
+const operations:ArchiveTaskOperation[]=['create','extract','test','update','drag','recover','cleanup'];
+const phases=['create','extract','test','prepare','update','commit','drag','scan','queue','recover','cleanup'];
 const states=['running','completed','failed','cancelled','interrupted'];
 const integer=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
 const taskPath=(value:unknown)=>typeof value==='string'&&value.length<=32768&&isAbsolute(value)&&!value.includes('\0');

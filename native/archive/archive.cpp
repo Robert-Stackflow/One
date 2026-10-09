@@ -487,6 +487,9 @@ int wmain(int argc, wchar_t **argv) {
             wchar_t test[4]{};
             if(argc!=3||GetEnvironmentVariableW(L"ONE_TEST_MODE",test,4)!=1||test[0]!=L'1')fail("Private scan test requires test mode");
             archive_scan(argv[2]);
+        } else if (mode == L"cleanup") {
+            if(argc!=4)fail("Cleanup requires an explicit parent and recovery directory");
+            extract_cleanup(argv[2],argv[3]);
         } else if (mode == L"recover") {
             if(argc!=4)fail("Recover requires an explicit parent and recovery directory");
             extract_recover(argv[2],argv[3]);

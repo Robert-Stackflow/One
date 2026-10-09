@@ -123,7 +123,13 @@ export async function inspectArchiveRecovery(value:ArchiveRecoveryRecord,signal?
   const directory=await lstat(value.path,{bigint:true}).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
   if(!directory)return{...result,state:'missing',message:'未找到恢复目录。它可能已完成清理或被移动，请检查目标目录。'};
   if(!directory.isDirectory()||directory.isSymbolicLink())throw Error('恢复目录被替换为链接或非文件夹，未读取其中内容');
-  const parent=await lstat(value.parent,{bigint:true}),manifest=join(value.path,'manifest.jsonl'),before=await lstat(manifest,{bigint:true});
+  const parent=await lstat(value.parent,{bigint:true}),manifest=join(value.path,'manifest.jsonl'),before=await lstat(manifest,{bigint:true}).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
+  if(!before){
+   const contents=await opendir(value.path);for await(const _entry of contents)throw Error('恢复清单缺失且目录中仍有内容，请保留资料');
+   signal?.throwIfAborted();const after=await lstat(value.path,{bigint:true});
+   if(!sameFile(directory,after)||!after.isDirectory()||after.isSymbolicLink())throw Error('恢复目录已经变化');
+   return{...result,state:'empty',message:'恢复目录已无清单和副本，可继续清理空目录。'};
+  }
   if(!before.isFile()||before.isSymbolicLink()||before.size>BigInt(maxJournalBytes))throw Error('恢复清单无效或超过读取上限');
   handle=await open(manifest,'r');const initial=await handle.stat({bigint:true});if(!sameFile(initial,before)||!initial.isFile()||initial.size>BigInt(maxJournalBytes))throw Error('恢复清单已经变化');
   const parentIdentity=await nativeDirectoryIdentity(value.parent),recoveryIdentity=await nativeDirectoryIdentity(value.path);

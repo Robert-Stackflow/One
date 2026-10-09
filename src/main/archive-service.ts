@@ -39,8 +39,16 @@ const archiveDiagnostic=(message:string)=>message.startsWith('Missing volume : '
   message==='RAR archive comment exceeded the memory budget'?'读取 RAR 压缩包备注时超出内存预算。':
   message==='RAR comment search exceeds the header limit'?'RAR 压缩包备注搜索超过头部读取上限。':message;
 type CachedTar={path:string;directory:string;stamp:string;users:number;used:number;stale:boolean};
-type RecoveryRequest=Omit<Extract<ArchiveRequest,{operation:'test'}>,'operation'>&{operation:'recover';record:ArchiveRecoveryRecord};
-function recoveryDiagnostic(message:string){
+type RecoveryRequest=Omit<Extract<ArchiveRequest,{operation:'test'}>,'operation'>&{operation:'recover'|'cleanup';record:ArchiveRecoveryRecord};
+function recoveryDiagnostic(message:string,cleanup=false){
+  if(cleanup){
+    if(message.includes('not finished restoring'))return '尚未完成原文件还原，请先还原再清理；剩余副本已保留';
+    if(message.includes('unknown'))return '恢复目录中包含未知内容，未删除这些内容；请检查后重试';
+    if(message.includes('modified')||message.includes('changed'))return '文件身份发生变化，清理已停止；其余恢复资料已保留';
+    if(message.includes('link')||message.includes('incompatible'))return '恢复路径包含链接或不兼容类型，清理已停止';
+    if(message.includes('cancelled')||message.includes('stopped'))return '清理已停止，已删除的副本无法撤销；剩余资料可检查后继续清理';
+    return '恢复资料无法验证、被占用或无法清理；剩余资料已保留，请查看运行日志';
+  }
   if(message.startsWith('Target was modified'))return '目标文件在解压后发生变化，还原已停止；文件与恢复资料均已保留';
   if(message.startsWith('Original recovery copy is missing'))return '缺少原文件副本，还原已停止；现有内容已保留';
   if(message.startsWith('Extraction was committed'))return '原解压已确认完成，不能按中断任务还原；恢复副本已保留';
@@ -88,10 +96,12 @@ export class ArchiveService {
     try{const result=await task;this.diagnostic('archive-recovery-inspected',JSON.stringify({id,state:result.state,items:result.items}),result.state==='invalid');return result;}finally{this.inspections.delete(id);}
   }
   cancelRecoveryInspection(owner:number,id:string){const task=this.inspections.get(archiveRecoveryId(id));if(task?.owner===owner)task.controller.abort();}
-  async restoreRecovery(owner:number,id:string):Promise<ArchiveResult>{
+  restoreRecovery(owner:number,id:string):Promise<ArchiveResult>{return this.recoveryOperation(owner,id,'recover');}
+  cleanupRecovery(owner:number,id:string):Promise<ArchiveResult>{return this.recoveryOperation(owner,id,'cleanup');}
+  private async recoveryOperation(owner:number,id:string,operation:'recover'|'cleanup'):Promise<ArchiveResult>{
     id=archiveRecoveryId(id);if(this.stopped||this.inspections.has(id))throw Error('恢复资料仍在检查或服务正在关闭');
-    const record=await this.recovery.read(id);if(this.inspections.has(id)||this.recoveryActive(id,record))throw Error('该任务可能仍在运行或检查，请等待结束后还原');
-    return this.schedule(owner,{operation:'recover',path:record.archive,record},id) as Promise<ArchiveResult>;
+    const record=await this.recovery.read(id);if(this.inspections.has(id)||this.recoveryActive(id,record))throw Error('该任务可能仍在运行或检查，请等待结束后处理');
+    return this.schedule(owner,{operation,path:record.archive,record},id) as Promise<ArchiveResult>;
   }
   async forgetRecovery(id:string){
     id=archiveRecoveryId(id);
@@ -138,7 +148,7 @@ export class ArchiveService {
     this.requests.add(id);
     const job={owner,cancelled:false,committing:false,finishing:false,resources,level,passwordEncoding,riskApproval:approved,extractionLimits:limits,source:request.path,extractionStarted:undefined as number|undefined,propagateZone,scan,controller:new AbortController(),shared:undefined as ArchiveSharedLease|undefined};this.jobs.set(id,job);
     const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown,release:(()=>void)|undefined;
-      try{if(request&&['create','extract','test','update','drag','recover'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
+      try{if(request&&['create','extract','test','update','drag','recover','cleanup'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
         this.checkpoint(id);release=await this.scheduler.acquire(resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
         job.shared=await this.shared!.acquire(id,resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
         this.checkpoint(id);this.diagnostic('archive-job-admitted',JSON.stringify({id,...resources,...this.scheduler.budget}));
@@ -152,19 +162,19 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+  private async execute(owner:number,id:string,operation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
     this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
       const options=this.jobs.get(id)!;
       const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,...options.shared!.environment,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
-      const task={child,owner,committing:false,cooperative:operation==='publish'||operation==='recover'};
+      const task={child,owner,committing:false,cooperative:operation==='publish'||operation==='recover'||operation==='cleanup'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;
       let lastProgress='';let risk:ArchiveRisk|undefined,deadline:ReturnType<typeof setTimeout>|undefined;
       if(operation==='extract'){options.extractionStarted??=performance.now();const remaining=options.extractionLimits.maxMilliseconds-(performance.now()-options.extractionStarted);deadline=setTimeout(()=>{failed=true;errorCode='timeout';error='解压超过本次时间上限，已停止解压；内容未发布';this.diagnostic('archive-timeout',JSON.stringify({id,operation,reason:'extraction-budget',maxMilliseconds:options.extractionLimits.maxMilliseconds}),true);child.kill();},Math.max(1,remaining));}
-      const watchdog=new ArchiveWatchdog(archiveWatchdogLimits(),()=>task.committing&&operation!=='recover',reason=>{
+      const watchdog=new ArchiveWatchdog(archiveWatchdogLimits(),()=>task.committing&&operation!=='recover'&&operation!=='cleanup',reason=>{
         failed=true;errorCode='timeout';error=reason==='heartbeat'?'归档辅助进程失去响应，任务已停止':'归档任务长时间没有读写或处理进展，任务已停止';
         this.diagnostic('archive-timeout',JSON.stringify({id,operation,reason}),true);child.kill();
       });
@@ -180,8 +190,8 @@ export class ArchiveService {
           try{const message=JSON.parse(line) as Message;
             if(message.type==='heartbeat'){watchdog.heartbeat(message.activity);}
             else if(message.type==='ready'){
-              if(!['update','drag','publish','recover'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
-              else{task.committing=true;if(operation==='publish'||operation==='recover'){child.stdin.write(Buffer.from([this.jobs.get(id)?.cancelled?2:1]));this.notify(owner,{id,operation:operation==='recover'?'recover':'extract',done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
+              if(!['update','drag','publish','recover','cleanup'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
+              else{task.committing=true;if(operation==='publish'||operation==='recover'||operation==='cleanup'){child.stdin.write(Buffer.from([this.jobs.get(id)?.cancelled?2:1]));this.notify(owner,{id,operation:operation==='publish'?'extract':operation,done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
             else if(message.type==='progress'){
               const current=`${message.phase??''}:${message.done}:${message.total}`;if(current!==lastProgress){lastProgress=current;watchdog.progress();}
@@ -192,7 +202,7 @@ export class ArchiveService {
             else if((message as {type:string}).type==='resources'){this.diagnostic('archive-resources',JSON.stringify({id,operation,...options.resources,level:options.level}));}
             else if((message as {type:string}).type==='origin'){const mark=message as unknown as {zone:number;stagedFiles:number};if(![3,4].includes(mark.zone)||!Number.isSafeInteger(mark.stagedFiles)||mark.stagedFiles<0||mark.stagedFiles>1000000)throw Error('来源标记结果无效');this.diagnostic('archive-source-zone',JSON.stringify({id,operation,zone:mark.zone,stagedFiles:mark.stagedFiles}));}
             else if(message.type==='risk'){if(risk||!validArchiveRisk(message))throw Error('解压风险数据无效');risk={revision:message.revision,entries:message.entries,bytes:message.bytes,compressed:message.compressed,nested:message.nested,highRatio:message.highRatio};this.diagnostic('archive-extraction-risk',JSON.stringify({id,operation,...risk}),true);}
-            else if(message.type==='error'){failed=true;if(operation==='recover')this.diagnostic('archive-recovery-error',JSON.stringify({id,message:message.message}),true);error=operation==='recover'?recoveryDiagnostic(message.message):archiveDiagnostic(message.message);if(['password','archive','read','write','safety','cancelled','resource','scan','threat','risk','timeout'].includes(message.code??''))errorCode=message.code!;if(errorCode==='scan')error='未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';else if(errorCode==='threat')error='恶意软件扫描阻止了本次解压；内容未发布';if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
+            else if(message.type==='error'){failed=true;if(operation==='recover'||operation==='cleanup')this.diagnostic('archive-recovery-error',JSON.stringify({id,operation,message:message.message}),true);error=operation==='recover'||operation==='cleanup'?recoveryDiagnostic(message.message,operation==='cleanup'):archiveDiagnostic(message.message);if(['password','archive','read','write','safety','cancelled','resource','scan','threat','risk','timeout'].includes(message.code??''))errorCode=message.code!;if(errorCode==='scan')error='未完成恶意软件扫描；本次内容未发布，可在设置中关闭扫描后重试';else if(errorCode==='threat')error='恶意软件扫描阻止了本次解压；内容未发布';if(errorCode==='resource'){this.diagnostic('archive-resource-error',JSON.stringify({id,message:message.message}),true);error='归档资源不足或无法应用限制；请降低压缩等级，或提高内存上限后重试';}}
             else data.push(message);
             if(data.length>505){failed=true;error='压缩程序返回过多数据';child.kill();}
           }catch{failed=true;errorCode='archive';error='压缩程序返回无效数据';if(scanning&&!scan){errorCode='scan';error='未完成恶意软件扫描：扫描结果无效，内容未发布';}child.kill();}
@@ -208,7 +218,7 @@ export class ArchiveService {
       const value=Buffer.from(secret,'utf8'),header=Buffer.alloc(4);header.writeUInt32LE(value.length);
       child.stdin.on('error',()=>{});
       const input=Buffer.concat([header,value,...(packet?[packet]:[])]);
-      if(operation==='update'||operation==='drag'||operation==='publish'||operation==='recover')child.stdin.write(input);else child.stdin.end(input);
+      if(operation==='update'||operation==='drag'||operation==='publish'||operation==='recover'||operation==='cleanup')child.stdin.write(input);else child.stdin.end(input);
       // Initial progress can synchronously request cancellation. Write the
       // private request frame first so a cooperative cancel byte cannot corrupt it.
       if(operation!=='list'&&operation!=='browse'&&operation!=='details')this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
@@ -280,12 +290,13 @@ export class ArchiveService {
     await this.cacheMaintenance;
     this.checkpoint(id);
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
-    if(request.operation==='recover'){
+    if(request.operation==='recover'||request.operation==='cleanup'){
       const current=await this.recovery.read(id);
       if(JSON.stringify(current)!==JSON.stringify(request.record))throw Error('恢复记录已变化，请重新检查');
-      const messages=await this.execute(owner,id,'recover',[current.parent,current.path],'');
+      const messages=await this.execute(owner,id,request.operation,[current.parent,current.path],'');
       const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
-      if(!result||!Number.isSafeInteger(result.count)||result.count<0||result.count>1000000)throw Error('还原进程未返回有效结果，资料已保留');
+      if(!result||!Number.isSafeInteger(result.count)||result.count<0||result.count>1000000)throw Error('恢复处理进程未返回有效结果，请保留剩余资料');
+      if(request.operation==='cleanup'){await this.recovery.clearIfAbsent(id);this.diagnostic('archive-recovery-cleaned',JSON.stringify({id,count:result.count}));return {path:current.parent,count:result.count,cancelled:result.cancelled};}
       this.diagnostic('archive-recovery-restored',JSON.stringify({id,count:result.count,retained:current.path}));
       return {path:current.path,count:result.count,cancelled:result.cancelled};
     }
