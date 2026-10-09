@@ -47,7 +47,7 @@ export interface OneAPI {
   archiveRecoveryList(offset?:number):Promise<import('./archive-recovery').ArchiveRecoveryPage>;
   archiveRecoveryInspect(id:string):Promise<import('./archive-recovery').ArchiveRecoveryInspection>;
   archiveRecoveryRestore(id:string):Promise<import('./archive').ArchiveResult>;
-  archiveRecoveryCleanup(id:string):Promise<import('./archive').ArchiveResult>;
+  archiveRecoveryCleanup(id:string,stageToken?:string):Promise<import('./archive').ArchiveResult>;
   archiveRecoveryCancel(id:string):Promise<void>;
   archiveRecoveryForget(id:string):Promise<void>;
   previewArchive(request:import('./archive').PreviewArchiveRequest,id:string):Promise<import('./archive').ArchiveListing>;

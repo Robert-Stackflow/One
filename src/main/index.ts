@@ -563,7 +563,7 @@ function registerIPC() {
   handle('archive-recovery-list',(_event,offset?:number)=>archiveService.recoveryPage(offset),['main']);
   handle('archive-recovery-inspect',(event,id:string)=>archiveService.inspectRecovery(event.sender.id,id),['main']);
   handle('archive-recovery-restore',(event,id:string)=>archiveService.restoreRecovery(event.sender.id,id),['main']);
-  handle('archive-recovery-cleanup',(event,id:string)=>archiveService.cleanupRecovery(event.sender.id,id),['main']);
+  handle('archive-recovery-cleanup',(event,id:string,stageToken?:string)=>archiveService.cleanupRecovery(event.sender.id,id,stageToken),['main']);
   handle('archive-recovery-cancel',(event,id:string)=>archiveService.cancelRecoveryInspection(event.sender.id,id),['main']);
   handle('archive-recovery-forget',(_event,id:string)=>archiveService.forgetRecovery(id),['main']);
   handle('archive-cancel',(event,id:string)=>archiveService.cancel(id,event.sender.id),['main','preview']);

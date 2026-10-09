@@ -19,10 +19,10 @@ import {archiveEntryDetails} from '../shared/archive-details';
 import {validArchiveRevision} from '../shared/archive-revision';
 import {ArchiveSharedBudget,type ArchiveSharedLease} from './archive-shared-budget';
 import {ArchiveRecoveryRegistry,inspectArchiveRecovery,archiveRecoveryId} from './archive-recovery';
-import type {ArchiveRecoveryRecord} from '../shared/archive-recovery';
+import {archiveStageInspection,type ArchiveRecoveryInspection,type ArchiveRecoveryRecord} from '../shared/archive-recovery';
 
 type NativeResult={type:'result';count:number;skipped?:number;cancelled?:boolean;retainCache?:boolean;staged?:boolean;path?:string;revision?:string;volumes?:number;committed?:boolean;cleanupPending?:boolean;recovery?:string};
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|NativeResult|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|NativeResult|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'stage-inspection'}|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
@@ -40,7 +40,25 @@ const archiveDiagnostic=(message:string)=>message.startsWith('Missing volume : '
   message==='RAR archive comment exceeded the memory budget'?'读取 RAR 压缩包备注时超出内存预算。':
   message==='RAR comment search exceeds the header limit'?'RAR 压缩包备注搜索超过头部读取上限。':message;
 type CachedTar={path:string;directory:string;stamp:string;users:number;used:number;stale:boolean};
-type RecoveryRequest=Omit<Extract<ArchiveRequest,{operation:'test'}>,'operation'>&{operation:'recover'|'cleanup';record:ArchiveRecoveryRecord};
+type RecoveryRequest=Omit<Extract<ArchiveRequest,{operation:'test'}>,'operation'>&{operation:'recover'|'cleanup';record:ArchiveRecoveryRecord;stageToken?:string};
+type StageInspectRequest=Omit<RecoveryRequest,'operation'|'stageToken'>&{operation:'inspect-stage'};
+type ScheduledResult=ArchiveListing|ArchiveResult|ArchiveRecoveryInspection;
+async function recordedStage(value:ArchiveRecoveryRecord){
+  if(value.kind!=='volume-update')return false;
+  const present=async(name:string)=>!!await lstat(join(value.path,name)).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
+  const [stage,published]=await Promise.all([present('stage.jsonl'),present('manifest.jsonl')]);
+  if(stage&&published)throw Error('暂存与发布清单同时存在，保存阶段无法确认；请保留全部资料');
+  return stage;
+}
+function stageInspectionDiagnostic(message:string){
+  if(message.includes('missing'))return '暂存来源记录缺失，无法确认清理范围；请保留资料';
+  if(message.includes('unknown'))return '暂存或恢复目录中包含未知内容，未处理这些内容；请检查后重试';
+  if(message.includes('link')||message.includes('incompatible'))return '暂存路径包含链接或类型已经变化，资料已保留';
+  if(message.includes('changed')||message.includes('replaced')||message.includes('differs')||message.includes('appeared'))return '暂存文件、目录或记录已经变化，无法确认清理范围；请保留资料';
+  if(message.includes('exceeds')||message.includes('limit'))return '暂存来源记录超过检查上限，资料已保留';
+  if(message.includes('Cannot lock'))return '暂存文件或目录被占用、无法访问，请关闭相关程序后重新检查';
+  return '暂存来源记录损坏或无法验证，资料已保留；详细原因可在运行日志中查看';
+}
 function recoveryDiagnostic(message:string,cleanup=false){
   if(cleanup){
     if(message.includes('not finished restoring'))return '尚未完成原文件还原，请先还原再清理；剩余副本已保留';
@@ -65,7 +83,7 @@ function recoveryDiagnostic(message:string,cleanup=false){
 export class ArchiveService {
   private active=new Map<string,{child:ChildProcessWithoutNullStreams;owner:number;committing:boolean;cooperative:boolean}>();
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
-  private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
+  private pending=new Set<Promise<ScheduledResult>>();
   private requests=new Set<string>();
   private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;passwordEncoding:ArchivePasswordEncoding;riskApproval?:ArchiveRiskApproval;extractionLimits:ExtractionBudget;source:string;extractionStarted?:number;propagateZone:boolean;scan:boolean;controller:AbortController;shared?:ArchiveSharedLease}>();
   private scheduler=new ArchiveScheduler();
@@ -78,6 +96,7 @@ export class ArchiveService {
   private dragCache:ArchiveDragCache;
   private recovery:ArchiveRecoveryRegistry;
   private inspections=new Map<string,{owner:number;controller:AbortController;task:Promise<import('../shared/archive-recovery').ArchiveRecoveryInspection>}>();
+  private stageSnapshots=new Map<string,{owner:number;token:string;record:string}>();
   private cacheMaintenance:Promise<DragCacheReport>;
   constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery')){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
@@ -94,23 +113,33 @@ export class ArchiveService {
     id=archiveRecoveryId(id);
     if(this.stopped)throw Error('压缩服务正在关闭');if(this.inspections.size>=2||this.inspections.has(id))throw Error('已有恢复资料正在检查，请稍候');
     const controller=new AbortController();
-    const task=(async()=>{const value=await this.recovery.read(id);controller.signal.throwIfAborted();if(this.recoveryActive(id,value))throw Error('该任务可能仍在运行，请等待结束后检查');return inspectArchiveRecovery(value,controller.signal);})();
+    this.stageSnapshots.delete(id);
+    const task=(async()=>{const value=await this.recovery.read(id);controller.signal.throwIfAborted();if(this.recoveryActive(id,value))throw Error('该任务可能仍在运行，请等待结束后检查');
+      let staged:boolean;try{staged=await recordedStage(value);}catch(error){return{id,kind:value.kind,state:'invalid',message:error instanceof Error?error.message:String(error),items:0,files:0,directories:0,replaced:0,published:0,skipped:0,samples:[]} as ArchiveRecoveryInspection;}
+      controller.signal.throwIfAborted();if(!staged)return inspectArchiveRecovery(value,controller.signal);
+      const cancel=()=>{this.cancel(id,owner);};controller.signal.addEventListener('abort',cancel,{once:true});
+      try{const result=await this.schedule(owner,{operation:'inspect-stage',path:value.archive,record:value},id);controller.signal.throwIfAborted();
+        if(result.stage){if(this.stageSnapshots.size>=1024)this.stageSnapshots.delete(this.stageSnapshots.keys().next().value!);this.stageSnapshots.set(id,{owner,token:result.stage.token,record:JSON.stringify(value)});}return result;
+      }finally{controller.signal.removeEventListener('abort',cancel);}
+    })();
     this.inspections.set(id,{owner,controller,task});
     try{const result=await task;this.diagnostic('archive-recovery-inspected',JSON.stringify({id,kind:result.kind??'extract',state:result.state,items:result.items}),result.state==='invalid');return result;}finally{this.inspections.delete(id);}
   }
   cancelRecoveryInspection(owner:number,id:string){const task=this.inspections.get(archiveRecoveryId(id));if(task?.owner===owner)task.controller.abort();}
   restoreRecovery(owner:number,id:string):Promise<ArchiveResult>{return this.recoveryOperation(owner,id,'recover');}
-  cleanupRecovery(owner:number,id:string):Promise<ArchiveResult>{return this.recoveryOperation(owner,id,'cleanup');}
-  private async recoveryOperation(owner:number,id:string,operation:'recover'|'cleanup'):Promise<ArchiveResult>{
+  cleanupRecovery(owner:number,id:string,stageToken?:string):Promise<ArchiveResult>{return this.recoveryOperation(owner,id,'cleanup',stageToken);}
+  private async recoveryOperation(owner:number,id:string,operation:'recover'|'cleanup',stageToken?:string):Promise<ArchiveResult>{
     id=archiveRecoveryId(id);if(this.stopped||this.inspections.has(id))throw Error('恢复资料仍在检查或服务正在关闭');
     const record=await this.recovery.read(id);if(this.inspections.has(id)||this.recoveryActive(id,record))throw Error('该任务可能仍在运行或检查，请等待结束后处理');
-    return this.schedule(owner,{operation,path:record.archive,record},id) as Promise<ArchiveResult>;
+    if(stageToken!==undefined){const checked=this.stageSnapshots.get(id);if(operation!=='cleanup'||typeof stageToken!=='string'||!/^[a-f0-9]{64}$/.test(stageToken)||!checked||checked.owner!==owner||checked.token!==stageToken||checked.record!==JSON.stringify(record))throw Error('请在当前窗口重新检查暂存资料后确认清理');}
+    else if(await recordedStage(record))throw Error(operation==='recover'?'仅生成了暂存资料，原压缩包未发布修改，无需还原；请检查后清理暂存':'请先检查暂存资料，再确认永久清理');
+    return this.schedule(owner,{operation,path:record.archive,record,stageToken},id) as Promise<ArchiveResult>;
   }
   async forgetRecovery(id:string){
     id=archiveRecoveryId(id);
     if(this.stopped||this.inspections.has(id)||this.requests.has(id))throw Error('任务仍在进行，请稍后处理');
     const value=await this.recovery.read(id).catch(()=>undefined);if(this.recoveryActive(id,value))throw Error('该任务可能仍在其他实例中运行');
-    await this.recovery.forget(id);this.diagnostic('archive-recovery-forgotten',JSON.stringify({id}));
+    await this.recovery.forget(id);this.stageSnapshots.delete(id);this.diagnostic('archive-recovery-forgotten',JSON.stringify({id}));
   }
   get pendingTasks(){return this.pending.size;}
   setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.shared?.configure(budget);this.budgetOverride=budget;}
@@ -129,7 +158,7 @@ export class ArchiveService {
     for(const task of this.inspections.values())task.controller.abort();await Promise.allSettled([...this.inspections.values()].map(value=>value.task));
     await Promise.allSettled([...this.pending]);await this.shared?.close();await this.tasks?.flush();await this.cacheMaintenance;
     for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
-    this.cached.clear();await this.dragCache.sweep();
+    this.cached.clear();this.stageSnapshots.clear();await this.dragCache.sweep();
     // Another helper can outlive a crashed One instance. Never recursively
     // remove its leased payload merely because this instance is quitting.
     await this.dragCache.removeEmptyRoot().catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
@@ -138,7 +167,9 @@ export class ArchiveService {
     if(!request||!['list','details','create','extract','test','update','drag'].includes(request.operation))return Promise.reject(Error('压缩请求无效'));
     return this.schedule(owner,request,requestedId);
   }
-  private schedule(owner:number,request:ArchiveRequest|RecoveryRequest,requestedId?:string):Promise<ArchiveListing|ArchiveResult>{
+  private schedule(owner:number,request:StageInspectRequest,requestedId?:string):Promise<ArchiveRecoveryInspection>;
+  private schedule(owner:number,request:ArchiveRequest|RecoveryRequest,requestedId?:string):Promise<ArchiveListing|ArchiveResult>;
+  private schedule(owner:number,request:ArchiveRequest|RecoveryRequest|StageInspectRequest,requestedId?:string):Promise<ScheduledResult>{
     if(this.stopped)return Promise.reject(Error('压缩服务正在关闭'));
     if(!request||typeof request!=='object'||typeof request.path!=='string')return Promise.reject(Error('压缩请求无效'));
     if(this.requests.size>=32)return Promise.reject(Error('进行中或等待的压缩任务过多，请等待当前任务完成'));
@@ -150,7 +181,7 @@ export class ArchiveService {
     try{this.scheduler.configure(budget);this.shared??=new ArchiveSharedBudget(budget);this.shared.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
     const job={owner,cancelled:false,committing:false,finishing:false,resources,level,passwordEncoding,riskApproval:approved,extractionLimits:limits,source:request.path,extractionStarted:undefined as number|undefined,propagateZone,scan,controller:new AbortController(),shared:undefined as ArchiveSharedLease|undefined};this.jobs.set(id,job);
-    const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown,release:(()=>void)|undefined;
+    const task=(async()=>{let result:ScheduledResult|undefined,error:unknown,release:(()=>void)|undefined;
       try{if(request&&['create','extract','test','update','drag','recover','cleanup'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
         this.checkpoint(id);release=await this.scheduler.acquire(resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
         job.shared=await this.shared!.acquire(id,resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
@@ -165,8 +196,8 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'update-stage'|'volume-publish'|'volume-recover'|'volume-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
-    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'?'cleanup':nativeOperation==='volume-publish'?'publish':nativeOperation==='update-stage'?'update':nativeOperation;
+  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'update-stage'|'volume-publish'|'volume-recover'|'volume-cleanup'|'stage-inspect'|'stage-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'||nativeOperation==='stage-cleanup'?'cleanup':nativeOperation==='stage-inspect'?'list':nativeOperation==='volume-publish'?'publish':nativeOperation==='update-stage'?'update':nativeOperation;
     this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
@@ -290,18 +321,32 @@ export class ArchiveService {
       }
     });
   }
-  private async perform(owner:number,request:ArchiveRequest|RecoveryRequest,id:string):Promise<ArchiveListing|ArchiveResult> {
+  private async perform(owner:number,request:ArchiveRequest|RecoveryRequest|StageInspectRequest,id:string):Promise<ScheduledResult> {
     await this.cacheMaintenance;
     this.checkpoint(id);
     if(!request||typeof request!=='object')throw Error('压缩请求无效');
+    if(request.operation==='inspect-stage'){
+      const current=await this.recovery.read(id);
+      if(JSON.stringify(current)!==JSON.stringify(request.record)||current.kind!=='volume-update')throw Error('恢复记录已变化，请重新检查');
+      const result:ArchiveRecoveryInspection={id,kind:'volume-update',state:'invalid',message:'',items:0,files:0,directories:0,replaced:0,published:0,skipped:0,samples:[]};
+      try{const messages=await this.execute(owner,id,'stage-inspect',[current.archive,current.stage,current.path],'');
+        if(messages.length!==1||messages[0].type!=='stage-inspection')throw Error('暂存检查未返回唯一结果');
+        const {samples,...stage}=archiveStageInspection(messages[0]);
+        return{...result,state:'staged',message:stage.sealed?'新卷已生成，尚未交接发布；此流程不会修改原压缩包。':'新卷生成尚未完成；此流程不会修改原压缩包。',items:stage.created,files:stage.files,stage,samples:samples.map(name=>({name,directory:false,existing:false}))};
+      }catch(error){if(error instanceof ArchiveFailure&&['cancelled','resource','timeout'].includes(error.code))throw error;const message=error instanceof Error?error.message:String(error);this.diagnostic('archive-stage-inspection-error',JSON.stringify({id,message}),true);return{...result,message:stageInspectionDiagnostic(message)};}
+    }
     if(request.operation==='recover'||request.operation==='cleanup'){
       const current=await this.recovery.read(id);
       if(JSON.stringify(current)!==JSON.stringify(request.record))throw Error('恢复记录已变化，请重新检查');
-      const nativeOperation=current.kind==='volume-update'?(request.operation==='recover'?'volume-recover':'volume-cleanup'):request.operation;
-      const messages=await this.execute(owner,id,nativeOperation,[current.parent,current.path],'');
+      const staged=request.stageToken!==undefined;
+      if(staged&&(request.operation!=='cleanup'||current.kind!=='volume-update'))throw Error('暂存清理请求无效');
+      if(!staged&&await recordedStage(current))throw Error('资料已变化，请重新检查暂存后确认清理');
+      const nativeOperation=staged?'stage-cleanup':current.kind==='volume-update'?(request.operation==='recover'?'volume-recover':'volume-cleanup'):request.operation;
+      const args=staged&&current.kind==='volume-update'?[current.archive,current.stage,current.path,request.stageToken!]:[current.parent,current.path];
+      const messages=await this.execute(owner,id,nativeOperation,args,'');
       const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
       if(!result||!Number.isSafeInteger(result.count)||result.count<0||result.count>1000000)throw Error('恢复处理进程未返回有效结果，请保留剩余资料');
-      if(request.operation==='cleanup'){if(!await this.recovery.clearIfAbsent(id))throw Error('恢复目录或分卷暂存目录仍存在，记录已保留；请检查剩余资料');this.diagnostic('archive-recovery-cleaned',JSON.stringify({id,kind:current.kind??'extract',count:result.count}));return {path:current.parent,count:result.count,cancelled:result.cancelled};}
+      if(request.operation==='cleanup'){if(!await this.recovery.clearIfAbsent(id))throw Error('恢复目录或分卷暂存目录仍存在，记录已保留；请检查剩余资料');this.stageSnapshots.delete(id);this.diagnostic('archive-recovery-cleaned',JSON.stringify({id,kind:current.kind??'extract',phase:staged?'stage':'publication',count:result.count}));return {path:current.parent,count:result.count,cancelled:result.cancelled};}
       this.diagnostic('archive-recovery-restored',JSON.stringify({id,kind:current.kind??'extract',count:result.count,retained:current.path}));
       return {path:current.path,count:result.count,cancelled:result.cancelled};
     }
