@@ -385,6 +385,41 @@ static int archive_format(const std::wstring &path) {
     fail("Unsupported archive format");
 }
 
+// The private request is always UTF-8. ZIP encryption operates on bytes and
+// carries no password-encoding marker; never guess or silently substitute.
+static std::string zip_password(const std::string &password, int format) {
+    wchar_t option[16]{};SetLastError(ERROR_SUCCESS);
+    const auto size=GetEnvironmentVariableW(L"ONE_ARCHIVE_PASSWORD_ENCODING",option,16);
+    unsigned encoding=65001;
+    if(size||GetLastError()!=ERROR_ENVVAR_NOT_FOUND){
+        if(!size||size>=16)fail("Invalid ZIP password encoding","password");
+        const std::wstring_view text(option,size);
+        if(text==L"0")encoding=0;
+        else if(text==L"437")encoding=437;
+        else if(text==L"932")encoding=932;
+        else if(text==L"936")encoding=936;
+        else if(text==L"950")encoding=950;
+        else if(text!=L"65001")fail("Invalid ZIP password encoding","password");
+    }
+    if(format!=0&&encoding!=65001)fail("Password encoding is only supported for ZIP archives","password");
+    if(password.find('\0')!=std::string::npos)fail("Password contains an invalid null character","password");
+    const auto unicode=wide(password);
+    if(format!=0||password.empty())return password;
+    if(!encoding)encoding=GetACP();
+    if(encoding==CP_UTF8)return password;
+    BOOL substituted=FALSE;
+    const int length=WideCharToMultiByte(encoding,WC_NO_BEST_FIT_CHARS,unicode.data(),(int)unicode.size(),nullptr,0,nullptr,&substituted);
+    if(!length||length>1024||substituted)fail("Password cannot be represented in the selected ZIP encoding; choose UTF-8 or change the password","password");
+    std::string bytes(length,0);
+    if(WideCharToMultiByte(encoding,WC_NO_BEST_FIT_CHARS,unicode.data(),(int)unicode.size(),bytes.data(),length,nullptr,&substituted)!=length||substituted||bytes.find('\0')!=std::string::npos)
+        fail("Password cannot be represented in the selected ZIP encoding; choose UTF-8 or change the password","password");
+    const int count=MultiByteToWideChar(encoding,0,bytes.data(),length,nullptr,0);
+    std::wstring roundtrip(count,0);
+    if(!count||MultiByteToWideChar(encoding,0,bytes.data(),length,roundtrip.data(),count)!=count||roundtrip!=unicode)
+        fail("Password cannot be represented exactly in the selected ZIP encoding; choose UTF-8 or change the password","password");
+    return bytes;
+}
+
 int wmain(int argc, wchar_t **argv) {
     std::setvbuf(stdin,nullptr,_IONBF,0);
     _setmode(_fileno(stdout), _O_BINARY);
@@ -394,6 +429,7 @@ int wmain(int argc, wchar_t **argv) {
         ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
+        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
         if (mode == L"create") {
             if (argc < 4) fail("Create requires input paths");
             int first_source = 3;

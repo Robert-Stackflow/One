@@ -2,7 +2,7 @@ import {validArchiveScan,copyArchiveScan,archiveScanText} from '../shared/archiv
 import {randomUUID} from 'node:crypto';
 import {open,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
-import type {ArchiveEdit,ArchiveEncoding,ArchiveRequest,ArchiveListing,ArchiveResult} from '../shared/archive';
+import type {ArchiveEdit,ArchiveEncoding,ArchivePasswordEncoding,ArchiveRequest,ArchiveListing,ArchiveResult} from '../shared/archive';
 import {archiveEditPacket} from './archive-update';
 import {archiveLevel,archiveResources,archiveBudget,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
@@ -22,6 +22,7 @@ list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
+ZIP password: --password-encoding utf8|system|437|932|936|950|65001 (default utf8; separate from filename encoding)
 resources: --threads 1-64 (compression), --memory-mib 128-8192 (per helper, default 1024)
 queue: --concurrency 1-8 (default 1), --total-memory-mib 128-32768, --total-threads 1-64
        Queue options belong to this invocation, not individual batch jobs.
@@ -47,7 +48,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  argument(['list','create','extract','test','update','batch'].includes(operation),'Unknown archive command');
  const flags=new Set(['json','progress','password-stdin','help',...(operation==='extract'?['no-zone','scan','no-scan']:[])]);
  const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
- for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib');
+ for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib','password-encoding');
  for(const options of Object.values(allowed))options.push('concurrency','total-memory-mib','total-threads');
  const options=new Map<string,string>(),paths:string[]=[];let literal=false;
  for(let i=0;i<args.length;i++){
@@ -64,6 +65,8 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  if(result.help)return result;
  const encodingText=options.get('encoding')??'auto';argument(['auto','437','932','936','950','65001'].includes(encodingText),'Invalid code page');
  const encoding=(encodingText==='auto'?0:Number(encodingText)) as ArchiveEncoding;
+ const passwordEncodingText=options.get('password-encoding')??'utf8';argument(['utf8','system','437','932','936','950','65001'].includes(passwordEncodingText),'Invalid ZIP password encoding');
+ const passwordEncoding=(passwordEncodingText==='utf8'?65001:passwordEncodingText==='system'?0:Number(passwordEncodingText)) as ArchivePasswordEncoding;
  const number=(key:string)=>{const value=options.get(key);if(value===undefined)return undefined;argument(/^\d+$/.test(value),`--${key} requires an integer`);return Number(value);};
  if(['concurrency','total-memory-mib','total-threads'].some(key=>options.has(key))){
   result.queue={maxConcurrent:number('concurrency')??1,totalMemoryMiB:number('total-memory-mib'),totalThreads:number('total-threads')};
@@ -75,13 +78,15 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  argument(paths.length>0&&paths.length<=128,'Supply 1–128 paths');
  if(operation==='create'){
   argument(options.has('output'),'create requires --output');const path=filePath(options.get('output')!,cwd);argument(targetPattern.test(path),'Unsupported output archive format');
+  argument(passwordEncoding===65001||/\.zip$/i.test(path),'Password encoding options apply only to ZIP archives');
   const format=options.get('format');if(format){argument(['zip','7z','tar','tar.gz','tar.xz','gz','xz'].includes(format),'Unsupported format');const lower=path.toLowerCase(),actual=/\.(tar\.gz|tgz)$/.test(lower)?'tar.gz':/\.(tar\.xz|txz)$/.test(lower)?'tar.xz':lower.split('.').at(-1);argument(actual===format,'--format must match the output extension');}
   let volumeBytes=0;const volume=options.get('volume-size');if(volume){const match=/^(\d+)(KiB|MiB|GiB)?$/i.exec(volume);argument(match,'Volume size requires integer bytes or KiB/MiB/GiB');const unit=match[2]?.toLowerCase();volumeBytes=Number(match[1])*(unit==='kib'?1024:unit==='mib'?1024**2:unit==='gib'?1024**3:1);argument(Number.isSafeInteger(volumeBytes)&&volumeBytes>=1024**2&&volumeBytes<=64*1024**3,'Volume size must be 1 MiB–64 GiB');argument(/\.(zip|7z)$/i.test(path),'Only ZIP and 7Z support volumes');}
   let level:number|undefined;try{level=options.has('level')?archiveLevel(number('level')):undefined;}catch{throw new CliFailure('--level must be an integer from 0 to 9');}
   argument(!/\.tar$/i.test(path)||level===undefined||level===0,'TAR stores files without compression; only --level 0 is valid');
-  result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,...resources}}];return result;
+  result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,passwordEncoding,...resources}}];return result;
  }
  argument(paths.every(path=>sourcePattern.test(path)),'Unsupported input archive format');
+ argument(passwordEncoding===65001||paths.every(path=>/\.zip$/i.test(path)),'Password encoding options apply only to ZIP archives');
  if(operation==='extract'){
   argument(!(options.has('scan')&&options.has('no-scan')),'--scan and --no-scan are mutually exclusive');
   argument(options.has('output'),'extract requires --output');const parent=filePath(options.get('output')!,cwd),destination=options.get('destination')??'folder',conflict=options.get('conflict')??'rename';
@@ -93,7 +98,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];
  }else result.jobs=paths.map(path=>({operation:operation as 'list'|'test',request:{operation:operation as 'list'|'test',path,encoding}}));
- for(const job of result.jobs)Object.assign(job.request,resources);
+ for(const job of result.jobs)Object.assign(job.request,resources,{passwordEncoding});
  return result;
 }
 
@@ -160,7 +165,7 @@ export async function runCli(command:CliCommand,service:CliService,io:CliIO):Pro
      }while(offset<total);
      value={path:job.request.path,count};
     }else if(job.request.operation==='update'){
-     const changes=await readChanges(job.changesFile!);const listing=await call({operation:'list',path:job.request.path,encoding:job.request.encoding}) as ArchiveListing;
+     const changes=await readChanges(job.changesFile!);const listing=await call({operation:'list',path:job.request.path,encoding:job.request.encoding,passwordEncoding:job.request.passwordEncoding}) as ArchiveListing;
      if(!listing.editable||!listing.revision)throw new CliFailure('Archive is not an editable single-volume ZIP or 7Z',2);
      value=await call({...job.request,changes,revision:listing.revision});
     }else value=await call(job.request);

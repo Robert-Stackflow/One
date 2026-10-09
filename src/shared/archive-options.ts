@@ -1,3 +1,8 @@
+import type {ArchivePasswordEncoding} from './archive';
+export function archivePasswordEncoding(value:unknown=65001):ArchivePasswordEncoding {
+ if(typeof value!=='number'||![0,437,932,936,950,65001].includes(value))throw Error('ZIP 密码编码无效');
+ return value as ArchivePasswordEncoding;
+}
 export interface ArchiveResources {threads:number;memoryMiB:number}
 export const defaultArchiveResources=():ArchiveResources=>({threads:2,memoryMiB:1024});
 export interface ArchiveBudget {maxConcurrent:number;totalMemoryMiB:number;totalThreads:number}

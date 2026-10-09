@@ -5,13 +5,13 @@ import {join,dirname,basename,extname,isAbsolute,resolve,relative} from 'node:pa
 import {existsSync} from 'node:fs';
 import {createReadStream,createWriteStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
-import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding} from '../shared/archive';
+import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveResult,ArchiveEncoding,ArchivePasswordEncoding} from '../shared/archive';
 import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 import type {ArchiveTasks} from './archive-tasks';
 import {validArchiveScan,copyArchiveScan,type ArchiveScan} from '../shared/archive-scan';
-import {archiveResources,archiveLevel,archiveBudget,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
+import {archiveResources,archiveLevel,archiveBudget,archivePasswordEncoding,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
 import {ArchiveWatchdog,archiveWatchdogLimits} from './archive-watchdog';
 
@@ -20,7 +20,7 @@ export class ArchiveFailure extends Error {constructor(message:string,readonly c
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
-const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||Buffer.byteLength(value,'utf8')>1024)throw Error('密码无效或过长');return value;};
+const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||value.includes('\0')||Buffer.byteLength(value,'utf8')>1024||Buffer.from(value,'utf8').toString('utf8')!==value)throw Error('密码无效或过长');return value;};
 const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(target))throw Error('不支持该压缩包格式');return target;};
 const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(source))throw Error('暂不支持该压缩格式');return source;};
 const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|tar\.gz|tar\.xz|zip|7z|rar|r00|tar|tgz|txz|gz|xz)$/i,'');
@@ -32,7 +32,7 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
-  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;propagateZone:boolean;scan:boolean;controller:AbortController}>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;passwordEncoding:ArchivePasswordEncoding;propagateZone:boolean;scan:boolean;controller:AbortController}>();
   private scheduler=new ArchiveScheduler();
   private budgetOverride:ArchiveBudget|undefined;
   private stopped=false;
@@ -70,11 +70,12 @@ export class ArchiveService {
     if(this.requests.size>=32)return Promise.reject(Error('进行中或等待的压缩任务过多，请等待当前任务完成'));
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
-    let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget;
+    let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget,passwordEncoding:ArchivePasswordEncoding;
+    try{passwordEncoding=archivePasswordEncoding(request?.passwordEncoding);if(passwordEncoding!==65001&&(typeof request?.path!=='string'||!/\.zip$/i.test(request.path)))throw Error('密码编码选项仅适用于 ZIP；其他格式请使用默认 UTF-8');password(request?.password);}catch(error){return Promise.reject(error);}
     try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=this.budgetOverride??archiveBudget(defaults,resources);}catch(error){return Promise.reject(error);}
     try{this.scheduler.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
-    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,propagateZone,scan,controller:new AbortController()};this.jobs.set(id,job);
+    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,passwordEncoding,propagateZone,scan,controller:new AbortController()};this.jobs.set(id,job);
     const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown,release:(()=>void)|undefined;
       try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
         this.checkpoint(id);release=await this.scheduler.acquire(resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
@@ -92,7 +93,7 @@ export class ArchiveService {
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
       const options=this.jobs.get(id)!;
-      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
+      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
       const task={child,owner,committing:false,cooperative:operation==='publish'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;

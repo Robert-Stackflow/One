@@ -1,5 +1,7 @@
 import type {ArchiveScan} from './archive-scan';
 export type ArchiveEncoding = 0|437|932|936|950|65001;
+// Unlike filename encoding, 0 explicitly means the Windows system code page.
+export type ArchivePasswordEncoding = ArchiveEncoding;
 export type ArchiveConflict = 'rename'|'skip'|'replace';
 export type ArchiveBrowse = {directory:string;search:string;flat:boolean};
 export type ArchiveEntry = {index:number;name:string;directory:boolean;size:number;compressed:number;encrypted:boolean;implicit?:boolean};
@@ -17,7 +19,7 @@ export type ArchiveEdit =
   | {kind:'mkdir';name:string}
   | {kind:'add';source:string;name:string;replace?:boolean}
   | {kind:'comment';text:string};
-export type ArchiveRequest = Partial<import('./archive-options').ArchiveResources> & (
+export type ArchiveRequest = Partial<import('./archive-options').ArchiveResources> & {passwordEncoding?:ArchivePasswordEncoding} & (
   | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding;password?:string;browse?:ArchiveBrowse}
   | {operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number;level?:number}
   | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart'|'here';conflict?:ArchiveConflict;selected?:number[];selectedFolders?:string[];revision?:string;password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean;scan?:boolean}

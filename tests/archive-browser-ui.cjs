@@ -11,15 +11,24 @@ async function main(){
   for(let i=0;i<405;i++)source.file(`root-${String(i).padStart(3,'0')}.txt`,'content '+i);
   const zip=path.join(root,'browser.zip');await fs.writeFile(zip,await source.generateAsync({type:'nodebuffer'}));
   const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:path.join(root,'profile'),TEMP:root,TMP:root};delete env.ELECTRON_RUN_AS_NODE;
-  app=await electron.launch({args:[path.resolve('.')],env});const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(String(error)));
+  app=await electron.launch({args:[path.resolve(process.env.ONE_ARCHIVE_UI_APP_ROOT||'.')],env});const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(String(error)));
   await app.evaluate(({shell,ipcMain})=>{
    globalThis.archiveReveals=0;globalThis.dragRequests=[];shell.showItemInFolder=()=>globalThis.archiveReveals++;shell.openPath=async()=>{globalThis.archiveReveals++;return '';};
    const previous=ipcMain._invokeHandlers.get('one:archive-run');ipcMain.removeHandler('one:archive-run');
    ipcMain.handle('one:archive-run',(event,request,id)=>{if(request.operation!=='drag')return previous(event,request,id);globalThis.dragRequests.push(request);return {path:request.path,count:request.selected.length+request.selectedFolders.length,cancelled:true};});
   });
   await page.waitForSelector('[data-page="archive"]');await page.locator('[data-page="archive"]').click();await expect(page.locator('#archive-open-completed')).not.toBeChecked();
+  const choose=async(id,label)=>{await page.locator('#'+id).click();await page.getByRole('option',{name:label,exact:true}).click();};
   const content=path.join(root,'created.txt'),created=path.join(root,'created.zip');await fs.writeFile(content,'create test');
+  await page.locator('.archive-advanced > summary').click();assert.equal(await page.locator('#archive-create-password-encoding').evaluate(node=>node.value),'65001');
+  await choose('archive-format','7Z');await expect(page.locator('#archive-create-password-encoding-row')).toBeHidden();await choose('archive-format','ZIP');
+  await page.locator('#archive-create-password').fill(' 页面中文密码 ');await choose('archive-create-password-encoding','GBK / CP936');
   await fillArchiveSources(page,content);await page.locator('#archive-target').fill(created);await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包');
+  await page.locator('[data-archive-mode="browse"]').click();await page.locator('#archive-source').fill(created);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(1);
+  await page.locator('#archive-password').fill(' 页面中文密码 ');await page.locator('#archive-test').click();await expect(page.locator('#archive-status')).toHaveAttribute('data-state','error');
+  await page.locator('#archive-password-encoding-row > summary').click();assert.equal(await page.locator('#archive-password-encoding').evaluate(node=>node.value),'65001');await choose('archive-password-encoding','GBK / CP936');
+  await page.locator('#archive-test').click();await expect(page.locator('#archive-status-text')).toContainText('校验完成');await page.locator('#archive-parent').fill(root);await page.locator('#archive-extract-all').click();await expect(page.locator('#archive-status-text')).toContainText('已解压');assert.equal(await fs.readFile(path.join(root,'created/created.txt'),'utf8'),'create test');
+  await page.locator('#archive-password').fill('');await choose('archive-password-encoding','UTF-8（默认）');
   await page.locator('[data-archive-mode="browse"]').click();await page.locator('#archive-source').fill(zip);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(200);
   const row=name=>page.locator('.archive-entry').filter({has:page.locator('.archive-entry-name',{hasText:name})});
   await expect(page.locator('#archive-extract-selected')).toBeDisabled();
@@ -44,7 +53,7 @@ async function main(){
   await page.locator('#archive-open-completed').uncheck();await expect.poll(()=>page.evaluate(async()=>(await window.one.settings()).archive.openCompleted)).toBe(false);
   await page.reload();await page.locator('[data-page="archive"]').click();await expect(page.locator('#archive-open-completed')).not.toBeChecked();
   assert.equal(await app.evaluate(()=>globalThis.archiveReveals),0);assert.deepEqual(errors,[]);
-  console.log('Archive browser UI passed: bounded paging, recursive search, breadcrumbs, cross-page selection/extraction/drag, editing across navigation and saved no-open-folder preference. Explorer calls were mocked.');
+  console.log('Archive browser UI passed: real ZIP password encoding create/test/extract, default UTF-8, 7Z option visibility, bounded paging, recursive search, breadcrumbs, cross-page selection/extraction/drag, editing across navigation and saved no-open-folder preference. Explorer calls were mocked.');
  }finally{if(app)await app.close();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
