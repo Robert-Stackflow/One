@@ -6,9 +6,9 @@
 | --- | --- |
 | 根目录 `README.md` | 项目入口、最新发布包位置和功能概要 |
 | `docs/user-guide` | 持续更新的使用说明 |
-| `docs/development` | 需求、设计、开发与缓存规则、当前优化进度 |
+| `docs/development` | 当前状态与待办、代码职责、设计、开发及验收方法 |
 | `docs/research` | 调研依据与实现参考 |
-| `docs/history` | 各版本当时的验收结论，按版本保存 |
+| `docs/history` | 各版本与专题当时的设计、实施和验收记录 |
 
 使用说明以当前源码为准，开发版新增能力会单独注明；可运行发布包版本与位置见 [项目入口](../README.md)。历史验收保留当时的环境和限制，不能代替当前说明。
 
@@ -22,17 +22,17 @@
 
 ## 开发资料
 
-- [功能 TODO](development/TODO.md)
-- [开发、发布与缓存规则](development/开发与缓存.md)
+- [当前开发状态与功能 TODO](development/TODO.md)
+- [开发、构建与目录管理](development/开发与缓存.md)
 - [安装器](development/安装器.md)
 - [需求](development/需求.md)
-- [技术栈](development/技术栈.md)
+- [技术栈与代码结构](development/技术栈.md)
 - [开发计划](development/开发计划.md)
 - [设计规范](development/设计规范.md)
 - [图标设计](development/图标设计.md)
-- [持续优化进度](development/优化进度.md)
+- [优化与测量](development/优化进度.md)
 - [原生文件索引模块](development/原生文件索引.md)
-- [压缩与解压实现计划](development/压缩与解压实现计划.md)
+- [压缩与解压实现与验收设计](development/压缩与解压实现计划.md)
 
 ## 调研与历史
 
@@ -48,6 +48,6 @@
 
 ## 文档维护
 
-新文档放入对应分类并更新本导航；版本验收只更新历史索引。根目录仅保留 `README.md`，不另存带日期的说明副本。截图、日志和生成样本使用有上限的验证目录，规则见 [开发、发布与缓存](development/开发与缓存.md)。
+新文档放入对应分类并更新本导航；阶段与版本验收归入历史并更新索引。根目录仅保留 `README.md`，不另存带日期的说明副本。截图、日志和生成样本使用有上限的验证目录，规则见 [开发、发布与缓存](development/开发与缓存.md)。
 
 运行 `npm run check:docs` 可检查文档分类、导航覆盖和仓库内链接，不生成额外缓存。当前说明更新后修正原文件，历史记录通过 Git 保存。
