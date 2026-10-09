@@ -1204,7 +1204,7 @@ int32_t mz_zip_writer_open(void *handle, void *stream, uint8_t append) {
     return mz_zip_writer_open_int(writer, stream, mode);
 }
 
-int32_t mz_zip_writer_open_file(void *handle, const char *path, int64_t disk_size, uint8_t append) {
+static int32_t mz_zip_writer_open_file_int(void *handle, const char *path, int64_t disk_size, uint8_t append, uint8_t exclusive) {
     mz_zip_writer *writer = (mz_zip_writer *)handle;
     int32_t mode = MZ_OPEN_MODE_READWRITE;
     int32_t err = MZ_OK;
@@ -1213,6 +1213,10 @@ int32_t mz_zip_writer_open_file(void *handle, const char *path, int64_t disk_siz
 
     if (!writer)
         return MZ_PARAM_ERROR;
+    if (exclusive && append)
+        return MZ_PARAM_ERROR;
+    if (exclusive)
+        mode |= MZ_OPEN_MODE_EXCLUSIVE;
     mz_zip_writer_close(writer);
 
     if (mz_os_file_exists(path) != MZ_OK) {
@@ -1230,6 +1234,8 @@ int32_t mz_zip_writer_open_file(void *handle, const char *path, int64_t disk_siz
     } else if (append) {
         mode |= MZ_OPEN_MODE_APPEND;
     } else {
+        if (exclusive)
+            return MZ_EXIST_ERROR;
         if (writer->overwrite_cb)
             err_cb = writer->overwrite_cb(writer, writer->overwrite_userdata, path);
 
@@ -1267,6 +1273,18 @@ int32_t mz_zip_writer_open_file(void *handle, const char *path, int64_t disk_siz
         err = mz_zip_writer_open_int(writer, writer->split_stream, mode);
 
     return err;
+}
+
+int32_t mz_zip_writer_open_file(void *handle, const char *path, int64_t disk_size, uint8_t append) {
+    return mz_zip_writer_open_file_int(handle, path, disk_size, append, 0);
+}
+
+int32_t mz_zip_writer_open_file_exclusive(void *handle, const char *path, int64_t disk_size) {
+#ifdef _WIN32
+    return mz_zip_writer_open_file_int(handle, path, disk_size, 0, 1);
+#else
+    return MZ_SUPPORT_ERROR;
+#endif
 }
 
 int32_t mz_zip_writer_open_file_in_memory(void *handle, const char *path) {

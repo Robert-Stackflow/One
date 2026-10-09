@@ -167,6 +167,8 @@ int32_t mz_zip_writer_open(void *handle, void *stream, uint8_t append);
 /* Opens zip file from stream */
 
 int32_t mz_zip_writer_open_file(void *handle, const char *path, int64_t disk_size, uint8_t append);
+/* One Windows-only extension: all newly created disks use CREATE_NEW. */
+int32_t mz_zip_writer_open_file_exclusive(void *handle, const char *path, int64_t disk_size);
 /* Opens zip file from a file path */
 
 int32_t mz_zip_writer_open_file_in_memory(void *handle, const char *path);

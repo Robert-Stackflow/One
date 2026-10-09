@@ -15,6 +15,11 @@ Commit: 9826cbd4355af856b38bf8d863b29653b90c6b7f
 License: vendor/archive/minizip-ng/LICENSE (zlib)
 One local source modification: mz_os_win32.c size queries use shared read/write
 access, matching the input stream, so concurrent readers cannot block one another.
+One local Windows staging extension: mz_zip_writer_open_file_exclusive adds
+MZ_OPEN_MODE_EXCLUSIVE. New disks use CREATE_NEW and deny write sharing rather
+than truncating existing paths. The exclusive split stream allows at most 4095
+data disks plus the terminal ZIP. Ordinary writer behavior remains unchanged;
+the exclusive entry point reports unsupported on non-Windows platforms.
 
 zlib 1.3.1
 Source: https://github.com/madler/zlib/releases/tag/v1.3.1

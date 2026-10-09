@@ -89,10 +89,13 @@ int32_t mz_stream_os_open(void *stream, const char *path, int32_t mode) {
         creation_disposition = OPEN_EXISTING;
     } else if (mode & MZ_OPEN_MODE_CREATE) {
         desired_access = GENERIC_WRITE | GENERIC_READ;
-        creation_disposition = CREATE_ALWAYS;
+        creation_disposition = (mode & MZ_OPEN_MODE_EXCLUSIVE) ? CREATE_NEW : CREATE_ALWAYS;
     } else {
         return MZ_PARAM_ERROR;
     }
+
+    if (mode & MZ_OPEN_MODE_EXCLUSIVE)
+        share_mode = FILE_SHARE_READ;
 
     mz_stream_os_print("Win32 - Open - %s (mode %" PRId32 ")\n", path);
 

@@ -34,4 +34,6 @@ size_t seven_extract(const fs::path &source, const fs::path &destination,
 void seven_create(const fs::path &destination, const std::vector<fs::path> &sources,
                   const std::string &password, int format);
 void seven_update(const fs::path &source,const fs::path &temporary,const fs::path &backup,
-                  const std::string &revision,const std::string &password,bool prepare=false);
+                  const std::string &revision,const std::string &password,bool prepare=false,bool group=false);
+void update_volume_stage(const fs::path &source,const fs::path &stage,int encoding,
+                         const std::string &revision,const std::string &password,int format);

@@ -48,8 +48,9 @@ struct Writer {
 
 
 void zip_update(const fs::path &source, const fs::path &temporary, const fs::path &backup,
-                int encoding, const std::string &revision, const std::string &password,bool prepare) {
-    check_staging(source,temporary,backup);
+                int encoding, const std::string &revision, const std::string &password,bool prepare,bool group) {
+    if(group&&!prepare)fail("Volume staging cannot commit changes directly");
+    check_staging(source,temporary,backup,group);
     if(!prepare&&revision.starts_with("v2:"))fail("Split ZIP editing is not supported yet");
     if(prepare)expect_archive_revision(source,revision);
     // Deny writes/deletion throughout preflight, rewrite and verification.
@@ -97,7 +98,10 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         mz_zip_writer_set_follow_links(writer.value, 0);
         mz_zip_writer_set_store_links(writer.value, 0);
         mz_zip_writer_set_compress_level(writer.value, 6);
-        if (mz_zip_writer_open_file(writer.value, utf8(temporary.wstring()).c_str(), 0, 0) != MZ_OK)
+        const auto output_name=utf8(temporary.wstring());
+        const int opened=group?mz_zip_writer_open_file_exclusive(writer.value,output_name.c_str(),(int64_t)source_volume_bytes(source)):
+            mz_zip_writer_open_file(writer.value,output_name.c_str(),0,0);
+        if (opened != MZ_OK)
             fail("Cannot create staging ZIP");
         RenameInfo context; context.reader = &reader;
         mz_zip_writer_set_entry_cb(writer.value, &context, rename_metadata);
@@ -140,6 +144,7 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         }
         if (mz_zip_writer_close(writer.value) != MZ_OK) fail("Cannot finish staging ZIP");
     }
+    if(group){flush_prepared_zip(temporary);lock_archive_source(temporary);}
     size_t final_count = 0;
     {
         Reader verify(temporary.wstring(), 0);
@@ -164,6 +169,6 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
             fail("Updated ZIP did not preserve the requested comment");
         zip_test(verify, items, password, false);
     }
-    if(prepare){Reader recheck(source.wstring(),encoding);finish_preparation(source,temporary,revision,final_count);}
+    if(prepare){Reader recheck(source.wstring(),encoding);if(group)finish_volume_preparation(source,temporary,revision,final_count,password,0);else finish_preparation(source,temporary,revision,final_count);}
     else commit(original,source,temporary,backup,revision,final_count);
 }

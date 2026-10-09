@@ -63,7 +63,11 @@ struct OutputEntry {
 void check_tree(const std::vector<OutputEntry> &nodes);
 void check_source(const fs::path &source);
 void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &source,bool encrypted,std::string *comment);
-void check_staging(const fs::path &source,const fs::path &temporary,const fs::path &backup);
+void check_staging(const fs::path &source,const fs::path &temporary,const fs::path &backup,bool group=false);
 void commit(File &original,const fs::path &source,const fs::path &temporary,const fs::path &backup,const std::string &revision,size_t count);
 void finish_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,size_t count);
+uint64_t source_volume_bytes(const fs::path &source);
+void flush_prepared_zip(const fs::path &temporary);
+void finish_volume_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,
+                               size_t count,const std::string &password,int format);
 }

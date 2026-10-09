@@ -461,9 +461,10 @@ size_t seven_extract(const fs::path &source,const fs::path &destination,
 }
 
 void seven_update(const fs::path &source,const fs::path &temporary,const fs::path &backup,
-                  const std::string &revision,const std::string &password,bool prepare){
+                  const std::string &revision,const std::string &password,bool prepare,bool group){
     using namespace archive_update;
-    check_staging(source,temporary,backup);File original(source,GENERIC_READ,FILE_SHARE_READ);
+    if(group&&!prepare)fail("Volume staging cannot commit changes directly");
+    check_staging(source,temporary,backup,group);File original(source,GENERIC_READ,FILE_SHARE_READ);
     if(prepare)expect_archive_revision(source,revision);
     else if(stamp(original.handle)!=revision)fail("Archive changed; reopen it before saving changes");
     Plan plan;std::vector<OutputEntry> nodes;std::vector<std::string> names;
@@ -490,6 +491,6 @@ void seven_update(const fs::path &source,const fs::path &temporary,const fs::pat
         count=items.size();
     }
     seven_test(temporary,password,7,false);
-    if(prepare){OpenArchive recheck(source,password,7);finish_preparation(source,temporary,revision,count);}
+    if(prepare){OpenArchive recheck(source,password,7);if(group)finish_volume_preparation(source,temporary,revision,count,password,7);else finish_preparation(source,temporary,revision,count);}
     else commit(original,source,temporary,backup,revision,count);
 }

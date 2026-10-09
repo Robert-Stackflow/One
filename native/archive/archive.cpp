@@ -457,7 +457,7 @@ int wmain(int argc, wchar_t **argv) {
         ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
-        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"details"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"update-prepare"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
+        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"details"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"update-prepare"||mode==L"update-stage"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
         if (mode == L"create") {
             if (argc < 4) fail("Create requires input paths");
             int first_source = 3;
@@ -501,6 +501,9 @@ int wmain(int argc, wchar_t **argv) {
             int count=argc-(folders?1:0);
             if (count < 6 || count > 8) fail("Drag requires a staging directory, encoding and revision");
             archive_drag(argv[2], argv[3], _wtoi(argv[4]), utf8(argv[5]), password, archive_format(argv[2]), mode == L"drag-test", count >= 7 ? std::stoull(argv[6]) : 0, count == 8 ? fs::path(argv[7]) : fs::path{},folders);
+        } else if(mode==L"update-stage"){
+            if(argc!=6)fail("Volume staging requires a source, new directory, encoding and revision");
+            update_volume_stage(argv[2],argv[3],_wtoi(argv[4]),utf8(argv[5]),password,archive_format(argv[2]));
         } else if (mode == L"update"||mode==L"update-prepare") {
             const bool prepare=mode==L"update-prepare";
             if(argc!=7)fail("Update requires an archive, staging paths, encoding and revision");

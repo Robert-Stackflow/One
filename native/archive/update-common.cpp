@@ -154,9 +154,10 @@ void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &sourc
     if (plan.cursor != plan.bytes.size()) fail("Unexpected trailing archive update data");
     for(const auto index:anchors)nodes[index].removed=true;
 }
-void check_staging(const fs::path &source,const fs::path &temporary,const fs::path &backup){
+void check_staging(const fs::path &source,const fs::path &temporary,const fs::path &backup,bool group){
     const auto parent=fs::absolute(source).parent_path();
-    if(parent!=fs::absolute(temporary).parent_path()||parent!=fs::absolute(backup).parent_path()||
+    const auto output_parent=fs::absolute(temporary).parent_path();
+    if((group?(output_parent.parent_path()!=parent||!output_parent.filename().wstring().starts_with(L".one-update-")):(output_parent!=parent))||output_parent!=fs::absolute(backup).parent_path()||
        key(utf8(fs::absolute(source).wstring()))==key(utf8(fs::absolute(temporary).wstring()))||
        key(utf8(fs::absolute(source).wstring()))==key(utf8(fs::absolute(backup).wstring()))||
        key(utf8(fs::absolute(temporary).wstring()))==key(utf8(fs::absolute(backup).wstring()))||
@@ -197,13 +198,6 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
 void finish_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,size_t count){
     File flush(temporary,GENERIC_WRITE,FILE_SHARE_READ);if(!FlushFileBuffers(flush.handle))fail("Cannot flush prepared archive","write");
     if(zip_revision(source)!=revision)fail("Archive volume set changed during rewrite","safety");
-    const auto members=archive_source_members(source);
-    const bool zip=key(utf8(source.extension().wstring()))==L".zip";
-    // ZIP does not record the creator's configured split limit. Preserve an
-    // observed member size, not an invented original setting; ZIP records can
-    // end a disk slightly below that limit. 7Z is a byte-split stream.
-    uint64_t volume_bytes=0;
-    if(members.size()>1){if(zip){for(size_t i=1;i<members.size();++i)volume_bytes=std::max<uint64_t>(volume_bytes,fs::file_size(members[i]));}else volume_bytes=fs::file_size(members[0]);}
-    emit("{\"type\":\"result\",\"count\":"+std::to_string(count)+",\"prepared\":true,\"volumeBytes\":"+std::to_string(volume_bytes)+",\"volumes\":"+std::to_string(members.size())+"}");
+    emit("{\"type\":\"result\",\"count\":"+std::to_string(count)+",\"prepared\":true,\"volumeBytes\":"+std::to_string(source_volume_bytes(source))+",\"volumes\":"+std::to_string(archive_source_members(source).size())+"}");
 }
 }

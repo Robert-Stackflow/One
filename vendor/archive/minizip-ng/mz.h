@@ -54,6 +54,8 @@
 #define MZ_OPEN_MODE_CREATE    (0x08)
 #define MZ_OPEN_MODE_EXISTING  (0x10)
 #define MZ_OPEN_MODE_NOFOLLOW  (0x20)
+/* One local extension: never overwrite a newly generated Windows volume. */
+#define MZ_OPEN_MODE_EXCLUSIVE (0x40)
 
 /* MZ_SEEK */
 #define MZ_SEEK_SET (0)

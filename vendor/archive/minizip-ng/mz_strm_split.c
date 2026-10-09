@@ -69,6 +69,10 @@ static int32_t mz_stream_split_open_disk(void *stream, int32_t number_disk) {
     int32_t err = MZ_OK;
     int16_t disk_part = 0;
 
+    /* One's exclusive staging reserves at most 4095 data disks plus the CD. */
+    if ((split->mode & MZ_OPEN_MODE_EXCLUSIVE) && number_disk >= 4095)
+        return MZ_SUPPORT_ERROR;
+
     /* Check if we are reading or writing a disk part or the cd disk */
     if (number_disk >= 0) {
         if ((split->mode & MZ_OPEN_MODE_WRITE) == 0)
