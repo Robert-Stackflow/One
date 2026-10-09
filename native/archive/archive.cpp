@@ -111,6 +111,13 @@ Reader::Reader(const std::wstring &path, int encoding):value(mz_zip_reader_creat
         mz_zip_reader_delete(&value);
         fail("Cannot open ZIP archive");
     }
+    try {
+        void *zip=nullptr;mz_zip_reader_get_zip_handle(value,&zip);uint32_t disk=0;
+        if(mz_zip_get_disk_number_with_cd(zip,&disk)!=MZ_OK||disk>=4096)fail("Cannot read ZIP volume set");
+        std::vector<fs::path> members{fs::path(path)};
+        for(uint32_t i=1;i<=disk;++i){auto member=fs::path(path);member.replace_extension(std::wstring(L".z")+(i<10?L"0":L"")+std::to_wstring(i));members.push_back(member);}
+        bind_archive_members(fs::path(path),members);
+    }catch(...){mz_zip_reader_delete(&value);throw;}
 }
 Reader::~Reader() { mz_zip_reader_delete(&value); }
 
@@ -496,7 +503,7 @@ int wmain(int argc, wchar_t **argv) {
             }else fail("Editing requires a single-volume ZIP or 7Z archive");
         } else if(mode==L"details"){
             if(argc!=6)fail("Details require an index, encoding and revision");
-            const auto revision=utf8(argv[5]);if(revision.empty()||zip_revision(argv[2])!=revision)fail("Archive changed; reopen it before viewing details");
+            const auto revision=utf8(argv[5]);lock_archive_source(argv[2]);expect_archive_revision(argv[2],revision);
             const auto index=std::stoull(argv[3]);if(index>=1000000)fail("Entry index is out of range");
             const auto format=archive_format(argv[2]);
             if(format==0){Reader reader(argv[2],_wtoi(argv[4]));details(reader,index);}else seven_details(argv[2],index,password,format);
@@ -515,19 +522,19 @@ int wmain(int argc, wchar_t **argv) {
                     else if(option.starts_with(L"--revision=")&&expected_revision.empty())expected_revision=utf8(std::wstring(option.substr(11)));
                     else fail("Invalid extraction option");
                 }
-                if(!expected_revision.empty()&&zip_revision(argv[2])!=expected_revision)fail("Archive changed; reopen it before extracting");
+                if(!expected_revision.empty())expect_archive_revision(argv[2],expected_revision);
                 encoding = _wtoi(argv[5]);
             } else if (argc == 4) encoding = _wtoi(argv[3]);
             int format = archive_format(argv[2]);
+            lock_archive_source(argv[2]);
             if (mode == L"browse") {
                 const auto query=read_browse_query();size_t offset=std::stoull(argv[3]),limit=std::min<size_t>(500,std::stoull(argv[4]));
-                if(format==0){const auto revision=zip_revision(argv[2]);Reader reader(argv[2],encoding);BrowseRows rows(query);const auto items=zip_entries(reader);for(const auto &entry:items)rows.add(entry);const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(items.size(),zip_comment(reader,comment),revision,disk==0,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
+                if(format==0){Reader reader(argv[2],encoding);const auto revision=zip_revision(argv[2]);BrowseRows rows(query);const auto items=zip_entries(reader);for(const auto &entry:items)rows.add(entry);const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(items.size(),zip_comment(reader,comment),revision,disk==0,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
                 else seven_browse(argv[2],offset,limit,password,format,query);
             } else if (mode == L"list") {
                 size_t offset = std::stoull(argv[3]), limit = std::min<size_t>(500, std::stoull(argv[4]));
                 if (format == 0) {
-                    const auto revision = zip_revision(argv[2]);
-                    Reader reader(argv[2], encoding); list(reader, revision, offset, limit);
+                    Reader reader(argv[2], encoding);const auto revision = zip_revision(argv[2]); list(reader, revision, offset, limit);
                     if (zip_revision(argv[2]) != revision) fail("ZIP changed during listing; reopen it");
                 }
                 else seven_list(argv[2], offset, limit, password, format);

@@ -347,7 +347,7 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
     std::set<size_t> selected;for(uint32_t i=0;i<count;++i){auto value=input_u32();if(value>=1000000)fail("Invalid drag entry index");selected.insert(value);}
     const auto folders=has_folders?read_selected_folders():std::vector<std::string>{};
     if(count+folders.size()==0||count+folders.size()>10000)fail("Select 1–10000 entries to drag");
-    SourceLock lock(source);if(zip_revision(source)!=revision)fail("Archive changed; reopen it before dragging");
+    SourceLock lock(source);lock_archive_source(source);expect_archive_revision(source,revision);
     auto entries= [&]{if(format!=0)return seven_drag_entries(source,password,format);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
     auto selection=select(entries,selected,folders);
     ExtractionRisk risk;for(auto index:selection.indexes){const auto &item=entries[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();

@@ -190,4 +190,3 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
     emit("{\"type\":\"result\",\"count\":" + std::to_string(count) + "}");
 }
 }
-std::string zip_revision(const fs::path &source){archive_update::File file(source);return archive_update::stamp(file.handle);}

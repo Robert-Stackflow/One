@@ -1,3 +1,4 @@
+import {validArchiveRevision} from './archive-revision';
 export type ArchiveRisk={revision:string;entries:number;bytes:number;compressed:number;nested:number;highRatio:boolean};
 export type ArchiveRiskApproval={revision:string;maxBytes:number;maxMilliseconds:number};
 export type ExtractionBudget=Pick<ArchiveRiskApproval,'maxBytes'|'maxMilliseconds'>;
@@ -10,12 +11,12 @@ export function extractionBudget(value:unknown):ExtractionBudget {
 }
 export function validArchiveRisk(value:unknown):value is ArchiveRisk {
  if(!value||typeof value!=='object')return false;const risk=value as ArchiveRisk;
- return typeof risk.revision==='string'&&/^\d+(?::\d+){6}$/.test(risk.revision)&&['entries','bytes','compressed','nested'].every(key=>Number.isSafeInteger(risk[key as keyof ArchiveRisk])&&Number(risk[key as keyof ArchiveRisk])>=0)&&risk.entries<=1000000&&risk.nested<=risk.entries&&typeof risk.highRatio==='boolean';
+ return validArchiveRevision(risk.revision)&&['entries','bytes','compressed','nested'].every(key=>Number.isSafeInteger(risk[key as keyof ArchiveRisk])&&Number(risk[key as keyof ArchiveRisk])>=0)&&risk.entries<=1000000&&risk.nested<=risk.entries&&typeof risk.highRatio==='boolean';
 }
 export function riskApproval(value:unknown):ArchiveRiskApproval|undefined {
  if(value===undefined)return undefined;
  if(!value||typeof value!=='object')throw Error('解压风险确认无效');const approval=value as ArchiveRiskApproval;
- if(typeof approval.revision!=='string'||!/^\d+(?::\d+){6}$/.test(approval.revision))throw Error('解压风险确认无效');
+ if(!validArchiveRevision(approval.revision))throw Error('解压风险确认无效');
  return {revision:approval.revision,...extractionBudget(approval)};
 }
 export function archiveRiskReasons(risk:ArchiveRisk):string[]{

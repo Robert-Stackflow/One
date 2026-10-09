@@ -16,6 +16,7 @@ import {ArchiveScheduler} from './archive-scheduler';
 import {ArchiveWatchdog,archiveWatchdogLimits} from './archive-watchdog';
 import {extractionBudget,riskApproval,validArchiveRisk,type ArchiveRisk,type ArchiveRiskApproval,type ExtractionBudget} from '../shared/archive-risk';
 import {archiveEntryDetails} from '../shared/archive-details';
+import {validArchiveRevision} from '../shared/archive-revision';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
@@ -238,7 +239,7 @@ export class ArchiveService {
     if(request.operation==='details'){
       const source=archiveSource(request.path);
       if(!Number.isInteger(request.index)||request.index<0||request.index>=1000000)throw Error('文件编号无效');
-      if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后查看文件信息');
+      if(!validArchiveRevision(request.revision))throw Error('请重新打开压缩包后查看文件信息');
       const prepared=await this.acquireSource(owner,id,source);
       try{
         const messages=await this.execute(owner,id,'details',[prepared.path,String(request.index),String(encoding(request.encoding)),request.revision],password(request.password));
@@ -250,7 +251,7 @@ export class ArchiveService {
     }
     if(request.operation==='drag'){
       const source=archiveSource(request.path),secret=password(request.password);
-      if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后再拖出');
+      if(!validArchiveRevision(request.revision))throw Error('请重新打开压缩包后再拖出');
       const selected=request.selected;
       const folders=folderSelection(request.selectedFolders);
       if(!Array.isArray(selected)||!selected.length&&!folders.folders.length||selected.length+folders.folders.length>10000||selected.some(index=>!Number.isInteger(index)||index<0||index>=1000000))throw Error('请选择 1–10000 项拖出');
@@ -275,7 +276,7 @@ export class ArchiveService {
     if(request.operation==='update'){
       const source=archiveSource(request.path);
       if(!/\.(?:zip|7z)$/i.test(source))throw Error('目前支持修改单卷 ZIP 和 7Z 压缩包');
-      if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后再保存修改');
+      if(!validArchiveRevision(request.revision))throw Error('请重新打开压缩包后再保存修改');
       const packet=await archiveEditPacket(request.changes);
       if(/\.7z$/i.test(source)&&request.changes.some(change=>change.kind==='comment'))throw Error('7Z 格式不支持压缩包备注');
       const suffix=extname(source),temporary=join(dirname(source),`.one-update-${id}${suffix}`),backup=join(dirname(source),`.one-update-${id}.original${suffix}`);
@@ -374,7 +375,7 @@ export class ArchiveService {
       const selected=request.selected||[];
       const folders=folderSelection(request.selectedFolders);
       if(!Array.isArray(selected)||selected.length+folders.folders.length>10000||selected.some(value=>!Number.isSafeInteger(value)||value<0||value>=1000000))throw Error('选择的条目无效');
-      if(request.revision!==undefined&&(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision)))throw Error('请重新打开压缩包后再解压');
+      if(request.revision!==undefined&&!validArchiveRevision(request.revision))throw Error('请重新打开压缩包后再解压');
       const uniqueTarget=(name:string,file=false)=>{const extension=file?extname(name):'',base=extension?name.slice(0,-extension.length):name;let target=join(parent,name),suffix=2;while(existsSync(target)){target=join(parent,`${base} (${suffix++})${extension}`);if(suffix>10000)throw Error('没有可用的解压目标名称');}return target;};
       const temporary=join(parent,`.one-extract-${id}`);
       const prepared=await this.acquireSource(owner,id,source);

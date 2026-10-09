@@ -66,7 +66,7 @@ struct Archive7: IUnknown {
 
 class FileInput final: public InStream7 {
     std::atomic<ULONG> refs{1};
-    struct Part { HANDLE file; U64 start; U64 size; };
+    struct Part { HANDLE file; U64 start; U64 size; fs::path path; };
     std::vector<Part> parts;
     U64 position=0,total=0;
 public:
@@ -78,12 +78,13 @@ public:
             if(file==INVALID_HANDLE_VALUE)break;
             LARGE_INTEGER size{};
             if(!GetFileSizeEx(file,&size)||size.QuadPart<0){CloseHandle(file);break;}
-            parts.push_back({file,total,(U64)size.QuadPart});total+=(U64)size.QuadPart;
+            parts.push_back({file,total,(U64)size.QuadPart,part});total+=(U64)size.QuadPart;
             if(!split)break;
         }
     }
     ~FileInput(){for(const auto &part:parts)CloseHandle(part.file);}
     bool valid() const {return !parts.empty();}
+    std::vector<fs::path> members()const{std::vector<fs::path> result;for(const auto &part:parts)result.push_back(part.path);return result;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
         if(matches(id,IID_IUnknown)||matches(id,iid(3,1))||matches(id,iid(3,3))){*out=this;AddRef();return S_OK;}
@@ -119,6 +120,7 @@ class OpenRequest final: public OpenCallback7,public Password7,public Volume7 {
     unsigned volumes=0;
 public:
     bool passwordRequested=false;
+    std::vector<fs::path> members;
     OpenRequest(const fs::path &source,const std::string &secret):directory(source.parent_path()),password(wide(secret)),filename(source.filename().wstring()){}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
@@ -150,6 +152,7 @@ public:
            wcscmp(name,L".")==0||wcscmp(name,L"..")==0)return E_INVALIDARG;
         auto input=new FileInput(directory/name);
         if(!input->valid()){input->Release();return S_FALSE;}
+        members.push_back(directory/name);
         *stream=input;return S_OK;
     }
 };
@@ -214,10 +217,13 @@ public:
         for(int candidate:formats(format)){
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);
             if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)continue;
-            const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){if(format==3)checkRar();return;}
+            const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){
+                if(format==3)checkRar();auto members=input->members();members.insert(members.end(),callback->members.begin(),callback->members.end());bind_archive_members(source,members);return;
+            }
             if(opened==E_OUTOFMEMORY)fail("Opening the archive exceeded the memory budget","resource");
             archive->Close();archive->Release();archive=nullptr;
             input->Seek(0,FILE_BEGIN,nullptr);
+            callback->members.clear();
         }
         if(callback->passwordRequested&&password.empty())fail("Password required","password");
         // Header failure with a supplied password can also mean corruption.
@@ -369,8 +375,8 @@ std::vector<U32> selected_indices(const std::vector<Item> &items,const std::set<
 }
 
 void seven_list(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format){
-    const auto revision=zip_revision(source);
     OpenArchive reader(source,password,format);
+    const auto revision=zip_revision(source);
     U32 total=reader.count();
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
     emit("{\"type\":\"meta\",\"total\":"+std::to_string(total)+",\"comment\":"+json(reader.comment())+",\"revision\":"+json(revision)+",\"editable\":"+(format==7&&extension==L".7z"?"true":"false")+"}");
@@ -408,7 +414,7 @@ void seven_details(const fs::path &source,size_t index,const std::string &passwo
 }
 
 void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query){
-    const auto revision=zip_revision(source);OpenArchive reader(source,password,format);BrowseRows rows(query);
+    OpenArchive reader(source,password,format);const auto revision=zip_revision(source);BrowseRows rows(query);
     const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});}
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
     rows.emit_page(total,reader.comment(),revision,format==7&&extension==L".7z",offset,limit);

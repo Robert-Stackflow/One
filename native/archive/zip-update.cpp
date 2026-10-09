@@ -50,6 +50,7 @@ struct Writer {
 void zip_update(const fs::path &source, const fs::path &temporary, const fs::path &backup,
                 int encoding, const std::string &revision, const std::string &password) {
     check_staging(source,temporary,backup);
+    if(revision.starts_with("v2:"))fail("Split ZIP editing is not supported yet");
     // Deny writes/deletion throughout preflight, rewrite and verification.
     File original(source, GENERIC_READ, FILE_SHARE_READ);
     if (stamp(original.handle) != revision) fail("Archive changed; reopen it before saving changes");
