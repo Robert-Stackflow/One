@@ -20637,7 +20637,7 @@ Copyright (C) 2004-2009 kippler@gmail.com , http://www.kipple.pe.kr
   3. This notice may not be removed or altered from any source distribution.
 
 
-===== Native archive: EGG AZO models from EggDotNet (ported by One) =====
+===== Native archive: EGG AZO/LEA models from EggDotNet (ported by One) =====
 Source: https://github.com/akolman/EggDotNet/tree/78b64f54026a8687dac1cdd4c86eb5fe5abf04ae
 License: MIT; port and bounded decoding changes: vendor/archive/egg/SOURCE.txt
 MIT License

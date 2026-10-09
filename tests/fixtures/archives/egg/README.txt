@@ -69,4 +69,26 @@ file maps, arbitrary cross-volume header/payload boundaries, reversed input
 volume order, missing/duplicate/unrelated/cyclic volumes, truncated archives,
 metadata memory/name/count limits and cancellation. Both native suites support
 --asan. The container records raw name encoding and parent IDs; production path
-preflight, payload CRC/decoding/crypto and product entry points are still pending.
+preflight and product entry points are still pending. Payload decoding and
+authentication are checked independently below.
+
+Run: npm run test:archive-egg-codecs
+Requires the existing native archive dependency build (zlib/liblzma libraries
+under work/archive-build); no new runtime or downloaded dependency is needed.
+The C++ core decodes 25 datasets with valid per-block CRC and exact packed/output
+counts. 22 match the independent oracle's file hashes; attributes are checked
+against Node's raw Deflate decoder. The two short LEA fixtures decode to the
+same CRC-correct plaintext hash, a8a2f6ebe286697c527eb35a58b5539532e9b3ae3b64d4eb0a46fb657b41562c,
+instead of the reference's incorrect all-zero data. Larger LEA128/256 hashes
+also match the independently decoded AES/ZipCrypto versions of that content.
+
+192 checks cover all five codecs and AES128/256, LEA128/256 and ZipCrypto;
+independently generated AES/ZipCrypto multi-block data with continuous cipher
+state; AES-wrapped unchanged external AZO streams; every MAC byte, password
+verifiers/salts, sticky authentication failures, ciphertext and CRC tampering;
+native allocation limits, decoded
+output limits and cancellation. Synthetic Unicode-password archives use UTF-8;
+other real-writer password encodings are not claimed. --asan instruments the
+new native modules and BZip2; zlib/liblzma remain the existing release libraries.
+Framing/crypto completion does not expose EGG in One until the product adapter,
+staging/path/risk checks, revisions, browser/extraction/drag/CLI are integrated.

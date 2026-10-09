@@ -1,4 +1,4 @@
-EGG AZO decoder
+EGG native decoder core
 
 Probability models, arithmetic decoder and tables ported to C++ from:
 https://github.com/akolman/EggDotNet/tree/78b64f54026a8687dac1cdd4c86eb5fe5abf04ae/src/EggDotNet/Compression/AZO
@@ -7,10 +7,21 @@ License: MIT; original notice retained in LICENSE.EggDotNet.txt.
 Exact reference sources and per-file hashes:
 tests/fixtures/archives/egg/EggDotNet-reference-source.tar.gz and manifest.json
 
+LEA round/key-schedule parameters and EGG encryption framing also follow the
+same pinned MIT source in src/EggDotNet/Encryption/Lea/Imp/LeaCryptoTransform.cs
+and Format/Egg/EncryptHeader.cs. AES/PBKDF2/HMAC use Windows CNG; ZipCrypto and
+stream framing are implemented directly by One. Native code uses exact two-byte
+password verification, independent ciphertext authentication and continuous
+cipher state across all blocks in a file. It does not copy the reference's
+AES128 verifier collision or short LEA stream bug (see the fixture README).
+
 One changes: C++ port with exact-read/write callbacks, bounded zero padding,
 strict sizes/indices/match distances, memory accounting before allocation and
 cancellation checkpoints. AZO framing has no checksum; the enclosing EGG reader
 must check each decoded block's CRC, size and complete packed consumption.
+egg-codecs.cpp now performs those checks for Store/Deflate/BZip2/AZO/LZMA and
+provides bounded custom allocation for zlib/BZip2/liblzma. Cipher authentication
+is finalized separately after all blocks of the file.
 
 Per-block x86 address filter follows the CC0 1.0 descriptive pseudocode A.12:
 https://github.com/alkegi/docs/blob/36230c34d3056604cc63519e9855a79e894496b7/egg.md
@@ -19,5 +30,5 @@ This document is only a secondary description. Parent-path semantics and the
 private-version constant disagree with real files/reference code elsewhere;
 One validates actual fixtures rather than trusting those descriptions.
 
-This implementation unit is tested independently. It does not by itself add
-an EGG product entry point. The test-only .NET oracle is not a runtime dependency.
+These core modules are tested independently. They do not by themselves add an
+EGG product entry point. The test-only .NET oracle is not a runtime dependency.

@@ -14,7 +14,7 @@
 
 | 编号 | 状态 | 剩余范围 |
 | --- | --- | --- |
-| ARCH-FMT | 首批只读已实现，待扩展兼容 | ZIPX、CAB、BZ2/ZSTD、LHA/LZH、ISO/WIM、JAR/APK 及 TAR.BZ2/TAR.ZST 已接通浏览、测试和解压；样本、方法和限制见用户指南及 `tests/fixtures/archives/`。ALZ 单卷 v10 的存储/Deflate/BZip2-DLZ、加密及 CP949 已接通；EGG 已验证 MIT 参考 22 个 CRC 验证数据集及 C++ AZO 377 项及容器 370 项检查，内容解码/CRC/加密/入口仍在实现；ALZ 分卷/其他变体、ZIPX 更多外部组合、LHA level 3/旧编码、更多 ISO/UDF、CAB/WIM 分卷及安装版仍待推进。 |
+| ARCH-FMT | 首批只读已实现，待扩展兼容 | ZIPX、CAB、BZ2/ZSTD、LHA/LZH、ISO/WIM、JAR/APK 及 TAR.BZ2/TAR.ZST 已接通浏览、测试和解压；样本、方法和限制见用户指南及 `tests/fixtures/archives/`。ALZ 单卷 v10 的存储/Deflate/BZip2-DLZ、加密及 CP949 已接通；EGG 已验证 MIT 参考 22 个 CRC 验证数据集及 C++ AZO 377 项及容器 370 项检查，5 方法解码/CRC/加密另 192 项检查通过，浏览/解压/拖出/CLI 等产品入口待接；ALZ 分卷/其他变体、ZIPX 更多外部组合、LHA level 3/旧编码、更多 ISO/UDF、CAB/WIM 分卷及安装版仍待推进。 |
 | ARCH-EDIT | 已实现，待兼容验收 | 自动打开副本、变化检测、连续确认写回、原包冲突核对、另存、中断恢复和暂存回收已通过开发版检查；继续验证真实 Office/图片编辑器、复用窗口、跨权限及安装版。 |
 | ARCH-RECOVERY | 已实现，待系统矩阵验收 | 生成新卷暂存与正式保存的记录式交接已验证；硬件断电、更多文件系统与权限组合仍待验收。损坏、未知或未登记资料保留。 |
 | ARCH-PERF | 待完整基准与针对性优化 | 百万条目、十万小文件、超大固实包、混合并发、慢盘及网络盘；已有分页、流式处理和预算不代表全部性能目标达成。 |
