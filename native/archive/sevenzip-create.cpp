@@ -1,4 +1,5 @@
 #include "common.h"
+#include "heartbeat.h"
 #include "resources.h"
 #include "sevenzip-update.h"
 #include <windows.h>
@@ -74,7 +75,7 @@ public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out)override{if(!out)return E_POINTER;*out=nullptr;if(matches(id,IID_IUnknown)||matches(id,iid(3,1))){*out=this;AddRef();return S_OK;}return E_NOINTERFACE;}
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release()override{auto n=--refs;if(!n)delete this;return n;}
-    HRESULT STDMETHODCALLTYPE Read(void *data,U32 size,U32 *done)override{if(!done)return E_POINTER;*done=0;return ReadFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr)?S_OK:HRESULT_FROM_WIN32(GetLastError());}
+    HRESULT STDMETHODCALLTYPE Read(void *data,U32 size,U32 *done)override{if(!done)return E_POINTER;*done=0;if(!ReadFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr))return HRESULT_FROM_WIN32(GetLastError());if(*done)archive_activity();return S_OK;}
 };
 
 class Output final:public SeekOut{
@@ -87,7 +88,7 @@ public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out)override{if(!out)return E_POINTER;*out=nullptr;if(matches(id,IID_IUnknown)||matches(id,iid(3,2))||matches(id,iid(3,4))){*out=static_cast<SeekOut*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release()override{auto n=--refs;if(!n)delete this;return n;}
-    HRESULT STDMETHODCALLTYPE Write(const void *data,U32 size,U32 *done)override{if(!done)return E_POINTER;*done=0;return WriteFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr)?S_OK:HRESULT_FROM_WIN32(GetLastError());}
+    HRESULT STDMETHODCALLTYPE Write(const void *data,U32 size,U32 *done)override{if(!done)return E_POINTER;*done=0;if(!WriteFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr))return HRESULT_FROM_WIN32(GetLastError());if(*done)archive_activity();return S_OK;}
     HRESULT STDMETHODCALLTYPE Seek(I64 offset,U32 origin,U64 *position)override{
         if(origin>FILE_END)return E_INVALIDARG;LARGE_INTEGER value{},result{};value.QuadPart=offset;
         if(!SetFilePointerEx(file,value,&result,origin))return HRESULT_FROM_WIN32(GetLastError());
@@ -102,7 +103,7 @@ public:
 };
 
 class Request final:public UpdateCallback,public Password2{
-    std::atomic<ULONG> refs{1};const std::vector<SourceItem> &items;std::wstring secret;U32 completed=0;
+    std::atomic<ULONG> refs{1};const std::vector<SourceItem> &items;std::wstring secret;U32 completed=0;std::atomic<U64> bytes{0};
 public:
     Request(const std::vector<SourceItem> &value,const std::string &password):items(value),secret(wide(password)){}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out)override{
@@ -114,7 +115,7 @@ public:
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release()override{auto n=--refs;if(!n)delete this;return n;}
     HRESULT STDMETHODCALLTYPE SetTotal(U64)override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE SetCompleted(const U64*)override{return S_OK;}
+    HRESULT STDMETHODCALLTYPE SetCompleted(const U64 *value)override{if(value&&bytes.exchange(*value)!=*value)archive_activity();return S_OK;}
     HRESULT STDMETHODCALLTYPE GetUpdateItemInfo(U32 index,int *data,int *props,U32 *old)override{
         if(index>=items.size())return E_INVALIDARG;if(data)*data=1;if(props)*props=1;if(old)*old=U32(-1);return S_OK;
     }
@@ -154,7 +155,7 @@ class RewriteRequest final:public UpdateCallback,public Password2,public ReadPas
     std::vector<size_t> indexes;std::vector<SourceItem> sources;std::vector<std::string> revisions;
     std::wstring password;bool encrypted;
     std::function<HRESULT(U32,U32,PROPVARIANT*)> property;
-    std::atomic<U64> total{0},last{0};
+    std::atomic<U64> total{0},last{0},bytes{0};
 public:
     std::atomic<bool> failed{false};
     RewriteRequest(const std::vector<archive_update::OutputEntry> &nodes,const std::vector<std::string> &names,
@@ -191,7 +192,7 @@ public:
     ULONG STDMETHODCALLTYPE Release()override{auto n=--refs;if(!n)delete this;return n;}
     HRESULT STDMETHODCALLTYPE SetTotal(U64 value)override{total=value;return S_OK;}
     HRESULT STDMETHODCALLTYPE SetCompleted(const U64 *value)override{
-        if(!value)return S_OK;const auto now=GetTickCount64();auto previous=last.load();
+        if(!value)return S_OK;if(bytes.exchange(*value)!=*value)archive_activity();const auto now=GetTickCount64();auto previous=last.load();
         if((now-previous>=100||*value==total)&&last.compare_exchange_strong(previous,now))
             emit("{\"type\":\"progress\",\"done\":"+std::to_string(*value)+",\"total\":"+std::to_string(total.load())+"}");
         return S_OK;

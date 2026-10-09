@@ -11,6 +11,7 @@
 #include "mz_zip_rw.h"
 #include "zip-common.h"
 #include "update-common.h"
+#include "heartbeat.h"
 
 namespace {
 using namespace archive_update;
@@ -89,6 +90,7 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
             (capacity.available < 256ull * 1024 * 1024 || needed > capacity.available - 256ull * 1024 * 1024))
             fail("Not enough free disk space to update the archive");
         Writer writer;
+        mz_zip_writer_set_progress_cb(writer.value,nullptr,[](void*,void*,mz_zip_file*,int64_t)->int32_t{archive_activity();return MZ_OK;});
         mz_zip_writer_set_comment(writer.value, comment.c_str());
         mz_zip_writer_set_follow_links(writer.value, 0);
         mz_zip_writer_set_store_links(writer.value, 0);

@@ -14,6 +14,7 @@
 #include <string_view>
 #include <vector>
 #include <mutex>
+#include "heartbeat.h"
 #include "mz.h"
 #include "mz_os.h"
 #include "mz_strm.h"
@@ -55,7 +56,13 @@ std::string json(const std::string &value) {
     return result + '"';
 }
 
-void emit(const std::string &line) { static std::mutex mutex; std::lock_guard guard(mutex); std::printf("%s\n", line.c_str()); std::fflush(stdout); }
+void emit(const std::string &line) {
+    static std::mutex mutex;static bool terminal=false;std::lock_guard guard(mutex);
+    // Keep result/error last even if the heartbeat worker already woke up.
+    if(line.starts_with("{\"type\":\"heartbeat\"")&&terminal)return;
+    if(line.starts_with("{\"type\":\"result\"")||line.starts_with("{\"type\":\"error\""))terminal=true;
+    std::printf("%s\n", line.c_str());std::fflush(stdout);
+}
 [[noreturn]] void fail(const std::string &message,const std::string &code) { throw ArchiveError(message,code); }
 
 static std::string password_from_stdin() {
@@ -160,7 +167,7 @@ std::vector<Entry> zip_entries(Reader &reader) {
             (uint64_t)std::max<int64_t>(0, info->uncompressed_size), (uint64_t)std::max<int64_t>(0, info->compressed_size),
             (info->flag & MZ_ZIP_FLAG_ENCRYPTED) != 0});
         if (result.size() > 1000000) fail("ZIP contains too many entries");
-        err = mz_zip_reader_goto_next_entry(reader.value);
+        archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);
     }
     if (err != MZ_END_OF_LIST) fail("Cannot finish reading ZIP directory");
     return result;
@@ -183,7 +190,7 @@ void zip_preflight(Reader &reader, const std::vector<Entry> &items) {
         while (!path.empty() && (path.back() == L'/' || path.back() == L'\\')) path.pop_back();
         std::transform(path.begin(), path.end(), path.begin(), [](wchar_t c) { return std::towlower(c == L'/' ? L'\\' : c); });
         if (!seen.insert(path).second) fail("Archive contains duplicate paths","safety");
-        err = mz_zip_reader_goto_next_entry(reader.value);
+        archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);
     }
 }
 
@@ -211,7 +218,7 @@ static void list(Reader &reader, const std::string &revision, size_t offset, siz
                  ",\"compressed\":" + std::to_string(std::max<int64_t>(0, info->compressed_size)) +
                  ",\"encrypted\":" + ((info->flag & MZ_ZIP_FLAG_ENCRYPTED) ? "true" : "false") + "}");
         }
-        if (i + 1 < offset + limit && i + 1 < total) err = mz_zip_reader_goto_next_entry(reader.value);
+        if (i + 1 < offset + limit && i + 1 < total) {archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);}
     }
 }
 
@@ -227,7 +234,7 @@ void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string
             const int opened=mz_zip_reader_entry_open(reader.value);
             if (opened != MZ_OK) fail("Cannot open ZIP entry: " + item.name,opened==MZ_PASSWORD_ERROR?"password":"archive");
             int count;
-            while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {}
+            while ((count = mz_zip_reader_entry_read(reader.value, buffer, sizeof(buffer))) > 0) {archive_activity();}
             if (count < 0 || mz_zip_reader_entry_close(reader.value) != MZ_OK) fail("ZIP integrity check failed: " + item.name);
         }
         const auto now = GetTickCount64();
@@ -235,7 +242,7 @@ void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string
             emit("{\"type\":\"progress\",\"done\":" + std::to_string(item.index + 1) + ",\"total\":" + std::to_string(items.size()) + "}");
             last_progress = now;
         }
-        err = mz_zip_reader_goto_next_entry(reader.value);
+        archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);
     }
     if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(items.size()) + "}");
 }
@@ -301,7 +308,7 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
                     DWORD actual = 0;
                     if (!WriteFile(output.handle, buffer, (DWORD)count, &actual, nullptr) || actual != (DWORD)count)
                         fail("Cannot write extracted file: " + item.name,"write");
-                    written += (uint64_t)count;
+                    written += (uint64_t)count;archive_activity();
                 }
                 if (count < 0 || written != item.size || mz_zip_reader_entry_close(reader.value) != MZ_OK)
                     fail("Cannot extract or verify ZIP entry: " + item.name);
@@ -313,7 +320,7 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
                 last_progress = now;
             }
         }
-        err = mz_zip_reader_goto_next_entry(reader.value);
+        archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);
     }
     if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(done) + "}");
     return done;
@@ -325,6 +332,7 @@ static void create(const fs::path &destination, const std::vector<fs::path> &sou
     void *writer = mz_zip_writer_create();
     if (!writer) fail("Cannot initialize ZIP writer","resource");
     try {
+        mz_zip_writer_set_progress_cb(writer,nullptr,[](void*,void*,mz_zip_file*,int64_t)->int32_t{archive_activity();return MZ_OK;});
         mz_zip_writer_set_follow_links(writer, 0);
         mz_zip_writer_set_store_links(writer, 0);
         mz_zip_writer_set_compress_level(writer, (int16_t)archive_resources().level);
@@ -381,6 +389,7 @@ int wmain(int argc, wchar_t **argv) {
     try {
         if (argc < 3) fail("Usage: One.Archive.exe list|create|extract|test ...");
         ArchiveResourceJob resources;
+        ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
         if (mode == L"create") {

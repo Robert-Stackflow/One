@@ -33,7 +33,7 @@ Malware scanning is off by default. --scan requires a local AMSI provider; incom
 Parallel results may interleave; JSON records include the original job index and request id.
 Overlapping reads/writes keep plan order; update jobs are ordered barriers. Independent CLI instances have separate budgets.
 Exit: 0 success, 1 operation failure, 2 arguments, 3 password, 4 invalid archive,
-      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 10 scan incomplete, 11 scan blocked, 130 cancelled, 126 runtime missing.
+      5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 10 scan incomplete, 11 scan blocked, 12 timed out, 130 cancelled, 126 runtime missing.
 `;
 function argument(condition:unknown,message:string):asserts condition {if(!condition)throw new CliFailure(message);}
 const filePath=(value:string,cwd:string)=>{argument(typeof value==='string'&&value.length>0&&value.length<=32768&&!/[\0\r\n]/.test(value),'Invalid path');return resolve(cwd,value);};
@@ -113,7 +113,7 @@ export interface CliIO {out:(line:string)=>Promise<void>;err:(line:string)=>Prom
 export function cliExit(error:unknown,writing=false):number {
  if(error instanceof CliFailure)return error.exitCode;
  const code=error&&typeof error==='object'&&'code' in error?String(error.code):'';
- const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,scan:10,threat:11,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
+ const typed:Record<string,number>={password:3,archive:4,read:5,write:6,safety:7,resource:9,scan:10,threat:11,timeout:12,cancelled:130};if(Object.hasOwn(typed,code))return typed[code];
  if(['ENOENT','ENOTDIR','EISDIR'].includes(code))return 5;
  if(['EEXIST','ENOSPC','EROFS'].includes(code))return 6;
  if(['EACCES','EPERM','EBUSY'].includes(code))return writing?6:5;

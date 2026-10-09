@@ -1,4 +1,5 @@
 #include "common.h"
+#include "heartbeat.h"
 #include "zip-common.h"
 #include "browse.h"
 #include "sevenzip-update.h"
@@ -96,7 +97,7 @@ public:
         if(!SetFilePointerEx(part->file,offset,nullptr,FILE_BEGIN))return HRESULT_FROM_WIN32(GetLastError());
         DWORD count=0,requested=(DWORD)std::min<U64>(size,part->size-offset.QuadPart);
         if(!ReadFile(part->file,data,requested,&count,nullptr))return HRESULT_FROM_WIN32(GetLastError());
-        *read=count;position+=count;return S_OK;
+        *read=count;position+=count;if(count)archive_activity();return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Seek(I64 offset,U32 origin,U64 *position) override {
         if(origin>FILE_END)return E_INVALIDARG;
@@ -191,6 +192,7 @@ public:
         return result;
     }
     Item item(U32 index) const {
+        archive_activity();
         auto name=property(index,path_prop);
         std::string text=name.vt==VT_BSTR?utf8(std::wstring(name.bstrVal,SysStringLen(name.bstrVal))):"";
         PropVariantClear(&name);
@@ -256,14 +258,14 @@ public:
         if(archive_cancelled())return E_ABORT;
         if(!done)return E_POINTER;*done=0;if(size>limit-written)return E_FAIL;
         if(!WriteFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr))return HRESULT_FROM_WIN32(GetLastError());
-        written+=*done;return *done==size?S_OK:E_FAIL;
+        written+=*done;if(*done)archive_activity();return *done==size?S_OK:E_FAIL;
     }
 };
 
 class ExtractRequest final:public ExtractCallback7,public Password7 {
     std::atomic<ULONG> refs{1};
     const std::vector<Item> &items;fs::path destination;std::wstring password;FileOutput *active=nullptr;
-    U32 done=0,total=0;bool testing=false;ULONGLONG last_progress=0;
+    U32 done=0,total=0;U64 completed=0;bool testing=false;ULONGLONG last_progress=0;
 public:
     std::string errorCode="archive";
     ExtractRequest(const std::vector<Item> &entries,const fs::path &path,const std::string &secret,U32 expected,bool test):
@@ -279,7 +281,7 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release() override{ULONG value=--refs;if(!value)delete this;return value;}
     HRESULT STDMETHODCALLTYPE SetTotal(U64) override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE SetCompleted(const U64*) override{return archive_cancelled()?E_ABORT:S_OK;}
+    HRESULT STDMETHODCALLTYPE SetCompleted(const U64 *value) override{if(value&&*value!=completed){completed=*value;archive_activity();}return archive_cancelled()?E_ABORT:S_OK;}
     HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR *out) override {
         if(!out)return E_POINTER;*out=nullptr;if(password.empty()){errorCode="password";return E_ABORT;}
         *out=SysAllocStringLen(password.data(),(UINT)password.size());return *out?S_OK:E_OUTOFMEMORY;
