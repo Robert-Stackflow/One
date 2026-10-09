@@ -115,7 +115,7 @@ test('设置校验拒绝越界参数和任意角落命令', () => {
 
 test('0.2 设置迁移补齐外观与取色，热角命令参数保留为独立数组',()=>{
   const old=core.defaultSettings();delete old.appearance;delete old.cornerBindings;delete old.colorShortcut;delete old.colorHistory;
-  const settings=core.validateSettings(old);assert.equal(settings.appearance.lightBackground,'#ffffff');assert.equal(settings.appearance.darkBackground,'#181818');assert.equal(settings.colorShortcut,'Shift+Win+C');
+  const settings=core.validateSettings(old);assert.equal(settings.appearance.lightBackground,'#ffffff');assert.equal(settings.appearance.darkBackground,'#1e1e1f');assert.equal(settings.colorShortcut,'Shift+Win+C');
   settings.corners.TL='command';settings.cornerBindings.TL={command:'program.exe',args:['a b','$(not shell)','& not shell'],cwd:'',shortcut:''};assert.deepEqual(core.validateSettings(settings).cornerBindings.TL.args,settings.cornerBindings.TL.args);
   assert.throws(()=>core.validateSettings({...settings,cornerBindings:{...settings.cornerBindings,TL:{...settings.cornerBindings.TL,args:'unparsed command'}}}),/参数/);
   assert.throws(()=>core.validateSettings({...settings,appearance:{...settings.appearance,accent:'url(example)'}}),/颜色/);
