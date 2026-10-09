@@ -43,6 +43,12 @@ export interface OneAPI {
   echoReady():Promise<void>;
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
   archiveRun(request:import('./archive').ArchiveRequest,id?:string):Promise<import('./archive').ArchiveListing|import('./archive').ArchiveResult>;
+  archiveEditStart(request:import('./archive-edit-session').ArchiveEditStart,id?:string):Promise<import('./archive-edit-session').ArchiveEditSession>;
+  archiveEditList():Promise<import('./archive-edit-session').ArchiveEditSessionPage>;
+  archiveEditCheck(id:string):Promise<import('./archive-edit-session').ArchiveEditSession>;
+  archiveEditOpen(id:string):Promise<void>;
+  archiveEditSave(id:string,token:string,password?:string,taskId?:string):Promise<import('./archive').ArchiveResult>;
+  archiveEditDiscard(id:string,token:string):Promise<void>;
   archiveCancel(id:string):Promise<boolean>;
   archiveRecoveryList(offset?:number):Promise<import('./archive-recovery').ArchiveRecoveryPage>;
   archiveRecoveryInspect(id:string):Promise<import('./archive-recovery').ArchiveRecoveryInspection>;

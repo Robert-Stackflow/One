@@ -40,6 +40,7 @@
 - [屏幕取色调研](research/取色实现调研.md)
 - [文件索引内存与驻留](research/文件索引内存调研.md)
 - [Bandizip 功能与设置调研](research/Bandizip功能与设置调研.md)
+- [归档功能缺口与原生引擎调研](research/归档功能缺口与原生引擎调研.md)
 - [全局热键占用进程定位方案](research/全局热键占用进程定位方案.md)
 - [历史验收记录](history/README.md)
 

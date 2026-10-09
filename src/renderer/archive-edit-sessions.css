@@ -1,0 +1,4 @@
+.archive-edit-sessions .archive-session-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.archive-edit-sessions .archive-session-password{display:grid;gap:8px;margin-top:16px;font-size:12px;color:var(--muted)}
+.archive-edit-sessions .archive-session-password input{width:100%}
+.archive-edit-sessions [data-edit-feedback]{font-size:12px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}

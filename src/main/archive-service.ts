@@ -11,6 +11,7 @@ import type {ArchiveRequest,ArchiveListing,ArchiveEntry,ArchiveProgress,ArchiveR
 import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
+import {ArchiveEditSessions} from './archive-edit-sessions';
 import type {ArchiveTasks} from './archive-tasks';
 import {validArchiveScan,copyArchiveScan,type ArchiveScan} from '../shared/archive-scan';
 import {archiveResources,archiveLevel,archiveBudget,archivePasswordEncoding,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
@@ -102,10 +103,12 @@ export class ArchiveService {
   private inspections=new Map<string,{owner:number;controller:AbortController;task:Promise<import('../shared/archive-recovery').ArchiveRecoveryInspection>}>();
   private stageSnapshots=new Map<string,{owner:number;token:string;record:string}>();
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&Partial<ArchiveCompression>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery')){
+  readonly edits:ArchiveEditSessions;
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&Partial<ArchiveCompression>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery'),launchEdit:(file:string)=>Promise<string>=async()=> '未配置外部编辑程序'){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
     this.recovery=new ArchiveRecoveryRegistry(recoveryDirectory);
+    this.edits=new ArchiveEditSessions(join(dirname(cacheRoot),'archive-edits'),(owner,request,id)=>this.run(owner,request,id),launchEdit);
   }
   private recoveryActive(id:string,value?:ArchiveRecoveryRecord){
     if([...this.requests].some(value=>value.toLowerCase()===id.toLowerCase()))return true;
@@ -145,7 +148,7 @@ export class ArchiveService {
     const value=await this.recovery.read(id).catch(()=>undefined);if(this.recoveryActive(id,value))throw Error('该任务可能仍在其他实例中运行');
     await this.recovery.forget(id);this.stageSnapshots.delete(id);this.diagnostic('archive-recovery-forgotten',JSON.stringify({id}));
   }
-  get pendingTasks(){return this.pending.size;}
+  get pendingTasks(){return this.pending.size+this.edits.pendingTasks;}
   setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.shared?.configure(budget);this.budgetOverride=budget;}
   taskOverview(){return this.tasks?.overview()??Promise.resolve({active:[],recent:[],error:''});}
   cancelId(id:string){const job=this.jobs.get(id);if(!job)throw Error('任务已结束');if(!this.cancel(id,job.owner))throw Error('正在完成最终保存，请等待任务结束');return job.owner;}
@@ -153,12 +156,13 @@ export class ArchiveService {
   private checkpoint(id:string){if(this.jobs.get(id)?.cancelled)throw new ArchiveFailure('压缩任务已取消','cancelled');}
   private seal(owner:number,id:string,confirmed=false){const job=this.jobs.get(id);if(confirmed&&job)job.cancelled=false;this.checkpoint(id);if(job)job.committing=true;this.notify(owner,{id,operation:'commit',done:0,total:0});}
   private notify(owner:number,value:ArchiveProgress){const job=this.jobs.get(value.id);this.tasks?.progress(value,!!job&&!job.cancelled&&!job.finishing&&!job.committing);this.changed(owner,value);}
-  cancel(id:string,owner:number){const job=this.jobs.get(id);if(!job||job.owner!==owner||job.finishing||job.committing)return false;job.cancelled=true;
+  cancel(id:string,owner:number){if(this.edits.cancel(id,owner))return true;const job=this.jobs.get(id);if(!job||job.owner!==owner||job.finishing||job.committing)return false;job.cancelled=true;
     this.tasks?.cancelling(id);job.controller.abort(new ArchiveFailure('压缩任务已取消','cancelled'));
     const task=this.active.get(id);if(task&&task.owner===owner){if(task.cooperative)task.child.stdin.write(Buffer.from([2]));else task.child.kill();}
     this.publishing.get(id)?.controller.abort();return true;}
   async stop(){
     this.stopped=true;for(const [id,job] of this.jobs)this.cancel(id,job.owner);
+    await this.edits.stop();
     for(const task of this.inspections.values())task.controller.abort();await Promise.allSettled([...this.inspections.values()].map(value=>value.task));
     await Promise.allSettled([...this.pending]);await this.shared?.close();await this.tasks?.flush();await this.cacheMaintenance;
     for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));

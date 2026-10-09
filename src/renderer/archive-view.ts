@@ -8,6 +8,7 @@ import type {ArchiveListing,ArchiveEncoding,ArchivePasswordEncoding,ArchiveProgr
 import {isArchivePath,type ArchiveOpenAction} from '../shared/archive-actions';
 import './archive-view.css';
 import {showArchiveRecovery} from './archive-recovery';
+import {showArchiveEditSessions} from './archive-edit-sessions';
 import {archiveRiskRunner,ArchiveRiskNotice} from './archive-risk';
 import {showArchiveDetails} from './archive-details';
 import {closeDialog,dialogMarkup,openDialog} from './dialog';
@@ -15,7 +16,7 @@ import {closeDialog,dialogMarkup,openDialog} from './dialog';
 const passwordEncodingOptions=()=>'<option value="65001">UTF-8（默认）</option><option value="0">Windows 系统编码</option><option value="936">GBK / CP936</option><option value="932">Shift JIS / CP932</option><option value="950">Big5 / CP950</option><option value="437">CP437</option>';
 
 export function archivePage(){return `<div class="archive-workspace">
- <div class="archive-toolbar"><div class="archive-mode tabs" role="tablist" aria-label="压缩与解压"><button type="button" data-archive-mode="create" class="selected" aria-selected="true">创建压缩包</button><button type="button" data-archive-mode="browse" aria-selected="false">浏览与解压</button></div><div class="archive-toolbar-actions"><button id="archive-recovery-open" class="quiet" type="button">${icon('history')}恢复资料</button><label class="archive-open-completed"><input id="archive-open-completed" type="checkbox">完成后打开文件夹</label></div></div>
+ <div class="archive-toolbar"><div class="archive-mode tabs" role="tablist" aria-label="压缩与解压"><button type="button" data-archive-mode="create" class="selected" aria-selected="true">创建压缩包</button><button type="button" data-archive-mode="browse" aria-selected="false">浏览与解压</button></div><div class="archive-toolbar-actions"><button id="archive-edit-sessions-open" class="quiet" type="button">外部编辑</button><button id="archive-recovery-open" class="quiet" type="button">${icon('history')}恢复资料</button><label class="archive-open-completed"><input id="archive-open-completed" type="checkbox">完成后打开文件夹</label></div></div>
  <div class="archive-work-area">
  <section class="archive-layout archive-create-layout archive-explorer" data-archive-pane="create">
   <div class="archive-panel archive-source-panel"><div class="archive-card-heading"><div><h2>压缩内容</h2><span id="archive-source-count">尚未添加内容</span></div><div class="archive-heading-actions"><button id="archive-add-file" type="button">${icon('plus')}添加文件</button><button id="archive-add-folder" type="button">${icon('folder')}添加文件夹</button><button id="archive-sources-clear" class="icon-button quiet" type="button" aria-label="清空待压缩内容" title="清空" hidden>${icon('trash')}</button></div></div>
@@ -73,6 +74,7 @@ export function setupArchiveView(){
  const root=document.querySelector<HTMLElement>('#page-archive')!;
  const find=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
  find('#archive-recovery-open').onclick=()=>showArchiveRecovery();
+ find('#archive-edit-sessions-open').onclick=()=>showArchiveEditSessions(async archive=>{if(listing?.path===archive)await load();});
  const showOptions=(id:string)=>openDialog(find<HTMLDialogElement>(id));
  const finishOptions=(id:string)=>closeDialog(find<HTMLDialogElement>(id));
  find('#archive-advanced-open').onclick=()=>showOptions('#archive-advanced-dialog');
@@ -132,7 +134,10 @@ export function setupArchiveView(){
  }});
  let savedRecovery='';
  const savedMessage=()=>savedRecovery?'已保存压缩包修改；恢复副本待清理，请打开“恢复资料”检查。':'已保存压缩包修改';
- const editor=setupArchiveEditor(root,{listing:()=>listing,selected:()=>browser.entries(),status,save:changes=>run(id=>archiveRun({operation:'update',path:listing!.path,revision:listing!.revision!,changes,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{savedRecovery='recovery'in value?value.recovery??'':'';status(savedMessage());}),saved:async()=>{if(await load())status(savedMessage());}});
+ const editor=setupArchiveEditor(root,{listing:()=>listing,selected:()=>browser.entries(),status,externalEdit:async entry=>{
+  const source=listing;if(!source?.revision)return;
+  await run(id=>api.archiveEditStart({path:source.path,revision:source.revision!,index:entry.index,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),()=>{status('编辑副本已准备，请打开副本进行编辑');showArchiveEditSessions(async archive=>{if(listing?.path===archive)await load();});},'正在准备编辑副本…');
+ },save:changes=>run(id=>archiveRun({operation:'update',path:listing!.path,revision:listing!.revision!,changes,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{savedRecovery='recovery'in value?value.recovery??'':'';status(savedMessage());}),saved:async()=>{if(await load())status(savedMessage());}});
  const invalidateListing=(message?:string)=>{listing=undefined;editor.invalidate();browser.clear(message);find('#archive-list-head').hidden=true;find('#archive-count').textContent='';find('#archive-comment').textContent='';find('#archive-comment-open').hidden=true;};
  const render=()=>{if(!listing)return;find('#archive-list-head').hidden=false;find('#archive-count').textContent=`${listing.total.toLocaleString()} 项`;
    find('#archive-comment').textContent=listing.comment;find('#archive-comment-open').hidden=!listing.comment;

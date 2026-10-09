@@ -53,6 +53,8 @@
     "test:archive-volume-recovery": "node scripts/build-archive.mjs && node tests/archive-volume-recovery.cjs && node tests/archive-recovery.cjs && node tests/archive-restore.cjs && node tests/archive-cleanup.cjs && node tests/archive-watchdog.cjs",
     "test:archive-volume-update": "node scripts/build-archive.mjs && node tests/archive-volume-update.cjs && node tests/archive-volume-publish.cjs && node tests/archive-volume-recovery.cjs && node tests/archive-update.cjs && node tests/archive-seven-update.cjs",
     "test:archive-compression": "node scripts/build-archive.mjs && node tests/archive-compression.cjs && node tests/archive-resources.cjs && node tests/archive-password.cjs",
+    "test:archive-edit-sessions": "node tests/archive-edit-sessions.cjs",
+    "test:archive-edit-sessions-ui": "node tests/archive-edit-sessions-ui.cjs",
     "test:archive-icons": "node tests/archive-icons.cjs",
     "test:archive-recovery": "node scripts/build-archive.mjs && node tests/archive-recovery.cjs && node tests/archive-journal.cjs && node tests/archive-restore.cjs && node tests/archive-cleanup.cjs",
     "test:archive-large": "node scripts/build-archive.mjs && node tests/archive-large.cjs",
