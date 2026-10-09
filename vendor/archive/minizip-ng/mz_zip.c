@@ -2088,12 +2088,18 @@ int32_t mz_zip_entry_read_close(void *handle, uint32_t *crc32, int64_t *compress
     mz_zip *zip = (mz_zip *)handle;
     int64_t total_in = 0;
     int32_t err = MZ_OK;
+    int32_t err_close = MZ_OK;
     uint8_t zip64 = 0;
 
     if (!zip || mz_zip_entry_is_open(zip) != MZ_OK)
         return MZ_PARAM_ERROR;
 
-    mz_stream_close(zip->compress_stream);
+    /* One: finalise both filters and propagate authentication failures. The
+     * compression filter does not close its base encryption filter. */
+    err = mz_stream_close(zip->compress_stream);
+    err_close = mz_stream_close(zip->crypt_stream);
+    if (err == MZ_OK)
+        err = err_close;
 
     mz_zip_print("Zip - Entry - Read Close\n");
 
@@ -2104,9 +2110,14 @@ int32_t mz_zip_entry_read_close(void *handle, uint32_t *crc32, int64_t *compress
     if (uncompressed_size)
         *uncompressed_size = zip->file_info.uncompressed_size;
 
-    mz_stream_get_prop_int64(zip->compress_stream, MZ_STREAM_PROP_TOTAL_IN, &total_in);
+    /* One: on-disk packed size includes encryption headers and AES MAC.
+     * Decoder input excludes them, which otherwise bypasses CRC verification
+     * for encrypted AE-1/ZipCrypto entries and misplaces descriptors. */
+    err_close = mz_stream_get_prop_int64(zip->crypt_stream, MZ_STREAM_PROP_TOTAL_IN, &total_in);
+    if (err == MZ_OK)
+        err = err_close;
 
-    if ((zip->file_info.flag & MZ_ZIP_FLAG_DATA_DESCRIPTOR) &&
+    if ((err == MZ_OK) && (zip->file_info.flag & MZ_ZIP_FLAG_DATA_DESCRIPTOR) &&
         ((zip->file_info.flag & MZ_ZIP_FLAG_MASK_LOCAL_INFO) == 0) && (crc32 || compressed_size || uncompressed_size)) {
         /* Check to see if data descriptor is zip64 bit format or not */
         if (mz_zip_extrafield_contains(zip->local_file_info.extrafield, zip->local_file_info.extrafield_size,

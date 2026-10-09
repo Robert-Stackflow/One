@@ -1,0 +1,28 @@
+Additional One changes to minizip-ng 4.1.2 (2026-10-10)
+
+mz_zip.c, mz_zip_entry_read_close:
+- Close the decryption filter explicitly and propagate its status. The
+  compression filter's close does not close the base filter; WinZip AES
+  authentication is checked by the decryption filter's close routine.
+- Compare packed size using the decryption filter's on-disk input count,
+  including encryption header and authentication footer. The decompressor's
+  input count excludes these bytes and previously skipped the CRC branch for
+  encrypted AE-1 and ZipCrypto entries.
+- Preserve prior close/authentication failures when reading descriptors.
+
+Reproduction: an intact AES ZIP passes; changing only one authentication
+footer byte was accepted by the unmodified bundled ZIP reader, while the
+independent 7-Zip ZIP handler refused it. The change applies to integrity
+testing, extraction, drag, update preflight and post-write verification.
+Raw encrypted copying without a password still uses a raw filter; the
+source is authenticated by One's update preflight before copying.
+
+Original copyright and zlib license are retained in LICENSE and source.
+This is an altered version; it is not an unmodified upstream release.
+
+mz_zip_rw.c, mz_zip_writer_add_file:
+- Store known zero-length filesystem files when XZ compression is selected.
+  Their XZ stream was accepted by the bundled reader but rejected by 7-Zip
+  25.01/26.04 as trailing payload data. Nonempty files retain XZ compression;
+  encryption, filenames, timestamps and attributes are preserved. This also
+  covers One's parallel ZIP creation, which uses the same file-entry API.

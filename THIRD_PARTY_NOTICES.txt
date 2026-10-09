@@ -20506,6 +20506,7 @@ DEALINGS IN THE SOFTWARE.
 ===== Native archive: minizip-ng 4.1.2 =====
 Source: https://github.com/zlib-ng/minizip-ng
 License: zlib
+Altered by One; additional authentication and empty-XZ changes: vendor/archive/minizip-ng/ONE-PATCHES.txt
 Condition of use and distribution are the same as zlib:
 
 This software is provided 'as-is', without any express or implied

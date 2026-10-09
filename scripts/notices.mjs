@@ -26,6 +26,7 @@ for(const [name,version,source] of [
   ['zlib','1.3.1','https://github.com/madler/zlib']
 ]){
   output+=`\n===== Native archive: ${name} ${version} =====\nSource: ${source}\nLicense: zlib\n`;
+  if(name==='minizip-ng')output+='Altered by One; additional authentication and empty-XZ changes: vendor/archive/minizip-ng/ONE-PATCHES.txt\n';
   output+=await readFile(`vendor/archive/${name}/LICENSE`,'utf8')+'\n';
 }
 output+='\n===== Native archive: liblzma (XZ Utils) 5.8.2 =====\nSource: https://github.com/tukaani-project/xz/releases/tag/v5.8.2\nLicense: 0BSD\n'+await readFile('vendor/archive/xz/COPYING.0BSD','utf8')+'\n';

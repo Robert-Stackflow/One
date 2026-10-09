@@ -1675,6 +1675,10 @@ int32_t mz_zip_writer_add_file(void *handle, const char *path, const char *filen
     file_info.compression_method = writer->compress_method;
     file_info.filename = filename;
     file_info.uncompressed_size = mz_os_get_file_size(path);
+    /* One: 7-Zip rejects the XZ payload of zero-length ZIP entries as trailing
+     * data. Known empty filesystem inputs need no codec; store them directly. */
+    if (file_info.uncompressed_size == 0 && file_info.compression_method == MZ_COMPRESS_METHOD_XZ)
+        file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
     file_info.flag = MZ_ZIP_FLAG_UTF8;
 
     if (writer->zip_cd)
