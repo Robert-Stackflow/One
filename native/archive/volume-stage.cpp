@@ -5,6 +5,7 @@
 #include "zip-common.h"
 #include "update-common.h"
 #include "heartbeat.h"
+#include "stage-ownership.h"
 
 namespace {
 using namespace archive_update;
@@ -97,7 +98,8 @@ fs::path split_seven(const fs::path &temporary,uint64_t limit,const std::string 
     for(uint64_t index=1;index<=count;++index){
         auto suffix=std::to_wstring(index);if(suffix.size()<3)suffix.insert(0,3-suffix.size(),L'0');
         const auto target=fs::path(temporary.wstring()+L"."+suffix);members.push_back(target);
-        struct Output {HANDLE value;explicit Output(const fs::path &path):value(CreateFileW(path.c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)){}
+        struct Output {HANDLE value;explicit Output(const fs::path &path):value(CreateFileW(path.c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)){
+                if(value!=INVALID_HANDLE_VALUE)try{archive_stage::created(path,value);}catch(...){CloseHandle(value);value=INVALID_HANDLE_VALUE;throw;}}
             ~Output(){if(value!=INVALID_HANDLE_VALUE)CloseHandle(value);}} output(target);
         if(output.value==INVALID_HANDLE_VALUE)fail("Cannot create a new 7Z staged volume","write");
         uint64_t remaining=(std::min)(limit,bytes-copied);
@@ -139,6 +141,7 @@ void finish_volume_preparation(const fs::path &source,const fs::path &temporary,
     const auto primary=format==7?split_seven(temporary,limit,password):temporary;
     const auto members=archive_source_members(primary);exact_members(temporary.parent_path(),members);
     if(zip_revision(source)!=revision)fail("Archive volume set changed during staging","safety");
+    archive_stage::seal();
     emit("{\"type\":\"result\",\"count\":"+std::to_string(count)+",\"staged\":true,\"path\":"+json(utf8(primary.wstring()))+
         ",\"volumeBytes\":"+std::to_string(limit)+",\"inputVolumes\":"+std::to_string(archive_source_members(source).size())+
         ",\"volumes\":"+std::to_string(members.size())+",\"revision\":"+json(zip_revision(primary))+"}");
@@ -146,11 +149,15 @@ void finish_volume_preparation(const fs::path &source,const fs::path &temporary,
 }
 
 void update_volume_stage(const fs::path &source,const fs::path &stage,int encoding,
-                         const std::string &revision,const std::string &password,int format){
+                         const std::string &revision,const std::string &password,int format,const fs::path &recovery){
     if((format!=0&&format!=7)||(format==0&&!revision.starts_with("v2:"))||revision.empty()||revision.size()>256)fail("Volume staging requires a split ZIP or 7Z source","safety");
     Stage guard(source,stage);auto name=source.filename().wstring();
+    std::unique_ptr<archive_stage::Recorder> recorder;
+    if(!recovery.empty())recorder=std::make_unique<archive_stage::Recorder>(source,stage,recovery,revision);
     if(format==7){if(!path_key(source.filename()).ends_with(L".7z.001"))fail("Volume staging requires the first 7Z volume","safety");name.resize(name.size()-4);}
     const auto temporary=stage/name,backup=stage/L".unused-original";
-    if(format==0)zip_update(source,temporary,backup,encoding,revision,password,true,true);
-    else seven_update(source,temporary,backup,revision,password,true,true);
+    try{
+        if(format==0)zip_update(source,temporary,backup,encoding,revision,password,true,true);
+        else seven_update(source,temporary,backup,revision,password,true,true);
+    }catch(...){if(recorder)recorder->rethrow_failure();throw;}
 }

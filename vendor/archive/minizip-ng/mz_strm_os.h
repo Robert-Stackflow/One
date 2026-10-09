@@ -26,6 +26,12 @@ int32_t mz_stream_os_seek(void *stream, int64_t offset, int32_t origin);
 int32_t mz_stream_os_close(void *stream);
 int32_t mz_stream_os_error(void *stream);
 
+#ifdef _WIN32
+/* One: invoked only for successful exclusive creates, before any write. */
+typedef int32_t (*mz_stream_os_created_cb)(void *opaque, const char *path, void *handle);
+void mz_stream_os_set_created_cb(void *opaque, mz_stream_os_created_cb callback);
+#endif
+
 void *mz_stream_os_create(void);
 void mz_stream_os_delete(void **stream);
 

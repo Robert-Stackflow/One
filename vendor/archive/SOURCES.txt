@@ -20,6 +20,12 @@ MZ_OPEN_MODE_EXCLUSIVE. New disks use CREATE_NEW and deny write sharing rather
 than truncating existing paths. The exclusive split stream allows at most 4095
 data disks plus the terminal ZIP. Ordinary writer behavior remains unchanged;
 the exclusive entry point reports unsupported on non-Windows platforms.
+One local Windows provenance callback: mz_stream_os_set_created_cb observes
+successful CREATE_NEW while the output is still empty. Recorded volume staging
+flushes the real handle identity before allowing payload writes; callback errors
+close the handle and return MZ_WRITE_ERROR without crossing C with an exception.
+The callback is process-scoped (one native operation/writer) and unset on exit;
+ordinary create/update operations do not install it.
 
 zlib 1.3.1
 Source: https://github.com/madler/zlib/releases/tag/v1.3.1

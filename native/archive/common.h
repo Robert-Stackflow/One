@@ -39,6 +39,6 @@ void seven_create(const fs::path &destination, const std::vector<fs::path> &sour
 void seven_update(const fs::path &source,const fs::path &temporary,const fs::path &backup,
                   const std::string &revision,const std::string &password,bool prepare=false,bool group=false);
 void update_volume_stage(const fs::path &source,const fs::path &stage,int encoding,
-                         const std::string &revision,const std::string &password,int format);
+                         const std::string &revision,const std::string &password,int format,const fs::path &recovery={});
 void publish_volume_update(const fs::path &source,const fs::path &prepared,const fs::path &recovery,int encoding,
                            const std::string &revision,const std::string &prepared_revision,const std::string &password,int format);

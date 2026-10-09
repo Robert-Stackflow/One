@@ -464,7 +464,7 @@ int wmain(int argc, wchar_t **argv) {
         ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
-        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"details"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"update-prepare"||mode==L"update-stage"||mode==L"volume-publish"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
+        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"details"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"update-prepare"||mode==L"update-stage"||mode==L"update-recorded-stage"||mode==L"volume-publish"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
         if (mode == L"create") {
             if (argc < 4) fail("Create requires input paths");
             int first_source = 3;
@@ -514,6 +514,9 @@ int wmain(int argc, wchar_t **argv) {
         } else if(mode==L"volume-publish"){
             if(argc!=8)fail("Volume publishing requires source, staged primary, recovery, encoding and both revisions");
             publish_volume_update(argv[2],argv[3],argv[4],_wtoi(argv[5]),utf8(argv[6]),utf8(argv[7]),password,archive_format(argv[2]));
+        } else if(mode==L"update-recorded-stage"){
+            if(argc!=7)fail("Recorded staging requires source, new stage, recovery, encoding and revision");
+            update_volume_stage(argv[2],argv[3],_wtoi(argv[5]),utf8(argv[6]),password,archive_format(argv[2]),argv[4]);
         } else if(mode==L"update-stage"){
             if(argc!=6)fail("Volume staging requires a source, new directory, encoding and revision");
             update_volume_stage(argv[2],argv[3],_wtoi(argv[4]),utf8(argv[5]),password,archive_format(argv[2]));

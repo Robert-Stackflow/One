@@ -57,6 +57,15 @@ typedef struct mz_stream_win32_s {
     int32_t error;
 } mz_stream_win32;
 
+/* One uses one writer per native process. Never call across the C boundary
+ * with an exception; a failed durable registration closes before first write. */
+static void *one_created_opaque = NULL;
+static mz_stream_os_created_cb one_created_callback = NULL;
+void mz_stream_os_set_created_cb(void *opaque, mz_stream_os_created_cb callback) {
+    one_created_opaque = opaque;
+    one_created_callback = callback;
+}
+
 /***************************************************************************/
 
 #if 0
@@ -114,6 +123,13 @@ int32_t mz_stream_os_open(void *stream, const char *path, int32_t mode) {
     if (mz_stream_os_is_open(stream) != MZ_OK) {
         win32->error = GetLastError();
         return MZ_OPEN_ERROR;
+    }
+
+    if (creation_disposition == CREATE_NEW && one_created_callback &&
+        one_created_callback(one_created_opaque, path, win32->handle) != MZ_OK) {
+        CloseHandle(win32->handle);
+        win32->handle = INVALID_HANDLE_VALUE;
+        return MZ_WRITE_ERROR;
     }
 
     if (mode & MZ_OPEN_MODE_APPEND)

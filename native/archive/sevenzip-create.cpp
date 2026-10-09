@@ -1,4 +1,5 @@
 #include "common.h"
+#include "stage-ownership.h"
 #include "heartbeat.h"
 #include "resources.h"
 #include "sevenzip-update.h"
@@ -81,7 +82,9 @@ public:
 class Output final:public SeekOut{
     std::atomic<ULONG> refs{1};HANDLE file=INVALID_HANDLE_VALUE;
 public:
-    explicit Output(const fs::path &path):file(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)){}
+    explicit Output(const fs::path &path):file(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)){
+        if(file!=INVALID_HANDLE_VALUE)try{archive_stage::created(path,file);}catch(...){CloseHandle(file);file=INVALID_HANDLE_VALUE;throw;}
+    }
     ~Output(){if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);}
     bool valid()const{return file!=INVALID_HANDLE_VALUE;}
     bool flush()const{return FlushFileBuffers(file)!=0;}
