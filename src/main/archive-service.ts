@@ -11,7 +11,8 @@ import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 import type {ArchiveTasks} from './archive-tasks';
 import {validArchiveScan,copyArchiveScan,type ArchiveScan} from '../shared/archive-scan';
-import {archiveResources,archiveLevel,type ArchiveResources} from '../shared/archive-options';
+import {archiveResources,archiveLevel,archiveBudget,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
+import {ArchiveScheduler} from './archive-scheduler';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number;phase?:'scan'}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan){super(message);this.name='ArchiveFailure';}}
@@ -30,14 +31,15 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
-  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;propagateZone:boolean;scan:boolean}>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;propagateZone:boolean;scan:boolean;controller:AbortController}>();
+  private scheduler=new ArchiveScheduler();
   private stopped=false;
   private cached=new Map<string,CachedTar>();
   private preparing=new Map<string,Promise<CachedTar>>();
   private sweepQueued=false;
   private dragCache:ArchiveDragCache;
   private cacheMaintenance:Promise<DragCacheReport>;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources()){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources()){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
   }
@@ -48,7 +50,7 @@ export class ArchiveService {
   private seal(owner:number,id:string,confirmed=false){const job=this.jobs.get(id);if(confirmed&&job)job.cancelled=false;this.checkpoint(id);if(job)job.committing=true;this.notify(owner,{id,operation:'commit',done:0,total:0});}
   private notify(owner:number,value:ArchiveProgress){const job=this.jobs.get(value.id);this.tasks?.progress(value,!!job&&!job.cancelled&&!job.finishing&&!job.committing);this.changed(owner,value);}
   cancel(id:string,owner:number){const job=this.jobs.get(id);if(!job||job.owner!==owner||job.finishing||job.committing)return false;job.cancelled=true;
-    this.tasks?.cancelling(id);
+    this.tasks?.cancelling(id);job.controller.abort(new ArchiveFailure('压缩任务已取消','cancelled'));
     const task=this.active.get(id);if(task&&task.owner===owner){if(task.cooperative)task.child.stdin.write(Buffer.from([2]));else task.child.kill();}
     this.publishing.get(id)?.controller.abort();return true;}
   async stop(){
@@ -62,18 +64,20 @@ export class ArchiveService {
   }
   run(owner:number,request:ArchiveRequest,requestedId?:string):Promise<ArchiveListing|ArchiveResult>{
     if(this.stopped)return Promise.reject(Error('压缩服务正在关闭'));
-    if(this.requests.size>=32)return Promise.reject(Error('同时运行的压缩任务过多，请等待当前任务完成'));
+    if(this.requests.size>=32)return Promise.reject(Error('进行中或等待的压缩任务过多，请等待当前任务完成'));
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
-    let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean;
-    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');}catch(error){return Promise.reject(error);}
+    let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget;
+    try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=archiveBudget(defaults,resources);}catch(error){return Promise.reject(error);}
+    try{this.scheduler.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
-    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,propagateZone,scan};this.jobs.set(id,job);
-    const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown;
-      try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path));
-        this.checkpoint(id);result=await this.perform(owner,request,id);return result;
+    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,propagateZone,scan,controller:new AbortController()};this.jobs.set(id,job);
+    const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown,release:(()=>void)|undefined;
+      try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
+        this.checkpoint(id);release=await this.scheduler.acquire(resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
+        this.checkpoint(id);this.diagnostic('archive-job-admitted',JSON.stringify({id,...resources,...this.scheduler.budget}));result=await this.perform(owner,request,id);return result;
       }catch(cause){error=cause;throw cause;}
-      finally{job.finishing=true;await this.tasks?.finish(id,result&&'count'in result?result:undefined,error,job.cancelled||error instanceof ArchiveFailure&&error.code==='cancelled');}
+      finally{job.finishing=true;try{await this.tasks?.finish(id,result&&'count'in result?result:undefined,error,job.cancelled||error instanceof ArchiveFailure&&error.code==='cancelled');}finally{release?.();}}
     })();
     this.pending.add(task);
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
@@ -165,7 +169,13 @@ export class ArchiveService {
         this.preparing.set(key,preparing);
         void preparing.finally(()=>this.preparing.delete(key)).catch(()=>{});
       }
-      item=await preparing;
+      try{item=await preparing;}catch(error){
+        // The shared preparation belongs to its originating job. Cancelling
+        // that owner must not cancel another admitted reader of the archive.
+        this.checkpoint(id);
+        if(error instanceof ArchiveFailure&&error.code==='cancelled')return this.acquireSource(owner,id,source);
+        throw error;
+      }
     }
     item.users++;item.used=Date.now();
     const cached=item;

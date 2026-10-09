@@ -5,9 +5,9 @@ import {randomUUID} from 'node:crypto';
 import type {ArchiveTask,ArchiveTaskOperation,ArchiveTaskOverview,ArchiveProgress,ArchiveResult} from '../shared/archive';
 
 const operations:ArchiveTaskOperation[]=['create','extract','test','update','drag'];
-const phases=['create','extract','test','prepare','update','commit','drag','scan'];
+const phases=['create','extract','test','prepare','update','commit','drag','scan','queue'];
 const states=['running','completed','failed','cancelled','interrupted'];
-const integer=(value:unknown)=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
+const integer=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
 const taskPath=(value:unknown)=>typeof value==='string'&&value.length<=32768&&isAbsolute(value)&&!value.includes('\0');
 const valid=(value:ArchiveTask)=>value&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value.id)&&operations.includes(value.operation)&&states.includes(value.state)&&taskPath(value.path)&&integer(value.started)&&integer(value.done)&&integer(value.total)&&phases.includes(value.phase)&&typeof value.cancellable==='boolean'&&(value.finished===undefined||integer(value.finished))&&(value.message===undefined||typeof value.message==='string'&&value.message.length<=2048)&&(value.scan===undefined||validArchiveScan(value.scan))&&(value.result===undefined||taskPath(value.result.path)&&integer(value.result.count)&&(value.result.skipped===undefined||integer(value.result.skipped))&&(value.result.cancelled===undefined||typeof value.result.cancelled==='boolean'));
 const copy=(task:ArchiveTask):ArchiveTask=>({...task,...(task.scan?{scan:copyArchiveScan(task.scan)}:{}),...(task.result?{result:{...task.result}}:{})});
@@ -29,10 +29,16 @@ export class ArchiveTasks {
   if(interrupted)await this.persist();
  }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')this.warn(error);}}
  async overview():Promise<ArchiveTaskOverview>{await this.ready;return {active:[...this.live.values()].map(copy).sort((a,b)=>a.started-b.started),recent:this.recent.slice(0,30).map(copy),error:this.error};}
- async begin(id:string,operation:ArchiveTaskOperation,path:string){await this.ready;if(!taskPath(path)||!operations.includes(operation))return;
-  this.live.set(id,{id,operation,state:'running',path,started:Date.now(),phase:operation,done:0,total:0,cancellable:true});this.changed();await this.persist();
+ async begin(id:string,operation:ArchiveTaskOperation,path:string,phase:ArchiveProgress['operation']=operation){await this.ready;if(!taskPath(path)||!operations.includes(operation))return;
+  this.live.set(id,{id,operation,state:'running',path,started:Date.now(),phase,done:0,total:0,cancellable:true});this.changed();await this.persist();
  }
- progress(value:ArchiveProgress,cancellable:boolean){const task=this.live.get(value.id);if(!task)return;const notify=task.phase!==value.operation||task.cancellable!==cancellable;task.phase=value.operation;task.done=integer(value.done)?value.done:0;task.total=integer(value.total)?value.total:0;task.cancellable=cancellable;if(notify)this.changed();}
+ progress(value:ArchiveProgress,cancellable:boolean){
+  const task=this.live.get(value.id);if(!task)return;
+  const queuePosition=value.operation==='queue'&&integer(value.queuePosition)&&value.queuePosition>=1&&value.queuePosition<=32?value.queuePosition:undefined;
+  const notify=task.phase!==value.operation||task.cancellable!==cancellable||task.queuePosition!==queuePosition;
+  task.phase=value.operation;task.queuePosition=queuePosition;task.done=integer(value.done)?value.done:0;task.total=integer(value.total)?value.total:0;task.cancellable=cancellable;
+  if(notify)this.changed();
+ }
  cancelling(id:string){const task=this.live.get(id);if(task){task.cancellable=false;this.changed();}}
  async finish(id:string,result?:ArchiveResult,error?:unknown,cancelled=false){await this.ready;const task=this.live.get(id);if(!task)return;
   this.live.delete(id);task.finished=Date.now();task.cancellable=false;task.state=cancelled||result?.cancelled?'cancelled':error?'failed':'completed';
