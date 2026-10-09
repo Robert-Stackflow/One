@@ -43,6 +43,7 @@ struct OpenCallback7: IUnknown {
     virtual HRESULT STDMETHODCALLTYPE SetCompleted(const U64 *files,const U64 *bytes)=0;
 };
 struct Password7: IUnknown { virtual HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR *password)=0; };
+struct Properties7: IUnknown { virtual HRESULT STDMETHODCALLTYPE SetProperties(const wchar_t *const*,const PROPVARIANT*,U32)=0; };
 struct Volume7: IUnknown {
     virtual HRESULT STDMETHODCALLTYPE GetProperty(U32 prop,PROPVARIANT *value)=0;
     virtual HRESULT STDMETHODCALLTYPE GetStream(const wchar_t *name,InStream7 **stream)=0;
@@ -233,6 +234,14 @@ public:
         for(int candidate:formats(format)){
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);
             if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)continue;
+            if(candidate==1){
+                Properties7 *properties=nullptr;
+                if(archive->QueryInterface(iid(6,3),reinterpret_cast<void**>(&properties))!=S_OK||!properties)
+                    fail("ZIPX engine does not support password encoding");
+                const wchar_t *key=L"pwcp";PROPVARIANT value{};value.vt=VT_UI4;value.ulVal=zip_password_encoding();
+                const auto configured=properties->SetProperties(&key,&value,1);properties->Release();
+                if(configured!=S_OK)fail("ZIPX engine is incompatible with password encoding; rebuild the archive engine");
+            }
             const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){
                 openedFormat=candidate;
                 if(callback->additionalVolumeRequested)fail("This format currently requires a single-volume archive");

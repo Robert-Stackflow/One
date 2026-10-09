@@ -1,4 +1,7 @@
 import type {ArchivePasswordEncoding} from './archive';
+export function supportsArchivePasswordEncoding(path:unknown):path is string {
+ return typeof path==='string'&&/\.(?:zip|zipx|jar|apk)$/i.test(path);
+}
 export function archivePasswordEncoding(value:unknown=65001):ArchivePasswordEncoding {
  if(typeof value!=='number'||![0,437,932,936,949,950,65001].includes(value))throw Error('ZIP 密码编码无效');
  return value as ArchivePasswordEncoding;

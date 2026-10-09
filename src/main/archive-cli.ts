@@ -6,7 +6,7 @@ import type {ArchiveEdit,ArchiveEncoding,ArchivePasswordEncoding,ArchiveRequest,
 import {archiveEditPacket} from './archive-update';
 import {isArchivePath} from '../shared/archive-actions';
 import {archiveCompression} from '../shared/archive-compression';
-import {archiveLevel,archiveResources,archiveBudget,type ArchiveBudget} from '../shared/archive-options';
+import {archiveLevel,archiveResources,archiveBudget,supportsArchivePasswordEncoding,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
 import {archiveCliDependencies} from './archive-cli-plan';
 import {archiveRiskReasons,type ArchiveRiskApproval} from '../shared/archive-risk';
@@ -26,7 +26,7 @@ read-only: ZIPX/JAR/APK, CAB, ISO, LHA/LZH, WIM, BZ2/ZSTD, TAR.BZ2/TAR.ZST
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
-ZIP password: --password-encoding utf8|system|437|932|936|949|950|65001 (default utf8; separate from filename encoding)
+ZIP/ZIPX/JAR/APK password: --password-encoding utf8|system|437|932|936|949|950|65001 (default utf8; separate from filename encoding)
 extraction risk: --allow-risk [--max-extract-gib 1-8388607] [--max-extract-minutes 1-1440]
          Available for list/test/extract (composite listing may unpack a TAR wrapper).
          Default actual output limit: 64 GiB per stage, 30 minutes; risk approval is never implicit.
@@ -87,7 +87,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  argument(paths.length>0&&paths.length<=128,'Supply 1–128 paths');
  if(operation==='create'){
   argument(options.has('output'),'create requires --output');const path=filePath(options.get('output')!,cwd);argument(targetPattern.test(path),'Unsupported output archive format');
-  argument(passwordEncoding===65001||/\.zip$/i.test(path),'Password encoding options apply only to ZIP archives');
+  argument(passwordEncoding===65001||/\.zip$/i.test(path),'Creation password encoding options apply only to ZIP archives');
   const format=options.get('format');if(format){argument(['zip','7z','tar','tar.gz','tar.xz','gz','xz'].includes(format),'Unsupported format');const lower=path.toLowerCase(),actual=/\.(tar\.gz|tgz)$/.test(lower)?'tar.gz':/\.(tar\.xz|txz)$/.test(lower)?'tar.xz':lower.split('.').at(-1);argument(actual===format,'--format must match the output extension');}
   let volumeBytes=0;const volume=options.get('volume-size');if(volume){const match=/^(\d+)(KiB|MiB|GiB)?$/i.exec(volume);argument(match,'Volume size requires integer bytes or KiB/MiB/GiB');const unit=match[2]?.toLowerCase();volumeBytes=Number(match[1])*(unit==='kib'?1024:unit==='mib'?1024**2:unit==='gib'?1024**3:1);argument(Number.isSafeInteger(volumeBytes)&&volumeBytes>=1024**2&&volumeBytes<=64*1024**3,'Volume size must be 1 MiB–64 GiB');argument(/\.(zip|7z)$/i.test(path),'Only ZIP and 7Z support volumes');}
   let level:number|undefined;try{level=options.has('level')?archiveLevel(number('level')):undefined;}catch{throw new CliFailure('--level must be an integer from 0 to 9');}
@@ -99,7 +99,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,passwordEncoding,...resources,...compression}}];return result;
  }
  argument(paths.every(isArchivePath),'Unsupported input archive format');
- argument(passwordEncoding===65001||paths.every(path=>/\.zip$/i.test(path)),'Password encoding options apply only to ZIP archives');
+ argument(passwordEncoding===65001||paths.every(supportsArchivePasswordEncoding),'Password encoding options apply only to ZIP/ZIPX/JAR/APK archives');
  if(operation==='extract'){
   argument(!(options.has('scan')&&options.has('no-scan')),'--scan and --no-scan are mutually exclusive');
   argument(options.has('output'),'extract requires --output');const parent=filePath(options.get('output')!,cwd),destination=options.get('destination')??'folder',conflict=options.get('conflict')??'rename';

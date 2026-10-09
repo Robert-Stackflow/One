@@ -11,6 +11,7 @@ namespace fs = std::filesystem;
 std::string utf8(const std::wstring &value);
 std::wstring wide(const std::string &value);
 std::string json(const std::string &value);
+unsigned zip_password_encoding();
 void emit(const std::string &line);
 bool archive_cancelled();
 int archive_acknowledgement();

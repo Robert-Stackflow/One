@@ -432,7 +432,7 @@ static int archive_format(const std::wstring &path) {
 
 // The private request is always UTF-8. ZIP encryption operates on bytes and
 // carries no password-encoding marker; never guess or silently substitute.
-static std::string zip_password(const std::string &password, int format) {
+unsigned zip_password_encoding() {
     wchar_t option[16]{};SetLastError(ERROR_SUCCESS);
     const auto size=GetEnvironmentVariableW(L"ONE_ARCHIVE_PASSWORD_ENCODING",option,16);
     unsigned encoding=65001;
@@ -447,10 +447,14 @@ static std::string zip_password(const std::string &password, int format) {
         else if(text==L"950")encoding=950;
         else if(text!=L"65001")fail("Invalid ZIP password encoding","password");
     }
-    if(format!=0&&encoding!=65001)fail("Password encoding is only supported for ZIP archives","password");
+    return encoding;
+}
+static std::string zip_password(const std::string &password, int format) {
+    unsigned encoding=zip_password_encoding();
+    if(format!=0&&format!=1&&encoding!=65001)fail("Password encoding is only supported for ZIP/ZIPX/JAR/APK archives","password");
     if(password.find('\0')!=std::string::npos)fail("Password contains an invalid null character","password");
     const auto unicode=wide(password);
-    if(format!=0||password.empty())return password;
+    if((format!=0&&format!=1)||password.empty())return password;
     if(!encoding)encoding=GetACP();
     if(encoding==CP_UTF8)return password;
     BOOL substituted=FALSE;
@@ -463,7 +467,9 @@ static std::string zip_password(const std::string &password, int format) {
     std::wstring roundtrip(count,0);
     if(!count||MultiByteToWideChar(encoding,0,bytes.data(),length,roundtrip.data(),count)!=count||roundtrip!=unicode)
         fail("Password cannot be represented exactly in the selected ZIP encoding; choose UTF-8 or change the password","password");
-    return bytes;
+    // The ZIPX handler receives Unicode and independently encodes it using pwcp.
+    // Validate exact representation here, as for ZIP, before returning Unicode.
+    return format==0?bytes:password;
 }
 
 int wmain(int argc, wchar_t **argv) {

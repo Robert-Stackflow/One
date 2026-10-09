@@ -31,7 +31,7 @@ for(const [name,version,source] of [
 }
 output+='\n===== Native archive: liblzma (XZ Utils) 5.8.2 =====\nSource: https://github.com/tukaani-project/xz/releases/tag/v5.8.2\nLicense: 0BSD\n'+await readFile('vendor/archive/xz/COPYING.0BSD','utf8')+'\n';
 output+='\n===== Native archive: bzip2 1.0.8 with One ALZ framing =====\nSource: https://deb.debian.org/debian/pool/main/b/bzip2/bzip2_1.0.8.orig.tar.gz\nLicense: bzip2 license, altered version; see vendor/archive/alz-bzip2/MODIFICATIONS.txt\n'+await readFile('vendor/archive/alz-bzip2/LICENSE','utf8')+'\n===== ALZ framing reference: UnAlz 0.65 =====\nSource: https://deb.debian.org/debian/pool/main/u/unalz/unalz_0.65.orig.tar.gz\nLicense: zlib\n'+await readFile('vendor/archive/alz-bzip2/UNALZ-LICENSE.txt','utf8')+'\n';
-output+='\n===== Native archive: 7-Zip 26.04 (7z.dll) =====\nSource: https://www.7-zip.org/download.html\n';
+output+='\n===== Native archive: 7-Zip 26.04 (7z.dll, altered by One) =====\nSource: https://github.com/ip7z/7zip/tree/9128b80e3a471108678e2b3ec3c985861c8d7b0f\nCorresponding source and changes: vendor/archive/7zip/7zip-26.04-source.tar.gz, one-password-codepage.patch and MODIFICATIONS.txt\n';
 output+=await readFile('vendor/archive/7zip/License.txt','utf8')+'\n';
 output+='\n===== vscode-icons artwork =====\nSource: https://github.com/vscode-icons/vscode-icons\n'+await readFile('assets/file-icons/LICENSE','utf8');
 await writeFile('THIRD_PARTY_NOTICES.txt', output.replace(/\r\n?/g,'\n').replace(/[ \t]+$/gm,''), 'utf8');

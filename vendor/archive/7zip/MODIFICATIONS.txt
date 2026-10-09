@@ -1,0 +1,34 @@
+One changes to 7-Zip 26.04, 2026-10-10
+
+This is an altered build, based on the exact source and commit in SOURCE.json.
+The complete upstream source is provided in 7zip-26.04-source.tar.gz; the
+corresponding One changes are provided in one-password-codepage.patch.
+Original copyright and licenses are retained in License.txt and DOC/ in the
+source archive (GNU LGPL, unRAR restriction and the other stated licenses).
+
+The ZIP handler accepts a new ISetProperties "pwcp" unsigned integer property
+for read-password bytes, separately from the existing filename "cp" property.
+Allowed values: 0 (system ACP), 437, 932, 936, 949, 950, 65001 (UTF-8).
+The handler default remains CP_ACP. One explicitly supplies its chosen value
+and rejects passwords which cannot be represented exactly before decoding.
+No Unicode-to-ACP roundtrip trick, lossy substitution or process-wide locale
+change is used. RAR/7Z and other handlers retain their original password logic.
+ZIP output handling is unchanged; One's ZIP writer uses minizip-ng.
+
+Rebuild: node scripts/build-sevenzip.mjs
+Requires the repository's existing Visual Studio C++ x64 toolchain, Windows
+tar and Git. The script verifies the pinned archive hash, extracts into work,
+applies the patch and builds Format7zF with nmake PLATFORM=x64 MP_NPROC=8.
+node scripts/build-archive.mjs includes this step and copies the DLL to dist.
+Applications dynamically load this replaceable DLL from the helper directory.
+
+Standalone rebuild of the provided corresponding source:
+  tar -xzf 7zip-26.04-source.tar.gz --strip-components=1 -C <empty-source-dir>
+  cd <empty-source-dir>
+  git apply <path-to-one-password-codepage.patch>
+  call <Visual-Studio>/VC/Auxiliary/Build/vcvars64.bat
+  cd CPP/7zip/Bundles/Format7zF
+  nmake PLATFORM=x64 MP_NPROC=8
+The resulting replaceable library is x64/7z.dll. Packaged One includes this
+source capsule, patch, manifest, original licenses and modification notice in
+third-party/7zip next to the application directory.

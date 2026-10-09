@@ -16,7 +16,7 @@ import {ArchiveEditSessions} from './archive-edit-sessions';
 import {launchArchiveEditor,type ArchiveEditLauncher} from './archive-edit-launch';
 import type {ArchiveTasks} from './archive-tasks';
 import {validArchiveScan,copyArchiveScan,type ArchiveScan} from '../shared/archive-scan';
-import {archiveResources,archiveLevel,archiveBudget,archivePasswordEncoding,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
+import {archiveResources,archiveLevel,archiveBudget,archivePasswordEncoding,supportsArchivePasswordEncoding,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
 import {ArchiveWatchdog,archiveWatchdogLimits} from './archive-watchdog';
 import {extractionBudget,riskApproval,validArchiveRisk,type ArchiveRisk,type ArchiveRiskApproval,type ExtractionBudget} from '../shared/archive-risk';
@@ -189,7 +189,7 @@ export class ArchiveService {
     const id=requestedId??randomUUID();
     if(typeof id!=='string'||!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||this.requests.has(id))return Promise.reject(Error('压缩任务编号无效或正在使用'));
     let resources:ArchiveResources,compression:ArchiveCompression,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget,passwordEncoding:ArchivePasswordEncoding,approved:ArchiveRiskApproval|undefined,limits:ExtractionBudget;
-    try{approved=riskApproval(request?.riskApproval);limits=extractionBudget(approved??request?.extractionLimits);passwordEncoding=archivePasswordEncoding(request?.passwordEncoding);if(passwordEncoding!==65001&&(typeof request?.path!=='string'||!/\.zip$/i.test(request.path)))throw Error('密码编码选项仅适用于 ZIP；其他格式请使用默认 UTF-8');password(request?.password);}catch(error){return Promise.reject(error);}
+    try{approved=riskApproval(request?.riskApproval);limits=extractionBudget(approved??request?.extractionLimits);passwordEncoding=archivePasswordEncoding(request?.passwordEncoding);if(passwordEncoding!==65001&&!supportsArchivePasswordEncoding(request?.path))throw Error('密码编码选项仅适用于 ZIP/ZIPX/JAR/APK；其他格式请使用默认 UTF-8');password(request?.password);}catch(error){return Promise.reject(error);}
     try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=this.budgetOverride??archiveBudget(defaults,resources);compression=archiveCompression(request.operation==='create'?request:{},archiveCompression(defaults));if(compression.autoThreads&&(request.operation==='create'||request.operation==='update'))resources.threads=Math.max(1,Math.min(availableParallelism(),64,budget.totalThreads));}catch(error){return Promise.reject(error);}
     try{this.scheduler.configure(budget);this.shared??=new ArchiveSharedBudget(budget);this.shared.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);

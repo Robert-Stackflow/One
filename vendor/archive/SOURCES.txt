@@ -1,13 +1,22 @@
 One.Archive.exe native archive dependencies
 
-7-Zip 26.04 (7z.dll, x64)
+7-Zip 26.04 (7z.dll, x64, altered by One)
+Current source: https://github.com/ip7z/7zip/tree/9128b80e3a471108678e2b3ec3c985861c8d7b0f
+Complete pinned source, hash, patch and rebuild instructions:
+vendor/archive/7zip/SOURCE.json and MODIFICATIONS.txt.
+scripts/build-sevenzip.mjs builds Format7zF with the independent read-password
+codepage property pwcp. One explicitly supplies UTF-8/system/legacy encodings;
+the upstream default remains CP_ACP. Other handlers are unchanged.
+The source capsule and patch are included in third-party/7zip in packaged builds.
+Current binary hashes are retained in verification/archive-zipx-password/latest.json.
+Previous unmodified binary provenance (not the currently bundled DLL):
 Source: https://www.7-zip.org/download.html
 Binary: 7z2604-x64.exe
 Installer SHA-256: D54BF805F9F3704D1E8DB2FA3498AE7EF2DF0312B40B558E7C71C734430A665D
-7z.dll SHA-256: 899CD73D7FC60E1C1C35C7DE0F5BED3DC69BFE2CECBD48014D868A347970A0B1
+Original 7z.dll SHA-256: 899CD73D7FC60E1C1C35C7DE0F5BED3DC69BFE2CECBD48014D868A347970A0B1
 License: vendor/archive/7zip/License.txt (LGPL, unRAR restriction, BSD)
 Source archive: 7z2604-src.7z, SHA-256 6BCFD2679D178174DF06D09D50147DD7B5980D7BEAC896136689DFC9D51E0FD9
-The original DLL is loaded only in the separate One.Archive.exe process.
+The replaceable DLL is loaded only in the separate One.Archive.exe process.
 
 minizip-ng 4.1.2
 Source: https://github.com/zlib-ng/minizip-ng/releases/tag/4.1.2

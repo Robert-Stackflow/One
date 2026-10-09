@@ -1,4 +1,5 @@
 import {api,esc,icon} from './ui';
+import {supportsArchivePasswordEncoding} from '../shared/archive-options';
 import {installFileDropOverlay} from './file-drop-overlay';
 import {archiveScanText} from '../shared/archive-scan';
 import {archivePreferences,archiveLevelOptions,archiveThreadOptions,archiveSolidOptions,archiveZipMethodOptions,archiveZipEncryptionOptions,archiveSevenMethodOptions} from './archive-settings';
@@ -56,7 +57,7 @@ export function archivePage(){return `<div class="archive-workspace">
     <p id="archive-destination-hint" class="archive-field-hint">创建同名文件夹，已有内容不会被覆盖。</p>
     <div class="archive-options-link"><button id="archive-decode-open" type="button"><span><span>密码与编码</span><small id="archive-decode-summary">未设置密码 · 自动识别文件名</small></span>${icon('chevron')}</button></div>
     ${dialogMarkup({id:'archive-decode-dialog',title:'密码与文件名编码',className:'archive-options-dialog',body:`<label class="archive-field">解压密码<input id="archive-password" type="password" autocomplete="off" placeholder="未加密的压缩包可留空"></label>
-    <div id="archive-password-encoding-row" hidden><label class="archive-field">ZIP 密码编码<select id="archive-password-encoding">${passwordEncodingOptions()}</select></label><p>密码正确却无法解密时，尝试创建压缩包时使用的编码。Windows 版 7-Zip 可尝试系统编码；与文件名编码无关。</p></div>
+    <div id="archive-password-encoding-row" hidden><label class="archive-field">ZIP / ZIPX 密码编码<select id="archive-password-encoding">${passwordEncodingOptions()}</select></label><p>密码正确却无法解密时，尝试创建压缩包时使用的编码。Windows 版 7-Zip 可尝试系统编码；与文件名编码无关。</p></div>
     <label class="archive-field">旧文件名编码<select id="archive-encoding"><option value="0">自动</option><option value="437">CP437</option><option value="936">GBK / CP936</option><option value="932">Shift JIS / CP932</option><option value="949">韩文 / CP949</option><option value="950">Big5 / CP950</option><option value="65001">UTF-8</option></select></label><p>文件名显示异常时可手动选择编码。应用后会重新读取当前压缩包。</p><p id="archive-alz-encoding-note" hidden>ALZ 的“自动”使用韩文 CP949；密码沿用本次文件名编码。</p>
     <label id="archive-conflict-row" class="archive-field" hidden>解压至此 · 同名文件<select id="archive-conflict"><option value="rename">自动重命名 · 保留原文件</option><option value="skip">跳过</option><option value="replace">替换文件</option></select></label>`,actions:'<button id="archive-decode-done" class="primary" type="button">应用</button>'})}
     <div class="archive-rail-action"><button id="archive-extract-all" class="primary" type="button">${icon('download')}全部解压</button><button id="archive-extract-selected" type="button">解压选中项</button></div>
@@ -86,8 +87,8 @@ export function setupArchiveView(){
  find('#archive-comment-done').onclick=()=>void finishOptions('#archive-comment-section');
  find('#archive-result-done').onclick=()=>void finishOptions('#archive-result-dialog');
  const field=(selector:string)=>{const input=find<HTMLInputElement>(selector);return input.type==='password'?input.value:input.value.trim();};
- const readPasswordEncoding=():ArchivePasswordEncoding=>/\.zip$/i.test(field('#archive-source'))?Number(field('#archive-password-encoding')) as ArchivePasswordEncoding:65001;
- const syncPasswordEncoding=()=>{find('#archive-password-encoding-row').hidden=!/\.zip$/i.test(field('#archive-source'));find('#archive-alz-encoding-note').hidden=!/\.alz$/i.test(field('#archive-source'));};
+ const readPasswordEncoding=():ArchivePasswordEncoding=>supportsArchivePasswordEncoding(field('#archive-source'))?Number(field('#archive-password-encoding')) as ArchivePasswordEncoding:65001;
+ const syncPasswordEncoding=()=>{find('#archive-password-encoding-row').hidden=!supportsArchivePasswordEncoding(field('#archive-source'));find('#archive-alz-encoding-note').hidden=!/\.alz$/i.test(field('#archive-source'));};
  const decodeSummary=()=>{find('#archive-decode-summary').textContent=`${field('#archive-password')?'已设置密码':'未设置密码'} · ${field('#archive-encoding')==='0'?'自动识别文件名':'指定文件名编码'}`;};
  let mode:'create'|'browse'='create',listing:ArchiveListing|undefined,busy=false,taskId='',creationFormat='zip',selectionCount=0,stopping=false,cancelAllowed=true;
  type BatchItem={path:string;state:'待处理'|'正在处理'|'已完成'|'失败'|'已取消'|'待打开'|'已读取';detail:string};

@@ -12,3 +12,4 @@
 *.bat text eol=crlf
 # Preserve upstream liblzma source formatting and line endings.
 vendor/archive/xz/** text eol=lf -whitespace
+vendor/archive/7zip/*.patch text eol=lf -whitespace

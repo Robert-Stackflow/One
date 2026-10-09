@@ -1,4 +1,5 @@
 import {api,esc,icon,size} from './ui';
+import {supportsArchivePasswordEncoding} from '../shared/archive-options';
 import {customControls} from './controls';
 import type {ArchiveBrowse,ArchiveEncoding,ArchiveListing,ArchivePasswordEncoding} from '../shared/archive';
 import './archive-preview.css';
@@ -7,7 +8,7 @@ import './archive-preview.css';
 export function renderArchivePreview(host:HTMLElement,path:string){
  const root=document.createElement('div');root.className='archive-preview';
  root.innerHTML=`<header class="archive-preview-toolbar"><button data-up class="icon-button quiet" aria-label="上一级包内目录">${icon('up')}</button><span data-location>压缩包</span><input data-search type="search" aria-label="搜索包内文件" placeholder="搜索包内文件"><button data-search-run class="icon-button quiet" aria-label="搜索">${icon('search')}</button><button data-open type="button">打开解压</button></header>
- <details class="archive-preview-options"><summary>密码与文件名编码</summary><div><input data-password type="password" autocomplete="off" placeholder="解压密码" aria-label="解压密码"><select id="preview-archive-encoding" aria-label="文件名编码"><option value="0">自动识别文件名</option><option value="936">GBK / CP936</option><option value="437">CP437</option><option value="932">Shift JIS / CP932</option><option value="949">韩文 / CP949</option><option value="950">Big5 / CP950</option><option value="65001">UTF-8</option></select><select id="preview-archive-password-encoding" aria-label="ZIP 密码编码"><option value="65001">密码 UTF-8</option><option value="0">密码 Windows 系统编码</option><option value="936">密码 GBK / CP936</option><option value="932">密码 Shift JIS</option><option value="949">韩文 / CP949</option><option value="950">密码 Big5</option><option value="437">密码 CP437</option></select><button data-apply>应用</button></div></details>
+ <details class="archive-preview-options"><summary>密码与文件名编码</summary><div><input data-password type="password" autocomplete="off" placeholder="解压密码" aria-label="解压密码"><select id="preview-archive-encoding" aria-label="文件名编码"><option value="0">自动识别文件名</option><option value="936">GBK / CP936</option><option value="437">CP437</option><option value="932">Shift JIS / CP932</option><option value="949">韩文 / CP949</option><option value="950">Big5 / CP950</option><option value="65001">UTF-8</option></select><select id="preview-archive-password-encoding" aria-label="ZIP / ZIPX 密码编码"><option value="65001">密码 UTF-8</option><option value="0">密码 Windows 系统编码</option><option value="936">密码 GBK / CP936</option><option value="932">密码 Shift JIS</option><option value="949">韩文 / CP949</option><option value="950">密码 Big5</option><option value="437">密码 CP437</option></select><button data-apply>应用</button></div></details>
  ${/\.alz$/i.test(path)?'<p class="archive-preview-options">ALZ 的“自动”使用韩文 CP949；密码沿用本次文件名编码。</p>':''}
  <div data-error class="archive-preview-error" role="alert" hidden></div><div data-list class="archive-preview-list" aria-label="包内文件"></div><footer><span data-count></span><button data-previous>上一页</button><button data-next>下一页</button></footer>
  <div data-loading class="archive-preview-loading" hidden><span data-progress role="status">正在读取压缩包…</span><button data-stop>停止</button></div>`;
@@ -23,12 +24,12 @@ export function renderArchivePreview(host:HTMLElement,path:string){
  };
  const load=async(offset=0)=>{if(disposed||busy)return;busy=true;task=crypto.randomUUID();const id=task;
   find('[data-loading]').hidden=false;find('[data-error]').hidden=true;find('[data-progress]').textContent='正在读取压缩包…';controls();
-  try{const value=await api.previewArchive({path,offset,browse:query,password:find<HTMLInputElement>('[data-password]').value,encoding:Number((find('#preview-archive-encoding') as HTMLSelectElement).value) as ArchiveEncoding,passwordEncoding:/\.zip$/i.test(path)?Number((find('#preview-archive-password-encoding') as HTMLSelectElement).value) as ArchivePasswordEncoding:65001},id);
+  try{const value=await api.previewArchive({path,offset,browse:query,password:find<HTMLInputElement>('[data-password]').value,encoding:Number((find('#preview-archive-encoding') as HTMLSelectElement).value) as ArchiveEncoding,passwordEncoding:supportsArchivePasswordEncoding(path)?Number((find('#preview-archive-password-encoding') as HTMLSelectElement).value) as ArchivePasswordEncoding:65001},id);
    if(disposed||id!==task)return;listing=value;query=value.browse??query;paint();
   }catch(error){if(disposed||id!==task)return;find('[data-error]').textContent=String(error instanceof Error?error.message:error).replace(/^Error invoking remote method '[^']+':\s*/,'').replace(/^(?:Error|ArchiveFailure):\s*/,'');find('[data-error]').hidden=false;
   }finally{if(!disposed&&id===task){task='';busy=false;find('[data-loading]').hidden=true;controls();}}
  };
- find('#preview-archive-password-encoding').hidden=!/\.zip$/i.test(path);
+ find('#preview-archive-password-encoding').hidden=!supportsArchivePasswordEncoding(path);
  const search=()=>{if(busy)return;query={...query,search:find<HTMLInputElement>('[data-search]').value.trim()};void load();};
  find('[data-search-run]').onclick=search;find<HTMLInputElement>('[data-search]').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();search();event.stopPropagation();}};
  find('[data-apply]').onclick=()=>void load();

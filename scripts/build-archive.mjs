@@ -3,6 +3,7 @@ import {promisify} from 'node:util';
 import {cp,copyFile,mkdir,writeFile} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
+import {buildSevenzip} from './build-sevenzip.mjs';
 
 const run=promisify(execFile);
 const root=resolve('.');
@@ -10,6 +11,7 @@ const vswhere=join(process.env['ProgramFiles(x86)']||'C:\\Program Files (x86)','
 const {stdout}=await run(vswhere,['-latest','-products','*','-requires','Microsoft.VisualStudio.Component.VC.Tools.x86.x64','-property','installationPath'],{windowsHide:true});
 const installation=stdout.trim();
 if(!installation)throw new Error('需要 Visual Studio C++ x64 工具链构建压缩辅助程序');
+await buildSevenzip(installation);
 const cmake=join(installation,'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe');
 const zlibSource=resolve('work/archive-source/zlib');
 const zlibBuild=resolve('work/archive-build/zlib');

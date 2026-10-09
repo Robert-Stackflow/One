@@ -20637,8 +20637,9 @@ Copyright (C) 2004-2009 kippler@gmail.com , http://www.kipple.pe.kr
   3. This notice may not be removed or altered from any source distribution.
 
 
-===== Native archive: 7-Zip 26.04 (7z.dll) =====
-Source: https://www.7-zip.org/download.html
+===== Native archive: 7-Zip 26.04 (7z.dll, altered by One) =====
+Source: https://github.com/ip7z/7zip/tree/9128b80e3a471108678e2b3ec3c985861c8d7b0f
+Corresponding source and changes: vendor/archive/7zip/7zip-26.04-source.tar.gz, one-password-codepage.patch and MODIFICATIONS.txt
   7-Zip
   ~~~~~
   License for use and distribution
