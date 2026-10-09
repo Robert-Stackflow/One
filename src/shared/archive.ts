@@ -7,6 +7,7 @@ export type ArchiveBrowse = {directory:string;search:string;flat:boolean};
 export type ArchiveEntry = {index:number;name:string;directory:boolean;size:number;compressed:number;encrypted:boolean;implicit?:boolean};
 export type ArchiveEntryDetails = {entry:ArchiveEntry;packedKnown:boolean;packedShared:boolean;modified?:number;crc32?:string;method?:string};
 export type ArchiveListing = {path:string;total:number;comment:string;offset:number;entries:ArchiveEntry[];revision?:string;editable?:boolean;matched?:number;browse?:ArchiveBrowse};
+export type PreviewArchiveRequest={path:string;offset?:number;browse?:ArchiveBrowse;password?:string;encoding?:ArchiveEncoding;passwordEncoding?:ArchivePasswordEncoding};
 export type ArchiveProgress = {id:string;operation:'create'|'extract'|'test'|'prepare'|'update'|'commit'|'drag'|'scan'|'queue';done:number;total:number;queuePosition?:number};
 export type ArchiveResult = {path:string;count:number;skipped?:number;cancelled?:boolean;scan?:ArchiveScan;risk?:import('./archive-risk').ArchiveRisk;details?:ArchiveEntryDetails};
 export type ArchiveTaskOperation='create'|'extract'|'test'|'update'|'drag';

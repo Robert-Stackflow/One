@@ -33,7 +33,7 @@ export interface Settings {
 }
 export interface MaintenanceRow { name: string; source: string; status: string; command: string; location: string }
 export interface FileEntry { name: string; path: string; directory: boolean; size?: number; packedSize?: number }
-export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; workbookToken?:string; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
+export interface PreviewData { name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'epub' | 'font' | 'notebook' | 'unsupported'; workbook?:import('./workbook').WorkbookData; workbookToken?:string; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; nativeArchive?:boolean; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
 export interface LinkCard {domain:string;title:string;description:string;image?:string}
 export type { PickerData } from './picker';
 export interface OneAPI {
@@ -44,6 +44,7 @@ export interface OneAPI {
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
   archiveRun(request:import('./archive').ArchiveRequest,id?:string):Promise<import('./archive').ArchiveListing|import('./archive').ArchiveResult>;
   archiveCancel(id:string):Promise<boolean>;
+  previewArchive(request:import('./archive').PreviewArchiveRequest,id:string):Promise<import('./archive').ArchiveListing>;
   archiveCancelId(id:string):Promise<void>;
   onArchiveTasksChanged(callback:()=>void):()=>void;
   onArchiveCancelRequested(callback:(id:string)=>void):()=>void;

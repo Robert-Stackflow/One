@@ -118,7 +118,7 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .sidebar-collapsed .brand-name{width:0;flex:0 0 0}
 
 /* Quiet navigation groups; only the content scrolls when vertical space is tight. */
-.sidebar-navigation{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;scrollbar-width:thin;padding-bottom:12px}
+.sidebar-navigation{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;padding-bottom:12px}
 .sidebar-navigation>.nav,.sidebar-group>.nav{width:100%}
 .sidebar-group{display:flex;flex-direction:column;flex-shrink:0;gap:3px;margin-top:14px}
 .sidebar-group-caption{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);margin:0 10px 3px;max-height:16px;opacity:.85;overflow:hidden;white-space:nowrap;transition:opacity .15s var(--ease),max-height .24s var(--ease),margin .24s var(--ease)}

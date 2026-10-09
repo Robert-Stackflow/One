@@ -1,0 +1,23 @@
+.preview-body.type-archive:has(.archive-preview){overflow:hidden;background:var(--surface)}
+.archive-preview{height:100%;min-height:0;display:flex;flex-direction:column;position:relative;background:var(--surface)}
+.archive-preview-toolbar{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex:none;min-width:0}
+.archive-preview-toolbar [data-location]{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.archive-preview-toolbar input{width:150px;min-width:60px;font-size:12px}
+.archive-preview-toolbar button{font-size:12px;flex:none}
+.archive-preview-options{padding:10px 16px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);flex:none;max-height:40%;overflow:auto}
+.archive-preview-options summary{cursor:pointer}
+.archive-preview-options>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:12px}
+.archive-preview-options input,.archive-preview-options button{font-size:12px;max-width:100%}
+.archive-preview-error{padding:12px 16px;font-size:12px;line-height:1.7;overflow-wrap:anywhere;max-height:120px;overflow:auto;background:var(--soft);flex:none;user-select:text}
+.archive-preview-list{overflow:auto;flex:1;min-height:0;padding:8px}
+.archive-preview-entry{display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:8px 12px;border:0;border-radius:6px;font-size:12px;background:transparent;text-align:left;line-height:20px}
+.archive-preview-entry:hover{background:var(--hover)}
+.archive-preview-entry .icon{display:block;width:16px;height:16px;color:var(--muted)}
+.archive-preview-entry>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.archive-preview-entry small{font-size:11px;color:var(--muted);white-space:nowrap}
+.archive-preview-empty{display:grid;place-items:center;height:100%;font-size:12px;color:var(--muted)}
+.archive-preview footer{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--line);flex:none;font-size:11px;color:var(--muted)}
+.archive-preview footer span{flex:1}
+.archive-preview footer button{font-size:11px;min-height:28px}
+.archive-preview-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:16px;background:color-mix(in srgb,var(--surface) 85%,transparent);backdrop-filter:blur(2px);font-size:12px}
+@media(max-width:650px){.archive-preview-toolbar input{width:100px}.archive-preview-toolbar{padding-inline:8px}.archive-preview-options{padding-inline:12px}}

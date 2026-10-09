@@ -3,9 +3,9 @@ import {closeDialog,confirmDialog,dialogMarkup,openDialog} from './dialog';
 import type {ArchiveEdit,ArchiveEntry,ArchiveListing} from '../shared/archive';
 
 export function archiveEditorMarkup(){return `<div id="archive-editor" class="archive-editor" hidden>
- <details class="archive-edit-options"><summary>修改压缩包</summary><div class="archive-edit-tools" aria-label="修改压缩包"><button data-archive-edit="add">${icon('plus')}添加内容</button><button data-archive-edit="mkdir">${icon('folder')}新建目录</button><button data-archive-edit="rename">${icon('rename')}重命名</button><button data-archive-edit="delete">${icon('trash')}删除选中项</button><button data-archive-edit="comment">${icon('text')}备注</button></div></details>
- <div id="archive-edit-preview" class="archive-edit-preview" hidden><div class="archive-edit-heading"><span id="archive-edit-summary"></span><div><button id="archive-edit-discard" class="quiet">放弃修改</button><button id="archive-edit-save" class="primary">保存修改</button></div></div><ol id="archive-edit-changes"></ol><p>保存前会校验原包和修改结果。文件夹的重命名、删除包括其中的全部内容。</p></div>
+ <div class="archive-edit-tools" aria-label="修改压缩包"><button type="button" data-archive-edit="add">${icon('plus')}<span>添加内容</span></button><button type="button" data-archive-edit="mkdir">${icon('folder')}<span>新建目录</span></button><button type="button" data-archive-edit="rename">${icon('rename')}<span>重命名选中项</span></button><button type="button" data-archive-edit="delete">${icon('trash')}<span>删除选中项</span></button><button type="button" data-archive-edit="comment">${icon('text')}<span>编辑备注</span></button></div>
  </div>`;}
+export function archiveEditPreviewMarkup(){return `<div id="archive-edit-preview" class="archive-edit-preview" hidden><div class="archive-edit-heading"><span id="archive-edit-summary"></span><div><button id="archive-edit-discard" class="quiet">放弃修改</button><button id="archive-edit-save" class="primary">保存修改</button></div></div><ol id="archive-edit-changes"></ol><p>保存前会校验原包和修改结果。文件夹的重命名、删除包括其中的全部内容。</p></div>`;}
 
 type Draft={change:ArchiveEdit;description:string};
 let dialogNumber=0;
@@ -43,7 +43,8 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
  const selected=()=>options.selected?.()??[...root.querySelectorAll<HTMLInputElement>('.archive-entry input:checked')].map(input=>entries.get(Number(input.value))).filter((entry):entry is ArchiveEntry=>!!entry);
  const render=()=>{
   const listing=options.listing();find('#archive-editor').hidden=!listing?.editable;
-  for(const button of root.querySelectorAll<HTMLButtonElement>('[data-archive-edit]'))button.disabled=busy||!listing?.editable;
+  const count=selected().length;
+  for(const button of root.querySelectorAll<HTMLButtonElement>('[data-archive-edit]'))button.disabled=busy||!listing?.editable||(button.dataset.archiveEdit==='rename'&&count!==1)||(button.dataset.archiveEdit==='delete'&&count===0);
   find<HTMLButtonElement>('[data-archive-edit="comment"]').hidden=!!listing&&!/\.zip$/i.test(listing.path);
   find('#archive-edit-preview').hidden=!drafts.length;
   find('#archive-edit-summary').textContent=`待保存 · ${drafts.length} 项变更`;
@@ -82,6 +83,7 @@ export function setupArchiveEditor(root:HTMLElement,options:{listing:()=>Archive
   async discardBeforeLoad(){if(drafts.length&&!await confirmDialog({title:'放弃未保存的修改',message:'重新打开压缩包会清除当前待保存的变更。',confirm:'放弃并打开'}))return false;drafts=[];entries.clear();render();return true;},
   loaded(listing:ArchiveListing){entries.clear();for(const entry of listing.entries)if(!entry.implicit)entries.set(entry.index,entry);render();},
   setBusy(value:boolean){busy=value;render();},
+  selectionChanged(){render();},
   invalidate(){render();},
  };
 }

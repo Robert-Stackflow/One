@@ -1,4 +1,4 @@
-const {fillArchiveSources}=require('./archive-ui-helpers.cjs');
+const {fillArchiveSources,openArchiveEditor,openArchiveOptions,closeArchiveOptions,setArchivePassword,testArchive}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -31,7 +31,7 @@ async function main(){
     await expect(page.locator('[data-archive-pane="create"]')).toBeVisible();
     await expect(page.locator('[data-archive-pane="browse"]')).toBeHidden();
     await expect(page.locator('#archive-extract-all')).toBeDisabled();
-    assert.equal(await page.locator('.archive-advanced').evaluate(node=>node.open),false);
+    assert.equal(await page.locator('#archive-advanced-dialog').evaluate(node=>node.open),false);
     await fillArchiveSources(page,[source,source+'-excluded'].join('\n'));
     await expect(page.locator('.archive-source-item')).toHaveCount(2);
     await page.locator('[data-archive-source-remove="1"]').click();
@@ -55,12 +55,12 @@ async function main(){
     await expect(page.locator('#archive-conflict-row')).toBeHidden();
     await page.locator('#archive-parent').fill(here);await page.locator('#archive-destination-mode').click();
     await page.locator('#archive-destination-mode-options [role="option"][aria-label="解压至此"]').click();
-    await expect(page.locator('#archive-conflict-row')).toBeVisible();
+    await page.locator('#archive-decode-open').click();await expect(page.locator('#archive-conflict-row')).toBeVisible();await page.locator('#archive-decode-dialog-close').click();await page.locator('#archive-decode-dialog').waitFor({state:'hidden'});
     await page.locator('#archive-extract-all').click();await expect(page.locator('#archive-status-text')).toContainText('已解压');
     assert.equal(await fs.readFile(path.join(here,'源文件.txt'),'utf8'),'keep existing');assert.equal(await fs.readFile(path.join(here,'源文件 (2).txt'),'utf8'),'One archive UI smoke\n');
-    await page.locator('#archive-conflict').click();await page.locator('#archive-conflict-options [role="option"][aria-label="跳过"]').click();
+    await page.locator('#archive-decode-open').click();await page.locator('#archive-conflict').click();await page.locator('#archive-conflict-options [role="option"][aria-label="跳过"]').click();await page.locator('#archive-decode-dialog-close').click();await page.locator('#archive-decode-dialog').waitFor({state:'hidden'});
     await page.locator('#archive-extract-all').click();await expect(page.locator('#archive-status-text')).toContainText('跳过 1 项');assert.equal(await fs.readFile(path.join(here,'源文件.txt'),'utf8'),'keep existing');
-    await page.locator('#archive-conflict').click();await page.locator('#archive-conflict-options [role="option"][aria-label="替换文件"]').click();
+    await page.locator('#archive-decode-open').click();await page.locator('#archive-conflict').click();await page.locator('#archive-conflict-options [role="option"][aria-label="替换文件"]').click();await page.locator('#archive-decode-dialog-close').click();await page.locator('#archive-decode-dialog').waitFor({state:'hidden'});
     await expect(page.locator('#archive-destination-hint')).toContainText('替换已有同名文件');
     await page.locator('#archive-extract-all').click();await expect(page.locator('#archive-status-text')).toContainText('已解压');assert.equal(await fs.readFile(path.join(here,'源文件.txt'),'utf8'),'One archive UI smoke\n');
     assert(!(await fs.readdir(here)).some(name=>name.startsWith('.one-')));
@@ -70,8 +70,8 @@ async function main(){
     await page.locator('[data-archive-mode="create"]').click();
     await fillArchiveSources(page,large);
     await page.locator('#archive-target').fill(split);
-    await page.locator('.archive-advanced summary').click();
-    await page.locator('#archive-volume').fill('1');
+    await openArchiveOptions(page);
+    await openArchiveOptions(page);await page.locator('#archive-volume').fill('1');await closeArchiveOptions(page);
     await page.locator('#archive-create').click();
     await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
     assert.equal((await fs.stat(path.join(root,'split.z01'))).isFile(),true);
@@ -92,7 +92,7 @@ async function main(){
     await page.locator('[data-archive-mode="create"]').click();
     await fillArchiveSources(page,[source,second].join('\n'));
     await page.locator('#archive-target').fill(multi);
-    await page.locator('#archive-volume').fill('');
+    await openArchiveOptions(page);await page.locator('#archive-volume').fill('');await closeArchiveOptions(page);
     await page.locator('#archive-create').click();
     await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
     await page.locator('[data-archive-mode="browse"]').click();
@@ -108,7 +108,7 @@ async function main(){
     await page.locator('[data-archive-mode="create"]').click();
     await fillArchiveSources(page,large);
     await page.locator('#archive-target').fill(occupied);
-    await page.locator('#archive-volume').fill('1');
+    await openArchiveOptions(page);await page.locator('#archive-volume').fill('1');await closeArchiveOptions(page);
     await page.locator('#archive-create').click();
     await expect(page.locator('#archive-status-text')).toContainText('同名分卷',{timeout:30000});
     await expect(page.locator('#archive-status')).toHaveAttribute('data-state','error');
@@ -123,10 +123,10 @@ async function main(){
       assert.equal(made.status,0,made.stdout+'\n'+made.stderr);
       await page.locator('[data-archive-mode="browse"]').click();
       await page.locator('#archive-source').fill(seven);
-      await page.locator('#archive-password').fill('secret');
+      await setArchivePassword(page,'secret');
       await page.locator('#archive-open').click();
       await expect(page.locator('.archive-entry-name')).toHaveText('源文件.txt');
-      await page.locator('#archive-test').click();
+      await testArchive(page);
       await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
     }
     await page.locator('[data-archive-mode="create"]').click();
@@ -135,21 +135,21 @@ async function main(){
     const appSeven=path.join(root,'app-created.7z');
     await fillArchiveSources(page,source);
     await page.locator('#archive-target').fill(appSeven);
-    await page.locator('#archive-volume').fill('');
-    await page.locator('#archive-create-password').fill('secret');
+    await openArchiveOptions(page);await page.locator('#archive-volume').fill('');await closeArchiveOptions(page);
+    await openArchiveOptions(page);await page.locator('#archive-create-password').fill('secret');await closeArchiveOptions(page);
     await page.locator('#archive-create').click();
     await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
     await page.locator('[data-archive-mode="browse"]').click();
     await page.locator('#archive-source').fill(appSeven);
-    await page.locator('#archive-password').fill('secret');
+    await setArchivePassword(page,'secret');
     await page.locator('#archive-open').click();
     await expect(page.locator('.archive-entry-name')).toHaveText('源文件.txt');
     const appSplit=path.join(root,'app-split.7z');
     await page.locator('[data-archive-mode="create"]').click();
     await fillArchiveSources(page,large);
     await page.locator('#archive-target').fill(appSplit);
-    await page.locator('#archive-create-password').fill('');
-    await page.locator('#archive-volume').fill('1');
+    await openArchiveOptions(page);await page.locator('#archive-create-password').fill('');await closeArchiveOptions(page);
+    await openArchiveOptions(page);await page.locator('#archive-volume').fill('1');await closeArchiveOptions(page);
     await page.locator('#archive-create').click();
     await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
     assert.equal((await fs.stat(appSplit+'.001')).isFile(),true);
@@ -157,10 +157,10 @@ async function main(){
     if(!made.error){const external=spawnSync('7z',['t','-y',appSplit+'.001'],{encoding:'utf8'});assert.equal(external.status,0,external.stdout+'\n'+external.stderr);}
     await page.locator('[data-archive-mode="browse"]').click();
     await page.locator('#archive-source').fill(appSplit+'.001');
-    await page.locator('#archive-password').fill('');
+    await setArchivePassword(page,'');
     await page.locator('#archive-open').click();
     await expect(page.locator('.archive-entry-name')).toHaveText('large.bin');
-    await page.locator('#archive-test').click();
+    await testArchive(page);
     await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
     if(!made.error){
       const tar=path.join(root,'documents.tar'),gzip=tar+'.gz',xz=tar+'.xz',tgz=path.join(root,'documents.tgz'),txz=path.join(root,'documents.txz');
@@ -171,7 +171,7 @@ async function main(){
         await page.locator('#archive-source').fill(archive);
         await page.locator('#archive-open').click();
         await expect(page.locator('.archive-entry')).toHaveCount(2,{timeout:30000});
-        await page.locator('#archive-test').click();
+        await testArchive(page);
         await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
       }
       const unpack=path.join(root,'composite-output');await fs.mkdir(unpack);
@@ -219,7 +219,7 @@ async function main(){
       await page.locator('#archive-source').fill(archive);
       await page.locator('#archive-open').click();
       await expect(page.locator('.archive-entry')).toHaveCount(count,{timeout:30000});
-      await page.locator('#archive-test').click();
+      await testArchive(page);
       await expect(page.locator('#archive-status-text')).toContainText('校验完成',{timeout:30000});
       const output=path.join(root,`output-${format.replaceAll('.','-')}`);await fs.mkdir(output);
       await page.locator('#archive-parent').fill(output);
@@ -236,7 +236,7 @@ async function main(){
     await page.locator('#archive-format').click();await page.locator('#archive-format-options [role="option"][aria-label="ZIP"]').click();
     const optin=path.join(root,'optin-created.zip');
     await fillArchiveSources(page,source);await page.locator('#archive-target').fill(optin);
-    await page.locator('#archive-create-password').fill('');await page.locator('#archive-volume').fill('');
+    await openArchiveOptions(page);await page.locator('#archive-create-password').fill('');await closeArchiveOptions(page);await openArchiveOptions(page);await page.locator('#archive-volume').fill('');await closeArchiveOptions(page);
     await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包',{timeout:30000});
     await expect.poll(()=>app.evaluate(()=>globalThis.archiveRevealCount)).toBe(1);
     await page.locator('[data-archive-mode="browse"]').click();await page.locator('#archive-source').fill(optin);await page.locator('#archive-open').click();

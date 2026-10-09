@@ -19,7 +19,7 @@ import {archiveEntryDetails} from '../shared/archive-details';
 import {validArchiveRevision} from '../shared/archive-revision';
 import {ArchiveSharedBudget,type ArchiveSharedLease} from './archive-shared-budget';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean;retainCache?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
@@ -57,6 +57,7 @@ export class ArchiveService {
   setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.shared?.configure(budget);this.budgetOverride=budget;}
   taskOverview(){return this.tasks?.overview()??Promise.resolve({active:[],recent:[],error:''});}
   cancelId(id:string){const job=this.jobs.get(id);if(!job)throw Error('任务已结束');if(!this.cancel(id,job.owner))throw Error('正在完成最终保存，请等待任务结束');return job.owner;}
+  cancelOwner(owner:number){for(const [id,job] of this.jobs)if(job.owner===owner)this.cancel(id,owner);}
   private checkpoint(id:string){if(this.jobs.get(id)?.cancelled)throw new ArchiveFailure('压缩任务已取消','cancelled');}
   private seal(owner:number,id:string,confirmed=false){const job=this.jobs.get(id);if(confirmed&&job)job.cancelled=false;this.checkpoint(id);if(job)job.committing=true;this.notify(owner,{id,operation:'commit',done:0,total:0});}
   private notify(owner:number,value:ArchiveProgress){const job=this.jobs.get(value.id);this.tasks?.progress(value,!!job&&!job.cancelled&&!job.finishing&&!job.committing);this.changed(owner,value);}
@@ -263,18 +264,22 @@ export class ArchiveService {
       selected.forEach((value,index)=>indexes.writeUInt32LE(value,4+index*4));
       const packet=Buffer.concat([indexes,...(folders.packet?[folders.packet]:[])]);
       const prepared=await this.acquireSource(owner,id,source);
-      let job:Awaited<ReturnType<ArchiveDragCache['create']>>|undefined;
+      let job:Awaited<ReturnType<ArchiveDragCache['create']>>|undefined,retainCache=false;
       try{
         await this.dragCache.sweep();job=await this.dragCache.create(id);
         const messages=await this.execute(owner,id,'drag',[prepared.path,job.payload,String(encoding(request.encoding)),request.revision,this.sourceWindow(owner),job.lease,...(folders.packet?['--folders']:[])],secret,'prepare',packet,{path:source,stamp:prepared.stamp});
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('拖出未完成');
+        retainCache=result.retainCache===true;
         return {path:source,count:result.count,cancelled:result.cancelled===true,...this.scanResult(messages)};
       }finally{
         prepared.release();
         // The helper exits only after the target ends its async operation and
         // closes all contents streams. Never remove files when DoDragDrop alone returns.
-        if(job)await this.dragCache.release(id).then(removed=>{if(!removed)this.diagnostic('archive-drag-cache-retained',id,true);}).catch(error=>this.diagnostic('archive-drag-cache-cleanup',String(error),true));
+        // A path-only drop target may open the files after OLE returns. Keep that
+        // marked job for the regular 24-hour cache sweep; streams still release immediately.
+        if(job&&retainCache)this.diagnostic('archive-drag-path-cache-retained',id,false);
+        else if(job)await this.dragCache.release(id).then(removed=>{if(!removed)this.diagnostic('archive-drag-cache-retained',id,true);}).catch(error=>this.diagnostic('archive-drag-cache-cleanup',String(error),true));
       }
     }
     if(request.operation==='update'){

@@ -148,7 +148,7 @@ class DragData final:public IDataObject,public IDataObjectAsyncCapability {
     std::atomic<HRESULT> outcome{S_OK};std::atomic<DWORD> effect{DROPEFFECT_NONE};
     std::string failure,failure_code="archive";
 public:
-    Selection selection;std::shared_ptr<Lifetime> lifetime=std::make_shared<Lifetime>();
+    Selection selection;std::shared_ptr<Lifetime> lifetime=std::make_shared<Lifetime>();bool paths_supplied=false;
     CLIPFORMAT descriptors=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_FILEDESCRIPTORW);
     CLIPFORMAT contents=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_FILECONTENTS);
     CLIPFORMAT preferred=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
@@ -187,12 +187,29 @@ public:
         if(!request)return E_POINTER;if(request->dwAspect!=DVASPECT_CONTENT)return DV_E_DVASPECT;
         if(request->ptd)return DV_E_DVTARGETDEVICE;
         if(request->cfFormat==contents){if(!(request->tymed&TYMED_ISTREAM))return DV_E_TYMED;if(request->lindex<0||size_t(request->lindex)>=selection.items.size())return DV_E_LINDEX;return S_OK;}
-        if(request->cfFormat==descriptors||request->cfFormat==preferred||(request->cfFormat==untrusted&&is_untrusted())){if(!(request->tymed&TYMED_HGLOBAL))return DV_E_TYMED;return request->lindex==-1?S_OK:DV_E_LINDEX;}
+        if(request->cfFormat==CF_HDROP||request->cfFormat==descriptors||request->cfFormat==preferred||(request->cfFormat==untrusted&&is_untrusted())){if(!(request->tymed&TYMED_HGLOBAL))return DV_E_TYMED;return request->lindex==-1?S_OK:DV_E_LINDEX;}
         return DV_E_FORMATETC;
     }
     HRESULT STDMETHODCALLTYPE GetData(FORMATETC *request,STGMEDIUM *out) override {
         if(!out)return E_POINTER;*out={};auto checked=QueryGetData(request);if(FAILED(checked))return checked;
         try {
+            if(request->cfFormat==CF_HDROP){
+                // Applications which only accept real paths cannot consume FileContents.
+                // Publish paths only after all selected contents passed extraction and scanning.
+                prepare();std::vector<std::wstring> paths;size_t characters=1;
+                for(const auto &item:selection.items)if(fs::path(item.name).parent_path().empty()){
+                    const auto file=stage/item.original;
+                    if(item.directory)fs::create_directories(file);
+                    if(!fs::exists(file))fail("Dragged file was not extracted");
+                    paths.push_back(file.wstring());characters+=paths.back().size()+1;
+                }
+                if(paths.empty())fail("No files were prepared for drag");
+                auto memory=GlobalAlloc(GMEM_MOVEABLE|GMEM_ZEROINIT,sizeof(DROPFILES)+characters*sizeof(wchar_t));if(!memory)return E_OUTOFMEMORY;
+                auto header=static_cast<DROPFILES*>(GlobalLock(memory));if(!header){GlobalFree(memory);return E_OUTOFMEMORY;}
+                header->pFiles=sizeof(DROPFILES);header->fWide=TRUE;auto cursor=reinterpret_cast<wchar_t*>(header+1);
+                for(const auto &file:paths){std::memcpy(cursor,file.c_str(),(file.size()+1)*sizeof(wchar_t));cursor+=file.size()+1;}
+                GlobalUnlock(memory);out->tymed=TYMED_HGLOBAL;out->hGlobal=memory;paths_supplied=true;return S_OK;
+            }
             if(request->cfFormat==contents){
                 const auto &item=selection.items[request->lindex];IStream *stream=nullptr;HRESULT code;
                 if(item.directory)code=CreateStreamOnHGlobal(nullptr,TRUE,&stream);
@@ -228,8 +245,8 @@ public:
     }
     HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD direction,IEnumFORMATETC **out) override {
         if(direction!=DATADIR_GET)return E_NOTIMPL;
-        FORMATETC formats[]={{descriptors,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{contents,nullptr,DVASPECT_CONTENT,-1,TYMED_ISTREAM},{preferred,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{untrusted,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL}};
-        return SHCreateStdEnumFmtEtc(is_untrusted()?4:3,formats,out);
+        FORMATETC formats[]={{descriptors,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{contents,nullptr,DVASPECT_CONTENT,-1,TYMED_ISTREAM},{preferred,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{CF_HDROP,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{untrusted,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL}};
+        return SHCreateStdEnumFmtEtc(is_untrusted()?5:4,formats,out);
     }
     HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*,DWORD,IAdviseSink*,DWORD*) override{return OLE_E_ADVISENOTSUPPORTED;}
     HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override{return OLE_E_ADVISENOTSUPPORTED;}
@@ -324,6 +341,14 @@ void selftest(DragData *data,bool report_entries) {
     if(retained){if(!data->pending())fail("Drag cache released while a stream was retained");retained->Release();}
     if(data->pending())fail("Drag cache did not release its streams");
     marshal_test(data);
+    if(report_entries){
+        format={CF_HDROP,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL};
+        if(FAILED(data->GetData(&format,&medium)))fail(data->error().empty()?"Cannot prepare physical drag paths":data->error(),data->error_code());
+        const auto files=reinterpret_cast<HDROP>(medium.hGlobal);const UINT count=DragQueryFileW(files,0xffffffff,nullptr,0);
+        if(!count)fail("Empty drag path list");
+        for(UINT i=0;i<count;++i){const auto length=DragQueryFileW(files,i,nullptr,0);std::wstring path(length+1,L'\0');DragQueryFileW(files,i,path.data(),length+1);path.resize(length);if(!fs::exists(path))fail("Drag path is missing");}
+        ReleaseStgMedium(&medium);emit("{\"type\":\"drag-paths\",\"count\":"+std::to_string(count)+"}");
+    }
 }
 }
 bool archive_cancelled(){if(poll_escape&&(GetAsyncKeyState(VK_ESCAPE)&0x8000))cancelled=true;return cancelled.load();}
@@ -367,7 +392,7 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
         while(data->pending())pump();
         data->drain();
         if(!was_cancelled){if(!data->error().empty())fail(data->error(),data->error_code());if(FAILED(code)||FAILED(data->result()))fail("Target failed to copy archive contents");}
-        emit("{\"type\":\"result\",\"count\":"+std::to_string(was_cancelled?0:data->selection.roots)+",\"cancelled\":"+(was_cancelled?"true":"false")+"}");
+        emit("{\"type\":\"result\",\"count\":"+std::to_string(was_cancelled?0:data->selection.roots)+",\"retainCache\":"+(data->paths_supplied?"true":"false")+",\"cancelled\":"+(was_cancelled?"true":"false")+"}");
         data->Release();drag_source->Release();OleUninitialize();
     }catch(...){poll_escape=false;cancelled=true;data->drain();data->Release();drag_source->Release();OleUninitialize();throw;}
 }

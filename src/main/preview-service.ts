@@ -5,6 +5,7 @@ import {readText} from './text-files';
 import type {PreviewData,FileEntry} from '../shared/types';
 import {textExtensions} from '../shared/preview';
 import type {DirectoryInfo} from '../shared/directory';
+import {isArchivePath} from '../shared/archive-actions';
 function inspect(path:string,kind:string):Promise<{entries?:FileEntry[];metadata?:Record<string,string>;cover?:string;lyrics?:import('../shared/preview').LyricLine[];workbook?:import('../shared/workbook').WorkbookData}>{return new Promise((resolve,reject)=>{
   const worker=new Worker(join(__dirname,'preview-worker.cjs'),{workerData:{path,kind},resourceLimits:{maxOldGenerationSizeMb:192}});
   const timer=setTimeout(()=>{void worker.terminate();reject(new Error('文件解析超时，请用默认程序打开'));},15000);
@@ -23,6 +24,7 @@ export async function preparePreview(path:string,register:(path:string,mime:stri
   const data:PreviewData={name:basename(path)||path,path,size:info.size,type:'unsupported',siblings:[],navigation,modified:info.mtimeMs,created:info.birthtimeMs,metadata:{'类型':info.isDirectory()?'文件夹':(ext.toUpperCase()||'文件')}};
   if(info.isDirectory()){data.directory=await directory(path);data.type='folder';data.metadata!['项目']=String(data.directory.count);return data;}
   if(!info.isFile())throw new Error('此项目无法预览');
+  if(isArchivePath(path)){data.type='archive';data.nativeArchive=true;return data;}
   const kind=images[ext]?'image':media[ext]?'media':ext==='pdf'?'pdf':ext==='docx'?'docx':ext==='pptx'?'pptx':/^(xlsx|xlsm|xltx|ods)$/.test(ext)?'workbook':ext==='epub'?'epub':/^(ttf|otf|woff|woff2)$/.test(ext)?'font':/^(zip|apk|jar|nupkg|xpi|vsix)$/.test(ext)?'archive':null;
   if(kind){
     if((kind==='image'&&info.size>100*1024*1024)||(['docx','pptx','workbook','epub','font'].includes(kind)&&info.size>50*1024*1024)){data.error='文件超过预览大小上限';return data;}

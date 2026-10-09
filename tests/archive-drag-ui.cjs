@@ -1,3 +1,4 @@
+const {openArchiveOptions,closeArchiveOptions,setArchivePassword,testArchive}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -22,7 +23,7 @@ async function main(){
    });
   });
   await page.waitForSelector('[data-page="archive"]');await page.locator('[data-page="archive"]').click();await page.locator('[data-archive-mode="browse"]').click();
-  await page.locator('#archive-source').fill(zip);await page.locator('#archive-password').fill(' 密 码 ');await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(200);
+  await page.locator('#archive-source').fill(zip);await setArchivePassword(page,' 密 码 ');await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(200);
   await page.locator('.archive-entry input').nth(0).check();await page.locator('#archive-more').click();await expect(page.locator('.archive-entry')).toHaveCount(2);
   await page.locator('.archive-entry input').nth(1).check();
   const start=index=>page.locator('.archive-entry-name').nth(index).evaluate(element=>{

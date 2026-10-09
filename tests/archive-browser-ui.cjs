@@ -1,4 +1,4 @@
-const {fillArchiveSources,openArchiveEditor}=require('./archive-ui-helpers.cjs');
+const {fillArchiveSources,openArchiveEditor,openArchiveOptions,closeArchiveOptions,setArchivePassword,testArchive}=require('./archive-ui-helpers.cjs');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -20,15 +20,15 @@ async function main(){
   await page.waitForSelector('[data-page="archive"]');await page.locator('[data-page="archive"]').click();await expect(page.locator('#archive-open-completed')).not.toBeChecked();
   const choose=async(id,label)=>{await page.locator('#'+id).click();await page.getByRole('option',{name:label,exact:true}).click();};
   const content=path.join(root,'created.txt'),created=path.join(root,'created.zip');await fs.writeFile(content,'create test');
-  await page.locator('.archive-advanced > summary').click();assert.equal(await page.locator('#archive-create-password-encoding').evaluate(node=>node.value),'65001');
+  await openArchiveOptions(page);assert.equal(await page.locator('#archive-create-password-encoding').evaluate(node=>node.value),'65001');await closeArchiveOptions(page);
   await choose('archive-format','7Z');await expect(page.locator('#archive-create-password-encoding-row')).toBeHidden();await choose('archive-format','ZIP');
-  await page.locator('#archive-create-password').fill(' 页面中文密码 ');await choose('archive-create-password-encoding','GBK / CP936');
+  await openArchiveOptions(page);await page.locator('#archive-create-password').fill(' 页面中文密码 ');await closeArchiveOptions(page);await openArchiveOptions(page);await choose('archive-create-password-encoding','GBK / CP936');await closeArchiveOptions(page);
   await fillArchiveSources(page,content);await page.locator('#archive-target').fill(created);await page.locator('#archive-create').click();await expect(page.locator('#archive-status-text')).toContainText('已创建压缩包');
   await page.locator('[data-archive-mode="browse"]').click();await page.locator('#archive-source').fill(created);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(1);
-  await page.locator('#archive-password').fill(' 页面中文密码 ');await page.locator('#archive-test').click();await expect(page.locator('#archive-status')).toHaveAttribute('data-state','error');
-  await page.locator('#archive-password-encoding-row > summary').click();assert.equal(await page.locator('#archive-password-encoding').evaluate(node=>node.value),'65001');await choose('archive-password-encoding','GBK / CP936');
-  await page.locator('#archive-test').click();await expect(page.locator('#archive-status-text')).toContainText('校验完成');await page.locator('#archive-parent').fill(root);await page.locator('#archive-extract-all').click();await expect(page.locator('#archive-status-text')).toContainText('已解压');assert.equal(await fs.readFile(path.join(root,'created/created.txt'),'utf8'),'create test');
-  await page.locator('#archive-password').fill('');await choose('archive-password-encoding','UTF-8（默认）');
+  await setArchivePassword(page,' 页面中文密码 ');await testArchive(page);await expect(page.locator('#archive-status')).toHaveAttribute('data-state','error');
+  await page.locator('#archive-decode-open').click();assert.equal(await page.locator('#archive-password-encoding').evaluate(node=>node.value),'65001');await page.locator('#archive-decode-open').evaluate(node=>{if(!document.querySelector('#archive-decode-dialog').open)node.click();});await choose('archive-password-encoding','GBK / CP936');await page.locator('#archive-decode-dialog-close').click();await page.locator('#archive-decode-dialog').waitFor({state:'hidden'});
+  await testArchive(page);await expect(page.locator('#archive-status-text')).toContainText('校验完成');await page.locator('#archive-parent').fill(root);await page.locator('#archive-extract-all').click();await expect(page.locator('#archive-status-text')).toContainText('已解压');assert.equal(await fs.readFile(path.join(root,'created/created.txt'),'utf8'),'create test');
+  await setArchivePassword(page,'');await page.locator('#archive-decode-open').evaluate(node=>{if(!document.querySelector('#archive-decode-dialog').open)node.click();});await choose('archive-password-encoding','UTF-8（默认）');await page.locator('#archive-decode-dialog-close').click();await page.locator('#archive-decode-dialog').waitFor({state:'hidden'});
   const riskyZip=new JSZip();riskyZip.file('inner.zip',Buffer.from('nested data'));riskyZip.file('plain.txt','plain');const risky=path.join(root,'risk-ui.zip');await fs.writeFile(risky,await riskyZip.generateAsync({type:'nodebuffer'}));
   await page.locator('#archive-source').fill(risky);await page.locator('#archive-open').click();await expect(page.locator('.archive-entry')).toHaveCount(2);await page.locator('#archive-parent').fill(root);
   await page.locator('#archive-extract-all').click();let riskDialog=page.locator('#archive-risk-dialog');await expect(riskDialog).toBeVisible();await expect(riskDialog).toContainText('1 个疑似压缩包');await riskDialog.locator('[data-risk-cancel]').click();await expect(page.locator('#archive-status-text')).toContainText('已取消风险确认');await expect(page.locator('#archive-status')).toHaveAttribute('data-state','info');await assert.rejects(fs.stat(path.join(root,'risk-ui')),error=>error.code==='ENOENT');

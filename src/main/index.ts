@@ -1,3 +1,4 @@
+import {previewArchive} from './preview-archive';
 import {FileContextMenu} from './file-menu';
 import {explorerMenuState,setExplorerMenu} from './explorer-menu';
 import {readShellRequest} from './shell-request';
@@ -241,7 +242,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('responsive',()=>runtimeLog(app.getPath('userData'),`renderer-responsive:${view}`));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.on('close',()=>{if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);if(view==='preview')archiveService?.cancelOwner(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -559,7 +560,8 @@ function registerIPC() {
   handle('file-action-open',(_event,tool,paths)=>{if(!['rename','locksmith'].includes(tool)||!Array.isArray(paths)||paths.length>(tool==='locksmith'?32:4096))throw Error('文件操作请求无效');openFileAction({tool,paths:paths.map(filePath)});});
   handle('file-tools-run',(event,task)=>fileTools.run(event.sender.id,task));
   handle('archive-run',(event,request:ArchiveRequest,id?:string)=>archiveService.run(event.sender.id,request,id));
-  handle('archive-cancel',(event,id:string)=>archiveService.cancel(id,event.sender.id));
+  handle('archive-cancel',(event,id:string)=>archiveService.cancel(id,event.sender.id),['main','preview']);
+  handle('preview-archive',(event,request:import('../shared/archive').PreviewArchiveRequest,id:string)=>previewArchive(()=>previews.get(event.sender.id),request,id,(value,task)=>archiveService.run(event.sender.id,value,task)),['preview']);
   handle('archive-cancel-id',(_event,id:string)=>{if(typeof id!=='string'||!(/^[a-f0-9-]{36}$/i).test(id))throw Error('任务标识无效');const owner=archiveService.cancelId(id),window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&w.webContents.id===owner);window?.webContents.send('one:archive-cancel-requested',id);},['main']);
   handle('archive-association',(_event,operation)=>archiveAssociation(operation));
   handle('file-tools-cancel',(event,kind)=>fileTools.cancel(event.sender.id,kind));

@@ -27,7 +27,7 @@ async function main(){
    return native(['drag-test',file,path.join(root,`stage-${sequence++}`),'0',revision],secret,packet,expected,test);
   };
   const entries=lines=>lines.filter(m=>m.type==='drag-entry');
-  const one=drag(zip,[at('parent/folder/a.txt')]);assert.deepEqual(entries(one),[{type:'drag-entry',name:'a.txt',directory:false,bytes:Buffer.byteLength('内容'),hash:hash(Buffer.from('内容'))}]);assert.equal(one.at(-1).count,1);
+  const one=drag(zip,[at('parent/folder/a.txt')]);assert.deepEqual(entries(one),[{type:'drag-entry',name:'a.txt',directory:false,bytes:Buffer.byteLength('内容'),hash:hash(Buffer.from('内容'))}]);assert.equal(one.at(-1).count,1);assert.deepEqual(one.find(m=>m.type==='drag-paths'),{type:'drag-paths',count:1});assert.equal(one.at(-1).retainCache,true);
   const folder=drag(zip,[at('parent/folder/'),at('parent/folder/a.txt')]);assert.equal(folder.at(-1).count,1);assert.deepEqual(entries(folder).map(e=>e.name),['folder','folder\\a.txt','folder\\empty']);
   assert(entries(folder).find(e=>e.name==='folder\\empty').directory);
   const siblings=drag(zip,[at('parent/folder/a.txt'),at('parent/second.txt')]);assert.deepEqual(entries(siblings).map(e=>e.name),['folder','folder\\a.txt','second.txt']);

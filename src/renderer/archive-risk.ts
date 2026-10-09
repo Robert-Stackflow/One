@@ -22,7 +22,7 @@ async function confirmRisk(path:string,risk:ArchiveRisk):Promise<ArchiveRiskAppr
 }
 
 /** Per-page, revision-bound approvals; never persist permission in settings. */
-export function archiveRiskRunner(){
+export function archiveRiskRunner(waiting?:(value:boolean)=>void){
  const dragApprovals=new Map<string,ArchiveRiskApproval>();
  return async(request:ArchiveRequest,id:string)=>{
   const key=request.operation==='drag'?JSON.stringify([request.path.toLowerCase(),request.revision,[...request.selected].sort((a,b)=>a-b),[...(request.selectedFolders??[])].sort()]):'';
@@ -30,7 +30,8 @@ export function archiveRiskRunner(){
   for(let attempt=0;attempt<3;attempt++){
    const value=await api.archiveRun({...request,riskApproval:approved},id);
    if(!('risk' in value)||!value.risk)return value;
-   const next=await confirmRisk(request.path,value.risk);
+   waiting?.(true);let next:ArchiveRiskApproval|undefined;
+   try{next=await confirmRisk(request.path,value.risk);}finally{waiting?.(false);}
    if(!next)throw new ArchiveRiskNotice('已取消风险确认，未发布解压内容。');
    if(request.operation==='drag'){
     if(dragApprovals.size>=16)dragApprovals.clear();dragApprovals.set(key,next);
