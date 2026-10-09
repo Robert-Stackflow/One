@@ -26,7 +26,7 @@ async function main(){
   const {ArchiveService}=await load('src/main/archive-service.ts'),{parseCli,runCli}=await load('src/main/archive-cli.ts'),{previewArchive}=await load('src/main/preview-archive.ts');service=new ArchiveService(path.join(root,'cache'),()=>{});const run=async request=>{try{return await service.run(1,request);}catch(error){error.message=path.basename(request.path)+': '+error.message;throw error;}};
   const cases=[[437,' café £ '],[932,' 日本語 あ '],[936,' 中文 密码 '],[949,' 한국어 암호 '],[950,' 中文 密碼 '],[65001,' 中文 한국어 🔒 ']];cases.push([0,cases.find(([code])=>code===acp)?.[1]||' system password ']);
   const fixtureRoot=path.resolve('tests/fixtures/archives/encrypted-zip');let sequence=0;
-  for(const manifestName of ['manifest.json','sevenzip-manifest.json']){const manifest=JSON.parse(await fs.readFile(path.join(fixtureRoot,manifestName),'utf8'));
+  for(const manifestName of ['manifest.json','sevenzip-manifest.json','zstd-manifest.json']){const manifest=JSON.parse(await fs.readFile(path.join(fixtureRoot,manifestName),'utf8'));
    for(const fixture of manifest.files){const original=await fs.readFile(path.join(fixtureRoot,fixture.stored));assert.equal(hash(original),fixture.sha256);
     for(const [passwordEncoding,password] of cases){
      const source=path.join(root,sequence+++'-'+passwordEncoding+'.zipx'),bytes=rekey(original,manifest.password,password,passwordEncoding);await fs.writeFile(source,bytes);
@@ -49,7 +49,7 @@ async function main(){
   // JAR/APK use the same ZIP handler and must accept the explicit code page.
   const fixture=JSON.parse(await fs.readFile(path.join(fixtureRoot,'sevenzip-manifest.json'),'utf8')).files[0],original=await fs.readFile(path.join(fixtureRoot,fixture.stored));
   for(const ext of ['jar','apk']){const source=path.join(root,'alias.'+ext);await fs.writeFile(source,rekey(original,'secret',' 한국어 암호 ',949));await run({operation:'test',path:source,password:' 한국어 암호 ',passwordEncoding:949});checks++;}
-  console.log(`ZIPX password encoding passed: ${checks} checks, seven external codec/AES fixtures, UTF8+emoji, system ACP ${acp}, CP437/932/936/949/950, extraction hashes, wrong encoding/password, drag, CLI, preview and JAR/APK.`);
+  console.log(`ZIPX password encoding passed: ${checks} checks, ten external codec/AES fixtures including ZSTD, UTF8+emoji, system ACP ${acp}, CP437/932/936/949/950, extraction hashes, wrong encoding/password, drag, CLI, preview and JAR/APK.`);
  }finally{await service?.stop();for(const [key,value] of Object.entries(previous))if(value===undefined)delete process.env[key];else process.env[key]=value;const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 module.exports={rekey};

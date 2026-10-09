@@ -66,7 +66,7 @@ async function main(){
    }
   }
   const fixtureRoot=path.resolve('tests/fixtures/archives/encrypted-zip');
-  for(const manifestName of ['manifest.json','sevenzip-manifest.json']){
+  for(const manifestName of ['manifest.json','sevenzip-manifest.json','zstd-manifest.json']){
   const manifest=JSON.parse(await fs.readFile(path.join(fixtureRoot,manifestName),'utf8'));
   for(const fixture of manifest.files){
    const bytes=await fs.readFile(path.join(fixtureRoot,fixture.stored));assert.equal(bytes.length,fixture.bytes);assert.equal(hash(bytes),fixture.sha256);const entry=directory(bytes)[0];assert.equal(bytes.readUInt16LE(entry.aes),fixture.aesVersion);assert.equal(bytes[entry.aes+4],fixture.aesStrength);assert.equal(bytes.readUInt16LE(entry.aes+5),fixture.method);assert.equal(bytes.readUInt16LE(entry.local+6),fixture.flags);checks++;
@@ -78,7 +78,7 @@ async function main(){
    }
   }
   }
-  console.log(`Archive authentication passed: ${checks} checks, AES AE-1/AE-2 MAC, AES/ZipCrypto CRC, Store/Deflate/XZ, empty files, ZIPX oracle, seven independent WinZip/7-Zip AES fixtures including BZIP2/LZMA/PPMd8, no publication, drag and update refusal.`);
+  console.log(`Archive authentication passed: ${checks} checks, AES AE-1/AE-2 MAC, AES/ZipCrypto CRC, Store/Deflate/XZ, empty files, ZIPX oracle, ten AES fixtures including BZIP2/LZMA/PPMd8/ZSTD, no publication, drag and update refusal.`);
  }finally{await service?.stop();for(const [key,value] of Object.entries(previous))if(value===undefined)delete process.env[key];else process.env[key]=value;const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

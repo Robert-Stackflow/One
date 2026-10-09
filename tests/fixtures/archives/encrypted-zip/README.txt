@@ -17,8 +17,13 @@ The public test password is "secret". Archive bytes include random salt;
 the manifest pins the committed bytes and independently extracted content.
 These fixtures exercise the 7-Zip ZIPX reader, including methods unavailable
 in the minizip ZIP reader; copying to .zip is deliberately not a claimed flow.
-The installed generator did not support ZIP ZSTD creation, so encrypted ZSTD
-remains unverified. Non-ASCII passwords also remain a separate compatibility task.
+The installed generator did not support ZIP ZSTD creation. zstd-manifest.json
+therefore describes AES128/256 AE-1/AE-2 archives generated independently by
+generate-zstd.cjs, preserving the exact original method-93 ZSTD bytes from the
+pinned libarchive sample. Its plaintext output hash was independently obtained
+with 7-Zip. Deterministic salts are public test data, never product encryption.
+The password matrix also rekeys every fixture with UTF8/emoji, system ACP and
+CP437/932/936/949/950 and verifies the original ciphertext MAC before rekeying.
 
 tests/archive-authentication.cjs checks archive hashes and AES metadata, valid
 extraction hashes, wrong passwords and damaged authentication footers for both

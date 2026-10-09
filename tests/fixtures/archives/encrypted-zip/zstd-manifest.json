@@ -1,0 +1,66 @@
+{
+  "generator": "Node/OpenSSL PBKDF2-SHA1, independent AES-ECB little-endian CTR and HMAC-SHA1; deterministic public test salts",
+  "repository": "https://github.com/libarchive/libarchive",
+  "commit": "7f53fce04e4e672230f4eb80b219af17975e4f83",
+  "password": "secret",
+  "source": {
+    "file": "../test_read_format_zip_zstd.zipx",
+    "sha256": "ca15c7eabde8b918f1c91ff3a173012175b0599664f007fc3cb0bdf00c767377"
+  },
+  "files": [
+    {
+      "stored": "independent-aes128-ae2-zstd.zipx",
+      "bytes": 689,
+      "sha256": "c4d5f3293a62bc20a961442bf8a663a2fde9d53cbe78d82dcfbb7a84d52ef9df",
+      "aesVersion": 2,
+      "aesStrength": 1,
+      "method": 93,
+      "flags": 1,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "vimrc",
+        "bytes": 912,
+        "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+      }
+    },
+    {
+      "stored": "independent-aes256-ae1-zstd.zipx",
+      "bytes": 697,
+      "sha256": "09969611ff5f64961d604673cfa67ebc9170689839571690b1f7906323944009",
+      "aesVersion": 1,
+      "aesStrength": 3,
+      "method": 93,
+      "flags": 1,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "vimrc",
+        "bytes": 912,
+        "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+      }
+    },
+    {
+      "stored": "independent-aes256-ae2-zstd.zipx",
+      "bytes": 697,
+      "sha256": "36d62f590df97e0343eeadab8b5b9d91b40534040dc44773a0b1de29c1c5e40d",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 93,
+      "flags": 1,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "vimrc",
+        "bytes": 912,
+        "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+      }
+    }
+  ]
+}
