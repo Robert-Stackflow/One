@@ -21,6 +21,7 @@
 #include "mz_zip_rw.h"
 #include "common.h"
 #include "resources.h"
+#include "origin.h"
 #include "browse.h"
 #include "zip-common.h"
 
@@ -238,7 +239,7 @@ void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string
     if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(items.size()) + "}");
 }
 
-void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
+size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
                     const std::set<size_t> &selected, const std::string &password, bool result) {
     zip_preflight(reader, items);
     if (fs::exists(destination)) fail("Extraction destination already exists");
@@ -314,6 +315,7 @@ void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path
         err = mz_zip_reader_goto_next_entry(reader.value);
     }
     if (result) emit("{\"type\":\"result\",\"count\":" + std::to_string(done) + "}");
+    return done;
 }
 
 static void create(const fs::path &destination, const std::vector<fs::path> &sources,
@@ -463,13 +465,16 @@ int wmain(int argc, wchar_t **argv) {
                     else fail("Invalid selected entry index");
                 }
                 const auto folders=selected_folders?read_selected_folders():std::vector<std::string>{};
+                ArchiveOrigin origin(argv[2]);size_t extracted=0;
                 if (format == 0) {
                     Reader reader(argv[2], encoding); auto items = zip_entries(reader);
                     expand_folders(items,selected,folders);
                     if (!selected.empty() && *selected.rbegin() >= items.size()) fail("Selected entry index is out of range");
-                    zip_extract(reader, items, argv[3], selected, password);
-                } else seven_extract(argv[2], argv[3], selected, password, format,true,folders);
+                    extracted=zip_extract(reader, items, argv[3], selected, password,false);
+                } else extracted=seven_extract(argv[2], argv[3], selected, password, format,false,folders);
                 if(!expected_revision.empty()&&zip_revision(argv[2])!=expected_revision)fail("Archive changed during extraction; reopen it");
+                origin.apply(argv[3]);
+                emit("{\"type\":\"result\",\"count\":"+std::to_string(extracted)+"}");
             }
         } else fail("Unknown archive operation");
         return 0;

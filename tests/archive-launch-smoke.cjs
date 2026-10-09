@@ -15,7 +15,7 @@ async function main(){
   await build({entryPoints:['src/main/archive-launch.ts'],outfile:launch,bundle:true,platform:'node'});
   const {defaultSettings,validateSettings,mergeSettings}=require(prefs),{archiveLaunchPath}=require(launch);
   const old=defaultSettings();delete old.archive;
-  assert.deepEqual(validateSettings(old).archive,{doubleClick:'smart',defaultFormat:'zip',openCompleted:false,conflict:'rename',compressionLevel:6,threads:2,memoryMiB:1024});
+  assert.deepEqual(validateSettings(old).archive,{doubleClick:'smart',defaultFormat:'zip',openCompleted:false,propagateZone:true,conflict:'rename',compressionLevel:6,threads:2,memoryMiB:1024});
   const legacy=defaultSettings();delete legacy.archive.conflict;assert.equal(validateSettings(legacy).archive.conflict,'rename');
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{doubleClick:'delete'}}));
   assert.throws(()=>mergeSettings(defaultSettings(),{archive:{openCompleted:'true'}}));
@@ -62,6 +62,9 @@ async function main(){
   await page.evaluate(()=>localStorage.setItem('one-archive-open-completed','true'));
   await page.reload();await page.locator('[data-page="settings"]').click();await page.locator('[data-settings-tab="archive"]').click();
   await expect(page.locator('#archive-pref-open-completed')).toBeChecked();
+  await expect(page.locator('#archive-pref-propagate-zone')).toBeChecked();
+  await page.locator('#archive-pref-propagate-zone').uncheck();
+  await expect.poll(()=>page.evaluate(async()=>(await window.one.settings()).archive.propagateZone)).toBe(false);
   assert.equal(await page.evaluate(()=>localStorage.getItem('one-archive-open-completed')),null);
   await expect(page.locator('#archive-association-toggle')).toBeDisabled();
   assert.equal(await page.locator('#archive-pref-format').evaluate(node=>node.value),'7z');
@@ -70,6 +73,8 @@ async function main(){
   await page.locator('[data-page="archive"]').click();
   await expect(page.locator('#archive-open-completed')).not.toBeChecked();
   assert.equal(await page.locator('#archive-format').evaluate(node=>node.value),'7z');
+  await page.reload();await page.locator('[data-page="settings"]').click();await page.locator('[data-settings-tab="archive"]').click();
+  await expect(page.locator('#archive-pref-propagate-zone')).not.toBeChecked();
   assert.deepEqual(errors,[]);
   assert.equal(await app.evaluate(()=>globalThis.archiveExplorerCalls),0,'archive launches must not open Explorer');
   console.log('Archive launch smoke passed: smart startup, running-instance browse, queued requests, password recovery, settings migration and persistence.');

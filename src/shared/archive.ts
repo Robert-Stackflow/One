@@ -18,7 +18,7 @@ export type ArchiveEdit =
 export type ArchiveRequest = Partial<import('./archive-options').ArchiveResources> & (
   | {operation:'list';path:string;offset?:number;encoding?:ArchiveEncoding;password?:string;browse?:ArchiveBrowse}
   | {operation:'create';path:string;sources:string[];password?:string;volumeBytes?:number;level?:number}
-  | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart'|'here';conflict?:ArchiveConflict;selected?:number[];selectedFolders?:string[];revision?:string;password?:string;encoding?:ArchiveEncoding}
+  | {operation:'extract';path:string;parent:string;destination?:'folder'|'smart'|'here';conflict?:ArchiveConflict;selected?:number[];selectedFolders?:string[];revision?:string;password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean}
   | {operation:'update';path:string;revision:string;changes:ArchiveEdit[];password?:string;encoding?:ArchiveEncoding}
-  | {operation:'drag';path:string;revision:string;selected:number[];selectedFolders?:string[];password?:string;encoding?:ArchiveEncoding}
+  | {operation:'drag';path:string;revision:string;selected:number[];selectedFolders?:string[];password?:string;encoding?:ArchiveEncoding;propagateZone?:boolean}
   | {operation:'test';path:string;password?:string;encoding?:ArchiveEncoding});

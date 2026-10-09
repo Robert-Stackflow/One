@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include "zip-common.h"
 #include "browse.h"
+#include "origin.h"
 
 // The helper owns one OLE drag and stays alive until the target has finished
 // its asynchronous extraction AND released every contents stream. Electron
@@ -141,6 +142,7 @@ class DragData final:public IDataObject,public IDataObjectAsyncCapability {
     std::atomic<ULONG> refs{1};std::atomic<bool> async{true},running{false};
     std::shared_future<void> prepared;
     fs::path source,stage;int encoding,format;std::string password;
+    std::shared_ptr<ArchiveOrigin> origin;
     std::atomic<HRESULT> outcome{S_OK};std::atomic<DWORD> effect{DROPEFFECT_NONE};
     std::string failure;
 public:
@@ -150,13 +152,16 @@ public:
     CLIPFORMAT preferred=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
     CLIPFORMAT performed=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_PERFORMEDDROPEFFECT);
     CLIPFORMAT logical=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_LOGICALPERFORMEDDROPEFFECT);
-    DragData(fs::path source,fs::path stage,int encoding,int format,std::string password,Selection selection):
-        source(std::move(source)),stage(std::move(stage)),encoding(encoding),format(format),password(std::move(password)),selection(std::move(selection)){}
+    CLIPFORMAT untrusted=(CLIPFORMAT)RegisterClipboardFormatW(CFSTR_UNTRUSTEDDRAGDROP);
+    DragData(fs::path source,fs::path stage,int encoding,int format,std::string password,Selection selection,std::shared_ptr<ArchiveOrigin> origin):
+        source(std::move(source)),stage(std::move(stage)),encoding(encoding),format(format),password(std::move(password)),origin(std::move(origin)),selection(std::move(selection)){}
+    bool is_untrusted() const{return origin->zone()!=0;}
     void prepare() {
-        if(!prepared.valid())prepared=std::async(std::launch::async,[source=source,stage=stage,encoding=encoding,format=format,password=password,selected=selection.indexes]{
+        if(!prepared.valid())prepared=std::async(std::launch::async,[source=source,stage=stage,encoding=encoding,format=format,password=password,selected=selection.indexes,origin=origin]{
             if(archive_cancelled())fail("Archive drag cancelled");
             if(format==0){Reader reader(source,encoding);zip_extract(reader,zip_entries(reader),stage,selected,password,false);}
             else seven_extract(source,stage,selected,password,format,false);
+            origin->apply(stage);
         }).share();
         while(prepared.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready)pump();
         prepared.get();
@@ -178,7 +183,7 @@ public:
         if(!request)return E_POINTER;if(request->dwAspect!=DVASPECT_CONTENT)return DV_E_DVASPECT;
         if(request->ptd)return DV_E_DVTARGETDEVICE;
         if(request->cfFormat==contents){if(!(request->tymed&TYMED_ISTREAM))return DV_E_TYMED;if(request->lindex<0||size_t(request->lindex)>=selection.items.size())return DV_E_LINDEX;return S_OK;}
-        if(request->cfFormat==descriptors||request->cfFormat==preferred){if(!(request->tymed&TYMED_HGLOBAL))return DV_E_TYMED;return request->lindex==-1?S_OK:DV_E_LINDEX;}
+        if(request->cfFormat==descriptors||request->cfFormat==preferred||(request->cfFormat==untrusted&&is_untrusted())){if(!(request->tymed&TYMED_HGLOBAL))return DV_E_TYMED;return request->lindex==-1?S_OK:DV_E_LINDEX;}
         return DV_E_FORMATETC;
     }
     HRESULT STDMETHODCALLTYPE GetData(FORMATETC *request,STGMEDIUM *out) override {
@@ -190,10 +195,11 @@ public:
                 else{prepare();code=SHCreateStreamOnFileEx((stage/item.original).c_str(),STGM_READ|STGM_SHARE_DENY_WRITE,0,FALSE,nullptr,&stream);}
                 if(FAILED(code))return code;out->tymed=TYMED_ISTREAM;out->pstm=new Contents(stream,lifetime,item.directory?fs::path{}:stage/item.original);return S_OK;
             }
-            size_t bytes=request->cfFormat==preferred?sizeof(DWORD):offsetof(FILEGROUPDESCRIPTORW,fgd)+selection.items.size()*sizeof(FILEDESCRIPTORW);
+            const bool scalar=request->cfFormat==preferred||request->cfFormat==untrusted;
+            size_t bytes=scalar?sizeof(DWORD):offsetof(FILEGROUPDESCRIPTORW,fgd)+selection.items.size()*sizeof(FILEDESCRIPTORW);
             auto memory=GlobalAlloc(GMEM_MOVEABLE|GMEM_ZEROINIT,bytes);if(!memory)return E_OUTOFMEMORY;
             auto data=GlobalLock(memory);if(!data){GlobalFree(memory);return E_OUTOFMEMORY;}
-            if(request->cfFormat==preferred)*static_cast<DWORD*>(data)=DROPEFFECT_COPY;
+            if(scalar)*static_cast<DWORD*>(data)=request->cfFormat==preferred?DROPEFFECT_COPY:1;
             else{
                 auto group=static_cast<FILEGROUPDESCRIPTORW*>(data);group->cItems=(UINT)selection.items.size();
                 for(size_t i=0;i<selection.items.size();++i){const auto &item=selection.items[i];auto &desc=group->fgd[i];
@@ -217,8 +223,8 @@ public:
     }
     HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD direction,IEnumFORMATETC **out) override {
         if(direction!=DATADIR_GET)return E_NOTIMPL;
-        FORMATETC formats[]={{descriptors,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{contents,nullptr,DVASPECT_CONTENT,-1,TYMED_ISTREAM},{preferred,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL}};
-        return SHCreateStdEnumFmtEtc(3,formats,out);
+        FORMATETC formats[]={{descriptors,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{contents,nullptr,DVASPECT_CONTENT,-1,TYMED_ISTREAM},{preferred,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL},{untrusted,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL}};
+        return SHCreateStdEnumFmtEtc(is_untrusted()?4:3,formats,out);
     }
     HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*,DWORD,IAdviseSink*,DWORD*) override{return OLE_E_ADVISENOTSUPPORTED;}
     HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override{return OLE_E_ADVISENOTSUPPORTED;}
@@ -286,6 +292,15 @@ void selftest(DragData *data,bool report_entries) {
     if(group->cItems!=data->selection.items.size())fail("Invalid descriptor count");
     for(size_t i=0;i<group->cItems;++i)if(std::wstring(group->fgd[i].cFileName)!=data->selection.items[i].name)fail("Invalid descriptor name");
     GlobalUnlock(medium.hGlobal);ReleaseStgMedium(&medium);
+    format={data->untrusted,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL};
+    const auto origin_code=data->GetData(&format,&medium);
+    if(data->is_untrusted()){
+        if(FAILED(origin_code)||GlobalSize(medium.hGlobal)!=sizeof(DWORD))fail("Missing untrusted drag metadata");
+        auto flag=static_cast<DWORD*>(GlobalLock(medium.hGlobal));if(!flag)fail("Cannot read untrusted drag metadata");
+        const auto value=*flag;GlobalUnlock(medium.hGlobal);ReleaseStgMedium(&medium);
+        if(value!=1)fail("Invalid untrusted drag metadata");
+    }else if(origin_code!=DV_E_FORMATETC)fail("Unexpected untrusted drag metadata");
+    if(report_entries)emit("{\"type\":\"drag-origin\",\"untrusted\":"+std::string(data->is_untrusted()?"true":"false")+"}");
     IStream *retained=nullptr;
     for(size_t i=0;i<data->selection.items.size();++i){
         const auto &item=data->selection.items[i];
@@ -330,8 +345,9 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
     SourceLock lock(source);if(zip_revision(source)!=revision)fail("Archive changed; reopen it before dragging");
     auto entries= [&]{if(format!=0)return seven_drag_entries(source,password,format);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
     auto selection=select(entries,selected,folders);
+    auto origin=std::make_shared<ArchiveOrigin>(source);
     if(FAILED(OleInitialize(nullptr)))fail("Cannot initialize Windows file drag");
-    auto data=new DragData(source,stage,encoding,format,password,std::move(selection));
+    auto data=new DragData(source,stage,encoding,format,password,std::move(selection),std::move(origin));
     auto drag_source=new DragSource;
     try {
         emit("{\"type\":\"ready\"}");

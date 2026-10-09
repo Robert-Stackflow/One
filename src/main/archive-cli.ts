@@ -14,7 +14,7 @@ export const cliHelp=`One.Cli.exe archive <list|create|extract|test|update|batch
 
 create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size SIZE] [--level 0-9] SOURCES...
 extract: --output DIRECTORY [--destination smart|folder|here] [--conflict rename|skip|replace]
-         [--select 0,1,...] ARCHIVES...
+         [--select 0,1,...] [--no-zone] ARCHIVES...
 list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
@@ -37,7 +37,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
  if(!args.length||args.length===1&&['--help','-h','help'].includes(args[0]))return {json:false,progress:false,passwordStdin:false,help:true,jobs:[]};
  const operation=args.shift()!;
  argument(['list','create','extract','test','update','batch'].includes(operation),'Unknown archive command');
- const flags=new Set(['json','progress','password-stdin','help']);
+ const flags=new Set(['json','progress','password-stdin','help',...(operation==='extract'?['no-zone']:[])]);
  const allowed:Record<string,string[]>={list:['encoding'],test:['encoding'],create:['output','format','volume-size','level'],extract:['output','encoding','destination','conflict','select'],update:['encoding','changes'],batch:['jobs']};
  for(const operation of ['list','test','create','extract','update'])allowed[operation].push('threads','memory-mib');
  const options=new Map<string,string>(),paths:string[]=[];let literal=false;
@@ -74,7 +74,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   argument(['folder','smart','here'].includes(destination),'Invalid extraction destination');argument(['rename','skip','replace'].includes(conflict),'Invalid conflict policy');
   const select=options.get('select');let selected:number[]=[];
   if(select){argument(/^\d+(,\d+)*$/.test(select),'--select requires comma-separated zero-based indexes');selected=[...new Set(select.split(',').map(Number))];argument(selected.length<=10000&&selected.every(index=>Number.isSafeInteger(index)&&index<1000000),'Invalid selected indexes');}
-  result.jobs=paths.map(path=>({operation,request:{operation,path,parent,destination:destination as 'folder'|'smart'|'here',conflict:conflict as 'rename'|'skip'|'replace',encoding,selected}}));
+  result.jobs=paths.map(path=>({operation,request:{operation,path,parent,destination:destination as 'folder'|'smart'|'here',conflict:conflict as 'rename'|'skip'|'replace',encoding,selected,propagateZone:!options.has('no-zone')}}));
  }else if(operation==='update'){
   argument(paths.length===1&&options.has('changes'),'update requires one archive and --changes');argument(/\.(?:zip|7z)$/i.test(paths[0]),'Only single-volume ZIP and 7Z editing is supported');
   result.jobs=[{operation,request:{operation,path:paths[0],encoding,revision:'',changes:[]},changesFile:filePath(options.get('changes')!,cwd)}];

@@ -360,7 +360,7 @@ void seven_test(const fs::path &source,const std::string &password,int format,bo
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(items.size())+"}");
 }
 
-void seven_extract(const fs::path &source,const fs::path &destination,
+size_t seven_extract(const fs::path &source,const fs::path &destination,
                    const std::set<size_t> &selected,const std::string &password,int format,bool result,const std::vector<std::string> &folders){
     OpenArchive reader(source,password,format);auto items=reader.items();
     auto effective=selected;expand_folders(items,effective,folders);
@@ -377,6 +377,7 @@ void seven_extract(const fs::path &source,const fs::path &destination,
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
     const auto error=archive_cancelled()?"cancelled":callback->errorCode;callback->Release();if(code==E_OUTOFMEMORY)fail("Archive extraction exceeded the memory budget","resource");if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
+    return indices.size();
 }
 
 void seven_update(const fs::path &source,const fs::path &temporary,const fs::path &backup,

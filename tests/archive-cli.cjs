@@ -41,11 +41,14 @@ async function main(){
   await run(['create','--json','--output',path.join(root,'literal.zip'),'--','-leading $().txt'],'',0,cli,input);
   await run(['create','--json','--output','中文 archive.zip',input]);
   const archive=path.join(root,'中文 archive.zip');
+  const zone='[ZoneTransfer]\r\nZoneId=3\r\n';await fs.writeFile(archive+':Zone.Identifier',zone);
   await run(['create','--json','--output',archive,input],'',6);
   const listed=await run(['list','--json',archive]);assert.equal(listed.records.filter(item=>item.type==='entry').length,3);assert.equal(listed.records.at(-1).completed,1);
   await run(['test','--json',archive]);
   const outdir=path.join(root,'out');await fs.mkdir(outdir);const extracted=await run(['extract','--json','--destination','smart','--output',outdir,archive]);
   assert.equal(await fs.readFile(path.join(extracted.records.find(item=>item.type==='result').path,'hello.txt'),'utf8'),'hello CLI');
+  assert.equal(await fs.readFile(path.join(extracted.records.find(item=>item.type==='result').path,'hello.txt')+':Zone.Identifier','utf8'),zone);
+  const noZone=await run(['extract','--json','--no-zone','--output',outdir,archive]);await assert.rejects(fs.readFile(path.join(noZone.records.find(item=>item.type==='result').path,path.basename(input),'hello.txt')+':Zone.Identifier'),{code:'ENOENT'});
   const selection=listed.records.find(item=>item.type==='entry'&&item.name.endsWith('hello.txt')).index;
   await run(['extract','--json','--destination','here','--select',String(selection),'--output',outdir,archive]);assert.equal(await fs.readFile(path.join(outdir,path.basename(input),'hello.txt'),'utf8'),'hello CLI');
   const secret='  私密 $() " spaces  ';await run(['create','--json','--output','secret.zip','--password-stdin',path.join(input,'hello.txt')],secret+'\r\n');

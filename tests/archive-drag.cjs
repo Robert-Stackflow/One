@@ -81,11 +81,12 @@ async function main(){
     assert.equal((await service.run(1,{operation:'drag',path:file,revision:current.revision,selected:[index]})).count,1);
     assert(!(await fs.readdir(path.join(root,'cache'))).some(name=>name.startsWith('drag-')));
    }
+   await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:live.revision,selected:[]}),/请选择/);
+   await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:live.revision,selected:[1.5]}),/请选择/);
+   await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:'bad',selected:[0]}),/重新打开/);
    stopNext=true;await service.run(1,{operation:'drag',path:zip,revision:live.revision,selected:[at('zero.txt')]});await stopping;await assert.rejects(fs.stat(path.join(root,'cache')),error=>error.code==='ENOENT');
   }finally{if(previousTest===undefined)delete process.env.ONE_TEST_MODE;else process.env.ONE_TEST_MODE=previousTest;if(previousTarget===undefined)delete process.env.ONE_ARCHIVE_DRAG_TEST_TARGET;else process.env.ONE_ARCHIVE_DRAG_TEST_TARGET=previousTarget;}
-  await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:live.revision,selected:[]}),/请选择/);
-  await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:live.revision,selected:[1.5]}),/请选择/);
-  await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:'bad',selected:[0]}),/重新打开/);
+  await assert.rejects(service.run(1,{operation:'drag',path:zip,revision:live.revision,selected:[0]}),/正在关闭/);
   await service.stop();service=null;
   console.log('Archive drag protocol passed: selection hierarchy, directories, Unicode, encrypted ZIP/7Z, TAR/GZ/XZ, contents/size/hash, clone lifetime, stale revision, unsafe paths, cancellation and cache cleanup. No Explorer windows.');
  }finally{if(service)await service.stop();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}

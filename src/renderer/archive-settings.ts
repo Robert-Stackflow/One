@@ -25,15 +25,18 @@ export function archiveSettingsPage(){return `<h2 class="settings-title">压缩�
  <div class="setting-row"><div class="setting-copy"><h2>默认压缩等级</h2><p>等级越高，通常耗时和内存使用越多；TAR 只打包。</p></div><select id="archive-pref-level" aria-label="默认压缩等级">${archiveLevelOptions()}</select></div>
  <div class="setting-row"><div class="setting-copy"><h2>压缩线程数</h2><p>用于 7Z、XZ 压缩及 7Z 修改；ZIP 和 GZ 使用单线程。</p></div><input id="archive-pref-threads" type="number" min="1" max="64" step="1" aria-label="压缩线程数"></div>
  <div class="setting-row"><div class="setting-copy"><h2>归档进程内存上限（MB）</h2><p>限制每个归档进程的提交内存；不足时任务失败，可提高上限后重试。新任务生效。</p></div><input id="archive-pref-memory" type="number" min="128" max="8192" step="1" aria-label="归档进程内存上限"></div>
+ </div><h3 class="settings-section-title">解压防护</h3><div class="settings-card">
+ <div class="setting-row"><div class="setting-copy"><h2>保留下载来源标记</h2><p>默认开启。将压缩包的 Internet 或受限区域标记传给解出的文件，保留 Windows 后续提醒。写入失败时停止解压；不支持命名流的磁盘需手动关闭此项。</p></div>${switchControl('archive-pref-propagate-zone','保留下载来源标记')}</div>
  </div><h3 class="settings-section-title">文件关联</h3><div class="settings-card">
  <div class="setting-row"><div class="setting-copy"><h2>压缩包打开方式</h2><p id="archive-association-status">正在读取…</p></div>${button('archive-association-toggle','注册','archive')}</div>
  <div class="setting-row"><div class="setting-copy"><h2>Windows 默认应用</h2><p>选择由 One 打开的文件类型；注册不会更改现有默认程序。</p></div>${button('archive-association-defaults','设置默认应用','open')}</div>
  </div><p class="inline-notice" id="archive-association-message" role="status"></p>`;}
 
 export function setupArchiveSettings(){
- const fill=(value:ArchivePreferences)=>{q<HTMLInputElement>('archive-pref-double-click').value=value.doubleClick;q<HTMLInputElement>('archive-pref-format').value=value.defaultFormat;q<HTMLInputElement>('archive-pref-open-completed').checked=value.openCompleted;q<HTMLSelectElement>('archive-pref-conflict').value=value.conflict;q<HTMLSelectElement>('archive-pref-level').value=String(value.compressionLevel);q<HTMLInputElement>('archive-pref-threads').value=String(value.threads);q<HTMLInputElement>('archive-pref-memory').value=String(value.memoryMiB);};
+ const fill=(value:ArchivePreferences)=>{q<HTMLInputElement>('archive-pref-double-click').value=value.doubleClick;q<HTMLInputElement>('archive-pref-format').value=value.defaultFormat;q<HTMLInputElement>('archive-pref-open-completed').checked=value.openCompleted;q<HTMLSelectElement>('archive-pref-conflict').value=value.conflict;q<HTMLSelectElement>('archive-pref-level').value=String(value.compressionLevel);q<HTMLInputElement>('archive-pref-threads').value=String(value.threads);q<HTMLInputElement>('archive-pref-memory').value=String(value.memoryMiB);q<HTMLInputElement>('archive-pref-propagate-zone').checked=value.propagateZone;};
  const refresh=async()=>fill(await archivePreferences());
  void refresh().catch(toast);api.onArchivePreferences(fill);
+ bindPreference(q('archive-pref-propagate-zone'),()=>({archive:{propagateZone:q<HTMLInputElement>('archive-pref-propagate-zone').checked}}),refresh);
  bindPreference(q('archive-pref-double-click'),()=>({archive:{doubleClick:q<HTMLInputElement>('archive-pref-double-click').value as ArchivePreferences['doubleClick']}}),refresh);
  bindPreference(q('archive-pref-format'),()=>({archive:{defaultFormat:q<HTMLInputElement>('archive-pref-format').value as ArchivePreferences['defaultFormat']}}),refresh);
  bindPreference(q('archive-pref-open-completed'),()=>({archive:{openCompleted:q<HTMLInputElement>('archive-pref-open-completed').checked}}),refresh);

@@ -16,7 +16,7 @@ std::string zip_name(Reader &reader, const char *name, uint16_t flag,
 std::string zip_comment(Reader &reader, const char *comment);
 void zip_preflight(Reader &reader, const std::vector<Entry> &items);
 void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string &password, bool result = true);
-void zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
+size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
                  const std::set<size_t> &selected, const std::string &password, bool result = true);
 std::vector<Entry> seven_drag_entries(const fs::path &source, const std::string &password, int format);
 void archive_drag(const fs::path &source, const fs::path &stage, int encoding,
