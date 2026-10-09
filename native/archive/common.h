@@ -14,6 +14,7 @@ std::string json(const std::string &value);
 void emit(const std::string &line);
 bool archive_cancelled();
 void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path &recovery,const std::string &conflict,const fs::path &archive={});
+void extract_recover(const fs::path &parent,const fs::path &recovery);
 class ArchiveError final:public std::runtime_error {
 public:
     std::string code;

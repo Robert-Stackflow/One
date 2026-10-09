@@ -8,9 +8,9 @@ export function showArchiveRecovery(){
  const existing=document.querySelector<HTMLDialogElement>('#archive-recovery-dialog');if(existing){openDialog(existing);return;}
  const template=document.createElement('template');template.innerHTML=dialogMarkup({id:'archive-recovery-dialog',title:'恢复资料',className:'archive-recovery-dialog',body:`<div class="archive-recovery-heading"><p>检查异常退出后保留的解压记录与原文件副本。</p><button data-recovery-refresh class="quiet" type="button">${icon('refresh')}刷新</button></div><p data-recovery-error class="archive-recovery-error" role="alert" hidden></p><div data-recovery-list></div>`,actions:`<span data-recovery-count></span><button data-recovery-prev class="icon-button quiet" aria-label="上一页" type="button">${icon('back')}</button><button data-recovery-next class="icon-button quiet" aria-label="下一页" type="button">${icon('arrow')}</button><button data-dialog-dismiss type="button">关闭</button>`});
  const dialog=template.content.firstElementChild as HTMLDialogElement,find=<T extends HTMLElement=HTMLElement>(selector:string)=>dialog.querySelector<T>(selector)!;
- let live=true,revision=0,page:ArchiveRecoveryPage={items:[],total:0,offset:0},checking='',loading=false,removing=false;
+ let live=true,revision=0,page:ArchiveRecoveryPage={items:[],total:0,offset:0},checking='',restoring=false,loading=false,removing=false;
  const error=(value:unknown)=>{const node=find('[data-recovery-error]');node.textContent=errorMessage(value);node.hidden=!value;};
- const controls=()=>{const busy=loading||!!checking||removing;find<HTMLButtonElement>('[data-recovery-refresh]').disabled=busy;find<HTMLButtonElement>('[data-recovery-prev]').disabled=busy||!page.offset;find<HTMLButtonElement>('[data-recovery-next]').disabled=busy||page.offset+50>=page.total;dialog.querySelectorAll<HTMLButtonElement>('[data-check],[data-forget]').forEach(button=>button.disabled=busy||page.items[Number(button.dataset.check??button.dataset.forget)]?.active===true);};
+ const controls=()=>{const busy=loading||!!checking||removing;find<HTMLButtonElement>('[data-recovery-refresh]').disabled=busy;find<HTMLButtonElement>('[data-recovery-prev]').disabled=busy||!page.offset;find<HTMLButtonElement>('[data-recovery-next]').disabled=busy||page.offset+50>=page.total;dialog.querySelectorAll<HTMLButtonElement>('[data-check],[data-forget],[data-restore]').forEach(button=>button.disabled=busy||page.items[Number(button.dataset.check??button.dataset.forget??button.dataset.restore)]?.active===true);};
  const render=()=>{
   find('[data-recovery-count]').textContent=page.total?`${page.offset+1}–${Math.min(page.offset+50,page.total)} / ${page.total}${page.truncated?' · 处理后刷新可查看其余记录':''}`:'没有待处理记录';
   find('[data-recovery-list]').innerHTML=page.items.length?page.items.map((item,index)=>`<article class="archive-recovery-item"><div class="archive-recovery-item-heading"><div><strong>${esc(item.archive?.split(/[\\/]/).pop()||'无法读取的恢复记录')}</strong><time>${esc(new Date(item.created).toLocaleString())}${item.active?' · 任务可能仍在运行':''}</time></div><div class="archive-recovery-item-actions"><button type="button" data-check="${index}" class="quiet">检查</button>${item.path?`<button type="button" data-reveal="${index}" class="icon-button quiet" aria-label="查看恢复目录" title="查看恢复目录">${icon('folder')}</button>`:''}<button type="button" data-forget="${index}" class="icon-button quiet" aria-label="移除列表记录" title="移除列表记录">${icon('trash')}</button></div></div><p class="archive-recovery-path">${esc(item.parent||item.id)}</p>${item.error?`<p class="archive-recovery-error">${esc(item.error)}</p>`:''}<div data-recovery-inspection="${index}" hidden></div></article>`).join(''):'<div class="archive-recovery-empty">没有保留的恢复记录</div>';controls();
@@ -26,13 +26,26 @@ export function showArchiveRecovery(){
   output.querySelector<HTMLButtonElement>('[data-recovery-stop]')!.onclick=async()=>{stopped=true;try{await api.archiveRecoveryCancel(item.id);}catch(value){stopped=false;if(live)error(value);}};
   try{
    const result=await api.archiveRecoveryInspect(item.id);if(!live)return;
-   output.innerHTML=`<strong>${esc(stateNames[result.state])}</strong><p>${esc(result.message)}</p><div class="archive-recovery-stats"><span>${result.files.toLocaleString()} 个文件</span><span>${result.directories.toLocaleString()} 个文件夹</span><span>${result.replaced.toLocaleString()} 个原文件替换计划</span></div>${result.samples.length?`<details><summary>计划中的目标路径${result.items>result.samples.length?'（前 30 项）':''}</summary><ul>${result.samples.map(sample=>`<li>${esc(sample.name)}</li>`).join('')}</ul></details>`:''}<small>检查只验证清单及目录身份，不会还原、覆盖或删除文件。</small>`;
+   output.innerHTML=`<strong>${esc(stateNames[result.state])}</strong><p>${esc(result.message)}</p><div class="archive-recovery-stats"><span>${result.files.toLocaleString()} 个文件</span><span>${result.directories.toLocaleString()} 个文件夹</span><span>${result.replaced.toLocaleString()} 个原文件替换计划</span></div>${result.samples.length?`<details><summary>计划中的目标路径${result.items>result.samples.length?'（前 30 项）':''}</summary><ul>${result.samples.map(sample=>`<li>${esc(sample.name)}</li>`).join('')}</ul></details>`:''}<small>检查只验证原发布清单及目录身份。还原时会重新核对当前文件；目录、新内容与清单均会保留。</small>${result.state==='pending'||result.state==='rolled-back'?`<button type="button" data-restore="${index}">还原原文件</button>`:''}`;
   }catch(value){if(live)output.textContent=stopped?'检查已停止':errorMessage(value);}
   finally{checking='';if(live)controls();}
  };
+ const restore=async(index:number)=>{
+  if(checking||loading||removing)return;const item=page.items[index];if(!item||item.active)return;removing=true;error('');controls();
+  try{
+   if(!await confirmDialog({title:'还原解压前的文件',message:'将已发布的新文件移入恢复目录，再放回原文件副本。遇到文件身份变化、缺少副本或占用时停止。已还原的部分会保留，可继续重试；目录、新内容和原清单不会删除。',confirm:'还原原文件'})||!live)return;
+   removing=false;checking=item.id;restoring=true;const output=find(`[data-recovery-inspection="${index}"]`);output.hidden=false;output.className='archive-recovery-inspection';output.innerHTML='<span data-recovery-progress role="status">正在核对当前文件…</span><button data-recovery-stop type="button">停止</button>';controls();
+   output.querySelector<HTMLButtonElement>('[data-recovery-stop]')!.onclick=async event=>{const button=event.currentTarget as HTMLButtonElement;button.disabled=true;try{await api.archiveCancel(item.id);}catch(value){if(live){button.disabled=false;error(value);}}};
+   try{const result=await api.archiveRecoveryRestore(item.id);if(live)output.innerHTML=`<strong>还原处理完成</strong><p>${result.count?`已放回 ${result.count.toLocaleString()} 个原文件。`:'本次没有需要放回的原文件副本。'}新内容、目录与原发布清单已保留。刷新后仍可查看原发布记录。</p>`;}
+   catch(value){if(live){output.textContent='还原已停止或未完成。已处理的部分和恢复资料均保留，可检查后重试。';error(value);}}
+   finally{checking='';restoring=false;}
+  }finally{removing=false;if(live)controls();}
+ };
+ const releaseProgress=api.onArchiveProgress(value=>{if(!live||!restoring||checking!==value.id)return;const node=dialog.querySelector('[data-recovery-progress]');if(node)node.textContent=value.operation==='queue'?'正在等待归档资源…':value.total?`正在还原文件：${value.done.toLocaleString()} / ${value.total.toLocaleString()}`:'正在核对当前文件…';});
  dialog.addEventListener('click',event=>{
   const target=(event.target as Element).closest<HTMLButtonElement>('button');if(!target||target.disabled)return;
   if(target.hasAttribute('data-check'))void inspect(Number(target.dataset.check));
+  if(target.hasAttribute('data-restore'))void restore(Number(target.dataset.restore));
   if(target.hasAttribute('data-reveal')){const item=page.items[Number(target.dataset.reveal)];if(item?.path)void api.revealFile(item.path).catch(value=>{if(live)error(value);});}
   if(target.hasAttribute('data-forget'))void(async()=>{
    if(checking||loading||removing)return;const item=page.items[Number(target.dataset.forget)];if(!item||item.active)return;removing=true;controls();
@@ -41,6 +54,6 @@ export function showArchiveRecovery(){
   })();
  });
  find('[data-recovery-refresh]').onclick=()=>void load();find('[data-recovery-prev]').onclick=()=>void load(Math.max(0,page.offset-50));find('[data-recovery-next]').onclick=()=>void load(page.offset+50);
- dialog.addEventListener('close',()=>{live=false;++revision;if(checking)void api.archiveRecoveryCancel(checking).catch(()=>{});dialog.remove();},{once:true});
+ dialog.addEventListener('close',()=>{live=false;++revision;releaseProgress();if(checking)void(restoring?api.archiveCancel(checking):api.archiveRecoveryCancel(checking)).catch(()=>{});dialog.remove();},{once:true});
  document.body.append(dialog);openDialog(dialog);void load();
 }

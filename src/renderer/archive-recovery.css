@@ -17,6 +17,7 @@
 .archive-recovery-inspection p{margin:7px 0}
 .archive-recovery-inspection small{display:block;margin-top:10px;color:var(--muted);font-size:11px}
 .archive-recovery-inspection button{margin-left:16px}
+.archive-recovery-inspection [data-restore]{margin:12px 0 0}
 .archive-recovery-stats{display:flex;flex-wrap:wrap;gap:5px 18px;color:var(--muted);margin:8px 0}
 .archive-recovery-inspection details{margin-top:10px}
 .archive-recovery-inspection ul{margin:8px 0;padding-left:18px;overflow-wrap:anywhere}

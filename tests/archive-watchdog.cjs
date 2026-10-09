@@ -38,7 +38,11 @@ async function main(){
    mode='invalid';await assert.rejects(service.run(1,{operation:'test',path:probe}),error=>error.code==='archive');assert(last.killed);
    // Exercise the actual service ready handling, not only a timer predicate.
    mode='commit';const perform=service.perform.bind(service);service.perform=async(owner,request,id)=>{await service.execute(owner,id,'publish',[], '');return {path:request.path,count:1};};
-   const saving=service.run(1,{operation:'create',path:path.join(root,'protected.zip'),sources:[source]});await sleep(350);assert(!last.killed,'protected publication must never be killed by watchdog');last.finish();await saving;service.perform=perform;
+   const saving=service.run(1,{operation:'create',path:path.join(root,'protected.zip'),sources:[source]});await sleep(350);assert(!last.killed,'protected publication must never be killed by watchdog');last.finish();await saving;
+   // Identity-driven recovery can resume after a hard exit. Unlike final
+   // publication, its ready handshake must not disable liveness monitoring.
+   service.perform=async(owner,request,id)=>{await service.execute(owner,id,'recover',[], '');return {path:request.path,count:1};};
+   await assert.rejects(service.run(1,{operation:'create',path:path.join(root,'recover.zip'),sources:[source]}),error=>error.code==='timeout');assert(last.killed,'Unresponsive recovery must remain under watchdog after ready');service.perform=perform;
   }finally{for(const item of mocks)item.cleanup();cp.spawn=spawn;}
   // Real engine proof: hold the private request frame to observe liveness,
   // then create a sizeable ZIP and observe advancing I/O activity separately.
