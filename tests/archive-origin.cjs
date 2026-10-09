@@ -58,11 +58,21 @@ async function main(){
   }
   for(const zone of [0,1,2]){await fs.writeFile(ads(archive),canonical(zone));const result=await extract();await absent(path.join(result.path,'first.cmd'));}
   await fs.writeFile(ads(archive),'\uFEFF[ZoneTransfer]\nZoneId=4\nHostUrl=任意 URL\n');const restricted=await extract();assert.equal(await fs.readFile(ads(path.join(restricted.path,'empty.bin')),'utf8'),canonical(4));
-  for(const mark of ['','[ZoneTransfer]\nZoneId=5','[ZoneTransfer]\nZoneId=-1','[ZoneTransfer]\nZoneId=3\nZoneId=2','[ZoneTransfer]\nZoneId=3\n[ZoneTransfer]\nZoneId=4','[Other]\nZoneId=3','[ZoneTransfer]\nZoneId=3\0',canonical(3)+'x'.repeat(4096),Buffer.from([0xff,0xfe,0x41]),Buffer.from([0xff,0xfe,0,0xd8])]){
+  // Downloaders may count terminal NUL padding in the ADS length, including
+  // after a final URL without a newline. Preserve the zone, never the URL.
+  for(const mark of [
+   '[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl=https://example.test/\r\nHostUrl=https://example.test/file\0',
+   '[ZoneTransfer]\nZoneId=3\0\0',
+   '\uFEFF'+canonical(3)+'\0',
+   Buffer.concat([Buffer.from([0xff,0xfe]),Buffer.from(canonical(3)+'HostUrl=测试\0\0','utf16le')]),
+  ]){
+   await fs.writeFile(ads(archive),mark);const result=await extract();assert.equal(await fs.readFile(ads(path.join(result.path,'first.cmd')),'utf8'),canonical(3));
+  }
+  for(const mark of ['','\0\0','[ZoneTransfer]\nZoneId=5','[ZoneTransfer]\nZoneId=-1','[ZoneTransfer]\nZoneId=3\nZoneId=2','[ZoneTransfer]\nZoneId=3\n[ZoneTransfer]\nZoneId=4','[Other]\nZoneId=3','[ZoneTransfer]\nZoneId=3\0\nZoneId=2',canonical(3)+'HostUrl=before\0after',Buffer.concat([Buffer.from([0xff,0xfe]),Buffer.from(canonical(3)+'\0ZoneId=2','utf16le')]),canonical(3)+'x'.repeat(4096),Buffer.from([0xff,0xfe,0x41]),Buffer.from([0xff,0xfe,0,0xd8])]){
    await fs.writeFile(ads(archive),mark);await assert.rejects(extract(),error=>error.code==='safety');assert(!(await fs.readdir(root)).some(name=>name.startsWith('.one-extract-')));
   }
   const ignoreMalformed=await extract({propagateZone:false});await absent(path.join(ignoreMalformed.path,'first.cmd'));
-  await fs.writeFile(ads(archive),canonical(3));const listing=await run({operation:'list',path:archive});
+  await fs.writeFile(ads(archive),canonical(3)+'\0');const listing=await run({operation:'list',path:archive});
   const packet=Buffer.alloc(9);packet.writeUInt32LE(1);packet.writeUInt32LE(listing.entries.find(item=>item.name==='first.cmd').index,4);packet[8]=1;
   const stage=path.join(root,'drag-stage'),drag=native(['drag-test',archive,stage,'0',listing.revision],{ONE_TEST_MODE:'1'},0,packet);assert(drag.some(item=>item.type==='drag-origin'&&item.untrusted));assert.equal(await fs.readFile(ads(path.join(stage,'first.cmd')),'utf8'),canonical(3));
   const noStage=path.join(root,'drag-disabled'),noDrag=native(['drag-test',archive,noStage,'0',listing.revision],{ONE_TEST_MODE:'1',ONE_ARCHIVE_PROPAGATE_ZONE:'0'},0,packet);assert(noDrag.some(item=>item.type==='drag-origin'&&!item.untrusted));await absent(path.join(noStage,'first.cmd'));
@@ -71,7 +81,7 @@ async function main(){
   // is never overwritten, and the service must not publish any output.
   const failureZip=new JSZip();failureZip.file('first.cmd','first');failureZip.file('large.bin',Buffer.alloc(32*1024**2,42));const failedArchive=path.join(root,'write-failure.zip');await fs.writeFile(failedArchive,await failureZip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}));await fs.writeFile(ads(failedArchive),canonical(3));inject=true;
   await assert.rejects(run({operation:'extract',path:failedArchive,parent:root}),error=>error.code==='write');assert.equal(inject,false);assert(!sync.existsSync(path.join(root,'write-failure')));assert(!(await fs.readdir(root)).some(name=>name.startsWith('.one-extract-')));
-  assert.deepEqual(await fs.readFile(archive),original);assert.equal(await fs.readFile(ads(archive),'utf8'),canonical(3));
+  assert.deepEqual(await fs.readFile(archive),original);assert.equal(await fs.readFile(ads(archive),'utf8'),canonical(3)+'\0');
   assert(events.some(item=>item.event==='archive-source-zone'));assert(!JSON.stringify(events).includes('secret'));assert(!JSON.stringify(events).includes('HostUrl'));
   console.log('Archive origin passed: settings/backup/CLI policy, ZIP/7Z/TAR/GZ/XZ/composites/split 7Z, smart/here/skip/replace, source-only URL privacy, UTF-8/UTF-16 metadata, malformed bounds, real stream failure rollback and untrusted virtual drag metadata.');
  }finally{if(service)await service.stop();const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}

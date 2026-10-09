@@ -56,6 +56,11 @@ unsigned parse(const unsigned char *bytes,size_t size){
         size_t offset=size>=3&&bytes[0]==0xef&&bytes[1]==0xbb&&bytes[2]==0xbf?3:0;
         text.assign(reinterpret_cast<const char*>(bytes+offset),size-offset);
     }
+    // Some downloaders include the string terminator in the ADS length.
+    // Strip only terminal padding after decoding (also covers UTF-16); an
+    // embedded NUL must not hide conflicting ZoneId fields or other content.
+    const auto end=text.find_last_not_of('\0');
+    text.resize(end==std::string::npos?0:end+1);
     if(text.find('\0')!=std::string::npos)fail("Malformed source mark","safety");
     // Browser URL fields may use an ANSI code page. Only the ASCII section
     // and ZoneId are interpreted; URL/referrer fields are never propagated.
