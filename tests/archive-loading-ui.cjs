@@ -57,6 +57,19 @@ const {_electron:electron,expect}=require('@playwright/test');
   await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>window.cancelled.length),1);
   await page.evaluate(()=>window.pending.at(-1).resolve({path:'D:\\资料\\测试.zip',count:200}));await expect(page.locator('#archive-loading')).toBeHidden();
   await expect(page.locator('#archive-result-title')).toHaveText('校验通过');await expect(page.locator('#archive-result-message')).toContainText('200');await page.locator('#archive-result-done').click();await expect(page.locator('#archive-result-dialog')).not.toBeVisible();await size(840,620);await fits('#archive-extract-selected');
+  // Even a task completed without progress events leaves an explicit result to dismiss.
+  await page.locator('#archive-list-head').click();await page.locator('#archive-test').click();
+  await page.evaluate(()=>window.pending.at(-1).resolve({path:'D:\\资料\\测试.zip',count:1}));
+  await expect(page.locator('#archive-result-dialog')).toBeVisible();await expect(page.locator('#archive-result-title')).toHaveText('校验通过');await expect(page.locator('#archive-result-message')).toContainText('1 项');
+  await page.locator('#archive-result-done').click();await expect(page.locator('#archive-result-dialog')).not.toBeVisible();
+  await page.locator('#archive-list-head').click();await page.locator('#archive-test').click();
+  await page.evaluate(()=>window.pending.at(-1).reject(Error('压缩包数据损坏，CRC 校验失败')));
+  await expect(page.locator('#archive-result-title')).toHaveText('校验未完成');await expect(page.locator('#archive-result-message')).toContainText('CRC 校验失败');
+  await page.locator('#archive-result-done').click();await expect(page.locator('#archive-result-dialog')).not.toBeVisible();
+  // A successful completion racing with Stop must still report the confirmed result.
+  await page.locator('#archive-list-head').click();await page.locator('#archive-test').click();await page.locator('#archive-cancel').click();
+  await page.evaluate(()=>window.pending.at(-1).resolve({path:'D:\\资料\\测试.zip',count:200}));
+  await expect(page.locator('#archive-result-title')).toHaveText('校验通过');await page.locator('#archive-result-done').click();await expect(page.locator('#archive-result-dialog')).not.toBeVisible();
   await page.locator('#archive-list-head').click();await page.locator('#archive-test').click();await page.evaluate(()=>window.cancelMode='fail');await page.locator('#archive-cancel').click();await expect(page.locator('#archive-loading-hint')).toContainText('可以重试');
   await page.evaluate(()=>window.cancelMode='accept');await page.keyboard.press('Escape');await expect(page.locator('#archive-cancel')).toBeDisabled();
   await page.evaluate(()=>window.pending.at(-1).reject(Error('Error invoking remote method \'one:archive-run\': ArchiveFailure: 已取消')));await expect(page.locator('#archive-loading')).toBeHidden();await expect(page.locator('#archive-status-text')).toHaveText('已取消');

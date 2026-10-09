@@ -164,7 +164,7 @@ export function setupArchiveView(){
  find<HTMLButtonElement>('#archive-parent-pick').onclick=async()=>{const folder=await api.pickDirectory();if(folder)find<HTMLInputElement>('#archive-parent').value=folder;};
  find<HTMLButtonElement>('#archive-test').onclick=async()=>{const source=listing?.path;if(!source)return;let count=0;
   const passed=await run(id=>archiveRun({operation:'test',path:source,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if('count' in value){count=value.count;status(`校验完成：${value.count} 项`);}},'正在校验…');
-  if(stopping)return;
+  if(stopping&&!passed)return;
   find('#archive-result-icon').innerHTML=icon(passed?'check':'info');find('#archive-result-title').textContent=passed?'校验通过':'校验未完成';find('#archive-result-file').textContent=source.split(/[\\/]/).pop()||source;
   find('#archive-result-message').textContent=passed?`已检查 ${count.toLocaleString()} 项，未发现数据损坏。`:find('#archive-status-text').textContent;
   showOptions('#archive-result-dialog');

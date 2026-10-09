@@ -91,9 +91,9 @@
 .archive-more-menu button{display:flex;align-items:center;justify-content:flex-start;width:100%;min-height:34px;padding:8px 10px;gap:10px;border:0;border-radius:6px;background:transparent;font-size:12px;text-align:left;font-weight:400}
 .archive-more-menu button:hover:not(:disabled){background:var(--hover)}
 .archive-more-menu .icon{width:16px;height:16px;color:var(--muted);flex-shrink:0}
-.archive-menu-section{padding-block:4px;border-bottom:1px solid var(--line)}
-.archive-flat{display:flex;align-items:center;gap:10px;padding:10px;margin-top:5px;font-size:12px;white-space:nowrap;cursor:pointer}
-.archive-flat:hover{background:var(--hover);border-radius:6px}
+.archive-menu-section{padding-block:6px;border-bottom:1px solid var(--line)}
+.archive-flat{display:flex;align-items:center;gap:10px;min-height:34px;padding:8px 10px;margin-top:6px;border-radius:6px;font-size:12px;white-space:nowrap;cursor:pointer}
+.archive-flat:hover{background:var(--hover)}
 .archive-flat input{margin:0}
 .archive-browser-content{flex:1;display:grid;grid-template-columns:150px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden}
 .archive-file-table{display:flex;flex-direction:column;min-width:0;min-height:0}
