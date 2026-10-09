@@ -10,7 +10,7 @@ struct Reader {
     Reader(const Reader &) = delete;
     Reader &operator=(const Reader &) = delete;
 };
-struct Entry { size_t index; std::string name; bool directory; uint64_t size; uint64_t compressed; bool encrypted; };
+struct Entry { size_t index; std::string name; bool directory; uint64_t size; uint64_t compressed; bool encrypted; bool size_known=true; };
 std::vector<Entry> zip_entries(Reader &reader);
 std::string zip_name(Reader &reader, const char *name, uint16_t flag,
                     const uint8_t *extra = nullptr, uint16_t extra_size = 0, uint16_t unicode_tag = 0x7075);
@@ -24,6 +24,7 @@ void archive_drag(const fs::path &source, const fs::path &stage, int encoding,
                   const std::string &revision, const std::string &password, int format, bool testing, uintptr_t owner = 0,
                   const fs::path &lease = {}, bool folders = false);
 std::string zip_revision(const fs::path &source);
+std::string archive_content_fingerprint(void *file);
 std::string archive_revision_from_stamps(const std::vector<std::pair<fs::path,std::string>> &members);
 void lock_archive_source(const fs::path &source);
 void expect_archive_revision(const fs::path &source,const std::string &expected);

@@ -119,10 +119,12 @@ class OpenRequest final: public OpenCallback7,public Password7,public Volume7 {
     fs::path directory;
     std::wstring password,filename;
     unsigned volumes=0;
+    bool allowVolumes;
 public:
     bool passwordRequested=false;
+    bool additionalVolumeRequested=false;
     std::vector<fs::path> members;
-    OpenRequest(const fs::path &source,const std::string &secret):directory(source.parent_path()),password(wide(secret)),filename(source.filename().wstring()){}
+    OpenRequest(const fs::path &source,const std::string &secret,bool allowVolumes):directory(source.parent_path()),password(wide(secret)),filename(source.filename().wstring()),allowVolumes(allowVolumes){}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
         if(matches(id,IID_IUnknown)||matches(id,iid(6,0x10)))*out=static_cast<OpenCallback7*>(this);
@@ -148,6 +150,7 @@ public:
     HRESULT STDMETHODCALLTYPE GetStream(const wchar_t *name,InStream7 **stream) override {
         if(!stream)return E_POINTER;*stream=nullptr;
         if(archive_cancelled())return E_ABORT;
+        if(!allowVolumes){additionalVolumeRequested=true;return S_FALSE;}
         if(++volumes>4096)return E_OUTOFMEMORY;
         if(!name||!name[0]||wcslen(name)>260||wcschr(name,L'/')||wcschr(name,L'\\')||wcschr(name,L':')||
            wcscmp(name,L".")==0||wcscmp(name,L"..")==0)return E_INVALIDARG;
@@ -158,7 +161,7 @@ public:
     }
 };
 
-struct Item {U32 index;std::string name;bool directory;U64 size;U64 compressed;bool encrypted;};
+struct Item {U32 index;std::string name;bool directory;U64 size;U64 compressed;bool encrypted;bool size_known;};
 
 class OpenArchive final {
     HMODULE library=nullptr;
@@ -168,7 +171,18 @@ class OpenArchive final {
     fs::path source;
     int format;
     int openedFormat=0;
-    static std::vector<int> formats(int format){return format==3?std::vector<int>{0xcc,3}:std::vector<int>{format};}
+    static std::vector<int> formats(int format){return format==3?std::vector<int>{0xcc,3}:format==0xe7?std::vector<int>{0xe0,0xe7}:std::vector<int>{format};}
+    void checkReadHeaders() const {
+        PROPVARIANT value{};PropVariantInit(&value);
+        const auto result=archive->GetArchiveProperty(error_prop,&value);
+        const bool error=result==S_OK&&value.vt==VT_BSTR&&SysStringLen(value.bstrVal)>0;
+        PropVariantClear(&value);
+        if(error)fail("Archive headers are damaged, incomplete or unsupported");
+        U32 flags=0;
+        if(archive->GetArchiveProperty(error_flags_prop,&value)==S_OK&&value.vt==VT_UI4)flags=value.ulVal;
+        PropVariantClear(&value);
+        if(flags&~(1u<<6))fail("Archive headers are damaged, incomplete or unsupported");
+    }
     void close(){if(archive){archive->Close();archive->Release();archive=nullptr;}if(callback){callback->Release();callback=nullptr;}if(input){input->Release();input=nullptr;}if(library){FreeLibrary(library);library=nullptr;}}
     void checkRar() const {
         auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
@@ -214,14 +228,17 @@ public:
         const auto name=source.filename().wstring();
         input=new FileInput(source,format==7&&name.size()>=3&&name.substr(name.size()-3)==L"001");
         if(!input->valid())fail("Cannot open archive file","read");
-        callback=new OpenRequest(source,password);
+        callback=new OpenRequest(source,password,format==3||format==7);
         const U64 scan=1ull<<23;
         for(int candidate:formats(format)){
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);
             if(create(&class_id,&interface_id,reinterpret_cast<void**>(&archive))!=S_OK||!archive)continue;
             const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){
                 openedFormat=candidate;
-                if(format==3)checkRar();auto members=input->members();members.insert(members.end(),callback->members.begin(),callback->members.end());bind_archive_members(source,members);return;
+                if(callback->additionalVolumeRequested)fail("This format currently requires a single-volume archive");
+                if(format==3)checkRar();
+                else if(format==1||format==2||format==6||format==8||format==0x0e||format==0xe7||format==0xe6)checkReadHeaders();
+                auto members=input->members();members.insert(members.end(),callback->members.begin(),callback->members.end());bind_archive_members(source,members);return;
             }
             if(opened==E_OUTOFMEMORY)fail("Opening the archive exceeded the memory budget","resource");
             archive->Close();archive->Release();archive=nullptr;
@@ -247,19 +264,24 @@ public:
         auto name=property(index,path_prop);
         std::string text=name.vt==VT_BSTR?utf8(std::wstring(name.bstrVal,SysStringLen(name.bstrVal))):"";
         PropVariantClear(&name);
-        if(text.empty()&&(format==0x0c||format==0xef)){
+        if(text.empty()&&(format==0x0c||format==0xef||format==2||format==0x0e)){
             auto fallback=source.filename().wstring(),lower=fallback;
             std::transform(lower.begin(),lower.end(),lower.begin(),[](wchar_t ch){return std::towlower(ch);});
             if(lower.ends_with(L".txz")||lower.ends_with(L".tgz"))fallback=fallback.substr(0,fallback.size()-4)+L".tar";
+            else if(lower.ends_with(L".tbz2")||lower.ends_with(L".tzst"))fallback=fallback.substr(0,fallback.size()-5)+L".tar";
+            else if(lower.ends_with(L".tbz"))fallback=fallback.substr(0,fallback.size()-4)+L".tar";
+            else if(lower.ends_with(L".bzip2"))fallback.resize(fallback.size()-6);
+            else if(lower.ends_with(L".zstd"))fallback.resize(fallback.size()-5);
+            else if(lower.ends_with(L".bz2")||lower.ends_with(L".zst"))fallback.resize(fallback.size()-4);
             else if(lower.ends_with(L".xz"))fallback.resize(fallback.size()-3);
             else if(lower.ends_with(L".gz"))fallback.resize(fallback.size()-3);
             text=utf8(fallback);
         }
         auto dir=property(index,dir_prop);bool directory=dir.vt==VT_BOOL&&dir.boolVal==VARIANT_TRUE;PropVariantClear(&dir);
-        auto size=property(index,size_prop);U64 bytes=size.vt==VT_UI8?size.uhVal.QuadPart:size.vt==VT_UI4?size.ulVal:0;PropVariantClear(&size);
+        auto size=property(index,size_prop);const bool size_known=size.vt==VT_UI8||size.vt==VT_UI4;U64 bytes=size.vt==VT_UI8?size.uhVal.QuadPart:size.vt==VT_UI4?size.ulVal:0;PropVariantClear(&size);
         auto packed=property(index,packed_prop);U64 compressed=packed.vt==VT_UI8?packed.uhVal.QuadPart:packed.vt==VT_UI4?packed.ulVal:0;PropVariantClear(&packed);
         auto encrypted=property(index,encrypted_prop);bool locked=encrypted.vt==VT_BOOL&&encrypted.boolVal==VARIANT_TRUE;PropVariantClear(&encrypted);
-        return {index,text,directory,bytes,compressed,locked};
+        return {index,text,directory,bytes,compressed,locked,size_known};
     }
     std::string comment() const {
         PROPVARIANT value{};PropVariantInit(&value);
@@ -293,13 +315,13 @@ void preflight(OpenArchive &reader,const std::vector<Item> &items){
 }
 
 class FileOutput final:public OutStream7 {
-    std::atomic<ULONG> refs{1};HANDLE file=INVALID_HANDLE_VALUE;U64 limit=0,written=0;ExtractionSpace &space;
+    std::atomic<ULONG> refs{1};HANDLE file=INVALID_HANDLE_VALUE;U64 limit=0,written=0;ExtractionSpace &space;bool size_known;
 public:
-    FileOutput(const fs::path &path,U64 expected,ExtractionSpace &space):file(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
-        FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr)),limit(expected),space(space){}
+    FileOutput(const fs::path &path,U64 expected,ExtractionSpace &space,bool size_known):file(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
+        FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr)),limit(expected),space(space),size_known(size_known){}
     ~FileOutput(){if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);}
     bool valid()const{return file!=INVALID_HANDLE_VALUE;}
-    bool complete()const{return written==limit;}
+    bool complete()const{return !size_known||written==limit;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;if(matches(id,IID_IUnknown)||matches(id,iid(3,2))){*out=this;AddRef();return S_OK;}return E_NOINTERFACE;
     }
@@ -307,7 +329,7 @@ public:
     ULONG STDMETHODCALLTYPE Release() override{ULONG value=--refs;if(!value)delete this;return value;}
     HRESULT STDMETHODCALLTYPE Write(const void *data,U32 size,U32 *done) override {
         if(archive_cancelled())return E_ABORT;
-        if(!done)return E_POINTER;*done=0;if(size>limit-written)return E_FAIL;
+        if(!done)return E_POINTER;*done=0;if(size_known&&size>limit-written)return E_FAIL;
         if(!space.write(size))return HRESULT_FROM_WIN32(ERROR_DISK_FULL);
         if(!WriteFile(file,data,size,reinterpret_cast<DWORD*>(done),nullptr))return HRESULT_FROM_WIN32(GetLastError());
         written+=*done;if(*done)archive_activity();return *done==size?S_OK:E_FAIL;
@@ -346,7 +368,7 @@ public:
         const auto &item=items[index];const auto target=destination/entry_path(item.name);
         try{if(item.directory){fs::create_directories(target);return S_OK;}fs::create_directories(target.parent_path());}
         catch(...){errorCode="write";return E_FAIL;}
-        auto output=new FileOutput(target,item.size,*space);
+        auto output=new FileOutput(target,item.size,*space,item.size_known);
         if(!output->valid()){errorCode="write";output->Release();return E_FAIL;}
         active=output;active->AddRef();*stream=output;return S_OK;
     }
@@ -387,7 +409,7 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
         const auto item=reader.item((U32)i);
         emit("{\"type\":\"entry\",\"index\":"+std::to_string(item.index)+",\"name\":"+json(item.name)+
             ",\"directory\":"+(item.directory?"true":"false")+",\"size\":"+std::to_string(item.size)+
-            ",\"compressed\":"+std::to_string(item.compressed)+",\"encrypted\":"+(item.encrypted?"true":"false")+"}");
+            ",\"compressed\":"+std::to_string(item.compressed)+",\"encrypted\":"+(item.encrypted?"true":"false")+(item.size_known?"":",\"sizeKnown\":false")+"}");
     }
     if(zip_revision(source)!=revision)fail("Archive changed during listing; reopen it");
 }
@@ -407,18 +429,20 @@ void seven_details(const fs::path &source,size_t index,const std::string &passwo
     PropVariantClear(&compression);
     // Single-stream handlers may expose the method on the archive instead.
     // Gzip's validated header fixes CM=8 (Deflate); its SDK handler omits it.
-    if(method.empty()&&(format==0x0c||format==0xef)){
+    if(method.empty()&&(format==0x0c||format==0xef||format==2||format==0x0e)){
         PROPVARIANT stream_method{};PropVariantInit(&stream_method);
         if(reader.get()->GetArchiveProperty(22,&stream_method)==S_OK&&stream_method.vt==VT_BSTR&&SysStringLen(stream_method.bstrVal)<=1024)method=utf8(std::wstring(stream_method.bstrVal,SysStringLen(stream_method.bstrVal)));
         PropVariantClear(&stream_method);if(method.empty()&&format==0xef)method="Deflate";
+        if(method.empty()&&format==2)method="BZip2";
+        if(method.empty()&&format==0x0e)method="ZSTD";
     }
     PROPVARIANT solid{};PropVariantInit(&solid);const bool shared=reader.get()->GetArchiveProperty(13,&solid)==S_OK&&solid.vt==VT_BOOL&&solid.boolVal==VARIANT_TRUE;PropVariantClear(&solid);
-    emit_details({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted},known,modified,crc,method,shared);
+    emit_details({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted,item.size_known},known,modified,crc,method,shared);
 }
 
 void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query){
     OpenArchive reader(source,password,format);const auto revision=zip_revision(source);BrowseRows rows(query);
-    const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});}
+    const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted,item.size_known});}
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
     rows.emit_page(total,reader.comment(),revision,format==7&&(extension==L".7z"||extension==L".001"),offset,limit);
     if(zip_revision(source)!=revision)fail("Archive changed during browsing; reopen it");
@@ -427,7 +451,7 @@ void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::s
 std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &password,int format){
     OpenArchive reader(source,password,format);auto items=reader.items();preflight(reader,items);
     std::vector<Entry> result;result.reserve(items.size());
-    for(const auto &item:items)result.push_back({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted});
+    for(const auto &item:items)result.push_back({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted,item.size_known});
     return result;
 }
 
@@ -450,7 +474,8 @@ size_t seven_extract(const fs::path &source,const fs::path &destination,
     auto indices=selected_indices(items,effective);
     U64 expected=0;for(U32 index:indices)if(!items[index].directory){if(items[index].size>UINT64_MAX-expected)fail("Archive declares too much extracted data","safety");expected+=items[index].size;}
     ExtractionRisk risk;for(U32 index:indices){const auto &item=items[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();
-    ExtractionSpace space(destination.parent_path(),expected);
+    const bool expected_known=std::all_of(indices.begin(),indices.end(),[&](U32 index){return items[index].directory||items[index].size_known;});
+    ExtractionSpace space(destination.parent_path(),expected,nullptr,nullptr,nullptr,expected_known);
     fs::create_directory(destination);
     auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false,&space);
     HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);

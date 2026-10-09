@@ -1,0 +1,358 @@
+{
+  "repository": "https://github.com/libarchive/libarchive",
+  "commit": "7f53fce04e4e672230f4eb80b219af17975e4f83",
+  "files": [
+    {
+      "name": "test_read_format_cab_1.cab",
+      "stored": "test_read_format_cab_1.cab",
+      "source": "test_read_format_cab_1.cab.uu",
+      "bytes": 266,
+      "sha256": "0672797c111fca020fefe1b4b86de410f0eed36b52482a5bd282527392124d0e",
+      "expected": [
+        {
+          "name": "dir1/file1",
+          "bytes": 60,
+          "sha256": "d0c504f06bbd64d183524eb35e5482ee5d966d456b905a24147165b2904d301b"
+        },
+        {
+          "name": "dir2/file2",
+          "bytes": 78,
+          "sha256": "60f47caf717b06cf21b3bbb7775e49269a1b5cd6b94bba62da29a2ecb048ccf2"
+        },
+        {
+          "name": "empty",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_lha_header0.lzh",
+      "stored": "test_read_format_lha_header0.lzh",
+      "source": "test_read_format_lha_header0.lzh.uu",
+      "bytes": 348,
+      "sha256": "286b32e0f5c98016944681e4694b0c7be5c0575570c876d6fc63195a09d3c508",
+      "expected": [
+        {
+          "name": "file1",
+          "bytes": 60,
+          "sha256": "d0c504f06bbd64d183524eb35e5482ee5d966d456b905a24147165b2904d301b"
+        },
+        {
+          "name": "file2",
+          "bytes": 78,
+          "sha256": "60f47caf717b06cf21b3bbb7775e49269a1b5cd6b94bba62da29a2ecb048ccf2"
+        }
+      ],
+      "unsupported": false,
+      "unsafe": true
+    },
+    {
+      "name": "test_read_format_lha_header1.lzh",
+      "stored": "test_read_format_lha_header1.lzh",
+      "source": "test_read_format_lha_header1.lzh.uu",
+      "bytes": 420,
+      "sha256": "094084407fa7b6cf4b9e1d32ac122ce122e4637867400ca21a44977b9b08ad16",
+      "expected": [
+        {
+          "name": "file1",
+          "bytes": 60,
+          "sha256": "d0c504f06bbd64d183524eb35e5482ee5d966d456b905a24147165b2904d301b"
+        },
+        {
+          "name": "file2",
+          "bytes": 78,
+          "sha256": "60f47caf717b06cf21b3bbb7775e49269a1b5cd6b94bba62da29a2ecb048ccf2"
+        }
+      ],
+      "unsupported": false,
+      "unsafe": true
+    },
+    {
+      "name": "test_read_format_lha_header2.lzh",
+      "stored": "test_read_format_lha_header2.lzh",
+      "source": "test_read_format_lha_header2.lzh.uu",
+      "bytes": 420,
+      "sha256": "12bcc4b3e8ac6f81af82f4dc191133fb1cdc1b802e1c63f710c294a463f457c7",
+      "expected": [
+        {
+          "name": "file1",
+          "bytes": 60,
+          "sha256": "d0c504f06bbd64d183524eb35e5482ee5d966d456b905a24147165b2904d301b"
+        },
+        {
+          "name": "file2",
+          "bytes": 78,
+          "sha256": "60f47caf717b06cf21b3bbb7775e49269a1b5cd6b94bba62da29a2ecb048ccf2"
+        }
+      ],
+      "unsupported": false,
+      "unsafe": true
+    },
+    {
+      "name": "test_read_format_lha_header3.lzh",
+      "stored": "test_read_format_lha_header3.lzh",
+      "source": "test_read_format_lha_header3.lzh.uu",
+      "bytes": 548,
+      "sha256": "d36f9beaf7d1aa482315e810c8cfca327975ffd31a05082004102327310e419d",
+      "expected": [],
+      "unsupported": true
+    },
+    {
+      "name": "test_compat_zstd_1.tar.zst",
+      "stored": "test_compat_zstd_1.tar.zst",
+      "source": "test_compat_zstd_1.tar.zst.uu",
+      "bytes": 369,
+      "sha256": "2f389bc41c90878df2e71a5ae0ee9099a9271e1507fa79d58cac86acac244264",
+      "expected": [
+        {
+          "name": "d1/f1",
+          "bytes": 3,
+          "sha256": "d690916cdea320e620748799a2051a0f4e07d6d0c3e2bc199ea3c69e0c0b5e4f"
+        },
+        {
+          "name": "d1/f2",
+          "bytes": 3,
+          "sha256": "b9a294f298d0ed2b65ca4488a42b473ff5f75d0b9843cbea84e1b472f9a514d1"
+        },
+        {
+          "name": "d1/f3",
+          "bytes": 3,
+          "sha256": "2ba85baaa7922ff4c0dfdbc00fd07bd69dcb1dce745c6a8c676fe8b5642a0d66"
+        },
+        {
+          "name": "f1",
+          "bytes": 3,
+          "sha256": "d690916cdea320e620748799a2051a0f4e07d6d0c3e2bc199ea3c69e0c0b5e4f"
+        },
+        {
+          "name": "f2",
+          "bytes": 3,
+          "sha256": "b9a294f298d0ed2b65ca4488a42b473ff5f75d0b9843cbea84e1b472f9a514d1"
+        },
+        {
+          "name": "f3",
+          "bytes": 3,
+          "sha256": "2ba85baaa7922ff4c0dfdbc00fd07bd69dcb1dce745c6a8c676fe8b5642a0d66"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_compat_zstd_2.tar.zst",
+      "stored": "test_compat_zstd_2.tar.zst",
+      "source": "test_compat_zstd_2.tar.zst.uu",
+      "bytes": 182,
+      "sha256": "83b1ca6361b77b1c2c7f65248a438494a68585cff4b6b41c37e16bf767b74ed6",
+      "expected": [
+        {
+          "name": "d1/f1",
+          "bytes": 3,
+          "sha256": "d690916cdea320e620748799a2051a0f4e07d6d0c3e2bc199ea3c69e0c0b5e4f"
+        },
+        {
+          "name": "d1/f2",
+          "bytes": 3,
+          "sha256": "b9a294f298d0ed2b65ca4488a42b473ff5f75d0b9843cbea84e1b472f9a514d1"
+        },
+        {
+          "name": "d1/f3",
+          "bytes": 3,
+          "sha256": "2ba85baaa7922ff4c0dfdbc00fd07bd69dcb1dce745c6a8c676fe8b5642a0d66"
+        },
+        {
+          "name": "f1",
+          "bytes": 3,
+          "sha256": "d690916cdea320e620748799a2051a0f4e07d6d0c3e2bc199ea3c69e0c0b5e4f"
+        },
+        {
+          "name": "f2",
+          "bytes": 3,
+          "sha256": "b9a294f298d0ed2b65ca4488a42b473ff5f75d0b9843cbea84e1b472f9a514d1"
+        },
+        {
+          "name": "f3",
+          "bytes": 3,
+          "sha256": "2ba85baaa7922ff4c0dfdbc00fd07bd69dcb1dce745c6a8c676fe8b5642a0d66"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_zip_bzip2.zipx",
+      "stored": "test_read_format_zip_bzip2.zipx",
+      "source": "test_read_format_zip_bzip2.zipx.uu",
+      "bytes": 708,
+      "sha256": "373ec637744c762bb6c69c2c4f6cc2d9dad85ed5d4662b0ffb9373077dbf01a5",
+      "expected": [
+        {
+          "name": "vimrc",
+          "bytes": 912,
+          "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_zip_lzma.zipx",
+      "stored": "test_read_format_zip_lzma.zipx",
+      "source": "test_read_format_zip_lzma.zipx.uu",
+      "bytes": 713,
+      "sha256": "a8fd1714eff610dae52e434a759818829bf8040b5016aa771b9a33965d2dbc89",
+      "expected": [
+        {
+          "name": "vimrc",
+          "bytes": 912,
+          "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_zip_ppmd8.zipx",
+      "stored": "test_read_format_zip_ppmd8.zipx",
+      "source": "test_read_format_zip_ppmd8.zipx.uu",
+      "bytes": 616,
+      "sha256": "3524501a47b1947a162cb2b33ccabc8d2bd8c2311b86c0a6af6f7ba28eedbf6e",
+      "expected": [
+        {
+          "name": "vimrc",
+          "bytes": 912,
+          "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_zip_xz_multi.zipx",
+      "stored": "test_read_format_zip_xz_multi.zipx",
+      "source": "test_read_format_zip_xz_multi.zipx.uu",
+      "bytes": 5476,
+      "sha256": "d4ba4b1fa117e8170ffb4e0ded734c5da9006064daf35c9056671c66da21bb74",
+      "expected": [
+        {
+          "name": "bash.bashrc",
+          "bytes": 2245,
+          "sha256": "4995deb0c6a2b5482ba62759f1f5bcdd19186528d99d263dc8bc61d42878798e"
+        },
+        {
+          "name": "pacman.conf",
+          "bytes": 2566,
+          "sha256": "6024bbf50cc92236b7b437430cb9e4180da91925cdc19a5a7910fe172931cfb6"
+        },
+        {
+          "name": "profile",
+          "bytes": 6601,
+          "sha256": "4973827f59fed69911bc0b3e4ad7f9ee6aac0ee120b38ded0a46a7302044dd36"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_zip_zstd.zipx",
+      "stored": "test_read_format_zip_zstd.zipx",
+      "source": "test_read_format_zip_zstd.zipx.uu",
+      "bytes": 647,
+      "sha256": "ca15c7eabde8b918f1c91ff3a173012175b0599664f007fc3cb0bdf00c767377",
+      "expected": [
+        {
+          "name": "vimrc",
+          "bytes": 912,
+          "sha256": "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "test_read_format_iso_joliet_by_nero.iso",
+      "stored": "test_read_format_iso_joliet_by_nero.iso.gz",
+      "source": "test_read_format_iso_joliet_by_nero.iso.Z.uu",
+      "bytes": 1228800,
+      "sha256": "9d0971981f7f032f281b93940fd9664f310ea9f41751ca3e97c4eac9be334b89",
+      "expected": [
+        {
+          "name": "test/test.txt",
+          "bytes": 8,
+          "sha256": "d37b9395c2baf168f977ce9ff9ec007d7270fc84cbf1549324bfc8dfc34333a9"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "payload.txt.bz2",
+      "stored": "payload.txt.bz2",
+      "origin": "One generated fixture",
+      "bytes": 92,
+      "sha256": "38181e3ce4fd04209841203d132ee17614d2106e7ab1799d5fe06695eb6fdc3d",
+      "expected": [
+        {
+          "name": "payload.txt",
+          "bytes": 45,
+          "sha256": "3cb6cd1a288c40b6c74094eed9be85b3e2dfa1343fba85d965bde08c2c401329"
+        }
+      ]
+    },
+    {
+      "name": "payload.tar.bz2",
+      "stored": "payload.tar.bz2",
+      "origin": "One generated fixture",
+      "bytes": 165,
+      "sha256": "047a70f06e09ca830fb7b0558c3f35cb5e10699e6d50f27db817d770022e5f51",
+      "expected": [
+        {
+          "name": "payload.txt",
+          "bytes": 45,
+          "sha256": "3cb6cd1a288c40b6c74094eed9be85b3e2dfa1343fba85d965bde08c2c401329"
+        }
+      ]
+    },
+    {
+      "name": "payload.wim",
+      "stored": "payload.wim",
+      "origin": "One generated fixture",
+      "bytes": 1301,
+      "sha256": "3c2ed8febb96c22a263f62998ab888d224ddd77b269aaf16aaea6e6dd1017d37",
+      "expected": [
+        {
+          "name": "payload.txt",
+          "bytes": 45,
+          "sha256": "3cb6cd1a288c40b6c74094eed9be85b3e2dfa1343fba85d965bde08c2c401329"
+        }
+      ]
+    },
+    {
+      "name": "test_read_format_lha_bugfix_0.lzh",
+      "stored": "test_read_format_lha_bugfix_0.lzh",
+      "source": "test_read_format_lha_bugfix_0.lzh.uu",
+      "bytes": 685,
+      "sha256": "2d13865aefb2a03a3a6270dab0d4fb9beb254d9326ea3e334cdd64877a90ad41",
+      "expected": [
+        {
+          "name": "f",
+          "bytes": 776,
+          "sha256": "5f59ec737fc007a0857687637352e03eb945ae15a178682f70c33b1599587e25"
+        }
+      ]
+    },
+    {
+      "name": "test_read_format_lha_filename_cp932.lzh",
+      "stored": "test_read_format_lha_filename_cp932.lzh",
+      "source": "test_read_format_lha_filename_cp932.lzh.uu",
+      "bytes": 165,
+      "sha256": "c94008b2e0202872a61a48db1815fa09cb9f7f93e754d989d2e26d0e20bf699f",
+      "expected": [
+        {
+          "name": "\u5a0d\u5e24.txt",
+          "bytes": 8,
+          "sha256": "c10ea15c5a50c023e587aa64e25c1dd409adb5e2fad9c446d72288950893612e"
+        },
+        {
+          "name": "\u661e.txt",
+          "bytes": 4,
+          "sha256": "a330395cc0a53ad1207736546afff4735940937564bbf75ce1edad40780d9139"
+        }
+      ]
+    }
+  ]
+}

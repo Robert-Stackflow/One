@@ -375,6 +375,7 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
     SourceLock lock(source);lock_archive_source(source);expect_archive_revision(source,revision);
     auto entries= [&]{if(format!=0)return seven_drag_entries(source,password,format);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
     auto selection=select(entries,selected,folders);
+    for(auto index:selection.indexes)if(!entries[index].directory&&!entries[index].size_known)fail("Unknown-size streams must be extracted before dragging");
     ExtractionRisk risk;for(auto index:selection.indexes){const auto &item=entries[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();
     auto origin=std::make_shared<ArchiveOrigin>(source);
     if(FAILED(OleInitialize(nullptr)))fail("Cannot initialize Windows file drag");

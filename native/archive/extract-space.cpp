@@ -23,8 +23,8 @@ bool test_number(const wchar_t *key,uint64_t &result){
 }
 }
 
-ExtractionSpace::ExtractionSpace(const fs::path &path,uint64_t expected,Probe probe,Clock clock,void *context):
-    directory(path),expected(expected),probe(probe?probe:disk_space),clock(clock?clock:ticks),context(context){
+ExtractionSpace::ExtractionSpace(const fs::path &path,uint64_t expected,Probe probe,Clock clock,void *context,bool expected_known):
+    directory(path),expected(expected),expected_known(expected_known),probe(probe?probe:disk_space),clock(clock?clock:ticks),context(context){
     const auto limits=extraction_limits();maximum_bytes=limits.bytes;maximum_ms=limits.milliseconds;started=this->clock(context);
     if(expected>maximum_bytes)fail("声明展开量超过本次解压上限，请提高上限后重试。","safety");
     // Fault injection can only reduce the real available space; it never makes
@@ -44,7 +44,8 @@ bool ExtractionSpace::refresh() noexcept {
         if(!probe(directory,free,context)){failure=Failure::query;return false;}
         if(test_cap&&written>=test_after)free=(std::min)(free,test_available);
         // Subtraction avoids overflow even for hostile 64-bit size fields.
-        if(free<reserve||expected-written>free-reserve){failure=Failure::space;return false;}
+        const auto remaining=expected_known?expected-written:0;
+        if(free<reserve||remaining>free-reserve){failure=Failure::space;return false;}
         available=free;since_query=0;last_query=clock(context);return true;
     }catch(...){failure=Failure::query;return false;}
 }
@@ -56,7 +57,7 @@ bool ExtractionSpace::write(uint64_t bytes) noexcept {
         const auto now=clock(context);
         if(bytes>maximum_bytes-written){failure=Failure::budget;return false;}
         if(now-started>=maximum_ms){failure=Failure::time;return false;}
-        if(bytes>expected-written){failure=Failure::expanded;return false;}
+        if(expected_known&&bytes>expected-written){failure=Failure::expanded;return false;}
         if(since_query>=query_bytes||bytes>=query_bytes-since_query||now-last_query>=query_ms)
             if(!refresh())return false;
         if(available<reserve||bytes>available-reserve){failure=Failure::space;return false;}

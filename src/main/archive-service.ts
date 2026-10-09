@@ -1,6 +1,7 @@
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {availableParallelism} from 'node:os';
+import {isArchivePath,archiveBaseName,isCompositeArchive} from '../shared/archive-actions';
 import {archiveCompression,type ArchiveCompression} from '../shared/archive-compression';
 import {lstat,link,mkdir,readdir,rename,rm,stat} from 'node:fs/promises';
 import {join,dirname,basename,extname,isAbsolute,resolve,relative} from 'node:path';
@@ -33,10 +34,13 @@ const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||val
 const encoding=(value:unknown):ArchiveEncoding=>[0,437,932,936,950,65001].includes(Number(value))?Number(value) as ArchiveEncoding:0;
 const password=(value:unknown)=>{if(value===undefined)return '';if(typeof value!=='string'||value.includes('\0')||Buffer.byteLength(value,'utf8')>1024||Buffer.from(value,'utf8').toString('utf8')!==value)throw Error('密码无效或过长');return value;};
 const archiveTarget=(value:unknown)=>{const target=path(value);if(!/\.(?:zip|7z|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(target))throw Error('不支持该压缩包格式');return target;};
-const archiveSource=(value:unknown)=>{const source=path(value);if(!/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(source))throw Error('暂不支持该压缩格式');return source;};
-const archiveName=(source:string)=>basename(source).replace(/\.(?:7z\.001|part\d+\.rar|tar\.gz|tar\.xz|zip|7z|rar|r00|tar|tgz|txz|gz|xz)$/i,'');
-const composite=(source:string)=>/\.(?:tar\.gz|tar\.xz|tgz|txz)$/i.test(source);
-const archiveDiagnostic=(message:string)=>message.startsWith('Missing volume : ')?`缺少 RAR 分卷：${message.slice('Missing volume : '.length)}。请将所有分卷放在同一文件夹后重新打开首卷。`:
+const archiveSource=(value:unknown)=>{const source=path(value);if(!isArchivePath(source))throw Error('暂不支持该压缩格式');return source;};
+const archiveName=(source:string)=>archiveBaseName(basename(source));
+const composite=isCompositeArchive;
+const archiveDiagnostic=(message:string)=>message==='Unknown-size streams must be extracted before dragging'?'该压缩流未提供展开大小，请先解压到文件后再拖出。':
+  message==='This format currently requires a single-volume archive'?'当前格式仅支持单卷读取，请使用完整的单卷压缩包。':
+  message==='Archive headers are damaged, incomplete or unsupported'?'压缩包头部损坏、不完整或使用了暂不支持的特性。':
+  message.startsWith('Missing volume : ')?`缺少 RAR 分卷：${message.slice('Missing volume : '.length)}。请将所有分卷放在同一文件夹后重新打开首卷。`:
   message==='Open the first RAR volume, not a later part'?'请选择 RAR 的第一个分卷（通常为 .part1.rar、.part01.rar 或 .rar），并将全部分卷放在同一文件夹。':
   message==='RAR archive headers are damaged, incomplete or unsupported'?'RAR 头部损坏、分卷不完整或使用了暂不支持的特性。请检查压缩包和全部分卷后重试。':
   message==='RAR archive comment is damaged or unsupported'?'RAR 压缩包备注损坏或使用了暂不支持的格式，无法读取或完成校验。':

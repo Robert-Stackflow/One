@@ -4,6 +4,7 @@ import {open,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 import type {ArchiveEdit,ArchiveEncoding,ArchivePasswordEncoding,ArchiveRequest,ArchiveListing,ArchiveResult} from '../shared/archive';
 import {archiveEditPacket} from './archive-update';
+import {isArchivePath} from '../shared/archive-actions';
 import {archiveCompression} from '../shared/archive-compression';
 import {archiveLevel,archiveResources,archiveBudget,type ArchiveBudget} from '../shared/archive-options';
 import {ArchiveScheduler} from './archive-scheduler';
@@ -21,6 +22,7 @@ create:  --output FILE [--format zip|7z|tar|tar.gz|tar.xz|gz|xz] [--volume-size 
 extract: --output DIRECTORY [--destination smart|folder|here] [--conflict rename|skip|replace]
          [--select 0,1,...] [--no-zone] [--scan|--no-scan] ARCHIVES...
 list/test: [--encoding auto|437|932|936|950|65001] ARCHIVES...
+read-only: ZIPX/JAR/APK, CAB, ISO, LHA/LZH, WIM, BZ2/ZSTD, TAR.BZ2/TAR.ZST
 update:  --changes FILE.json ARCHIVE.zip|ARCHIVE.7z
 batch:   --jobs FILE.json (array of argument arrays, up to 128 jobs)
 common:  --json (JSON Lines), --progress (stderr), --password-stdin, --help
@@ -44,7 +46,6 @@ Exit: 0 success, 1 operation failure, 2 arguments, 3 password, 4 invalid archive
 `;
 function argument(condition:unknown,message:string):asserts condition {if(!condition)throw new CliFailure(message);}
 const filePath=(value:string,cwd:string)=>{argument(typeof value==='string'&&value.length>0&&value.length<=32768&&!/[\0\r\n]/.test(value),'Invalid path');return resolve(cwd,value);};
-const sourcePattern=/\.(zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i;
 const targetPattern=/\.(zip|7z|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i;
 export function parseCli(input:string[],cwd:string):CliCommand {
  argument(input.length<=512&&input.every(item=>typeof item==='string'&&item.length<=32768&&!item.includes('\0')),'Too many or invalid arguments');
@@ -97,7 +98,7 @@ export function parseCli(input:string[],cwd:string):CliCommand {
   try{compression=archiveCompression({zipMethod:options.get('zip-method') as 'deflate'|'xz'|undefined,zipEncryption:options.get('zip-encryption') as 'aes256'|'zipcrypto'|undefined,sevenMethod:options.get('seven-method') as 'lzma'|'lzma2'|undefined,sevenSolid:(solid===undefined?undefined:solid==='off'||solid==='solid'?solid:Number(solid)) as import('../shared/archive-compression').ArchiveCompression['sevenSolid']|undefined,autoThreads});}catch(error){throw new CliFailure(error instanceof Error?error.message:'Invalid compression options');}
   result.jobs=[{operation,request:{operation,path,sources:paths,volumeBytes,level,passwordEncoding,...resources,...compression}}];return result;
  }
- argument(paths.every(path=>sourcePattern.test(path)),'Unsupported input archive format');
+ argument(paths.every(isArchivePath),'Unsupported input archive format');
  argument(passwordEncoding===65001||paths.every(path=>/\.zip$/i.test(path)),'Password encoding options apply only to ZIP archives');
  if(operation==='extract'){
   argument(!(options.has('scan')&&options.has('no-scan')),'--scan and --no-scan are mutually exclusive');
@@ -185,7 +186,7 @@ export async function runCli(command:CliCommand,service:CliService,io:CliIO):Pro
       if(total<0){total=page.total;revision=page.revision;argument(Number.isSafeInteger(total)&&total>=0&&total<=1000000,'Archive directory exceeds supported limits');await write('meta',{...base,total,comment:page.comment,revision,editable:page.editable},`Entries: ${total}${page.comment?'\nComment: '+human(page.comment):''}`);}
       else if(page.total!==total||page.revision!==revision)throw new CliFailure('Archive changed while listing',4);
       if(page.offset!==offset||page.entries.length>200||!page.entries.length&&offset<total)throw new CliFailure('Incomplete archive directory',4);
-      for(const entry of page.entries){if(entry.index!==count||count>=total)throw new CliFailure('Invalid archive directory order',4);await write('entry',{...base,...entry},`${entry.index}\t${entry.directory?'DIR':entry.size}\t${human(entry.name)}`);count++;}
+      for(const entry of page.entries){if(entry.index!==count||count>=total)throw new CliFailure('Invalid archive directory order',4);await write('entry',{...base,...entry},`${entry.index}\t${entry.directory?'DIR':entry.sizeKnown===false?'UNKNOWN':entry.size}\t${human(entry.name)}`);count++;}
       offset=count;
      }while(offset<total);
      value={path:job.request.path,count};

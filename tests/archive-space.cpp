@@ -60,5 +60,19 @@ int main(){
         refused=false;try{finished.finish();}catch(const ArchiveError &error){refused=error.code=="timeout";}assert(refused);
         SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_MS",nullptr);
     }
-    std::puts("Extraction space policy passed: quota/free-space changes, byte/time cadence, metadata, finish, overflow, terminal errors and shared streams.");
+    {
+        Fixture state;ExtractionSpace stream(L"unused",0,probe,clock_value,&state,false);
+        assert(stream.write(mib));state.time=ExtractionSpace::query_ms;stream.finish();assert(!stream.failed());
+        state.free=ExtractionSpace::reserve;state.time+=ExtractionSpace::query_ms;
+        assert(!stream.write(1));assert(std::string(stream.code())=="write");
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_BYTES",L"16");
+        Fixture budget;ExtractionSpace limited(L"unused",0,probe,clock_value,&budget,false);
+        assert(limited.write(8));assert(!limited.write(9));assert(std::string(limited.code())=="safety");
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_BYTES",nullptr);
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_MS",L"100");
+        Fixture time;ExtractionSpace timed(L"unused",0,probe,clock_value,&time,false);assert(timed.write(1));time.time=100;
+        assert(!timed.write(1));assert(std::string(timed.code())=="timeout");
+        SetEnvironmentVariableW(L"ONE_ARCHIVE_EXTRACT_MAX_MS",nullptr);
+    }
+    std::puts("Extraction space policy passed: known/unknown sizes, quota/free-space changes, byte/time budgets, metadata, finish, overflow, terminal errors and shared streams.");
 }

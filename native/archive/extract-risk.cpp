@@ -7,7 +7,8 @@
 namespace {
 bool nested(const std::string &name){
     auto suffix=fs::path(wide(name)).extension().wstring();std::transform(suffix.begin(),suffix.end(),suffix.begin(),[](wchar_t c){return std::towlower(c);});
-    return suffix==L".zip"||suffix==L".7z"||suffix==L".rar"||suffix==L".tar"||suffix==L".gz"||suffix==L".xz"||suffix==L".tgz"||suffix==L".txz"||suffix==L".bz2"||suffix==L".zst"||suffix==L".001";
+    for(const auto extension:{L".zip",L".zipx",L".jar",L".apk",L".7z",L".rar",L".tar",L".gz",L".xz",L".tgz",L".txz",L".bz2",L".bzip2",L".tbz",L".tbz2",L".zst",L".zstd",L".tzst",L".cab",L".lha",L".lzh",L".iso",L".wim",L".001"})if(suffix==extension)return true;
+    return false;
 }
 }
 void ExtractionRisk::add(const std::string &name,bool directory,uint64_t size,uint64_t packed){
@@ -28,12 +29,12 @@ void ExtractionRisk::check()const{
     // archive risk. Only the service's preparation step sets this exemption.
     const bool wrapper=extraction_policy::env(L"ONE_ARCHIVE_COMPOSITE_PREPARE")==L"1"&&count==1&&only_tar;
     const auto nested=wrapper?0:nested_count;
-    // GZ/XZ may omit packed-size properties. Their complete stream's physical
+    // Single-stream handlers may omit packed-size properties. Their physical
     // size is a conservative denominator even for a partial inner selection.
     // Never use a single volume's size for ZIP/7Z/RAR families.
     auto packed=compressed;
     auto extension=fs::path(source).extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
-    if(!packed&&(extension==L".gz"||extension==L".xz"||extension==L".tgz"||extension==L".txz")){
+    if(!packed&&(extension==L".gz"||extension==L".xz"||extension==L".tgz"||extension==L".txz"||extension==L".bz2"||extension==L".bzip2"||extension==L".tbz"||extension==L".tbz2"||extension==L".zst"||extension==L".zstd"||extension==L".tzst")){
         std::error_code error;packed=fs::file_size(source,error);if(error)fail("Cannot check compressed stream size","read");
     }
     // Solid archives may report packed sizes only on the first file. Unknown

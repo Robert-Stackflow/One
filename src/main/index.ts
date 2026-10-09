@@ -12,7 +12,7 @@ import {ArchiveService} from './archive-service';
 import {ArchiveTasks} from './archive-tasks';
 import {archiveAssociation} from './archive-associations';
 import {archiveLaunchPath} from './archive-launch';
-import {archiveShellAction,type ArchiveOpenAction} from '../shared/archive-actions';
+import {archiveShellAction,isArchivePath,type ArchiveOpenAction} from '../shared/archive-actions';
 import {LauncherService} from './launcher-service';
 import {openWithApplications,openInApplication,activatePreviewWindow,showFileContextMenu} from './open-with';
 import {DiskService} from './disk-service';
@@ -205,7 +205,7 @@ function showSearch(kind:SearchContext['kind']='search',hwnd=foreground(true)?.h
  void searchBridge.context(hwnd,focus).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
 function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();if(settings.search.explorerTyping)searchPopup(true);dialogBar?.warm();}
-async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}else await searchBridge.jump(searchContext,path);}catch(error){if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure)return;error=new Error(failure);}searchWindow?.show();searchWindow?.focus();throw error;}}else{if(!info.isDirectory()&&/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(path)){searchWindow?.hide();await shellInvocation([`--one-archive=${path}`],'search-open');return;}const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
+async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}else await searchBridge.jump(searchContext,path);}catch(error){if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure)return;error=new Error(failure);}searchWindow?.show();searchWindow?.focus();throw error;}}else{if(!info.isDirectory()&&isArchivePath(path)){searchWindow?.hide();await shellInvocation([`--one-archive=${path}`],'search-open');return;}const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
 function utilityState(){return {awake:awake?.state()||{...settings.utilities.awake,active:false,locked:false,remaining:0,error:''},pinned:topmost?.count()||0,shortcutError:topmost?.error||'',clicker:clicker?.state()||{running:false,clicks:0,remaining:0,error:''}};}
 function utilityChanged(){if(!awake||!topmost||!clicker)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}
 let applicationIcon: Electron.NativeImage;
@@ -795,7 +795,7 @@ function registerIPC() {
     });
     previewQueues.set(id,task); void task.finally(() => { if (previewQueues.get(id) === task) previewQueues.delete(id); }).catch(() => {}); return task;
   }, ['preview']);
-  handle('open-file', async (_event, path) => {const file=filePath(path);if(/\.(?:zip|7z|7z\.001|rar|r00|tar|tar\.gz|tgz|gz|tar\.xz|txz|xz)$/i.test(file)&&(await stat(file)).isFile())return shellInvocation([`--one-archive=${file}`],'file-open');const error=await shell.openPath(file);if(error)throw new Error(error);}, ['main','preview','search']);
+  handle('open-file', async (_event, path) => {const file=filePath(path);if(isArchivePath(file)&&(await stat(file)).isFile())return shellInvocation([`--one-archive=${file}`],'file-open');const error=await shell.openPath(file);if(error)throw new Error(error);}, ['main','preview','search']);
   handle('reveal-file', (_event, path) => shell.showItemInFolder(filePath(path)), ['main','preview','search']);
   handle('start-file-drag',async(event,value)=>{
     const path=filePath(value),info=await stat(path);

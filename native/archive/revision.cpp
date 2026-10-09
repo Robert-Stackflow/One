@@ -77,6 +77,13 @@ void bind_archive_members(const fs::path &source,const std::vector<fs::path> &me
     value.members=members;
     value.locks.merge(locks);
 }
+std::string archive_content_fingerprint(HANDLE file){
+    LARGE_INTEGER start{};if(!SetFilePointerEx(file,start,nullptr,FILE_BEGIN))fail("Cannot seek prepared archive","read");
+    Hash hash;hash.add("One archive content v1");std::string buffer(1024*1024,'\0');
+    for(;;){DWORD bytes=0;if(!ReadFile(file,buffer.data(),(DWORD)buffer.size(),&bytes,nullptr))fail("Cannot verify prepared archive content","read");
+        if(!bytes)break;hash.add(buffer.substr(0,bytes));archive_activity();}
+    return hash.finish();
+}
 std::string zip_revision(const fs::path &source){
     std::lock_guard guard(source_mutex);
     const auto found=sources.find(key(source));

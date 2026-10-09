@@ -40,6 +40,11 @@ async function main(){
    return {out,err,records};
   };
   assert((await run(['--help'])).out.includes('One.Cli.exe'));
+  for(const name of ['test_read_format_cab_1.cab','payload.wim','payload.txt.bz2','test_read_format_zip_zstd.zipx','test_compat_zstd_1.tar.zst']){
+   const source=path.resolve('tests/fixtures/archives',name),listed=await run(['list','--json',source]);assert(listed.records.some(record=>record.type==='entry'));
+   if(name==='payload.txt.bz2'){assert.equal(listed.records.find(record=>record.type==='entry').sizeKnown,false);assert((await run(['list',source])).out.includes('\tUNKNOWN\t'));}
+   await run(['test','--json',source]);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',source]);assert((await fs.readdir(output)).length>0);
+  }
   const input=path.join(root,'中文 & input');await fs.mkdir(input);await fs.writeFile(path.join(input,'hello.txt'),'hello CLI');await fs.writeFile(path.join(input,'-leading $().txt'),'literal');
   const stored=path.join(root,'store-only.zip');await run(['create','--json','--output',stored,'--level','0','--threads','1','--memory-mib','128',path.join(input,'hello.txt')]);
   const storedZip=await JSZip.loadAsync(await fs.readFile(stored));assert.equal(storedZip.file('hello.txt')._data.compressedSize,Buffer.byteLength('hello CLI'));

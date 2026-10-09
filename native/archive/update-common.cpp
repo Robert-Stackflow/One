@@ -171,13 +171,26 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
         if (!FlushFileBuffers(flush.handle)) fail("Cannot flush staging archive");
     }
     if (stamp(original.handle) != revision) fail("Archive changed while saving");
+    // ReplaceFile merges named streams (including Zone.Identifier) and can
+    // legitimately change LastWriteTime. Retain a content witness only for
+    // those files; ordinary saves keep the constant-time revision check.
+    bool named_streams=false;WIN32_FIND_STREAM_DATA stream{};
+    const auto search=FindFirstStreamW(source.c_str(),FindStreamInfoStandard,&stream,0);
+    if(search!=INVALID_HANDLE_VALUE){
+        do{if(wcscmp(stream.cStreamName,L"::$DATA")!=0)named_streams=true;}while(FindNextStreamW(search,&stream));
+        const auto error=GetLastError();FindClose(search);if(error!=ERROR_HANDLE_EOF)fail("Cannot inspect archive streams","read");
+    }else{const auto error=GetLastError();if(error!=ERROR_HANDLE_EOF&&error!=ERROR_INVALID_PARAMETER&&error!=ERROR_NOT_SUPPORTED)fail("Cannot inspect archive streams","read");}
+    std::string prepared_revision,prepared_content;BY_HANDLE_FILE_INFORMATION prepared_info{};
+    {File prepared(temporary,GENERIC_READ,FILE_SHARE_READ);prepared_revision=stamp(prepared.handle);
+        if(!GetFileInformationByHandle(prepared.handle,&prepared_info))fail("Cannot inspect prepared archive","read");
+        if(named_streams)prepared_content=archive_content_fingerprint(prepared.handle);}
     emit("{\"type\":\"ready\"}");
     // The host first disables cancellation, then acknowledges commit. Killing a
     // task before this handshake can never replace the original archive.
     if (std::fgetc(stdin) != 1) fail("Archive update was cancelled before commit");
     original.close();
     if (zip_revision(source) != revision) fail("Archive changed before commit");
-    const auto prepared_revision=zip_revision(temporary);
+    if(zip_revision(temporary)!=prepared_revision)fail("Prepared archive changed before commit");
     if (!ReplaceFileW(source.c_str(), temporary.c_str(), backup.c_str(), 0, nullptr, nullptr)) {
         DWORD error = GetLastError();
         if (!fs::exists(source) && fs::exists(backup) && !MoveFileExW(backup.c_str(), source.c_str(), MOVEFILE_WRITE_THROUGH))
@@ -195,7 +208,9 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
     }
     File published(source,GENERIC_READ,FILE_SHARE_READ);
     const auto saved_revision=stamp(published.handle);
-    if(saved_revision!=prepared_revision)
+    BY_HANDLE_FILE_INFORMATION saved_info{};if(!GetFileInformationByHandle(published.handle,&saved_info))fail("Cannot inspect saved archive","read");
+    const bool identity=saved_info.dwVolumeSerialNumber==prepared_info.dwVolumeSerialNumber&&saved_info.nFileIndexHigh==prepared_info.nFileIndexHigh&&saved_info.nFileIndexLow==prepared_info.nFileIndexLow&&saved_info.nFileSizeHigh==prepared_info.nFileSizeHigh&&saved_info.nFileSizeLow==prepared_info.nFileSizeLow;
+    if(!identity||(named_streams?archive_content_fingerprint(published.handle)!=prepared_content:saved_revision!=prepared_revision))
         fail("Archive changed after replacement; preserve the current file and recovery copy: "+utf8(backup.wstring()));
     DeleteFileW(backup.c_str()); // A failed deletion leaves a recoverable original.
     emit("{\"type\":\"result\",\"count\":" + std::to_string(count) + ",\"revision\":"+json(saved_revision)+"}");

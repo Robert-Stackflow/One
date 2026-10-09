@@ -35,6 +35,6 @@ void BrowseRows::emit_page(size_t total,const std::string &comment,const std::st
     // Stable directory-first ordering, without copying every name a second time.
     size_t position=0,sent=0;for(bool directories:{true,false})for(const auto &[key,entry]:rows){
         if(entry.directory!=directories)continue;if(position++<offset)continue;if(sent++>=limit)return;
-        emit("{\"type\":\"entry\",\"index\":"+(entry.index==size_t(-1)?"-1":std::to_string(entry.index))+",\"name\":"+json(entry.name)+",\"directory\":"+(entry.directory?"true":"false")+",\"size\":"+std::to_string(entry.size)+",\"compressed\":"+std::to_string(entry.compressed)+",\"encrypted\":"+(entry.encrypted?"true":"false")+",\"implicit\":"+(entry.index==size_t(-1)?"true":"false")+"}");
+        emit("{\"type\":\"entry\",\"index\":"+(entry.index==size_t(-1)?"-1":std::to_string(entry.index))+",\"name\":"+json(entry.name)+",\"directory\":"+(entry.directory?"true":"false")+",\"size\":"+std::to_string(entry.size)+",\"compressed\":"+std::to_string(entry.compressed)+",\"encrypted\":"+(entry.encrypted?"true":"false")+(entry.size_known?"":",\"sizeKnown\":false")+",\"implicit\":"+(entry.index==size_t(-1)?"true":"false")+"}");
     }
 }

@@ -413,11 +413,18 @@ static int archive_format(const std::wstring &path) {
     std::wstring name = fs::path(path).filename().wstring();
     std::transform(name.begin(), name.end(), name.begin(), [](wchar_t ch) { return std::towlower(ch); });
     if (name.ends_with(L".zip")) return 0;
+    if (name.ends_with(L".zipx") || name.ends_with(L".jar") || name.ends_with(L".apk")) return 1;
     if (name.ends_with(L".7z") || name.ends_with(L".7z.001")) return 7;
     if (name.ends_with(L".rar") || name.ends_with(L".r00")) return 3;
     if (name.ends_with(L".tar")) return 0xee;
     if (name.ends_with(L".tar.gz") || name.ends_with(L".tgz") || name.ends_with(L".gz")) return 0xef;
     if (name.ends_with(L".tar.xz") || name.ends_with(L".txz") || name.ends_with(L".xz")) return 0x0c;
+    if (name.ends_with(L".bz2") || name.ends_with(L".bzip2") || name.ends_with(L".tbz2") || name.ends_with(L".tbz")) return 2;
+    if (name.ends_with(L".zst") || name.ends_with(L".zstd") || name.ends_with(L".tzst")) return 0x0e;
+    if (name.ends_with(L".cab")) return 8;
+    if (name.ends_with(L".lha") || name.ends_with(L".lzh")) return 6;
+    if (name.ends_with(L".iso")) return 0xe7;
+    if (name.ends_with(L".wim")) return 0xe6;
     fail("Unsupported archive format");
 }
 

@@ -13,7 +13,7 @@ public:
     static constexpr uint64_t reserve=256ull*1024*1024;
     static constexpr uint64_t query_bytes=8ull*1024*1024;
     static constexpr ULONGLONG query_ms=250;
-    ExtractionSpace(const fs::path &directory,uint64_t expected,Probe probe=nullptr,Clock clock=nullptr,void *context=nullptr);
+    ExtractionSpace(const fs::path &directory,uint64_t expected,Probe probe=nullptr,Clock clock=nullptr,void *context=nullptr,bool expected_known=true);
     bool write(uint64_t bytes) noexcept;
     void require(uint64_t bytes);
     void finish();
@@ -24,6 +24,7 @@ private:
     enum class Failure {none,query,space,expanded,budget,time};
     fs::path directory;
     uint64_t expected=0,written=0,available=0,since_query=0;
+    bool expected_known=true;
     ULONGLONG last_query=0,started=0;uint64_t maximum_bytes=0,maximum_ms=0;
     Probe probe;Clock clock;void *context;
     std::mutex mutex;

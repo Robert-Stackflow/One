@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $archiveProgId='One.Archive'
 $archiveAppName='One 压缩与解压'
-$archiveExtensions=@('.zip','.7z','.rar','.r00','.tar','.tgz','.gz','.txz','.xz')
+$archiveExtensions=@('.zip','.7z','.rar','.r00','.tar','.tgz','.gz','.txz','.xz','.zipx','.jar','.apk','.bz2','.bzip2','.tbz','.tbz2','.zst','.zstd','.tzst','.cab','.lha','.lzh','.iso','.wim')
 $archiveCapabilities='One\Archive\Capabilities'
 
 # Accept a RegistryKey so tests can exercise the same logic below an isolated
