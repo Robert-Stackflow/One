@@ -21,12 +21,12 @@ output at 64 MiB. The original library sources remain unchanged.
 22 positive datasets decode with valid CRC through this independent oracle,
 covering Store,
 raw Deflate, BZip2, LZMA and AZO; AES128/256, ZipCrypto and LEA128/256; Korean and
-Japanese filenames; encrypted headers, solid contents and a real two-volume
+Japanese filenames; prefix content-encryption metadata, solid contents and a real two-volume
 archive. Expected hashes refer to decoded bytes, not source code assertions.
 number.vol2.egg is an additional volume, not a separate first-volume case.
 
 Four outcomes are explicitly not positive product or oracle coverage:
-- extattr.egg triggers a NullReferenceException in the pinned reference parser.
+- extattr.egg triggers a NullReferenceException in the pinned reference run.
   Preserve it for independent header analysis and the future native parser.
 - zeros.egg reports 197540460 expanded bytes from 338 compressed payload bytes
   in the upstream test. The oracle stops after 64 MiB; no complete-output hash
@@ -64,7 +64,7 @@ Run: npm run test:archive-egg-container
 The C++ bounded directory parser matches 24 reference metadata datasets (the
 two CRC-invalid short LEA files are metadata coverage only). It also reads all
 five attribute entries and the 197,540,460-byte output-limit entry without
-allocating their expanded contents. 370 checks cover multiple blocks, solid
+allocating their expanded contents. 374 checks cover multiple blocks, solid
 file maps, arbitrary cross-volume header/payload boundaries, reversed input
 volume order, missing/duplicate/unrelated/cyclic volumes, truncated archives,
 metadata memory/name/count limits and cancellation. Both native suites support
@@ -82,7 +82,7 @@ same CRC-correct plaintext hash, a8a2f6ebe286697c527eb35a58b5539532e9b3ae3b64d4e
 instead of the reference's incorrect all-zero data. Larger LEA128/256 hashes
 also match the independently decoded AES/ZipCrypto versions of that content.
 
-192 checks cover all five codecs and AES128/256, LEA128/256 and ZipCrypto;
+195 checks cover all five codecs and AES128/256, LEA128/256 and ZipCrypto;
 independently generated AES/ZipCrypto multi-block data with continuous cipher
 state; AES-wrapped unchanged external AZO streams; every MAC byte, password
 verifiers/salts, sticky authentication failures, ciphertext and CRC tampering;
@@ -92,3 +92,8 @@ other real-writer password encodings are not claimed. --asan instruments the
 new native modules and BZip2; zlib/liblzma remain the existing release libraries.
 Framing/crypto completion does not expose EGG in One until the product adapter,
 staging/path/risk checks, revisions, browser/extraction/drag/CLI are integrated.
+An Encrypt Info field preceding a File Header applies to that following entry
+only, including when it occurs between completed files. Tests use distinct
+AES128/256 keys and MACs in two consecutive prefix-header entries. This does
+not claim support for encrypted filenames or the separate unused Global Encrypt
+signature; the core explicitly rejects encrypted names and encrypted solid data.

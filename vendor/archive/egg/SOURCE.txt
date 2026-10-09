@@ -14,6 +14,10 @@ stream framing are implemented directly by One. Native code uses exact two-byte
 password verification, independent ciphertext authentication and continuous
 cipher state across all blocks in a file. It does not copy the reference's
 AES128 verifier collision or short LEA stream bug (see the fixture README).
+An Encrypt Info field before a File Header belongs only to that following
+entry, matching the reference's fresh-entry parsing; it is not inherited by
+later files. Prefix headers between completed files are handled with the same
+scope. The separate, unused Global Encrypt signature is not enabled.
 
 One changes: C++ port with exact-read/write callbacks, bounded zero padding,
 strict sizes/indices/match distances, memory accounting before allocation and

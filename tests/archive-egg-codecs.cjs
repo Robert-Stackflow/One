@@ -79,6 +79,13 @@ async function main(){
  const blocks=plain.map(bytes=>({method:1,expanded:bytes.length,crc:crc(bytes),data:zlib.deflateRawSync(bytes)}));assert.notEqual(blocks[0].data.length%16,0);
  for(const method of [0,1,2]){const password='汉字🔐 päss',encrypted=encrypt(blocks,method,password),data=create(encrypted.blocks,{encryption:encrypted.encryption}),actual=await invoke([data],{password});assert.equal(actual.entries[0].sha256,hash(Buffer.concat(plain)));checks++;
   await invoke([data],{password:password+'!',error:/password:|archive:/});}
+ // Prefix encryption headers are per-entry, including between two complete
+ // files. Distinct ciphers/keys/MACs must never leak into the next member.
+ {const password='prefix AES',parts=blocks.map((b,i)=>{const encrypted=encrypt([b],i+1,password),file=create(encrypted.blocks,{name:'file'+i,encryption:encrypted.encryption});file.writeUInt32LE(i,22);
+   const framed=frames(file),prefix=extra(0x08d1470f,encrypted.encryption),start=18,cryptoStart=framed.cryptoAt-7,cryptoEnd=framed.cryptoAt+encrypted.encryption.length;
+   return Buffer.concat([prefix,file.subarray(start,cryptoStart),file.subarray(cryptoEnd,-4)]);});
+  const joined=Buffer.concat([root(),...parts,end]),actual=await invoke([joined],{password});assert.deepEqual(actual.entries.map(x=>x.sha256),plain.map(hash));checks++;
+  const tampered=Buffer.from(joined);const second=parts[0].length+18;tampered[second+7+1+16+2]^=1;await invoke([tampered],{password,error:/authentication/});}
  // Preserve an external AZO stream unchanged and independently AES-wrap it.
  const source=await fs.readFile(path.join(fixtures,'azoshort_txt.egg')),f=frames(source),b=f.blocks[0],azo={method:3,expanded:b.expanded,crc:b.crc,data:source.subarray(b.dataAt,b.dataAt+b.packed)};
  for(const method of [1,2]){const password='AZO 中文🔐',encrypted=encrypt([azo],method,password),actual=await invoke([create(encrypted.blocks,{encryption:encrypted.encryption})],{password});assert.equal(actual.entries[0].sha256,manifest.fixtures.find(x=>x.name==='azoshort_txt.egg').result.entries[0].sha256);checks++;}

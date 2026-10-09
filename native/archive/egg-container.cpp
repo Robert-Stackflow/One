@@ -76,18 +76,18 @@ std::vector<size_t> egg_order_volumes(const std::vector<EggVolumeHeader> &header
 
 EggDirectory egg_directory(const EggReadAt &read,uint64_t payload_size,bool solid,const EggIndexLimits &limits,const std::function<void()> &checkpoint){
     Reader r{read,payload_size,0,checkpoint};Usage usage{limits};EggDirectory result;result.solid=solid;
-    std::unordered_set<uint32_t> ids;EggEncryption global_encryption;bool ended=false,solid_data=false;size_t current=SIZE_MAX;
+    std::unordered_set<uint32_t> ids;EggEncryption pending_encryption;bool ended=false,solid_data=false;size_t current=SIZE_MAX;
     auto finish=[&]{if(current==SIZE_MAX)return;auto &m=result.members[current];m.block_count=result.blocks.size()-m.first_block;
         if(!solid){uint64_t expanded=0;for(size_t i=m.first_block;i<result.blocks.size();++i){expanded=add_size(expanded,result.blocks[i].expanded);m.packed=add_size(m.packed,result.blocks[i].packed);}
             if(expanded!=m.size)invalid();}
         if(m.directory()&&(m.size||(!solid&&m.block_count)||m.encryption.encrypted()))invalid();
     };
     while(r.position<r.length){checkpoint();usage.header();const auto signature=r.number(4);
-        if(signature==end_magic){finish();if(r.position!=r.length)invalid();ended=true;break;}
+        if(signature==end_magic){finish();if(r.position!=r.length||pending_encryption.encrypted())invalid();ended=true;break;}
         if(signature==file_magic){finish();if(solid_data)invalid();if(result.members.size()>=limits.entries)fail("EGG directory exceeds its entry budget","resource");
-            usage.charge(sizeof(EggMember)*3+128);EggMember m;m.id=(uint32_t)r.number(4);m.size=r.number(8);m.encryption=global_encryption;
+            usage.charge(sizeof(EggMember)*3+128);EggMember m;m.id=(uint32_t)r.number(4);m.size=r.number(8);m.encryption=pending_encryption;pending_encryption=EggEncryption{};
             if(m.size>max_size)fail("EGG size exceeds its supported range","resource");if(!ids.insert(m.id).second)invalid();m.first_block=result.blocks.size();
-            bool named=false,encrypted=false,win=false,posix=false,commented=false;
+            bool named=false,encrypted=m.encryption.encrypted(),win=false,posix=false,commented=false;
             while(true){checkpoint();usage.header();const auto extra_signature=r.number(4);if(extra_signature==end_magic)break;Extra extra(r);
                 if(extra_signature==name_magic){if(named)invalid();named=true;extra.flags_only(4|8|16);if(extra.flags&4)fail("Encrypted EGG filenames are not supported");
                     if(!extra.size||extra.size>32767)invalid();usage.name(extra.size);m.name_flags=extra.flags;
@@ -108,7 +108,7 @@ EggDirectory egg_directory(const EggReadAt &read,uint64_t payload_size,bool soli
             result.packed=add_size(result.packed,block.packed);result.blocks.push_back(block);if(solid)solid_data=true;
         }else if(signature==dummy_magic){Extra extra(r);extra.flags_only(0);r.skip(extra.size);}
         else if(signature==comment_magic){Extra extra(r);result.comment=comment(r,extra,usage);}
-        else if(signature==encrypt_magic){if(current!=SIZE_MAX||global_encryption.encrypted())invalid();Extra extra(r);global_encryption=encryption(r,extra);}
+        else if(signature==encrypt_magic){if(pending_encryption.encrypted())invalid();finish();current=SIZE_MAX;Extra extra(r);pending_encryption=encryption(r,extra);}
         else invalid();
     }
     if(!ended)fail("EGG archive end marker is missing");

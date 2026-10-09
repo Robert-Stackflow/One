@@ -45,7 +45,11 @@ async function main(){
  assert.equal((await invoke([archive([member(0,'wide',0,[],1)])])).entries[0].name,'wide');checks++;
  const parent=await invoke([archive([member(0,'dir/',0,[directory]),member(1,'child',0,[],16,u32(0))])]);assert.equal(parent.entries[1].parent,0);assert.equal(parent.entries[1].nameFlags,16);checks+=2;
  const posix=extra(0x1ee922e5,Buffer.concat([u32(0120777),u32(0),u32(0),u64(0)]));assert((await invoke([archive([member(0,'link',0,[posix])])])).entries[0].link);checks++;
- const cipher=extra(0x08d1470f,Buffer.from([1,...Buffer.alloc(20)])),global=await invoke([archive([cipher,member(0,'a',0),member(1,'b',0)])]);assert(global.entries.every(x=>x.encrypted));checks++;
+ // Encrypt Info outside a File Header belongs to the following entry; the
+ // pinned reference constructs a fresh entry on every BuildHeaders call.
+ const cipher=extra(0x08d1470f,Buffer.from([1,...Buffer.alloc(20)])),prefix=await invoke([archive([cipher,member(0,'a',0),member(1,'b',0)])]);assert.deepEqual(prefix.entries.map(x=>x.encrypted),[true,false]);checks++;
+ const between=await invoke([archive([member(0,'a',0),cipher,member(1,'b',0)])]);assert.deepEqual(between.entries.map(x=>x.encrypted),[false,true]);checks++;
+ await invoke([archive([cipher])],{error:/archive:/});await invoke([archive([cipher,cipher,member(0,'a',0)])],{error:/archive:/});
  // Join at arbitrary byte boundaries: even a filename or block header may be
  // split. Volume IDs, not argument order, determine the logical stream.
  const payload=valid.subarray(18);for(const cut of [1,19,payload.length-3]){const first=split(10,0,20,payload.subarray(0,cut)),last=split(20,10,0,payload.subarray(cut));
