@@ -10,7 +10,9 @@ async function main(){
  try{
   const {ArchiveService}=await compile('src/main/archive-service.ts'),{ArchiveEditSessions}=await compile('src/main/archive-edit-sessions.ts');
   const profile=path.join(root,'profile');await fs.mkdir(profile);
-  const launches=[];service=new ArchiveService(path.join(profile,'cache'),()=>{},undefined,undefined,false,undefined,undefined,undefined,async file=>{launches.push(file);return '';});
+  const launches=[],events=[];const launcher=async(file,mode)=>{launches.push({file,mode});return{tracked:false,exited:Promise.resolve('unknown'),release(){}};};
+  service=new ArchiveService(path.join(profile,'cache'),()=>{},undefined,undefined,false,undefined,undefined,undefined,launcher,item=>events.push(item));
+  const journalPath=edit=>path.join(path.dirname(path.dirname(edit.file)),'session.json');
   const sources=path.join(root,'资料');await fs.mkdir(sources);await fs.writeFile(path.join(sources,'说明.txt'),'original');await fs.writeFile(path.join(sources,'run.cmd'),'echo executable');
   const run=request=>service.run(41,request);
   for(const [format,password,volumeBytes] of [['zip','',0],['7z','',0],['zip',' secret 中文 ',0],['7z',' secret 中文 ',0],['zip','',1048576],['7z','',1048576]]){
@@ -18,26 +20,28 @@ async function main(){
    const target=created.path,listing=await run({operation:'list',path:target,password});assert.ok(listing.revision);const chosen=listing.entries.find(e=>e.name.replaceAll('\\','/')==='资料/说明.txt');assert.ok(chosen,tag+': '+listing.entries.map(e=>e.name).join(', '));const index=chosen.index;
    const request={path:target,revision:listing.revision,index,password};const before=await hash(target);
    const edit=await service.edits.start(41,request,randomUUID());assert.equal(await fs.readFile(edit.file,'utf8'),'original');assert.equal((await service.edits.check(edit.id)).changed,false);pass();
-   await service.edits.open(edit.id);assert.equal(launches.at(-1),edit.file);pass();
-   const journal=await fs.readFile(path.join(path.dirname(edit.file),'session.json'),'utf8');assert.ok(!journal.includes('secret'));assert.ok(!journal.includes('password"'));pass();
+   await service.edits.open(edit.id);assert.equal(launches.at(-1).file,edit.file);assert.equal(launches.at(-1).mode,'text');assert.equal(path.basename(edit.file),'说明.txt');pass();
+   const journal=await fs.readFile(journalPath(edit),'utf8');assert.ok(!journal.includes('secret'));assert.ok(!journal.includes('password"'));pass();
    await fs.writeFile(edit.file,'changed '+tag);const changed=await service.edits.check(edit.id);assert.equal(changed.changed,true);
    await fs.writeFile(edit.file,'newer '+tag);await assert.rejects(service.edits.save(41,edit.id,changed.token,password),/确认后已变化/);assert.equal(await hash(target),before);assert.equal(await fs.readFile(edit.file,'utf8'),'newer '+tag);pass();
    const token=(await service.edits.check(edit.id)).token;
    await assert.rejects(service.edits.discard(edit.id,changed.token),/确认后已变化/);pass();
-   const restarted=new ArchiveEditSessions(path.join(profile,'archive-edits'),(owner,request,id)=>service.run(owner,request,id),async()=> 'association failure');
-   assert.ok((await restarted.list()).items.some(item=>item.id===edit.id));assert.equal((await restarted.check(edit.id)).token,token);await assert.rejects(restarted.open(edit.id),/association failure/);pass();
+   const restarted=new ArchiveEditSessions(path.join(profile,'archive-edits'),(owner,request,id)=>service.run(owner,request,id),async()=>{throw Error('association failure');});
+   assert.ok((await restarted.list()).items.some(item=>item.id===edit.id));assert.equal((await restarted.check(edit.id)).token,token);await assert.rejects(restarted.open(edit.id),/association failure/);await restarted.stop();pass();
    // Two copies opened at the same original revision must not overwrite each other.
    const stale=await service.edits.start(41,request);await fs.writeFile(stale.file,'stale edit');const staleToken=(await service.edits.check(stale.id)).token;
    const outcome=await service.edits.save(41,edit.id,token,password,randomUUID());assert.equal(outcome.path,target);assert.equal((await service.edits.check(edit.id)).state,'saved');pass();
    const after=await hash(target);assert.notEqual(after,before);await assert.rejects(service.edits.save(41,stale.id,staleToken,password),/变化|重新|revision/i);assert.equal(await hash(target),after);assert.equal(await fs.readFile(stale.file,'utf8'),'stale edit');pass();
-   await assert.rejects(service.edits.save(41,edit.id,token,password),/已经保存/);pass();
-   const extracted=await run({operation:'extract',path:target,parent:root,destination:'folder',password});assert.equal(await fs.readFile(path.join(extracted.path,'资料','说明.txt'),'utf8'),'newer '+tag);await run({operation:'test',path:target,password});pass();
-   if(password){await assert.rejects(service.edits.start(41,{...request,password:'wrong'}));assert.equal(await hash(target),after);pass();}
-   const savedCopy=await service.edits.check(edit.id);await fs.writeFile(path.join(path.dirname(edit.file),'editor-backup.txt'),'keep');await assert.rejects(service.edits.discard(edit.id,savedCopy.token),/其他资料/);assert.equal(await fs.readFile(edit.file,'utf8'),'newer '+tag);await fs.unlink(path.join(path.dirname(edit.file),'editor-backup.txt'));pass();
+   await assert.rejects(service.edits.save(41,edit.id,token,password),/没有变化/);pass();
+   await fs.writeFile(edit.file,'continued '+tag);const continued=await service.edits.check(edit.id);const second=await service.edits.save(41,edit.id,continued.token,password);assert.equal(second.revision,(await run({operation:'list',path:target,password})).revision);assert.equal((await service.edits.check(edit.id)).changed,false);pass();
+   const resolution=await service.edits.inspect(41,stale.id,password);assert.equal(resolution.same,false);await service.edits.resolve(41,stale.id,resolution.token,password);assert.equal((await service.edits.check(stale.id)).changed,true);pass();
+   const extracted=await run({operation:'extract',path:target,parent:root,destination:'folder',password});assert.equal(await fs.readFile(path.join(extracted.path,'资料','说明.txt'),'utf8'),'continued '+tag);await run({operation:'test',path:target,password});pass();
+   if(password){const currentHash=await hash(target);await assert.rejects(service.edits.start(41,{...request,password:'wrong'}));assert.equal(await hash(target),currentHash);pass();}
+   const savedCopy=await service.edits.check(edit.id);await fs.writeFile(path.join(path.dirname(edit.file),'editor-backup.txt'),'keep');await assert.rejects(service.edits.discard(edit.id,savedCopy.token),/其他资料/);assert.equal(await fs.readFile(edit.file,'utf8'),'continued '+tag);await fs.unlink(path.join(path.dirname(edit.file),'editor-backup.txt'));pass();
    await service.edits.discard(edit.id,savedCopy.token);await service.edits.discard(stale.id,staleToken);assert.equal((await service.edits.list()).items.length,0);pass();
   }
   const archive=path.join(root,'cancel.zip');await run({operation:'create',path:archive,sources:[sources]});const listing=await run({operation:'list',path:archive});const request={path:archive,revision:listing.revision,index:listing.entries.find(e=>e.name.endsWith('说明.txt')).index};
-  const executable=listing.entries.find(e=>e.name.endsWith('.cmd'));await assert.rejects(service.edits.start(41,{...request,index:executable.index}),/文档、文本和图片/);pass();
+  const executable=listing.entries.find(e=>e.name.endsWith('.cmd'));const scriptEdit=await service.edits.start(41,{...request,index:executable.index});await service.edits.open(scriptEdit.id);assert.equal(launches.at(-1).mode,'text');await service.edits.discard(scriptEdit.id,(await service.edits.check(scriptEdit.id)).token);pass();
   await assert.rejects(service.edits.start(41,{...request,index:listing.entries.find(e=>e.directory).index}),/普通文件/);pass();
   // Cancellation before native work must not create orphan copies or write originals.
   const before=await hash(archive),startId=randomUUID(),starting=service.edits.start(41,request,startId);assert.equal(service.cancel(startId,41),true);
@@ -45,7 +49,7 @@ async function main(){
   const edit=await service.edits.start(41,request);await fs.writeFile(edit.file,Buffer.alloc(8*1024*1024,7));const token=(await service.edits.check(edit.id)).token;
   const saveId=randomUUID(),saving=service.edits.save(41,edit.id,token,undefined,saveId);assert.equal(service.cancel(saveId,99),false);assert.equal(service.cancel(saveId,41),true);await assert.rejects(saving,/停止/);assert.equal(await hash(archive),before);assert.equal((await service.edits.check(edit.id)).state,'ready');pass();
   // Unknown/corrupt journal data never grants a path outside the edit directory.
-  const recordFile=path.join(path.dirname(edit.file),'session.json'),original=JSON.parse(await fs.readFile(recordFile,'utf8'));
+  const recordFile=journalPath(edit),original=JSON.parse(await fs.readFile(recordFile,'utf8'));
   await fs.writeFile(recordFile,JSON.stringify({...original,file:path.join(root,'victim.txt')}));await assert.rejects(service.edits.check(edit.id),/记录无效/);assert.ok((await service.edits.list()).items[0].error);await fs.writeFile(recordFile,JSON.stringify(original));pass();
   await assert.rejects(service.edits.check('../escape'),/标识无效/);pass();
   // A crash during writeback stays ambiguous; it is never automatically replayed.

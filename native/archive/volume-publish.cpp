@@ -300,7 +300,12 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
         crash_at("cleanup-stage-directory");
         log->remove();dirs.release(recovery);if(!RemoveDirectoryW(recovery.c_str()))fail("Cannot remove empty volume recovery directory","write");
     }catch(...){cleanup_pending=true;}
-    emit("{\"type\":\"result\",\"count\":"+std::to_string(next.size())+",\"volumes\":"+std::to_string(next.size())+
+    std::map<std::wstring,std::string> final_stamps;
+    for(const auto &item:items)if(item.new_file)final_stamps.emplace(key(item.target.filename()),stamp(item.new_file->handle));
+    std::vector<std::pair<fs::path,std::string>> final_members;
+    for(const auto &member:next)final_members.emplace_back(parent/member.path.filename(),final_stamps.at(key(member.path.filename())));
+    const auto saved_revision=archive_revision_from_stamps(final_members);
+    emit("{\"type\":\"result\",\"count\":"+std::to_string(next.size())+",\"volumes\":"+std::to_string(next.size())+",\"revision\":"+json(saved_revision)+
         ",\"removedVolumes\":"+std::to_string(removed)+",\"committed\":true,\"cleanupPending\":"+(cleanup_pending?"true":"false")+
         ",\"recovery\":"+json(cleanup_pending?utf8(recovery.wstring()):"")+"}");
 }

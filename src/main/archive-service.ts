@@ -12,6 +12,7 @@ import {archiveEditPacket} from './archive-update';
 import {browsePacket,folderSelection} from './archive-browser';
 import {ArchiveDragCache,type DragCacheReport} from './archive-drag-cache';
 import {ArchiveEditSessions} from './archive-edit-sessions';
+import {launchArchiveEditor,type ArchiveEditLauncher} from './archive-edit-launch';
 import type {ArchiveTasks} from './archive-tasks';
 import {validArchiveScan,copyArchiveScan,type ArchiveScan} from '../shared/archive-scan';
 import {archiveResources,archiveLevel,archiveBudget,archivePasswordEncoding,type ArchiveResources,type ArchiveBudget} from '../shared/archive-options';
@@ -104,11 +105,11 @@ export class ArchiveService {
   private stageSnapshots=new Map<string,{owner:number;token:string;record:string}>();
   private cacheMaintenance:Promise<DragCacheReport>;
   readonly edits:ArchiveEditSessions;
-  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&Partial<ArchiveCompression>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery'),launchEdit:(file:string)=>Promise<string>=async()=> '未配置外部编辑程序'){
+  constructor(private cacheRoot:string,private changed:(owner:number,progress:ArchiveProgress)=>void,private sourceWindow:(owner:number)=>string=()=> '0',private diagnostic:(event:string,detail:string,warning?:boolean)=>void=()=>{},private independentProcessGroup=false,private tasks?:ArchiveTasks,private defaults:()=>ArchiveResources&Partial<ArchiveBudget>&Partial<ArchiveCompression>&{compressionLevel?:number;propagateZone?:boolean;scanOnExtract?:boolean}=()=>archiveResources(),recoveryDirectory=join(dirname(cacheRoot),'tasks','archive-recovery'),launchEdit:ArchiveEditLauncher=launchArchiveEditor,editChanged:(item:import('../shared/archive-edit-session').ArchiveEditSession)=>void=()=>{}){
     this.dragCache=new ArchiveDragCache(cacheRoot,value=>this.diagnostic('archive-drag-cache',JSON.stringify(value),value.failures.length>0));
     this.cacheMaintenance=this.dragCache.sweep();
     this.recovery=new ArchiveRecoveryRegistry(recoveryDirectory);
-    this.edits=new ArchiveEditSessions(join(dirname(cacheRoot),'archive-edits'),(owner,request,id)=>this.run(owner,request,id),launchEdit);
+    this.edits=new ArchiveEditSessions(join(dirname(cacheRoot),'archive-edits'),(owner,request,id)=>this.run(owner,request,id),launchEdit,editChanged);
   }
   private recoveryActive(id:string,value?:ArchiveRecoveryRecord){
     if([...this.requests].some(value=>value.toLowerCase()===id.toLowerCase()))return true;
@@ -423,7 +424,8 @@ export class ArchiveService {
         const messages=await this.execute(owner,id,'update',[source,temporary,backup,String(encoding(request.encoding)),request.revision],password(request.password),undefined,packet);
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认修改成功');
-        return {path:source,count:result.count};
+        if(!validArchiveRevision(result.revision))throw Error('修改已执行，但未能确认保存版本；请检查原包并保留编辑副本');
+        return {path:source,count:result.count,revision:result.revision};
       }finally{
         await rm(temporary,{force:true}).catch(()=>{});
         // A backup left by a failed OS replacement is recovery data. Never
@@ -582,7 +584,8 @@ export class ArchiveService {
       let retained=result.cleanupPending;
       try{retained=!await this.recovery.clearIfAbsent(id);}catch(error){retained=true;this.diagnostic('archive-volume-index-cleanup',JSON.stringify({id,message:String(error)}),true);}
       if(retained)this.diagnostic('archive-volume-cleanup-pending',JSON.stringify({id,recovery:recovery.path}),true);
-      return{path:source,count:staged.count,...(retained?{recovery:recovery.path}:{})};
+      if(!validArchiveRevision(result.revision))throw Error('分卷修改已执行，但未能确认保存版本；请检查恢复资料');
+      return{path:source,count:staged.count,revision:result.revision,...(retained?{recovery:recovery.path}:{})};
     }catch(error){
       // Never recursively remove a stage or recovery tree: files can change
       // after a helper exits. The immutable index and native journal govern

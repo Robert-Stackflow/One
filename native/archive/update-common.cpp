@@ -177,6 +177,7 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
     if (std::fgetc(stdin) != 1) fail("Archive update was cancelled before commit");
     original.close();
     if (zip_revision(source) != revision) fail("Archive changed before commit");
+    const auto prepared_revision=zip_revision(temporary);
     if (!ReplaceFileW(source.c_str(), temporary.c_str(), backup.c_str(), 0, nullptr, nullptr)) {
         DWORD error = GetLastError();
         if (!fs::exists(source) && fs::exists(backup) && !MoveFileExW(backup.c_str(), source.c_str(), MOVEFILE_WRITE_THROUGH))
@@ -192,8 +193,12 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
             fail("Archive changed during commit; recovery copy: " + utf8(backup.wstring()));
         fail("Archive changed during commit; no changes saved");
     }
+    File published(source,GENERIC_READ,FILE_SHARE_READ);
+    const auto saved_revision=stamp(published.handle);
+    if(saved_revision!=prepared_revision)
+        fail("Archive changed after replacement; preserve the current file and recovery copy: "+utf8(backup.wstring()));
     DeleteFileW(backup.c_str()); // A failed deletion leaves a recoverable original.
-    emit("{\"type\":\"result\",\"count\":" + std::to_string(count) + "}");
+    emit("{\"type\":\"result\",\"count\":" + std::to_string(count) + ",\"revision\":"+json(saved_revision)+"}");
 }
 void finish_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,size_t count){
     File flush(temporary,GENERIC_WRITE,FILE_SHARE_READ);if(!FlushFileBuffers(flush.handle))fail("Cannot flush prepared archive","write");

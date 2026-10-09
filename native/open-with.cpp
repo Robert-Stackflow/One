@@ -122,6 +122,33 @@ HRESULT hereApplications(){
   }RegCloseKey(root);
  }std::cout<<']';return S_OK;
 }
+HRESULT monitorEditor(const std::wstring& path,const std::wstring& mode){
+ if(mode!=L"associated"&&mode!=L"text"&&mode!=L"choose")return E_INVALIDARG;
+ if(mode==L"choose"){
+  OPENASINFO choice{};choice.pcszFile=path.c_str();choice.oaifInFlags=OAIF_EXEC;
+  const auto hr=SHOpenWithDialog(nullptr,&choice);if(FAILED(hr))return hr;
+  std::cout<<"{\"type\":\"launched\",\"tracked\":false}"<<std::endl;return S_OK;
+ }
+ std::wstring program=path,arguments;
+ if(mode==L"text"){
+  wchar_t system[32768]{};const auto count=GetSystemDirectoryW(system,32768);if(!count||count>=32768)return E_FAIL;
+  program=std::wstring(system)+L"\\notepad.exe";arguments=quoteArgument(path);
+ }
+ // Tests use a real benign child without changing Windows associations.
+ wchar_t testing[8]{},fake[32768]{};
+  const auto fakeLength=GetEnvironmentVariableW(L"ONE_ARCHIVE_EDIT_TEST_PROGRAM",fake,32768);
+  if(GetEnvironmentVariableW(L"ONE_TEST_MODE",testing,8)==1&&testing[0]==L'1'&&fakeLength&&fakeLength<32768){
+  program=fake;arguments=quoteArgument(path);
+ }
+ SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC|SEE_MASK_FLAG_NO_UI;
+ info.lpVerb=L"open";info.lpFile=program.c_str();info.lpParameters=arguments.empty()?nullptr:arguments.c_str();info.nShow=SW_SHOWNORMAL;
+ if(!ShellExecuteExW(&info))return HRESULT_FROM_WIN32(GetLastError());
+ std::cout<<"{\"type\":\"launched\",\"tracked\":"<<(info.hProcess?"true":"false")<<"}"<<std::endl;
+ if(!info.hProcess)return S_OK; // Existing-process/DDE activation has no lifetime handle.
+ const auto waited=WaitForSingleObject(info.hProcess,INFINITE);CloseHandle(info.hProcess);
+ if(waited!=WAIT_OBJECT_0)return E_FAIL;
+ std::cout<<"{\"type\":\"exited\"}"<<std::endl;return S_OK;
+}
 int wmain(int argc,wchar_t** argv){
  if(argc==4&&std::wstring(argv[1])==L"focus"){
   HWND target=nullptr;DWORD owner=0;try{target=(HWND)(uintptr_t)std::stoull(argv[2]);owner=(DWORD)std::stoul(argv[3]);}catch(...){return 2;}
@@ -147,6 +174,7 @@ int wmain(int argc,wchar_t** argv){
  else if(mode==L"copy"||mode==L"cut"||mode==L"clipboard-probe")hr=copyItem(path,mode==L"cut"||argc==4&&std::wstring(argv[3])==L"cut",mode!=L"clipboard-probe");
  else if(mode==L"rename"&&argc==4){if(!MoveFileW(path.c_str(),argv[3]))hr=HRESULT_FROM_WIN32(GetLastError());}
  else if((mode==L"context"||mode==L"context-list")&&argc==7){try{hr=fileContextMenu(path,(HWND)(uintptr_t)std::stoull(argv[3]),(DWORD)std::stoul(argv[4]),std::stoi(argv[5]),std::stoi(argv[6]),mode==L"context-list");}catch(...){hr=E_INVALIDARG;}}
+ else if(mode==L"edit-monitor"&&argc==4)hr=monitorEditor(path,argv[3]);
  else if(mode==L"choose") {OPENASINFO info={};info.pcszFile=path.c_str();info.oaifInFlags=OAIF_EXEC;hr=SHOpenWithDialog(nullptr,&info);}
  else {
   ComPtr<IEnumAssocHandlers> enumerator;hr=SHAssocEnumHandlers(PathFindExtensionW(path.c_str()),mode==L"list"?ASSOC_FILTER_RECOMMENDED:ASSOC_FILTER_NONE,&enumerator);

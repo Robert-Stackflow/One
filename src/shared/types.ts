@@ -46,9 +46,13 @@ export interface OneAPI {
   archiveEditStart(request:import('./archive-edit-session').ArchiveEditStart,id?:string):Promise<import('./archive-edit-session').ArchiveEditSession>;
   archiveEditList():Promise<import('./archive-edit-session').ArchiveEditSessionPage>;
   archiveEditCheck(id:string):Promise<import('./archive-edit-session').ArchiveEditSession>;
-  archiveEditOpen(id:string):Promise<void>;
+  archiveEditOpen(id:string,choose?:boolean):Promise<void>;
   archiveEditSave(id:string,token:string,password?:string,taskId?:string):Promise<import('./archive').ArchiveResult>;
   archiveEditDiscard(id:string,token:string):Promise<void>;
+  archiveEditInspect(id:string,password?:string,taskId?:string):Promise<import('./archive-edit-session').ArchiveEditResolution>;
+  archiveEditResolve(id:string,token:string,password?:string,taskId?:string):Promise<import('./archive-edit-session').ArchiveEditSession>;
+  archiveEditExport(id:string,token:string):Promise<string|null>;
+  onArchiveEditChanged(callback:(item:import('./archive-edit-session').ArchiveEditSession)=>void):()=>void;
   archiveCancel(id:string):Promise<boolean>;
   archiveRecoveryList(offset?:number):Promise<import('./archive-recovery').ArchiveRecoveryPage>;
   archiveRecoveryInspect(id:string):Promise<import('./archive-recovery').ArchiveRecoveryInspection>;

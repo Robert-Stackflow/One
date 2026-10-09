@@ -43,11 +43,19 @@ public:
 std::string revision(const std::vector<fs::path> &members){
     if(members.empty()||members.size()>4096)fail("Invalid archive volume set","safety");
     if(members.size()==1){File file(members[0]);return archive_update::stamp(file.handle);}
-    Hash hash;hash.add("One archive member identities v2");hash.add(std::to_string(members.size()));
+    std::vector<std::pair<fs::path,std::string>> stamps;
     for(const auto &member:members){if(archive_cancelled())fail("Archive task cancelled","cancelled");archive_activity();
-        File file(member);hash.add(utf8(key(member)));hash.add(archive_update::stamp(file.handle));}
-    return hash.finish();
+        File file(member);stamps.emplace_back(member,archive_update::stamp(file.handle));}
+    return archive_revision_from_stamps(stamps);
 }
+}
+
+std::string archive_revision_from_stamps(const std::vector<std::pair<fs::path,std::string>> &members){
+    if(members.empty()||members.size()>4096)fail("Invalid archive volume set","safety");
+    if(members.size()==1)return members[0].second;
+    Hash hash;hash.add("One archive member identities v2");hash.add(std::to_string(members.size()));
+    for(const auto &[path,stamp]:members){hash.add(utf8(key(path)));hash.add(stamp);}
+    return hash.finish();
 }
 
 void lock_archive_source(const fs::path &source){std::lock_guard guard(source_mutex);auto &value=state(source);const auto name=key(source);if(!value.locks.contains(name))value.locks.emplace(name,std::make_unique<File>(source,GENERIC_READ,FILE_SHARE_READ));}

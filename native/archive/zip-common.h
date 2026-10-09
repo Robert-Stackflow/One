@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include <utility>
 
 struct Reader {
     void *value = nullptr;
@@ -23,6 +24,7 @@ void archive_drag(const fs::path &source, const fs::path &stage, int encoding,
                   const std::string &revision, const std::string &password, int format, bool testing, uintptr_t owner = 0,
                   const fs::path &lease = {}, bool folders = false);
 std::string zip_revision(const fs::path &source);
+std::string archive_revision_from_stamps(const std::vector<std::pair<fs::path,std::string>> &members);
 void lock_archive_source(const fs::path &source);
 void expect_archive_revision(const fs::path &source,const std::string &expected);
 void bind_archive_members(const fs::path &source,const std::vector<fs::path> &members);
