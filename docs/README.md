@@ -25,7 +25,7 @@
 - [当前开发状态与功能 TODO](development/TODO.md)
 - [开发、构建与目录管理](development/开发与缓存.md)
 - [安装器](development/安装器.md)
-- [需求](development/需求.md)
+- [产品需求与验收范围](development/需求.md)
 - [技术栈与代码结构](development/技术栈.md)
 - [开发计划](development/开发计划.md)
 - [设计规范](development/设计规范.md)
