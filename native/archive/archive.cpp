@@ -28,6 +28,7 @@
 #include "browse.h"
 #include "zip-common.h"
 #include "extract-space.h"
+#include "extract-directories.h"
 #include "extract-risk.h"
 #include "entry-details.h"
 #include "alz.h"
@@ -319,7 +320,7 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
     }
     ExtractionRisk risk;for(const auto &item:items)if(included(item))risk.add(item.name,item.directory,item.size,item.compressed);risk.check();
     ExtractionSpace space(destination.parent_path(),expected_bytes);
-    fs::create_directory(destination);
+    ExtractionDirectories directories(destination);
     for (const auto &item : items) {
         if (err != MZ_OK) fail("ZIP directory changed during extraction");
         if (archive_cancelled()) fail("Archive drag cancelled","cancelled");
@@ -327,9 +328,9 @@ size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::pa
             space.require(0);
             if (item.encrypted && password.empty()) fail("Password required","password");
             fs::path target = destination / entry_path(item.name);
-            if (item.directory) fs::create_directories(target);
+            if (item.directory) directories.ensure(target);
             else {
-                fs::create_directories(target.parent_path());
+                auto directory=directories.ensure(target.parent_path());
                 struct Output {
                     HANDLE handle;
                     explicit Output(const fs::path &path):handle(CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr,

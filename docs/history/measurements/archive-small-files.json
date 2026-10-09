@@ -1,0 +1,763 @@
+{
+  "scope": "100,000 nonempty ZIP files; real ArchiveService, native extraction and transactional here publication; two fresh destinations per mode/version",
+  "baselineSource": "81c0e75dd98493d33ffd7e7a8c8b949dfc936b69",
+  "optimizedSource": "Same commit as this file; ZIP bounded held-directory cache only",
+  "environment": {
+    "date": "2026-10-10T06:18:04.0564337+08:00",
+    "cpu": "AMD Ryzen 9 7940HX with Radeon Graphics        ",
+    "os": {
+      "Caption": "Microsoft Windows 11 专业版",
+      "Version": "10.0.26200",
+      "BuildNumber": "26200"
+    },
+    "volume": {
+      "FileSystem": "NTFS",
+      "DriveType": "Fixed"
+    },
+    "elevated": false,
+    "background": "OS/background workloads not frozen. A few short directory-unit compiler/test invocations overlapped the second baseline publish; no full build or other archive suites ran during extraction measurement."
+  },
+  "dataset": {
+    "count": 100000,
+    "bytes": 18710833,
+    "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+    "uncompressedBytes": 25600000,
+    "payloadBytes": 256,
+    "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+    "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+    "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+    "generatedSeconds": 3.060240300001169
+  },
+  "limitations": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+  "summary": {
+    "before": {
+      "folderSeconds": 61.296495900000004,
+      "hereSeconds": 467.29285964999997,
+      "extractSeconds": 61.2156877,
+      "publishSeconds": 405.50742304999994,
+      "extractKernelSeconds": 48.609375,
+      "extractOtherOperations": 2000858,
+      "extractLogicalReadBytes": 9840009942,
+      "extractWorkingMiB": 37.12109375,
+      "extractCommitMiB": 33.6953125,
+      "publishWorkingMiB": 182.84765625,
+      "firstProgressMilliseconds": 328.65175000000454
+    },
+    "after": {
+      "folderSeconds": 46.89114845,
+      "hereSeconds": 458.08451415,
+      "extractSeconds": 48.911370649999995,
+      "publishSeconds": 407.3607177,
+      "extractKernelSeconds": 36.890625,
+      "extractOtherOperations": 206755.5,
+      "extractLogicalReadBytes": 9840009942,
+      "extractWorkingMiB": 37.140625,
+      "extractCommitMiB": 33.7578125,
+      "publishWorkingMiB": 182.86328125,
+      "firstProgressMilliseconds": 326.967499999977
+    }
+  },
+  "cancellation": {
+    "date": "2026-10-09T22:18:50.069Z",
+    "sourceSha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+    "cancelDone": 1220,
+    "cancellationMilliseconds": 153.52739999999994,
+    "preservedParent": true,
+    "noStagingOrRecovery": true,
+    "helperSha256": "34e712310a10d3c8c5c07e058f8412ca55e25679794ba0b208182b8283fdfe66"
+  },
+  "before": {
+    "date": "2026-10-09T22:11:07.869Z",
+    "helperSha256": "96146603bffe8cfbf7b32fea8a7d2002da24e3cbc617ddc9e2cac3eff1fc1015",
+    "nativeArtifacts": {
+      "One.Archive.exe": "96146603bffe8cfbf7b32fea8a7d2002da24e3cbc617ddc9e2cac3eff1fc1015",
+      "One.ArchiveBudget.dll": "176a88e3beed36bcd9816c0abb79f72988c2519e6726fefe7abceba165d4025f",
+      "7z.dll": "76321c38d3d7658381de87f29a91c38d1a48ded4cd3535940e3cc1ad39f165a5"
+    },
+    "settings": {
+      "propagateZone": true,
+      "sourceZone": "No Zone.Identifier on generated local source",
+      "scan": false,
+      "threads": 2,
+      "memoryMiB": 1024,
+      "profile": "isolated",
+      "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+    },
+    "outputCleanupSeconds": 29.57727169999999,
+    "results": [
+      {
+        "mode": "folder",
+        "iteration": 0,
+        "firstProgressMilliseconds": 269.4791,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 16.114000000000004,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.2804388,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38887424,
+              "peakCommitBytes": 35328000,
+              "sampledPeakPrivateBytes": 35184640,
+              "seconds": 0.2818757,
+              "kernelSeconds": 0.03125,
+              "userSeconds": 0.234375,
+              "logicalIo": {
+                "readOperations": 505,
+                "writeOperations": 3,
+                "otherOperations": 119,
+                "readBytes": 16433991,
+                "writeBytes": 334,
+                "otherBytes": 3766
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 16.111400000000003,
+            "firstProgressMilliseconds": 263.6573,
+            "progressEvents": 547,
+            "seconds": 60.03649370000001,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38899712,
+              "peakCommitBytes": 35332096,
+              "sampledPeakPrivateBytes": 34754560,
+              "seconds": 60.0361635,
+              "kernelSeconds": 47.78125,
+              "userSeconds": 4.40625,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100579,
+                "otherOperations": 2000843,
+                "readBytes": 9840009942,
+                "writeBytes": 25627475,
+                "otherBytes": 1609526
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.330623,
+        "seconds": 60.1222791,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 3.049296699999999,
+        "nodeMemory": {
+          "rss": 64991232,
+          "heapTotal": 42455040,
+          "heapUsed": 15751232,
+          "external": 3655162,
+          "arrayBuffers": 1401860
+        }
+      },
+      {
+        "mode": "folder",
+        "iteration": 1,
+        "firstProgressMilliseconds": 307.0216000000073,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 23.401800000006915,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.3238203999999969,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38891520,
+              "peakCommitBytes": 35315712,
+              "sampledPeakPrivateBytes": 35315712,
+              "seconds": 0.3239783,
+              "kernelSeconds": 0.015625,
+              "userSeconds": 0.265625,
+              "logicalIo": {
+                "readOperations": 506,
+                "writeOperations": 3,
+                "otherOperations": 121,
+                "readBytes": 16442335,
+                "writeBytes": 334,
+                "otherBytes": 3766
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 21.195899999991525,
+            "firstProgressMilliseconds": 300.7954000000027,
+            "progressEvents": 568,
+            "seconds": 62.394881699999985,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38924288,
+              "peakCommitBytes": 35319808,
+              "sampledPeakPrivateBytes": 35319808,
+              "seconds": 62.3866443,
+              "kernelSeconds": 51.265625,
+              "userSeconds": 4.03125,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100602,
+                "otherOperations": 2000873,
+                "readBytes": 9840009942,
+                "writeBytes": 25628561,
+                "otherBytes": 1609766
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.3331200000000099,
+        "seconds": 62.47071270000001,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 2.9886094999999915,
+        "nodeMemory": {
+          "rss": 74440704,
+          "heapTotal": 26464256,
+          "heapUsed": 15005664,
+          "external": 3504188,
+          "arrayBuffers": 1255635
+        }
+      },
+      {
+        "mode": "here",
+        "iteration": 0,
+        "firstProgressMilliseconds": 350.28190000000177,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 25.21280000000843,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.3687346000000252,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38875136,
+              "peakCommitBytes": 35393536,
+              "sampledPeakPrivateBytes": 34385920,
+              "seconds": 0.3672365,
+              "kernelSeconds": 0.015625,
+              "userSeconds": 0.328125,
+              "logicalIo": {
+                "readOperations": 506,
+                "writeOperations": 3,
+                "otherOperations": 121,
+                "readBytes": 16442566,
+                "writeBytes": 334,
+                "otherBytes": 3766
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 20.199900000006892,
+            "firstProgressMilliseconds": 343.36470000000554,
+            "progressEvents": 526,
+            "seconds": 57.86914379999999,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38858752,
+              "peakCommitBytes": 35332096,
+              "sampledPeakPrivateBytes": 34611200,
+              "seconds": 57.8562358,
+              "kernelSeconds": 47.859375,
+              "userSeconds": 4.34375,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100557,
+                "otherOperations": 2000816,
+                "readBytes": 9840009942,
+                "writeBytes": 25626430,
+                "otherBytes": 1609310
+              }
+            }
+          },
+          {
+            "operation": "publish",
+            "firstOutputMilliseconds": 25.93069999999716,
+            "firstProgressMilliseconds": 6483.8193999999785,
+            "progressEvents": 3853,
+            "seconds": 428.2600152,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 191574016,
+              "peakCommitBytes": 198205440,
+              "sampledPeakPrivateBytes": 190603264,
+              "seconds": 428.2650732,
+              "kernelSeconds": 36.421875,
+              "userSeconds": 3.234375,
+              "logicalIo": {
+                "readOperations": 3,
+                "writeOperations": 6737,
+                "otherOperations": 2427855,
+                "readBytes": 8580,
+                "writeBytes": 73331954,
+                "otherBytes": 73963572
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.37790570000000295,
+        "seconds": 486.2145699999999,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 8.997788600000087,
+        "nodeMemory": {
+          "rss": 76496896,
+          "heapTotal": 25939968,
+          "heapUsed": 10099520,
+          "external": 3112877,
+          "arrayBuffers": 864324
+        }
+      },
+      {
+        "mode": "here",
+        "iteration": 1,
+        "firstProgressMilliseconds": 543.610800000024,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 43.47950000001583,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 1.2695052000000142,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38858752,
+              "peakCommitBytes": 35393536,
+              "sampledPeakPrivateBytes": 35393536,
+              "seconds": 1.2734118,
+              "kernelSeconds": 0.15625,
+              "userSeconds": 0.84375,
+              "logicalIo": {
+                "readOperations": 506,
+                "writeOperations": 3,
+                "otherOperations": 121,
+                "readBytes": 16465397,
+                "writeBytes": 334,
+                "otherBytes": 3826
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 45.99140000005718,
+            "firstProgressMilliseconds": 530.4951000000583,
+            "progressEvents": 591,
+            "seconds": 65.51224739999999,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38854656,
+              "peakCommitBytes": 35328000,
+              "sampledPeakPrivateBytes": 35328000,
+              "seconds": 65.5152902,
+              "kernelSeconds": 49.359375,
+              "userSeconds": 4.890625,
+              "logicalIo": {
+                "readOperations": 300506,
+                "writeOperations": 100626,
+                "otherOperations": 2000905,
+                "readBytes": 9840041304,
+                "writeBytes": 25629702,
+                "otherBytes": 1610006
+              }
+            }
+          },
+          {
+            "operation": "publish",
+            "firstOutputMilliseconds": 29.10690000001341,
+            "firstProgressMilliseconds": 10079.34719999996,
+            "progressEvents": 3400,
+            "seconds": 382.75483089999994,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 191729664,
+              "peakCommitBytes": 198205440,
+              "sampledPeakPrivateBytes": 190607360,
+              "seconds": 382.7588521,
+              "kernelSeconds": 38.328125,
+              "userSeconds": 3.984375,
+              "logicalIo": {
+                "readOperations": 3,
+                "writeOperations": 6062,
+                "otherOperations": 2428667,
+                "readBytes": 41651,
+                "writeBytes": 73194192,
+                "otherBytes": 73144568
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 1.2812877999999328,
+        "seconds": 448.37114929999996,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 10.049335100000025,
+        "nodeMemory": {
+          "rss": 77946880,
+          "heapTotal": 25939968,
+          "heapUsed": 11753352,
+          "external": 3299469,
+          "arrayBuffers": 1050916
+        }
+      }
+    ]
+  },
+  "after": {
+    "date": "2026-10-09T22:36:48.134Z",
+    "helperSha256": "34e712310a10d3c8c5c07e058f8412ca55e25679794ba0b208182b8283fdfe66",
+    "nativeArtifacts": {
+      "One.Archive.exe": "34e712310a10d3c8c5c07e058f8412ca55e25679794ba0b208182b8283fdfe66",
+      "One.ArchiveBudget.dll": "8b8f051e6ef70df3f376ea1e858adeaab121584b35d26915d60801ee9925edcb",
+      "7z.dll": "76321c38d3d7658381de87f29a91c38d1a48ded4cd3535940e3cc1ad39f165a5"
+    },
+    "settings": {
+      "propagateZone": true,
+      "sourceZone": "No Zone.Identifier on generated local source",
+      "scan": false,
+      "threads": 2,
+      "memoryMiB": 1024,
+      "profile": "isolated",
+      "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+    },
+    "outputCleanupSeconds": 29.297372899999907,
+    "results": [
+      {
+        "mode": "folder",
+        "iteration": 0,
+        "firstProgressMilliseconds": 295.9829,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 18.984500000000025,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.2889184,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 39706624,
+              "peakCommitBytes": 35364864,
+              "sampledPeakPrivateBytes": 33640448,
+              "seconds": 0.2950811,
+              "kernelSeconds": 0.015625,
+              "userSeconds": 0.265625,
+              "logicalIo": {
+                "readOperations": 505,
+                "writeOperations": 3,
+                "otherOperations": 225,
+                "readBytes": 16433991,
+                "writeBytes": 334,
+                "otherBytes": 6352
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 17.057000000000016,
+            "firstProgressMilliseconds": 289.3618,
+            "progressEvents": 437,
+            "seconds": 48.0253152,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38895616,
+              "peakCommitBytes": 35332096,
+              "sampledPeakPrivateBytes": 35332096,
+              "seconds": 48.0214676,
+              "kernelSeconds": 37.53125,
+              "userSeconds": 3.6875,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100463,
+                "otherOperations": 206745,
+                "readBytes": 9840009942,
+                "writeBytes": 25621981,
+                "otherBytes": 1737912
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.346248,
+        "seconds": 48.0940351,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 2.7019835999999997,
+        "nodeMemory": {
+          "rss": 63205376,
+          "heapTotal": 25939968,
+          "heapUsed": 9931752,
+          "external": 3091210,
+          "arrayBuffers": 837908
+        }
+      },
+      {
+        "mode": "folder",
+        "iteration": 1,
+        "firstProgressMilliseconds": 332.0500000000029,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 24.235200000002806,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.33348999999999795,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38854656,
+              "peakCommitBytes": 35311616,
+              "sampledPeakPrivateBytes": 35311616,
+              "seconds": 0.3351977,
+              "kernelSeconds": 0,
+              "userSeconds": 0.3125,
+              "logicalIo": {
+                "readOperations": 506,
+                "writeOperations": 3,
+                "otherOperations": 121,
+                "readBytes": 16442176,
+                "writeBytes": 334,
+                "otherBytes": 3770
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 19.671799999996438,
+            "firstProgressMilliseconds": 325.81669999999576,
+            "progressEvents": 413,
+            "seconds": 45.62007779999999,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38887424,
+              "peakCommitBytes": 35381248,
+              "sampledPeakPrivateBytes": 34516992,
+              "seconds": 45.6195324,
+              "kernelSeconds": 36.5,
+              "userSeconds": 3.359375,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100438,
+                "otherOperations": 206715,
+                "readBytes": 9840009942,
+                "writeBytes": 25620784,
+                "otherBytes": 1737672
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.34251789999999893,
+        "seconds": 45.6882618,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 2.7362648000000043,
+        "nodeMemory": {
+          "rss": 74723328,
+          "heapTotal": 26464256,
+          "heapUsed": 9773936,
+          "external": 2976188,
+          "arrayBuffers": 727635
+        }
+      },
+      {
+        "mode": "here",
+        "iteration": 0,
+        "firstProgressMilliseconds": 327.57210000000487,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 21.500299999999697,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.31624929999999585,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38850560,
+              "peakCommitBytes": 35311616,
+              "sampledPeakPrivateBytes": 35311616,
+              "seconds": 0.3207367,
+              "kernelSeconds": 0.046875,
+              "userSeconds": 0.3125,
+              "logicalIo": {
+                "readOperations": 506,
+                "writeOperations": 3,
+                "otherOperations": 121,
+                "readBytes": 16442585,
+                "writeBytes": 334,
+                "otherBytes": 3770
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 18.72479999999632,
+            "firstProgressMilliseconds": 321.3972999999969,
+            "progressEvents": 451,
+            "seconds": 49.797426099999996,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38854656,
+              "peakCommitBytes": 35340288,
+              "sampledPeakPrivateBytes": 35340288,
+              "seconds": 49.7997448,
+              "kernelSeconds": 37.28125,
+              "userSeconds": 3.90625,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100478,
+                "otherOperations": 206766,
+                "readBytes": 9840009942,
+                "writeBytes": 25622687,
+                "otherBytes": 1738080
+              }
+            }
+          },
+          {
+            "operation": "publish",
+            "firstOutputMilliseconds": 25.386499999993248,
+            "firstProgressMilliseconds": 10228.854800000001,
+            "progressEvents": 3683,
+            "seconds": 413.6676418999999,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 191746048,
+              "peakCommitBytes": 198189056,
+              "sampledPeakPrivateBytes": 190623744,
+              "seconds": 413.6709363,
+              "kernelSeconds": 39.640625,
+              "userSeconds": 4.375,
+              "logicalIo": {
+                "readOperations": 3,
+                "writeOperations": 6486,
+                "otherOperations": 2427782,
+                "readBytes": 8603,
+                "writeBytes": 73333075,
+                "otherBytes": 73683924
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.3250627000000095,
+        "seconds": 463.55546990000005,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 10.005467199999956,
+        "nodeMemory": {
+          "rss": 76820480,
+          "heapTotal": 25939968,
+          "heapUsed": 7805240,
+          "external": 2937701,
+          "arrayBuffers": 689148
+        }
+      },
+      {
+        "mode": "here",
+        "iteration": 1,
+        "firstProgressMilliseconds": 326.36289999994915,
+        "phases": [
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 42.48109999997541,
+            "firstProgressMilliseconds": null,
+            "progressEvents": 0,
+            "seconds": 0.35965240000002086,
+            "exitCode": 2,
+            "preflight": true,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38866944,
+              "peakCommitBytes": 35344384,
+              "sampledPeakPrivateBytes": 33906688,
+              "seconds": 0.3622534,
+              "kernelSeconds": 0.046875,
+              "userSeconds": 0.25,
+              "logicalIo": {
+                "readOperations": 506,
+                "writeOperations": 3,
+                "otherOperations": 121,
+                "readBytes": 16442895,
+                "writeBytes": 334,
+                "otherBytes": 3830
+              }
+            }
+          },
+          {
+            "operation": "extract",
+            "firstOutputMilliseconds": 20.224500000011176,
+            "firstProgressMilliseconds": 318.23419999994803,
+            "progressEvents": 461,
+            "seconds": 51.46934809999995,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 38944768,
+              "peakCommitBytes": 35397632,
+              "sampledPeakPrivateBytes": 35397632,
+              "seconds": 51.4729154,
+              "kernelSeconds": 36.4375,
+              "userSeconds": 3.078125,
+              "logicalIo": {
+                "readOperations": 300505,
+                "writeOperations": 100489,
+                "otherOperations": 206781,
+                "readBytes": 9840009942,
+                "writeBytes": 25623206,
+                "otherBytes": 1738200
+              }
+            }
+          },
+          {
+            "operation": "publish",
+            "firstOutputMilliseconds": 23.665399999939837,
+            "firstProgressMilliseconds": 6829.8125,
+            "progressEvents": 3596,
+            "seconds": 401.05379350000004,
+            "exitCode": 0,
+            "metrics": {
+              "available": true,
+              "peakWorkingBytes": 191737856,
+              "peakCommitBytes": 198148096,
+              "sampledPeakPrivateBytes": 190603264,
+              "seconds": 401.0483341,
+              "kernelSeconds": 35.875,
+              "userSeconds": 3.734375,
+              "logicalIo": {
+                "readOperations": 3,
+                "writeOperations": 6355,
+                "otherOperations": 2427744,
+                "readBytes": 18621,
+                "writeBytes": 73331454,
+                "otherBytes": 73486176
+              }
+            }
+          }
+        ],
+        "preflightSeconds": 0.36699460000009276,
+        "seconds": 452.6135584,
+        "verifiedFiles": 100000,
+        "verificationSeconds": 10.399106299999868,
+        "nodeMemory": {
+          "rss": 77398016,
+          "heapTotal": 25939968,
+          "heapUsed": 11192208,
+          "external": 3249077,
+          "arrayBuffers": 1000524
+        }
+      }
+    ]
+  }
+}
