@@ -1,0 +1,23 @@
+EGG AZO decoder
+
+Probability models, arithmetic decoder and tables ported to C++ from:
+https://github.com/akolman/EggDotNet/tree/78b64f54026a8687dac1cdd4c86eb5fe5abf04ae/src/EggDotNet/Compression/AZO
+Commit: 78b64f54026a8687dac1cdd4c86eb5fe5abf04ae
+License: MIT; original notice retained in LICENSE.EggDotNet.txt.
+Exact reference sources and per-file hashes:
+tests/fixtures/archives/egg/EggDotNet-reference-source.tar.gz and manifest.json
+
+One changes: C++ port with exact-read/write callbacks, bounded zero padding,
+strict sizes/indices/match distances, memory accounting before allocation and
+cancellation checkpoints. AZO framing has no checksum; the enclosing EGG reader
+must check each decoded block's CRC, size and complete packed consumption.
+
+Per-block x86 address filter follows the CC0 1.0 descriptive pseudocode A.12:
+https://github.com/alkegi/docs/blob/36230c34d3056604cc63519e9855a79e894496b7/egg.md
+Git blob: 748a5940cc4e07f03867bb1dc09da86e586ed367
+This document is only a secondary description. Parent-path semantics and the
+private-version constant disagree with real files/reference code elsewhere;
+One validates actual fixtures rather than trusting those descriptions.
+
+This implementation unit is tested independently. It does not by itself add
+an EGG product entry point. The test-only .NET oracle is not a runtime dependency.

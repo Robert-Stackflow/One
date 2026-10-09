@@ -1091,6 +1091,64 @@
         "message": "Oracle fixture exceeded 64 MiB"
       },
       "oracleStatus": "output-limit"
+    },
+    {
+      "name": "azonumbers.egg",
+      "bytes": 142809,
+      "sha256": "9f14db0f5a483582df9c23375fd5eff61b2334c1bf3d15fd317c2ea0ba2bbf9a",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "numbers_txt.sys",
+            "size": 6999999,
+            "actual": 6999999,
+            "encrypted": false,
+            "method": "Azo",
+            "sha256": "af5dab14d15e1377c0ac3ca1b217296a87be5cc3cd3a063cc3c5a937e0acb364"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "azomulti.egg",
+      "bytes": 1130631,
+      "sha256": "bfe14a701a798f827cbd14b5a513f9691a2c1f229f21f262bee759a4ac206dc8",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long_tif.sys",
+            "size": 1195080,
+            "actual": 1195080,
+            "encrypted": false,
+            "method": "Azo",
+            "sha256": "162d8b99fd7e695bd3e8c790493c93b649a76996f4e129c818a366614977ec67"
+          },
+          {
+            "name": "lorem_ipsum_medium_txt.sys",
+            "size": 3950,
+            "actual": 3950,
+            "encrypted": false,
+            "method": "Azo",
+            "sha256": "5dea92ab15a3a73af46b0afbf793c109b576e35c62ce9db703e7f4088f2e8a07"
+          },
+          {
+            "name": "lorem_ipsum_short_txt.sys",
+            "size": 525,
+            "actual": 525,
+            "encrypted": false,
+            "method": "Azo",
+            "sha256": "acfe59afcffcbe68a4dee454d11f5bf78dfdee32c77a03c1a50cf384418fe38f"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
     }
   ],
   "additionalVolumes": [
