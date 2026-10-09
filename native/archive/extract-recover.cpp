@@ -1,4 +1,5 @@
 #include "recovery-common.h"
+#include "publish-access.h"
 
 using namespace archive_recovery;
 
@@ -101,11 +102,11 @@ void extract_recover(const fs::path &parent,const fs::path &recovery){
     for(const auto &item:plan.items){
         check_cancel();if(item.directory){++done;continue;}const auto state=inspect(item,dirs);
         if(state.target==item.source_stamp){
-            Locked current(item.target,false,GENERIC_READ|DELETE);if(stamp(current.value)!=item.source_stamp)fail("Target changed before recovery; retained","safety");
+            Locked current(item.target,false,archive_publish_file_access);if(stamp(current.value)!=item.source_stamp)fail("Target changed before recovery; retained","safety");
             move(current.value,item.displaced);++displaced;crash("displaced:"+std::to_string(item.index));
         }
         if(!state.backup.empty()){
-            Locked original(item.backup,false,GENERIC_READ|DELETE);if(stamp(original.value)!=item.target_stamp)fail("Original copy changed before recovery; retained","safety");
+            Locked original(item.backup,false,archive_publish_file_access);if(stamp(original.value)!=item.target_stamp)fail("Original copy changed before recovery; retained","safety");
             move(original.value,item.target);++restored;crash("restored:"+std::to_string(item.index));
         }
         ++done;const auto now=GetTickCount64();if(!last||now-last>=100||done==plan.items.size()){emit("{\"type\":\"progress\",\"done\":"+std::to_string(done)+",\"total\":"+std::to_string(plan.items.size())+"}");last=now;}
@@ -148,7 +149,7 @@ void extract_cleanup(const fs::path &parent,const fs::path &recovery){
         if(!item.directory&&attributes(item.target)!=INVALID_FILE_ATTRIBUTES)target_guard=std::make_unique<Locked>(item.target,false);
         const auto candidate=cleanup_candidate(item,committed,dirs);
         if(!candidate.empty()){
-            Locked file(candidate,false,GENERIC_READ|DELETE);const auto expected=committed?item.target_stamp:item.source_stamp;
+            Locked file(candidate,false,archive_publish_file_access);const auto expected=committed?item.target_stamp:item.source_stamp;
             if(stamp(file.value)!=expected)fail("Cleanup recovery file changed before removal; remaining files retained","safety");
             erase(file.value);file.close();++removed;crash("cleanup:"+std::to_string(item.index));
         }

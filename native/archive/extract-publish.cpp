@@ -7,6 +7,7 @@
 #include <memory>
 #include <zlib.h>
 #include "common.h"
+#include "publish-access.h"
 
 namespace {
 struct Handle {
@@ -198,9 +199,9 @@ void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path
                 item.identity=stamp(dirs.held.at(key(item.target))->value,true);
                 if(item.created)log->append("{\"type\":\"directory-created\",\"index\":"+std::to_string(index)+",\"identity\":"+json(item.identity)+"}");
             }else{
-                Handle input(item.source,false,GENERIC_READ|DELETE);if(stamp(input.value)!=item.source_stamp)fail("Staged file changed before publishing");
+                Handle input(item.source,false,archive_publish_file_access);if(stamp(input.value)!=item.source_stamp)fail("Staged file changed before publishing");
                 if(item.existing){
-                    Handle old(item.target,false,GENERIC_READ|DELETE);if(stamp(old.value)!=item.target_stamp)fail("Existing file changed; extraction stopped: "+utf8(item.target.wstring()));
+                    Handle old(item.target,false,archive_publish_file_access);if(stamp(old.value)!=item.target_stamp)fail("Existing file changed; extraction stopped: "+utf8(item.target.wstring()));
                     move(old.value,item.backup);item.saved=true;
                     crash_at("backup:"+std::to_string(index));
                 }
@@ -226,8 +227,8 @@ void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path
         for(auto it=items.rbegin();it!=items.rend();++it){
             auto &item=*it;
             try{
-                if(item.moved){Handle file(item.target,false,GENERIC_READ|DELETE);if(stamp(file.value)!=item.source_stamp)fail("Published file changed; retain it");move(file.value,item.source);}
-                if(item.saved){Handle old(item.backup,false,GENERIC_READ|DELETE);if(stamp(old.value)!=item.target_stamp)fail("Backup changed; retain it");move(old.value,item.target);}
+                if(item.moved){Handle file(item.target,false,archive_publish_file_access);if(stamp(file.value)!=item.source_stamp)fail("Published file changed; retain it");move(file.value,item.source);}
+                if(item.saved){Handle old(item.backup,false,archive_publish_file_access);if(stamp(old.value)!=item.target_stamp)fail("Backup changed; retain it");move(old.value,item.target);}
                 if(item.created){
                     if(stamp(dirs.held.at(key(item.target))->value,true)!=item.identity)fail("Created folder changed");
                     dirs.release(item.target);if(!RemoveDirectoryW(item.target.c_str()))fail("Created folder is no longer empty; retain it");
@@ -242,7 +243,7 @@ void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path
     // Commit succeeded. Backups are removed by identity, with every ancestor
     // still locked; a changed recovery copy is kept and reported.
     try{
-        for(size_t index=0;index<items.size();++index){auto &item=items[index];if(item.saved){Handle old(item.backup,false,GENERIC_READ|DELETE);if(stamp(old.value)!=item.target_stamp)fail("Recovery file changed");erase(old.value);crash_at("cleanup:"+std::to_string(index));}}
+        for(size_t index=0;index<items.size();++index){auto &item=items[index];if(item.saved){Handle old(item.backup,false,archive_publish_file_access);if(stamp(old.value)!=item.target_stamp)fail("Recovery file changed");erase(old.value);crash_at("cleanup:"+std::to_string(index));}}
         log->remove();dirs.release(recovery);
         if(!RemoveDirectoryW(recovery.c_str()))fail("Cannot remove empty recovery directory");
     }catch(...){fail("Extraction completed but recovery files remain at "+utf8(recovery.wstring()));}

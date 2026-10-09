@@ -1,0 +1,1005 @@
+{
+  "scope": "100,000 nonempty ZIP files; real ArchiveService here extraction/publication; baseline and optimized alternate twice; all 400,000 outputs independently verified",
+  "baselineSource": "d9a6dfa31d5aaae1b5b5fa199f40b7d3cfc5e7df",
+  "optimizedSource": "Same commit as this measurement file; payload handles use FILE_READ_ATTRIBUTES|DELETE; manifests still require GENERIC_READ|DELETE",
+  "date": "2026-10-09T23:36:38.361Z",
+  "environment": {
+    "date": "2026-10-09T23:36:38.367Z",
+    "cpu": "AMD Ryzen 9 7940HX with Radeon Graphics        ",
+    "os": {
+      "Caption": "Microsoft Windows 11 专业版",
+      "Version": "10.0.26200",
+      "BuildNumber": "26200"
+    },
+    "volume": {
+      "FileSystem": "NTFS",
+      "DriveType": "Fixed"
+    },
+    "elevated": false,
+    "background": "OS/background workloads not frozen. A few short directory-unit compiler/test invocations overlapped the second baseline publish; no full build or other archive suites ran during extraction measurement.",
+    "note": "Same local Windows/CPU/NTFS development machine; fresh destination each run, OS caches not purged; no simultaneous build or heavy test"
+  },
+  "sourceSha256": {
+    "native/archive/extract-publish.cpp": "b0ca3ac587604e0cc173d561134782bdedb1323f4df3e9200df799663a789e7e",
+    "native/archive/extract-recover.cpp": "3e8f0a4a78befe9b9ba30490beec0ddaecf9e0d674ee2bbfea0d95a92eaca311",
+    "native/archive/publish-access.h": "bd3b6e87552e1aa409b3c93aa4ee50d42f734647c1790c0c978c508fb608097f",
+    "tests/archive-publish-access.cpp": "ec7056d861571d4827e39a1ab47e75d4d588a21d6ab5c8a1fd2c12d2259a0e24",
+    "tests/archive-publish-access.cjs": "aee29d6a3d0a3f8d6ad079eca1a760fd5988ed8d9be07b7d3ccf83770dd158e8",
+    "tests/archive-publish-profile.h": "b51583616079edf2483c4184250c2f7b2d24250fc4eccf72d507aaba025b9716",
+    "tests/archive-publish-profile.cjs": "b9358552448db4836484f27d5f12ed801be79223b9b3510d4c01b792e95ce5c0"
+  },
+  "nativeArtifacts": {
+    "baseline": {
+      "One.Archive.exe": "34e712310a10d3c8c5c07e058f8412ca55e25679794ba0b208182b8283fdfe66",
+      "One.ArchiveBudget.dll": "8b8f051e6ef70df3f376ea1e858adeaab121584b35d26915d60801ee9925edcb",
+      "7z.dll": "76321c38d3d7658381de87f29a91c38d1a48ded4cd3535940e3cc1ad39f165a5"
+    },
+    "optimized": {
+      "One.Archive.exe": "97b87f2e59675d196a5c575aab5e78a3f9ee6c048ec63255c4f525146fdda99d",
+      "One.ArchiveBudget.dll": "c26339b07bbfe787c9f47cb3898260b7be02b9b3d06ef9a0cde79eeba9148c2e",
+      "7z.dll": "76321c38d3d7658381de87f29a91c38d1a48ded4cd3535940e3cc1ad39f165a5"
+    }
+  },
+  "dataset": {
+    "count": 100000,
+    "bytes": 18710833,
+    "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+    "uncompressedBytes": 25600000,
+    "payloadBytes": 256,
+    "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+    "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+    "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+    "generatedSeconds": 3.060240300001169
+  },
+  "groups": {
+    "baseline": {
+      "completeSeconds": 389.53478544999996,
+      "publishSeconds": 343.92878699999994,
+      "extractSeconds": 45.52135425,
+      "publishPeakWorkingMiB": 182.71484375,
+      "publishPeakCommitMiB": 189.03125,
+      "publishKernelSeconds": 34.015625,
+      "firstFeedbackMilliseconds": 296.9943,
+      "cleanupSeconds": 12.900740900000034
+    },
+    "optimized": {
+      "completeSeconds": 110.71862490000001,
+      "publishSeconds": 66.30090105,
+      "extractSeconds": 44.314488999999995,
+      "publishPeakWorkingMiB": 182.7734375,
+      "publishPeakCommitMiB": 189.02734375,
+      "publishKernelSeconds": 27.3515625,
+      "firstFeedbackMilliseconds": 299.7677,
+      "cleanupSeconds": 15.733348199999993
+    }
+  },
+  "runs": [
+    {
+      "date": "2026-10-09T23:25:18.593Z",
+      "label": "baseline-0",
+      "helperSha256": "34e712310a10d3c8c5c07e058f8412ca55e25679794ba0b208182b8283fdfe66",
+      "dataset": {
+        "count": 100000,
+        "bytes": 18710833,
+        "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+        "uncompressedBytes": 25600000,
+        "payloadBytes": 256,
+        "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+        "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+        "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+        "generatedSeconds": 3.060240300001169
+      },
+      "settings": {
+        "propagateZone": true,
+        "sourceZone": "No Zone.Identifier on generated local source",
+        "scan": false,
+        "threads": 2,
+        "memoryMiB": 1024,
+        "profile": "isolated",
+        "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+      },
+      "processMemory": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+      "results": [
+        {
+          "mode": "here",
+          "iteration": 0,
+          "firstProgressMilliseconds": 284.99850000000004,
+          "phases": [
+            {
+              "operation": "extract",
+              "pid": 15624,
+              "started": 136.695,
+              "firstOutputMilliseconds": 18.824399999999997,
+              "firstProgressMilliseconds": null,
+              "progressEvents": 0,
+              "seconds": 0.285317,
+              "exitCode": 2,
+              "preflight": true,
+              "metrics": {
+                "available": true,
+                "pid": 15624,
+                "peakWorkingBytes": 39759872,
+                "peakCommitBytes": 35475456,
+                "sampledPeakPrivateBytes": 34328576,
+                "seconds": 0.2911374,
+                "kernelSeconds": 0.03125,
+                "userSeconds": 0.21875,
+                "logicalIo": {
+                  "readOperations": 505,
+                  "writeOperations": 3,
+                  "otherOperations": 225,
+                  "readBytes": 16433991,
+                  "writeBytes": 334,
+                  "otherBytes": 6444
+                }
+              }
+            },
+            {
+              "operation": "extract",
+              "pid": 28536,
+              "started": 434.2177,
+              "firstOutputMilliseconds": 17.719400000000007,
+              "firstProgressMilliseconds": 278.4028,
+              "progressEvents": 432,
+              "seconds": 47.6775269,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 28536,
+                "peakWorkingBytes": 38875136,
+                "peakCommitBytes": 35319808,
+                "sampledPeakPrivateBytes": 35319808,
+                "seconds": 47.6804367,
+                "kernelSeconds": 38.125,
+                "userSeconds": 3.171875,
+                "logicalIo": {
+                  "readOperations": 300505,
+                  "writeOperations": 100458,
+                  "otherOperations": 206742,
+                  "readBytes": 9840009942,
+                  "writeBytes": 25621740,
+                  "otherBytes": 1737920
+                }
+              }
+            },
+            {
+              "operation": "publish",
+              "pid": 57288,
+              "started": 48125.0254,
+              "firstOutputMilliseconds": 27.222600000000966,
+              "firstProgressMilliseconds": 6721.823900000003,
+              "progressEvents": 3042,
+              "seconds": 339.64860269999997,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 57288,
+                "peakWorkingBytes": 191590400,
+                "peakCommitBytes": 198213632,
+                "sampledPeakPrivateBytes": 198152192,
+                "seconds": 339.6521387,
+                "kernelSeconds": 34.140625,
+                "userSeconds": 3.46875,
+                "logicalIo": {
+                  "readOperations": 3,
+                  "writeOperations": 5526,
+                  "otherOperations": 2427500,
+                  "readBytes": 8243,
+                  "writeBytes": 73320033,
+                  "otherBytes": 73164956
+                }
+              }
+            }
+          ],
+          "preflightSeconds": 0.33525710000000003,
+          "seconds": 387.4119138,
+          "verifiedFiles": 100000,
+          "verificationSeconds": 9.779650599999993,
+          "nodeMemory": {
+            "rss": 64122880,
+            "heapTotal": 26464256,
+            "heapUsed": 12595400,
+            "external": 3228474,
+            "arrayBuffers": 975172
+          }
+        }
+      ],
+      "outputCleanupSeconds": 6.488948900000017
+    },
+    {
+      "date": "2026-10-09T23:27:18.659Z",
+      "label": "optimized-0",
+      "helperSha256": "97b87f2e59675d196a5c575aab5e78a3f9ee6c048ec63255c4f525146fdda99d",
+      "dataset": {
+        "count": 100000,
+        "bytes": 18710833,
+        "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+        "uncompressedBytes": 25600000,
+        "payloadBytes": 256,
+        "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+        "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+        "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+        "generatedSeconds": 3.060240300001169
+      },
+      "settings": {
+        "propagateZone": true,
+        "sourceZone": "No Zone.Identifier on generated local source",
+        "scan": false,
+        "threads": 2,
+        "memoryMiB": 1024,
+        "profile": "isolated",
+        "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+      },
+      "processMemory": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+      "results": [
+        {
+          "mode": "here",
+          "iteration": 0,
+          "firstProgressMilliseconds": 302.36619999999994,
+          "phases": [
+            {
+              "operation": "extract",
+              "pid": 54980,
+              "started": 373.5935,
+              "firstOutputMilliseconds": 21.7534,
+              "firstProgressMilliseconds": null,
+              "progressEvents": 0,
+              "seconds": 0.33470530000000004,
+              "exitCode": 2,
+              "preflight": true,
+              "metrics": {
+                "available": true,
+                "pid": 54980,
+                "peakWorkingBytes": 39661568,
+                "peakCommitBytes": 35414016,
+                "sampledPeakPrivateBytes": 35414016,
+                "seconds": 0.3287974,
+                "kernelSeconds": 0.046875,
+                "userSeconds": 0.234375,
+                "logicalIo": {
+                  "readOperations": 505,
+                  "writeOperations": 3,
+                  "otherOperations": 225,
+                  "readBytes": 16433991,
+                  "writeBytes": 334,
+                  "otherBytes": 6448
+                }
+              }
+            },
+            {
+              "operation": "extract",
+              "pid": 19524,
+              "started": 758.031,
+              "firstOutputMilliseconds": 17.432700000000068,
+              "firstProgressMilliseconds": 294.95939999999996,
+              "progressEvents": 407,
+              "seconds": 44.8212294,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 19524,
+                "peakWorkingBytes": 38871040,
+                "peakCommitBytes": 35323904,
+                "sampledPeakPrivateBytes": 35323904,
+                "seconds": 44.8130812,
+                "kernelSeconds": 37.015625,
+                "userSeconds": 3.0625,
+                "logicalIo": {
+                  "readOperations": 300505,
+                  "writeOperations": 100432,
+                  "otherOperations": 206706,
+                  "readBytes": 9840009942,
+                  "writeBytes": 25620501,
+                  "otherBytes": 1737636
+                }
+              }
+            },
+            {
+              "operation": "publish",
+              "pid": 48504,
+              "started": 45596.4697,
+              "firstOutputMilliseconds": 27.3295999999973,
+              "firstProgressMilliseconds": 7028.490899999997,
+              "progressEvents": 462,
+              "seconds": 58.0387599,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 48504,
+                "peakWorkingBytes": 191651840,
+                "peakCommitBytes": 198209536,
+                "sampledPeakPrivateBytes": 198144000,
+                "seconds": 58.0344326,
+                "kernelSeconds": 25.828125,
+                "userSeconds": 2.5625,
+                "logicalIo": {
+                  "readOperations": 3,
+                  "writeOperations": 1677,
+                  "otherOperations": 2426369,
+                  "readBytes": 8220,
+                  "writeBytes": 73199214,
+                  "otherBytes": 68664492
+                }
+              }
+            }
+          ],
+          "preflightSeconds": 0.4786163,
+          "seconds": 102.9509012,
+          "verifiedFiles": 100000,
+          "verificationSeconds": 8.703073099999994,
+          "nodeMemory": {
+            "rss": 63729664,
+            "heapTotal": 26726400,
+            "heapUsed": 14295936,
+            "external": 3441218,
+            "arrayBuffers": 1187916
+          }
+        }
+      ],
+      "outputCleanupSeconds": 7.582065799999997
+    },
+    {
+      "date": "2026-10-09T23:34:07.122Z",
+      "label": "baseline-1",
+      "helperSha256": "34e712310a10d3c8c5c07e058f8412ca55e25679794ba0b208182b8283fdfe66",
+      "dataset": {
+        "count": 100000,
+        "bytes": 18710833,
+        "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+        "uncompressedBytes": 25600000,
+        "payloadBytes": 256,
+        "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+        "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+        "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+        "generatedSeconds": 3.060240300001169
+      },
+      "settings": {
+        "propagateZone": true,
+        "sourceZone": "No Zone.Identifier on generated local source",
+        "scan": false,
+        "threads": 2,
+        "memoryMiB": 1024,
+        "profile": "isolated",
+        "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+      },
+      "processMemory": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+      "results": [
+        {
+          "mode": "here",
+          "iteration": 0,
+          "firstProgressMilliseconds": 308.9901,
+          "phases": [
+            {
+              "operation": "extract",
+              "pid": 35772,
+              "started": 496.8802,
+              "firstOutputMilliseconds": 19.91730000000001,
+              "firstProgressMilliseconds": null,
+              "progressEvents": 0,
+              "seconds": 0.323455,
+              "exitCode": 2,
+              "preflight": true,
+              "metrics": {
+                "available": true,
+                "pid": 35772,
+                "peakWorkingBytes": 39686144,
+                "peakCommitBytes": 35422208,
+                "sampledPeakPrivateBytes": 35422208,
+                "seconds": 0.3288917,
+                "kernelSeconds": 0.015625,
+                "userSeconds": 0.296875,
+                "logicalIo": {
+                  "readOperations": 505,
+                  "writeOperations": 3,
+                  "otherOperations": 225,
+                  "readBytes": 16433991,
+                  "writeBytes": 334,
+                  "otherBytes": 6444
+                }
+              }
+            },
+            {
+              "operation": "extract",
+              "pid": 35340,
+              "started": 840.2988,
+              "firstOutputMilliseconds": 18.47919999999999,
+              "firstProgressMilliseconds": 301.3533,
+              "progressEvents": 394,
+              "seconds": 43.36518160000001,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 35340,
+                "peakWorkingBytes": 38866944,
+                "peakCommitBytes": 35323904,
+                "sampledPeakPrivateBytes": 35323904,
+                "seconds": 43.3687712,
+                "kernelSeconds": 35.59375,
+                "userSeconds": 3.21875,
+                "logicalIo": {
+                  "readOperations": 300505,
+                  "writeOperations": 100418,
+                  "otherOperations": 206691,
+                  "readBytes": 9840009942,
+                  "writeBytes": 25619838,
+                  "otherBytes": 1737512
+                }
+              }
+            },
+            {
+              "operation": "publish",
+              "pid": 37272,
+              "started": 44223.9977,
+              "firstOutputMilliseconds": 19.60439999999653,
+              "firstProgressMilliseconds": 6850.7212,
+              "progressEvents": 3116,
+              "seconds": 348.2089713,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 37272,
+                "peakWorkingBytes": 191582208,
+                "peakCommitBytes": 198205440,
+                "sampledPeakPrivateBytes": 190472192,
+                "seconds": 348.206151,
+                "kernelSeconds": 33.890625,
+                "userSeconds": 3.875,
+                "logicalIo": {
+                  "readOperations": 2,
+                  "writeOperations": 5637,
+                  "otherOperations": 2427530,
+                  "readBytes": 5,
+                  "writeBytes": 73350798,
+                  "otherBytes": 72936668
+                }
+              }
+            }
+          ],
+          "preflightSeconds": 0.5069193,
+          "seconds": 391.6576571,
+          "verifiedFiles": 100000,
+          "verificationSeconds": 9.480063699999999,
+          "nodeMemory": {
+            "rss": 63893504,
+            "heapTotal": 26726400,
+            "heapUsed": 13899512,
+            "external": 3359698,
+            "arrayBuffers": 1106396
+          }
+        }
+      ],
+      "outputCleanupSeconds": 6.411792000000016
+    },
+    {
+      "date": "2026-10-09T23:36:34.376Z",
+      "label": "optimized-1",
+      "helperSha256": "97b87f2e59675d196a5c575aab5e78a3f9ee6c048ec63255c4f525146fdda99d",
+      "dataset": {
+        "count": 100000,
+        "bytes": 18710833,
+        "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+        "uncompressedBytes": 25600000,
+        "payloadBytes": 256,
+        "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+        "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+        "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+        "generatedSeconds": 3.060240300001169
+      },
+      "settings": {
+        "propagateZone": true,
+        "sourceZone": "No Zone.Identifier on generated local source",
+        "scan": false,
+        "threads": 2,
+        "memoryMiB": 1024,
+        "profile": "isolated",
+        "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+      },
+      "processMemory": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+      "results": [
+        {
+          "mode": "here",
+          "iteration": 0,
+          "firstProgressMilliseconds": 297.16920000000005,
+          "phases": [
+            {
+              "operation": "extract",
+              "pid": 27312,
+              "started": 336.2979,
+              "firstOutputMilliseconds": 20.843999999999994,
+              "firstProgressMilliseconds": null,
+              "progressEvents": 0,
+              "seconds": 0.30482299999999996,
+              "exitCode": 2,
+              "preflight": true,
+              "metrics": {
+                "available": true,
+                "pid": 27312,
+                "peakWorkingBytes": 39702528,
+                "peakCommitBytes": 35356672,
+                "sampledPeakPrivateBytes": 33488896,
+                "seconds": 0.3109909,
+                "kernelSeconds": 0.0625,
+                "userSeconds": 0.234375,
+                "logicalIo": {
+                  "readOperations": 505,
+                  "writeOperations": 3,
+                  "otherOperations": 225,
+                  "readBytes": 16433991,
+                  "writeBytes": 334,
+                  "otherBytes": 6448
+                }
+              }
+            },
+            {
+              "operation": "extract",
+              "pid": 41596,
+              "started": 653.6627,
+              "firstOutputMilliseconds": 15.648400000000038,
+              "firstProgressMilliseconds": 290.9136,
+              "progressEvents": 398,
+              "seconds": 43.8077486,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 41596,
+                "peakWorkingBytes": 38834176,
+                "peakCommitBytes": 35311616,
+                "sampledPeakPrivateBytes": 33443840,
+                "seconds": 43.8099434,
+                "kernelSeconds": 34.796875,
+                "userSeconds": 3.265625,
+                "logicalIo": {
+                  "readOperations": 300505,
+                  "writeOperations": 100422,
+                  "otherOperations": 206694,
+                  "readBytes": 9840009942,
+                  "writeBytes": 25620030,
+                  "otherBytes": 1737540
+                }
+              }
+            },
+            {
+              "operation": "publish",
+              "pid": 19828,
+              "started": 44492.6372,
+              "firstOutputMilliseconds": 23.846199999999953,
+              "firstProgressMilliseconds": 5899.380100000002,
+              "progressEvents": 621,
+              "seconds": 74.5630422,
+              "exitCode": 0,
+              "metrics": {
+                "available": true,
+                "pid": 19828,
+                "peakWorkingBytes": 191553536,
+                "peakCommitBytes": 198180864,
+                "sampledPeakPrivateBytes": 198144000,
+                "seconds": 74.5664684,
+                "kernelSeconds": 28.875,
+                "userSeconds": 3.078125,
+                "logicalIo": {
+                  "readOperations": 3,
+                  "writeOperations": 1916,
+                  "otherOperations": 2426440,
+                  "readBytes": 8229,
+                  "writeBytes": 73260968,
+                  "otherBytes": 68664532
+                }
+              }
+            }
+          ],
+          "preflightSeconds": 0.4277882,
+          "seconds": 118.4863486,
+          "verifiedFiles": 100000,
+          "verificationSeconds": 19.894453400000014,
+          "nodeMemory": {
+            "rss": 65200128,
+            "heapTotal": 26464256,
+            "heapUsed": 14088072,
+            "external": 3388850,
+            "arrayBuffers": 1135548
+          }
+        }
+      ],
+      "outputCleanupSeconds": 8.151282399999996
+    }
+  ],
+  "diagnostic": {
+    "note": "Earlier isolated instrumented 100k runs, one per mode. Inclusive Windows API wall timings; no claim about the underlying driver, antivirus or physical disk cause.",
+    "profiles": {
+      "baseline": {
+        "exitCode": 0,
+        "publishProfile": {
+          "wallSeconds": 278.9747446,
+          "inclusiveWindowsCalls": {
+            "open_read_data": {
+              "calls": 100000,
+              "seconds": 235.0229252
+            },
+            "open_delete_attributes": {
+              "calls": 1,
+              "seconds": 0.0001213
+            },
+            "open_attributes": {
+              "calls": 102011,
+              "seconds": 1.0130631
+            },
+            "identity": {
+              "calls": 403015,
+              "seconds": 1.8101746
+            },
+            "attributes": {
+              "calls": 303003,
+              "seconds": 1.9485615
+            },
+            "move": {
+              "calls": 100000,
+              "seconds": 31.9121969
+            },
+            "erase": {
+              "calls": 1,
+              "seconds": 0.0000127
+            },
+            "journal_write": {
+              "calls": 2071,
+              "seconds": 0.05461
+            },
+            "journal_flush": {
+              "calls": 1091,
+              "seconds": 0.6905429
+            },
+            "pipe_peek": {
+              "calls": 404005,
+              "seconds": 1.3633104
+            },
+            "output": {
+              "calls": 2491,
+              "seconds": 0.0329726
+            },
+            "directory_create": {
+              "calls": 1002,
+              "seconds": 0.1751695
+            }
+          }
+        }
+      },
+      "attributes": {
+        "exitCode": 0,
+        "publishProfile": {
+          "wallSeconds": 58.0980035,
+          "inclusiveWindowsCalls": {
+            "open_read_data": {
+              "calls": 0,
+              "seconds": 0
+            },
+            "open_delete_attributes": {
+              "calls": 100001,
+              "seconds": 3.5980252
+            },
+            "open_attributes": {
+              "calls": 102011,
+              "seconds": 0.6845118
+            },
+            "identity": {
+              "calls": 403015,
+              "seconds": 1.5525998
+            },
+            "attributes": {
+              "calls": 303003,
+              "seconds": 1.6082638
+            },
+            "move": {
+              "calls": 100000,
+              "seconds": 44.1061092
+            },
+            "erase": {
+              "calls": 1,
+              "seconds": 0.0000139
+            },
+            "journal_write": {
+              "calls": 1190,
+              "seconds": 0.0380057
+            },
+            "journal_flush": {
+              "calls": 209,
+              "seconds": 0.1723502
+            },
+            "pipe_peek": {
+              "calls": 404005,
+              "seconds": 1.2662755
+            },
+            "output": {
+              "calls": 472,
+              "seconds": 0.0078361
+            },
+            "directory_create": {
+              "calls": 1002,
+              "seconds": 0.1428312
+            }
+          }
+        }
+      }
+    },
+    "helpers": {
+      "baseline": {
+        "One.Archive.exe": "67b51d17598c14ebe7b938479621346ae53c19b67b8df047cb2b4eab1967ed0d",
+        "One.ArchiveBudget.dll": "8b8f051e6ef70df3f376ea1e858adeaab121584b35d26915d60801ee9925edcb",
+        "7z.dll": "76321c38d3d7658381de87f29a91c38d1a48ded4cd3535940e3cc1ad39f165a5"
+      },
+      "attributes": {
+        "One.Archive.exe": "2d222ba66d165f8937dea0be1ff040a5d83af4a0d63cfc8e5be03dd17ff7cd87",
+        "One.ArchiveBudget.dll": "8b8f051e6ef70df3f376ea1e858adeaab121584b35d26915d60801ee9925edcb",
+        "7z.dll": "76321c38d3d7658381de87f29a91c38d1a48ded4cd3535940e3cc1ad39f165a5"
+      }
+    },
+    "injectedSourceSha256": {
+      "baseline": "e4adb946c4f515c3c7069abe34c3c49f503104652a6f361a59447f2d2dc72ea6",
+      "attributes": "86565c63688c259cb3a9f8485205c3211980c5ac59921b0673991440b9095bc9"
+    },
+    "instrumentedReports": [
+      {
+        "date": "2026-10-09T22:57:52.452Z",
+        "label": "profile-service",
+        "helperSha256": "67b51d17598c14ebe7b938479621346ae53c19b67b8df047cb2b4eab1967ed0d",
+        "dataset": {
+          "count": 100000,
+          "bytes": 18710833,
+          "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+          "uncompressedBytes": 25600000,
+          "payloadBytes": 256,
+          "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+          "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+          "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+          "generatedSeconds": 3.060240300001169
+        },
+        "settings": {
+          "propagateZone": true,
+          "sourceZone": "No Zone.Identifier on generated local source",
+          "scan": false,
+          "threads": 2,
+          "memoryMiB": 1024,
+          "profile": "isolated",
+          "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+        },
+        "processMemory": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+        "results": [
+          {
+            "mode": "here",
+            "iteration": 0,
+            "firstProgressMilliseconds": 275.13239999999996,
+            "phases": [
+              {
+                "operation": "extract",
+                "pid": 54344,
+                "started": 339.3099,
+                "firstOutputMilliseconds": 20.53439999999995,
+                "firstProgressMilliseconds": null,
+                "progressEvents": 0,
+                "seconds": 0.2804669999999999,
+                "exitCode": 2,
+                "preflight": true,
+                "metrics": {
+                  "available": true,
+                  "pid": 54344,
+                  "peakWorkingBytes": 39714816,
+                  "peakCommitBytes": 35405824,
+                  "sampledPeakPrivateBytes": 35405824,
+                  "seconds": 0.2864576,
+                  "kernelSeconds": 0.046875,
+                  "userSeconds": 0.265625,
+                  "logicalIo": {
+                    "readOperations": 505,
+                    "writeOperations": 17,
+                    "otherOperations": 225,
+                    "readBytes": 16433991,
+                    "writeBytes": 987,
+                    "otherBytes": 6392
+                  }
+                }
+              },
+              {
+                "operation": "extract",
+                "pid": 5308,
+                "started": 632.3983,
+                "firstOutputMilliseconds": 16.944000000000074,
+                "firstProgressMilliseconds": 268.5488,
+                "progressEvents": 430,
+                "seconds": 47.3118869,
+                "exitCode": 0,
+                "metrics": {
+                  "available": true,
+                  "pid": 5308,
+                  "peakWorkingBytes": 38871040,
+                  "peakCommitBytes": 35323904,
+                  "sampledPeakPrivateBytes": 34463744,
+                  "seconds": 47.3146723,
+                  "kernelSeconds": 37.75,
+                  "userSeconds": 2.890625,
+                  "logicalIo": {
+                    "readOperations": 300505,
+                    "writeOperations": 100470,
+                    "otherOperations": 206739,
+                    "readBytes": 9840009942,
+                    "writeBytes": 25622297,
+                    "otherBytes": 1737904
+                  }
+                }
+              },
+              {
+                "operation": "publish",
+                "pid": 41652,
+                "started": 47957.6334,
+                "firstOutputMilliseconds": 24.693500000001222,
+                "firstProgressMilliseconds": 6321.825100000002,
+                "progressEvents": 2489,
+                "seconds": 279.0028097,
+                "exitCode": 0,
+                "metrics": {
+                  "available": true,
+                  "pid": 41652,
+                  "peakWorkingBytes": 191688704,
+                  "peakCommitBytes": 198213632,
+                  "sampledPeakPrivateBytes": 190627840,
+                  "seconds": 279.0061008,
+                  "kernelSeconds": 31.78125,
+                  "userSeconds": 3.171875,
+                  "logicalIo": {
+                    "readOperations": 3,
+                    "writeOperations": 4715,
+                    "otherOperations": 2427256,
+                    "readBytes": 8206,
+                    "writeBytes": 73283111,
+                    "otherBytes": 71947996
+                  }
+                }
+              }
+            ],
+            "preflightSeconds": 0.3686979,
+            "seconds": 326.3942551,
+            "verifiedFiles": 100000,
+            "verificationSeconds": 11.011309800000046,
+            "nodeMemory": {
+              "rss": 63811584,
+              "heapTotal": 26726400,
+              "heapUsed": 10159000,
+              "external": 2981898,
+              "arrayBuffers": 728596
+            }
+          }
+        ],
+        "outputCleanupSeconds": 6.756135700000042
+      },
+      {
+        "date": "2026-10-09T23:02:14.706Z",
+        "label": "profile-service-attributes",
+        "helperSha256": "2d222ba66d165f8937dea0be1ff040a5d83af4a0d63cfc8e5be03dd17ff7cd87",
+        "dataset": {
+          "count": 100000,
+          "bytes": 18710833,
+          "sha256": "8fa66269821f41ffdbc4dde67aca9cdac24f2587b7884b2eb288d690946a552b",
+          "uncompressedBytes": 25600000,
+          "payloadBytes": 256,
+          "payload": "SHA256(UTF-8(\"One small file \"+decimal index)) repeated eight times; original generated data, not representative compression entropy",
+          "paths": "小文件/group-{index % 1000:04d}/item-{index:06d}.bin",
+          "format": "Python stdlib ZIP Deflate, UTF-8 names, ZIP64 entry count when needed, no explicit directory entries",
+          "generatedSeconds": 3.060240300001169
+        },
+        "settings": {
+          "propagateZone": true,
+          "sourceZone": "No Zone.Identifier on generated local source",
+          "scan": false,
+          "threads": 2,
+          "memoryMiB": 1024,
+          "profile": "isolated",
+          "cache": "Fresh destination per request; OS caches not purged; no UI/history measurement"
+        },
+        "processMemory": "Native OS working/commit peaks; private sampled at 20ms. Node memory is end-of-request only. Logical I/O is not physical disk I/O.",
+        "results": [
+          {
+            "mode": "here",
+            "iteration": 0,
+            "firstProgressMilliseconds": 288.13329999999996,
+            "phases": [
+              {
+                "operation": "extract",
+                "pid": 41816,
+                "started": 330.1541,
+                "firstOutputMilliseconds": 24.454899999999952,
+                "firstProgressMilliseconds": null,
+                "progressEvents": 0,
+                "seconds": 0.3220214,
+                "exitCode": 2,
+                "preflight": true,
+                "metrics": {
+                  "available": true,
+                  "pid": 41816,
+                  "peakWorkingBytes": 39694336,
+                  "peakCommitBytes": 35393536,
+                  "sampledPeakPrivateBytes": 34390016,
+                  "seconds": 0.3258057,
+                  "kernelSeconds": 0.046875,
+                  "userSeconds": 0.234375,
+                  "logicalIo": {
+                    "readOperations": 505,
+                    "writeOperations": 17,
+                    "otherOperations": 225,
+                    "readBytes": 16433991,
+                    "writeBytes": 987,
+                    "otherBytes": 6496
+                  }
+                }
+              },
+              {
+                "operation": "extract",
+                "pid": 49968,
+                "started": 664.5456,
+                "firstOutputMilliseconds": 17.390199999999936,
+                "firstProgressMilliseconds": 281.9511,
+                "progressEvents": 417,
+                "seconds": 45.963969000000006,
+                "exitCode": 0,
+                "metrics": {
+                  "available": true,
+                  "pid": 49968,
+                  "peakWorkingBytes": 38916096,
+                  "peakCommitBytes": 35323904,
+                  "sampledPeakPrivateBytes": 34893824,
+                  "seconds": 45.965147,
+                  "kernelSeconds": 36.96875,
+                  "userSeconds": 3.125,
+                  "logicalIo": {
+                    "readOperations": 300505,
+                    "writeOperations": 100456,
+                    "otherOperations": 206721,
+                    "readBytes": 9840009942,
+                    "writeBytes": 25621633,
+                    "otherBytes": 1737804
+                  }
+                }
+              },
+              {
+                "operation": "publish",
+                "pid": 21480,
+                "started": 46642.6798,
+                "firstOutputMilliseconds": 25.044000000001688,
+                "firstProgressMilliseconds": 5676.0887,
+                "progressEvents": 470,
+                "seconds": 58.1336342,
+                "exitCode": 0,
+                "metrics": {
+                  "available": true,
+                  "pid": 21480,
+                  "peakWorkingBytes": 191602688,
+                  "peakCommitBytes": 197996544,
+                  "sampledPeakPrivateBytes": 190439424,
+                  "seconds": 58.1304822,
+                  "kernelSeconds": 24.1875,
+                  "userSeconds": 3.265625,
+                  "logicalIo": {
+                    "readOperations": 3,
+                    "writeOperations": 1705,
+                    "otherOperations": 2426374,
+                    "readBytes": 8225,
+                    "writeBytes": 73115111,
+                    "otherBytes": 68664540
+                  }
+                }
+              }
+            ],
+            "preflightSeconds": 0.43886780000000003,
+            "seconds": 104.1900131,
+            "verifiedFiles": 100000,
+            "verificationSeconds": 10.210710200000001,
+            "nodeMemory": {
+              "rss": 63770624,
+              "heapTotal": 25677824,
+              "heapUsed": 12243936,
+              "external": 3261930,
+              "arrayBuffers": 1008628
+            }
+          }
+        ],
+        "outputCleanupSeconds": 6.390939599999998
+      }
+    ]
+  }
+}

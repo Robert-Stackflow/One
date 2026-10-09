@@ -64,6 +64,7 @@
     "test:archive-alz-variants": "node tests/archive-alz-variants.cjs",
     "test:archive-authentication": "node tests/archive-authentication.cjs",
     "test:archive-directories": "node tests/archive-directories.cjs",
+    "test:archive-publish-access": "node tests/archive-publish-access.cjs",
     "test:archive-zipx-password": "node tests/archive-zipx-password.cjs",
     "test:archive-zipx-password-ui": "node tests/archive-zipx-password-ui.cjs",
     "test:archive-egg-reference": "node tests/archive-egg-reference.cjs",
