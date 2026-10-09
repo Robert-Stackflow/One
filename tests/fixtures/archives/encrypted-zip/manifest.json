@@ -1,0 +1,53 @@
+{
+  "repository": "https://github.com/libarchive/libarchive",
+  "commit": "7f53fce04e4e672230f4eb80b219af17975e4f83",
+  "license": "../LICENSE.libarchive.txt",
+  "password": "password",
+  "files": [
+    {
+      "stored": "test_read_format_zip_winzip_aes128.zip",
+      "source": "libarchive/test/test_read_format_zip_winzip_aes128.zip.uu",
+      "bytes": 2821,
+      "sha256": "4cb263afa9f999074643978598f4450e7f408f482dd3adb1a00a7aff6f30e0ac",
+      "aesVersion": 2,
+      "aesStrength": 1,
+      "method": 8,
+      "flags": 1,
+      "expected": {
+        "name": "README",
+        "bytes": 6818,
+        "sha256": "3c4bccfd3465ff9c3a37da7523a7ae092b7259980f78d3e226531cc19e2034d9"
+      }
+    },
+    {
+      "stored": "test_read_format_zip_winzip_aes256.zip",
+      "source": "libarchive/test/test_read_format_zip_winzip_aes256.zip.uu",
+      "bytes": 2829,
+      "sha256": "447342e5b3b20d05d087e3bc3b89727879fb74734cd84556abc6c5126528dd9e",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 8,
+      "flags": 1,
+      "expected": {
+        "name": "README",
+        "bytes": 6818,
+        "sha256": "3c4bccfd3465ff9c3a37da7523a7ae092b7259980f78d3e226531cc19e2034d9"
+      }
+    },
+    {
+      "stored": "test_read_format_zip_winzip_aes256_stored.zip",
+      "source": "libarchive/test/test_read_format_zip_winzip_aes256_stored.zip.uu",
+      "bytes": 6978,
+      "sha256": "ab0101c368b2dac4a652b09338fd53d95d9598d7c39d2195ff063b25d0a3eb39",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 0,
+      "flags": 1,
+      "expected": {
+        "name": "README",
+        "bytes": 6818,
+        "sha256": "3c4bccfd3465ff9c3a37da7523a7ae092b7259980f78d3e226531cc19e2034d9"
+      }
+    }
+  ]
+}

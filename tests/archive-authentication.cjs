@@ -11,7 +11,7 @@ async function closeProbe(root){
  const vswhere=path.join(process.env['ProgramFiles(x86)']||'C:\\Program Files (x86)','Microsoft Visual Studio/Installer/vswhere.exe');const installation=execFileSync(vswhere,['-latest','-products','*','-requires','Microsoft.VisualStudio.Component.VC.Tools.x86.x64','-property','installationPath'],{encoding:'utf8',windowsHide:true}).trim();assert(installation);
  const command=path.join(root,'build-close-probe.cmd'),exe=path.join(root,'close-probe.exe');const quote=file=>'"'+path.resolve(file)+'"';
  await fs.writeFile(command,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /I${quote('vendor/archive/minizip-ng')} /I${quote('work/archive-build/minizip-ng')} ${quote('tests/archive-authentication-native.cpp')} /Fo:${quote(path.join(root,'close-probe.obj'))} /Fe:${quote(exe)} /link ${quote('work/archive-build/minizip-ng/Release/minizip-ng.lib')} ${quote('work/archive-build/zlib/Release/zlibstatic.lib')} ${quote('work/archive-build/xz/Release/lzma.lib')} advapi32.lib bcrypt.lib crypt32.lib\r\n`);
- execFileSync('cmd.exe',['/d','/c',command],{windowsHide:true,encoding:'utf8',maxBuffer:128*1024});return (source,index)=>JSON.parse(execFileSync(exe,[source,String(index)],{encoding:'utf8',windowsHide:true,maxBuffer:8192}));
+ execFileSync('cmd.exe',['/d','/c',command],{windowsHide:true,encoding:'utf8',maxBuffer:128*1024});return (source,index,password='secret')=>JSON.parse(execFileSync(exe,[source,String(index),password],{encoding:'utf8',windowsHide:true,maxBuffer:8192}));
 }
 function directory(bytes){
  let end=bytes.length-22;while(end>=Math.max(0,bytes.length-65557)&&(bytes.readUInt32LE(end)!==0x06054b50||end+22+bytes.readUInt16LE(end+20)!==bytes.length))end--;assert(end>=0);
@@ -65,7 +65,20 @@ async function main(){
     if(method==='store'){const damaged=Buffer.from(bytes);damaged[entry.data+12]^=1;const badData=source.replace('.zip','-bad-data.zip');await fs.writeFile(badData,damaged);await rejected(badData);}
    }
   }
-  console.log(`Archive authentication passed: ${checks} checks, AES AE-1/AE-2 MAC, AES/ZipCrypto CRC, Store/Deflate/XZ, empty files, ZIPX oracle, no publication, drag and update refusal.`);
+  const fixtureRoot=path.resolve('tests/fixtures/archives/encrypted-zip');
+  for(const manifestName of ['manifest.json','sevenzip-manifest.json']){
+  const manifest=JSON.parse(await fs.readFile(path.join(fixtureRoot,manifestName),'utf8'));
+  for(const fixture of manifest.files){
+   const bytes=await fs.readFile(path.join(fixtureRoot,fixture.stored));assert.equal(bytes.length,fixture.bytes);assert.equal(hash(bytes),fixture.sha256);const entry=directory(bytes)[0];assert.equal(bytes.readUInt16LE(entry.aes),fixture.aesVersion);assert.equal(bytes[entry.aes+4],fixture.aesStrength);assert.equal(bytes.readUInt16LE(entry.aes+5),fixture.method);assert.equal(bytes.readUInt16LE(entry.local+6),fixture.flags);checks++;
+   for(const extension of fixture.extensions||['.zip','.zipx']){
+    const source=path.join(root,fixture.stored.replace(/\.zipx?$/,extension));await fs.writeFile(source,bytes);await run({operation:'test',path:source,password:manifest.password});const parent=path.join(root,'external-'+sequence++);await fs.mkdir(parent);await run({operation:'extract',path:source,password:manifest.password,parent,destination:'here'});const content=await fs.readFile(path.join(parent,fixture.expected.name));assert.equal(content.length,fixture.expected.bytes);assert.equal(hash(content),fixture.expected.sha256);checks++;
+    if(fixture.nativeClose!==false){const closed=close(source,0,manifest.password);assert.equal(closed.error,0);assert.equal(closed.read,fixture.expected.bytes);assert.equal(closed.packed,entry.packed);checks++;}
+    await assert.rejects(run({operation:'test',path:source,password:'incorrect'}));checks++;
+    const damaged=Buffer.from(bytes);damaged[entry.data+entry.packed-1]^=1;const bad=source+'.bad'+extension;await fs.writeFile(bad,damaged);await assert.rejects(run({operation:'test',path:bad,password:manifest.password}),error=>error.code==='archive');if(fixture.nativeClose!==false)assert(close(bad,0,manifest.password).error<0);checks++;
+   }
+  }
+  }
+  console.log(`Archive authentication passed: ${checks} checks, AES AE-1/AE-2 MAC, AES/ZipCrypto CRC, Store/Deflate/XZ, empty files, ZIPX oracle, seven independent WinZip/7-Zip AES fixtures including BZIP2/LZMA/PPMd8, no publication, drag and update refusal.`);
  }finally{await service?.stop();for(const [key,value] of Object.entries(previous))if(value===undefined)delete process.env[key];else process.env[key]=value;const relative=path.relative(path.resolve('work/temp'),root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

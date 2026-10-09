@@ -1,0 +1,79 @@
+{
+  "generator": "7-Zip 25.01 Windows x64",
+  "password": "secret",
+  "source": "payload.txt contains ASCII \"Independent encrypted ZIPX method fixture\\n\" repeated 64 times",
+  "files": [
+    {
+      "stored": "sevenzip-aes256-bzip2.zipx",
+      "bytes": 323,
+      "sha256": "0ac6afda311f5aae936d0183d569ff7667b53944cdebfa9e7e5ac7cda83e2623",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 12,
+      "flags": 1,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "payload.txt",
+        "bytes": 2688,
+        "sha256": "ac2fe8d2e5e0992345a419eefd3b70b7f191e811e1254eca3530cbe85f78eaff"
+      }
+    },
+    {
+      "stored": "sevenzip-aes256-lzma.zipx",
+      "bytes": 282,
+      "sha256": "9718385c22ac9aa2582eec194a21695d24ead5174366a6177e7dc24feef2c91c",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 14,
+      "flags": 3,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "payload.txt",
+        "bytes": 2688,
+        "sha256": "ac2fe8d2e5e0992345a419eefd3b70b7f191e811e1254eca3530cbe85f78eaff"
+      }
+    },
+    {
+      "stored": "sevenzip-aes256-ppmd.zipx",
+      "bytes": 260,
+      "sha256": "be6d08eaad8e400b2e89ef4e65b8005d1c940a45f1512eaa06536822a1dde84a",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 98,
+      "flags": 1,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "payload.txt",
+        "bytes": 2688,
+        "sha256": "ac2fe8d2e5e0992345a419eefd3b70b7f191e811e1254eca3530cbe85f78eaff"
+      }
+    },
+    {
+      "stored": "sevenzip-aes256-xz.zipx",
+      "bytes": 330,
+      "sha256": "bc5240092bbb586661e72038d6a6c2e2562f5c74525e69e55e19dcc4b28c6e3a",
+      "aesVersion": 2,
+      "aesStrength": 3,
+      "method": 95,
+      "flags": 1,
+      "extensions": [
+        ".zipx"
+      ],
+      "nativeClose": false,
+      "expected": {
+        "name": "payload.txt",
+        "bytes": 2688,
+        "sha256": "ac2fe8d2e5e0992345a419eefd3b70b7f191e811e1254eca3530cbe85f78eaff"
+      }
+    }
+  ]
+}

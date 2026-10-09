@@ -1,5 +1,9 @@
 # Archive read-format fixtures
 
+Encrypted ZIP/ZIPX fixtures and their source/expected hashes are maintained
+separately in encrypted-zip/; see its README.txt and two manifests. They cover
+WinZip AES128/256 and independently generated AES256 BZIP2/LZMA/PPMd8/XZ.
+
 The manifest pins libarchive fixtures to commit `7f53fce04e4e672230f4eb80b219af17975e4f83` (v3.8.2), under `libarchive/test/`. `source` is the original uuencoded filename in [libarchive](https://github.com/libarchive/libarchive/tree/7f53fce04e4e672230f4eb80b219af17975e4f83/libarchive/test). License notices are retained in `LICENSE.libarchive.txt`.
 
 UU decoding preserves the original bytes. The Nero Joliet ISO was independently decompressed from `.Z` using 7-Zip and stored as gzip to keep the repository small. SHA-256 and byte lengths describe the actual archive, after gzip decompression. Expected extracted file hashes were independently obtained using the installed 7-Zip command-line tool; TAR.ZST expectations refer to the inner TAR contents.
