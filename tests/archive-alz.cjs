@@ -48,7 +48,7 @@ async function main(){
   // Structural failures must be rejected before output is created.
   const base=stored([['safe.txt',Buffer.from('hello')]]),mutations=[];
   for(const length of [0,1,4,7,8,12,20,28,base.length-1,base.length-8])mutations.push(['truncate-'+length,base.subarray(0,length)]);
-  for(const [name,offset,value] of [['version',4,9],['width3',19,0x30],['width15',19,0xf0],['descriptor',19,0x48],['method',21,3],['reserved',20,1],['method-flags',22,1],['attributes',14,0x28]]){const bytes=Buffer.from(base);bytes[offset]=value;mutations.push([name,bytes]);}
+  for(const [name,offset,value] of [['version',4,9],['width3',19,0x30],['width15',19,0xf0],['descriptor',19,0x44],['method',21,3],['reserved',20,1],['method-flags',22,1],['attributes',14,0x28]]){const bytes=Buffer.from(base);bytes[offset]=value;mutations.push([name,bytes]);}
   for(const value of [0,65535]){const bytes=Buffer.from(base);bytes.writeUInt16LE(value,12);mutations.push(['name-length-'+value,bytes]);}
   const huge=Buffer.from(base);huge.writeUInt32LE(0xffffffff,27);mutations.push(['packed-overflow',huge]);
   for(const [name,bytes] of mutations){const source=path.join(root,name+'.alz'),output=path.join(root,name+'.out');await fs.writeFile(source,bytes);await fs.mkdir(output);

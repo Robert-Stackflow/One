@@ -1,0 +1,1145 @@
+{
+  "repository": "alkegi/unalz",
+  "commit": "30b4ad40c5452c686df69b3b45554de3073e57a1",
+  "external": [
+    {
+      "name": "bzip2_dlz.alz",
+      "bytes": 174,
+      "sha256": "f2ec9732be2e609779b6af45122362aeafe6a5c8621f1578e43ffac9d7a8d2b8",
+      "password": "",
+      "expected": [
+        {
+          "name": "text.txt",
+          "bytes": 3600,
+          "packed": 119,
+          "crc32": "2c19aec0",
+          "method": 1,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960760,
+          "sha256": "f347c6956986bb5e2616fd001f81f0fe7d4fcbf68456613b4ed6a2641d29b82a",
+          "encodedSha256": "ae77bc6456f618c6b9c028d0e8c3779ace9c8e0e7e1fc29b8671dc2d3064da0a"
+        }
+      ]
+    },
+    {
+      "name": "deflate_empty.alz",
+      "bytes": 4499,
+      "sha256": "4938c2a7cc6e7a7f4d1a82a320fa9e46002bf27ed0cdb566486cbece3d2d1731",
+      "password": "",
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 0,
+          "time": 1559960697,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "precompressed.gz",
+          "bytes": 95,
+          "packed": 100,
+          "crc32": "6a94d1bc",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "07ec682eb8d41b54afe790caa15773059968ff0befb3b090ef96a57856980f98",
+          "encodedSha256": "f41480978724b1563cc7e7f79af0602e485c9639dd7b7a8c2a188fa3007f1237"
+        },
+        {
+          "name": "prog.sys",
+          "bytes": 2060,
+          "packed": 36,
+          "crc32": "b54ccab2",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "a94e58afa385e60d53d5920852dff86ba296f34b25b12a7e9c8b3a6de4d71132",
+          "encodedSha256": "05e6a71737759ebe5b760cd99e9a2be199b4e9d812c45306f9d3abe04454dd92"
+        },
+        {
+          "name": "random.bin",
+          "bytes": 4096,
+          "packed": 4101,
+          "crc32": "1bb92dfc",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "c7caf0d1f590099d235bdd36c659a428e9f7780ccf4ee44128b1150884f45e33",
+          "encodedSha256": "46c2c7294148f128e46325d4a82d32592ca68a9be57ba4e9ac8b6e590c902592"
+        },
+        {
+          "name": "text.txt",
+          "bytes": 3150,
+          "packed": 82,
+          "crc32": "7a553a9d",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "b2a9316bdcae0fd397a8430e94a6294a4ea720c4faf9e1f77d4e4e30787ba6ac",
+          "encodedSha256": "2f3ef5820d1c9ab2fa91093505d3ed55ea4d71d6ce97b8b8abe40540978c061c"
+        }
+      ]
+    },
+    {
+      "name": "deflate_pure.alz",
+      "bytes": 146,
+      "sha256": "7e30cd821b16878c77f1101681615f2671b6e9e568ba84b6d0ca580c4fe3198b",
+      "password": "",
+      "expected": [
+        {
+          "name": "text.txt",
+          "bytes": 9000,
+          "packed": 91,
+          "crc32": "1859c604",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559962030,
+          "sha256": "2c44089c1478988b4f2d75dcce66a08008c0ab65e71877a8064ec93154e8b380",
+          "encodedSha256": "d603e8ae68252ecaff5d8215f2ff11c96411511bbb1c8af01ed1500ffe46a0a9"
+        }
+      ]
+    },
+    {
+      "name": "dir_tree.alz",
+      "bytes": 305,
+      "sha256": "0086a9b9e317b3a401206069f74e71ab67bd31d6f82cfb3b548bc94b06dead61",
+      "password": "",
+      "expected": [
+        {
+          "name": "work/tree/empty_folder",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": true,
+          "flags": 0,
+          "time": 1559957059,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "work/tree/sub/deeper/deepest/three.txt",
+          "bytes": 16,
+          "packed": 18,
+          "crc32": "75ec5dfb",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559957059,
+          "sha256": "03c29cb7bd343b7281e59b3b64cf552a733272381841232baa063358e3de7c12",
+          "encodedSha256": "c2df51ed6c6a45cf276f4537dacbbd92cc424b4c55febd0019078a6604daba2f"
+        },
+        {
+          "name": "work/tree/sub/deeper/two.txt",
+          "bytes": 8,
+          "packed": 10,
+          "crc32": "f359ac0a",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559957059,
+          "sha256": "04d0ef58d049b7a6620aa4ead8455d7c3613568c9d136a60e1afe898783dadae",
+          "encodedSha256": "0d336b55ddba46304e2c2c62918d4bc001167a2af86b374fece6c963df916aa2"
+        },
+        {
+          "name": "work/tree/sub/one.txt",
+          "bytes": 8,
+          "packed": 10,
+          "crc32": "d874ffc9",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559957059,
+          "sha256": "84d80ad6c9d14e2373568ddfc660a1bb4337355a2efaaaa0abbdce32091a2f64",
+          "encodedSha256": "34ad5584b8195e8d34159083c00b1e3d8ff9e6695de0a88bc8d4503a0de0ff3a"
+        },
+        {
+          "name": "work/tree/top.txt",
+          "bytes": 10,
+          "packed": 12,
+          "crc32": "fb2ea7cf",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1559957059,
+          "sha256": "33685921186a8fed52c9db4ea189ae5c1c755f5f148c9af16485362b5cef0163",
+          "encodedSha256": "8983aff4256d56205d7d85a209033c2e2bea0e8efc7d0baee18e8b70fc01247a"
+        }
+      ]
+    },
+    {
+      "name": "enc_deflate.alz",
+      "bytes": 703,
+      "sha256": "f1d3ae34f035eacfb3feb64f99bc188168f6bf2dd01df41439f607100ff8b213",
+      "password": "test1234",
+      "expected": [
+        {
+          "name": "a.txt",
+          "bytes": 3150,
+          "packed": 82,
+          "crc32": "7a553a9d",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1559960858,
+          "sha256": "b2a9316bdcae0fd397a8430e94a6294a4ea720c4faf9e1f77d4e4e30787ba6ac",
+          "encodedSha256": "2f3ef5820d1c9ab2fa91093505d3ed55ea4d71d6ce97b8b8abe40540978c061c"
+        },
+        {
+          "name": "b.bin",
+          "bytes": 512,
+          "packed": 517,
+          "crc32": "7735137b",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1559960858,
+          "sha256": "f97a9576c02fa95055ddca8bf384caf3fbcb229bb78d0d782a322a558712f2eb",
+          "encodedSha256": "0a310f0c17edf2e590920897696d5c7905e49c82e45258e8465dbe695b639208"
+        }
+      ]
+    },
+    {
+      "name": "enc_store.alz",
+      "bytes": 3667,
+      "sha256": "505539d414dc244507302cf80b222518bf57bcda45b15ee9eabda836058f6d45",
+      "password": "test1234",
+      "expected": [
+        {
+          "name": "text.txt",
+          "bytes": 3600,
+          "packed": 3600,
+          "crc32": "2c19aec0",
+          "method": 0,
+          "directory": false,
+          "flags": 33,
+          "time": 1559960760,
+          "sha256": "f347c6956986bb5e2616fd001f81f0fe7d4fcbf68456613b4ed6a2641d29b82a",
+          "encodedSha256": "f347c6956986bb5e2616fd001f81f0fe7d4fcbf68456613b4ed6a2641d29b82a"
+        }
+      ]
+    },
+    {
+      "name": "low.alz",
+      "bytes": 35833,
+      "sha256": "91f73aeaabe15d86c9677e761d4e94ca5c5d202f97330216610af5deb0637f21",
+      "password": "",
+      "expected": [
+        {
+          "name": "한글파일.txt",
+          "bytes": 56,
+          "packed": 61,
+          "crc32": "f223d6ec",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "0442367f9479d95a35b91a6b80ac5f7ffc199aa91f29855b6a012070dc97af08",
+          "encodedSha256": "2e9f489f4155fd3c26416ff6773881f1a81c5f562778dfa12f9b9b6b180df795"
+        },
+        {
+          "name": "subdir/nested/deep.txt",
+          "bytes": 20,
+          "packed": 22,
+          "crc32": "aab59c3d",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "66c77c742ffe88ea0fa1e085e32b20de9f0cfd763ebdb08d27df20e6a4bb1090",
+          "encodedSha256": "0a3985f32f8bccf90cd6aca3f5bbfa462d4764f8fc53d64b68818c5a938eb321"
+        },
+        {
+          "name": "subdir/inner.txt",
+          "bytes": 28,
+          "packed": 30,
+          "crc32": "da872f18",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "347c0d7c9a1ff5d5e1710b05dc385dea8651892de493ae0f7eade2e93e8b0c0e",
+          "encodedSha256": "8bf811d8471a226112b122fe4fd5482bd97d0c2e67651716d960c9afc4a8f3a0"
+        },
+        {
+          "name": "binary.bin",
+          "bytes": 1024,
+          "packed": 281,
+          "crc32": "b70b4c26",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9",
+          "encodedSha256": "071a1b0287de6ca051df2b1b09746ef48ee426ef4b1837f47c0f71b004620573"
+        },
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 0,
+          "time": 1548954372,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "euckr_content.txt",
+          "bytes": 71,
+          "packed": 76,
+          "crc32": "3e3e0f3f",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "77bc237fbcc49c3138cc308632aa91e57efeffa535a988adbfac2f48bf0d9472",
+          "encodedSha256": "55a8c61da2d862b0923e7ad7f2e7739d355ee1465cd3ee6927691045e93ca59c"
+        },
+        {
+          "name": "hello.txt",
+          "bytes": 131,
+          "packed": 126,
+          "crc32": "1b239eb9",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "d18ec9260c5c6902d8fc74c07cc092f45a2c4e6074e4a5b3cdeaf760eb96e7ce",
+          "encodedSha256": "efcbdb5b8e7b350f544845e26f8f93762e37fd6d856c00c31a75b066c8d27e77"
+        },
+        {
+          "name": "large.txt",
+          "bytes": 131364,
+          "packed": 34738,
+          "crc32": "fe5598ec",
+          "method": 2,
+          "directory": false,
+          "flags": 64,
+          "time": 1548954373,
+          "sha256": "176933d71d6ef16903b2ee4f61947af12fa8c4c450d747e4569a9bcf9267da53",
+          "encodedSha256": "bbc0a7f7378be429a9f9d13c02f31429ca83b63ce598b255299450f4ce499b39"
+        },
+        {
+          "name": "repeated.txt",
+          "bytes": 720,
+          "packed": 54,
+          "crc32": "33ab076a",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "1cec0d613b135373d084c68685b7476fb7c0d7f5caa28f35946ea6d302ba9225",
+          "encodedSha256": "7095c1cf867e862d21dfcf56381c6fe20edd51a73a407692a7cea2a45f072876"
+        },
+        {
+          "name": "뷁테스트.txt",
+          "bytes": 72,
+          "packed": 69,
+          "crc32": "64205eb3",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548954372,
+          "sha256": "696f6644df6b920646bf3e92745923109d0cfc8ad470818dde56176179408090",
+          "encodedSha256": "4570c16a567f603d6ddf427a88076b5b6afab6f6ccbb2988a9d311c2120c2ccf"
+        }
+      ]
+    },
+    {
+      "name": "normal.alz",
+      "bytes": 31569,
+      "sha256": "84de0250e1e5f78aad067628c1cf5614c5bf88310365ccde58513cd2e9b85ef1",
+      "password": "",
+      "expected": [
+        {
+          "name": "large.txt",
+          "bytes": 131364,
+          "packed": 30475,
+          "crc32": "fe5598ec",
+          "method": 2,
+          "directory": false,
+          "flags": 64,
+          "time": 1548953021,
+          "sha256": "176933d71d6ef16903b2ee4f61947af12fa8c4c450d747e4569a9bcf9267da53",
+          "encodedSha256": "3f1e8683af1096223419d876c0d6a458565e4823fe9813b611573e90d9f12dac"
+        },
+        {
+          "name": "repeated.txt",
+          "bytes": 720,
+          "packed": 54,
+          "crc32": "33ab076a",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "1cec0d613b135373d084c68685b7476fb7c0d7f5caa28f35946ea6d302ba9225",
+          "encodedSha256": "b7d4eb9ef72c0d346703b50b4d99260d4fb23698faf520fda37ef2c0fa2f841f"
+        },
+        {
+          "name": "뷁테스트.txt",
+          "bytes": 72,
+          "packed": 69,
+          "crc32": "64205eb3",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "696f6644df6b920646bf3e92745923109d0cfc8ad470818dde56176179408090",
+          "encodedSha256": "4570c16a567f603d6ddf427a88076b5b6afab6f6ccbb2988a9d311c2120c2ccf"
+        },
+        {
+          "name": "한글파일.txt",
+          "bytes": 56,
+          "packed": 61,
+          "crc32": "f223d6ec",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "0442367f9479d95a35b91a6b80ac5f7ffc199aa91f29855b6a012070dc97af08",
+          "encodedSha256": "2e9f489f4155fd3c26416ff6773881f1a81c5f562778dfa12f9b9b6b180df795"
+        },
+        {
+          "name": "subdir/nested/deep.txt",
+          "bytes": 20,
+          "packed": 22,
+          "crc32": "aab59c3d",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "66c77c742ffe88ea0fa1e085e32b20de9f0cfd763ebdb08d27df20e6a4bb1090",
+          "encodedSha256": "0a3985f32f8bccf90cd6aca3f5bbfa462d4764f8fc53d64b68818c5a938eb321"
+        },
+        {
+          "name": "subdir/inner.txt",
+          "bytes": 28,
+          "packed": 30,
+          "crc32": "da872f18",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "347c0d7c9a1ff5d5e1710b05dc385dea8651892de493ae0f7eade2e93e8b0c0e",
+          "encodedSha256": "8bf811d8471a226112b122fe4fd5482bd97d0c2e67651716d960c9afc4a8f3a0"
+        },
+        {
+          "name": "binary.bin",
+          "bytes": 1024,
+          "packed": 280,
+          "crc32": "b70b4c26",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9",
+          "encodedSha256": "2ab52f8d0dc9906991566e37f40b435348553ea3a80e41da48ad8e5b050a38d0"
+        },
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 0,
+          "time": 1548953021,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "euckr_content.txt",
+          "bytes": 71,
+          "packed": 76,
+          "crc32": "3e3e0f3f",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "77bc237fbcc49c3138cc308632aa91e57efeffa535a988adbfac2f48bf0d9472",
+          "encodedSha256": "55a8c61da2d862b0923e7ad7f2e7739d355ee1465cd3ee6927691045e93ca59c"
+        },
+        {
+          "name": "hello.txt",
+          "bytes": 131,
+          "packed": 126,
+          "crc32": "1b239eb9",
+          "method": 2,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "d18ec9260c5c6902d8fc74c07cc092f45a2c4e6074e4a5b3cdeaf760eb96e7ce",
+          "encodedSha256": "efcbdb5b8e7b350f544845e26f8f93762e37fd6d856c00c31a75b066c8d27e77"
+        }
+      ]
+    },
+    {
+      "name": "store.alz",
+      "bytes": 133862,
+      "sha256": "2ce074ed2e9fc38b2c6b935821a414379c82780c9e2191b3c66ee20274fe146b",
+      "password": "",
+      "expected": [
+        {
+          "name": "large.txt",
+          "bytes": 131364,
+          "packed": 131364,
+          "crc32": "fe5598ec",
+          "method": 0,
+          "directory": false,
+          "flags": 64,
+          "time": 1548953021,
+          "sha256": "176933d71d6ef16903b2ee4f61947af12fa8c4c450d747e4569a9bcf9267da53",
+          "encodedSha256": "176933d71d6ef16903b2ee4f61947af12fa8c4c450d747e4569a9bcf9267da53"
+        },
+        {
+          "name": "repeated.txt",
+          "bytes": 720,
+          "packed": 720,
+          "crc32": "33ab076a",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "1cec0d613b135373d084c68685b7476fb7c0d7f5caa28f35946ea6d302ba9225",
+          "encodedSha256": "1cec0d613b135373d084c68685b7476fb7c0d7f5caa28f35946ea6d302ba9225"
+        },
+        {
+          "name": "뷁테스트.txt",
+          "bytes": 72,
+          "packed": 72,
+          "crc32": "64205eb3",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "696f6644df6b920646bf3e92745923109d0cfc8ad470818dde56176179408090",
+          "encodedSha256": "696f6644df6b920646bf3e92745923109d0cfc8ad470818dde56176179408090"
+        },
+        {
+          "name": "한글파일.txt",
+          "bytes": 56,
+          "packed": 56,
+          "crc32": "f223d6ec",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "0442367f9479d95a35b91a6b80ac5f7ffc199aa91f29855b6a012070dc97af08",
+          "encodedSha256": "0442367f9479d95a35b91a6b80ac5f7ffc199aa91f29855b6a012070dc97af08"
+        },
+        {
+          "name": "subdir/nested/deep.txt",
+          "bytes": 20,
+          "packed": 20,
+          "crc32": "aab59c3d",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "66c77c742ffe88ea0fa1e085e32b20de9f0cfd763ebdb08d27df20e6a4bb1090",
+          "encodedSha256": "66c77c742ffe88ea0fa1e085e32b20de9f0cfd763ebdb08d27df20e6a4bb1090"
+        },
+        {
+          "name": "subdir/inner.txt",
+          "bytes": 28,
+          "packed": 28,
+          "crc32": "da872f18",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "347c0d7c9a1ff5d5e1710b05dc385dea8651892de493ae0f7eade2e93e8b0c0e",
+          "encodedSha256": "347c0d7c9a1ff5d5e1710b05dc385dea8651892de493ae0f7eade2e93e8b0c0e"
+        },
+        {
+          "name": "binary.bin",
+          "bytes": 1024,
+          "packed": 1024,
+          "crc32": "b70b4c26",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9",
+          "encodedSha256": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9"
+        },
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 0,
+          "time": 1548953021,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "euckr_content.txt",
+          "bytes": 71,
+          "packed": 71,
+          "crc32": "3e3e0f3f",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "77bc237fbcc49c3138cc308632aa91e57efeffa535a988adbfac2f48bf0d9472",
+          "encodedSha256": "77bc237fbcc49c3138cc308632aa91e57efeffa535a988adbfac2f48bf0d9472"
+        },
+        {
+          "name": "hello.txt",
+          "bytes": 131,
+          "packed": 131,
+          "crc32": "1b239eb9",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1548953021,
+          "sha256": "d18ec9260c5c6902d8fc74c07cc092f45a2c4e6074e4a5b3cdeaf760eb96e7ce",
+          "encodedSha256": "d18ec9260c5c6902d8fc74c07cc092f45a2c4e6074e4a5b3cdeaf760eb96e7ce"
+        }
+      ]
+    },
+    {
+      "name": "store_empty.alz",
+      "bytes": 9581,
+      "sha256": "410dcffe5fbede8b7737bc9c453c8406a5c099eec934033447c01c29a6bf0a9e",
+      "password": "",
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 0,
+          "time": 1559960697,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "precompressed.gz",
+          "bytes": 95,
+          "packed": 95,
+          "crc32": "6a94d1bc",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "07ec682eb8d41b54afe790caa15773059968ff0befb3b090ef96a57856980f98",
+          "encodedSha256": "07ec682eb8d41b54afe790caa15773059968ff0befb3b090ef96a57856980f98"
+        },
+        {
+          "name": "prog.sys",
+          "bytes": 2060,
+          "packed": 2060,
+          "crc32": "b54ccab2",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "a94e58afa385e60d53d5920852dff86ba296f34b25b12a7e9c8b3a6de4d71132",
+          "encodedSha256": "a94e58afa385e60d53d5920852dff86ba296f34b25b12a7e9c8b3a6de4d71132"
+        },
+        {
+          "name": "random.bin",
+          "bytes": 4096,
+          "packed": 4096,
+          "crc32": "1bb92dfc",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "c7caf0d1f590099d235bdd36c659a428e9f7780ccf4ee44128b1150884f45e33",
+          "encodedSha256": "c7caf0d1f590099d235bdd36c659a428e9f7780ccf4ee44128b1150884f45e33"
+        },
+        {
+          "name": "text.txt",
+          "bytes": 3150,
+          "packed": 3150,
+          "crc32": "7a553a9d",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960697,
+          "sha256": "b2a9316bdcae0fd397a8430e94a6294a4ea720c4faf9e1f77d4e4e30787ba6ac",
+          "encodedSha256": "b2a9316bdcae0fd397a8430e94a6294a4ea720c4faf9e1f77d4e4e30787ba6ac"
+        }
+      ]
+    },
+    {
+      "name": "store_old.alz",
+      "bytes": 3655,
+      "sha256": "65be42ee31ade0b469205783b07b604ad2896073f8c63f5f9338fcbe5027ecad",
+      "password": "",
+      "expected": [
+        {
+          "name": "text.txt",
+          "bytes": 3600,
+          "packed": 3600,
+          "crc32": "2c19aec0",
+          "method": 0,
+          "directory": false,
+          "flags": 32,
+          "time": 1559960760,
+          "sha256": "f347c6956986bb5e2616fd001f81f0fe7d4fcbf68456613b4ed6a2641d29b82a",
+          "encodedSha256": "f347c6956986bb5e2616fd001f81f0fe7d4fcbf68456613b4ed6a2641d29b82a"
+        }
+      ]
+    },
+    {
+      "name": "zip20.alz",
+      "bytes": 31677,
+      "sha256": "e76b7c48a99a71899316b855a7ceb0bdb112eba7671d6199f375f52922175d45",
+      "password": "test1234",
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 0,
+          "time": 1548953021,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "euckr_content.txt",
+          "bytes": 71,
+          "packed": 76,
+          "crc32": "3e3e0f3f",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "77bc237fbcc49c3138cc308632aa91e57efeffa535a988adbfac2f48bf0d9472",
+          "encodedSha256": "55a8c61da2d862b0923e7ad7f2e7739d355ee1465cd3ee6927691045e93ca59c"
+        },
+        {
+          "name": "hello.txt",
+          "bytes": 131,
+          "packed": 126,
+          "crc32": "1b239eb9",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "d18ec9260c5c6902d8fc74c07cc092f45a2c4e6074e4a5b3cdeaf760eb96e7ce",
+          "encodedSha256": "efcbdb5b8e7b350f544845e26f8f93762e37fd6d856c00c31a75b066c8d27e77"
+        },
+        {
+          "name": "large.txt",
+          "bytes": 131364,
+          "packed": 30475,
+          "crc32": "fe5598ec",
+          "method": 2,
+          "directory": false,
+          "flags": 65,
+          "time": 1548953021,
+          "sha256": "176933d71d6ef16903b2ee4f61947af12fa8c4c450d747e4569a9bcf9267da53",
+          "encodedSha256": "3f1e8683af1096223419d876c0d6a458565e4823fe9813b611573e90d9f12dac"
+        },
+        {
+          "name": "repeated.txt",
+          "bytes": 720,
+          "packed": 54,
+          "crc32": "33ab076a",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "1cec0d613b135373d084c68685b7476fb7c0d7f5caa28f35946ea6d302ba9225",
+          "encodedSha256": "b7d4eb9ef72c0d346703b50b4d99260d4fb23698faf520fda37ef2c0fa2f841f"
+        },
+        {
+          "name": "뷁테스트.txt",
+          "bytes": 72,
+          "packed": 69,
+          "crc32": "64205eb3",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "696f6644df6b920646bf3e92745923109d0cfc8ad470818dde56176179408090",
+          "encodedSha256": "4570c16a567f603d6ddf427a88076b5b6afab6f6ccbb2988a9d311c2120c2ccf"
+        },
+        {
+          "name": "한글파일.txt",
+          "bytes": 56,
+          "packed": 61,
+          "crc32": "f223d6ec",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "0442367f9479d95a35b91a6b80ac5f7ffc199aa91f29855b6a012070dc97af08",
+          "encodedSha256": "2e9f489f4155fd3c26416ff6773881f1a81c5f562778dfa12f9b9b6b180df795"
+        },
+        {
+          "name": "subdir/nested/deep.txt",
+          "bytes": 20,
+          "packed": 22,
+          "crc32": "aab59c3d",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "66c77c742ffe88ea0fa1e085e32b20de9f0cfd763ebdb08d27df20e6a4bb1090",
+          "encodedSha256": "0a3985f32f8bccf90cd6aca3f5bbfa462d4764f8fc53d64b68818c5a938eb321"
+        },
+        {
+          "name": "subdir/inner.txt",
+          "bytes": 28,
+          "packed": 30,
+          "crc32": "da872f18",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "347c0d7c9a1ff5d5e1710b05dc385dea8651892de493ae0f7eade2e93e8b0c0e",
+          "encodedSha256": "8bf811d8471a226112b122fe4fd5482bd97d0c2e67651716d960c9afc4a8f3a0"
+        },
+        {
+          "name": "binary.bin",
+          "bytes": 1024,
+          "packed": 280,
+          "crc32": "b70b4c26",
+          "method": 2,
+          "directory": false,
+          "flags": 33,
+          "time": 1548953021,
+          "sha256": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9",
+          "encodedSha256": "2ab52f8d0dc9906991566e37f40b435348553ea3a80e41da48ad8e5b050a38d0"
+        }
+      ]
+    }
+  ],
+  "generated": [
+    {
+      "name": "date-all.alz",
+      "bytes": 3478,
+      "sha256": "b562195a046f34c2c90c2d8143845898cad4546219634f8c9240bd43ff8aa3c5",
+      "password": "secret",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "date-0.bin",
+          "bytes": 3200,
+          "packed": 3200,
+          "crc32": "ed8a4c1c",
+          "method": 0,
+          "directory": false,
+          "flags": 73,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        },
+        {
+          "name": "date-1.bin",
+          "bytes": 3200,
+          "packed": 64,
+          "crc32": "ed8a4c1c",
+          "method": 1,
+          "directory": false,
+          "flags": 73,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "76a77cad549986aed92b80ab08a5f6bcf49fcd3338e9c6cda666260e4ac7c602"
+        },
+        {
+          "name": "date-2.bin",
+          "bytes": 3200,
+          "packed": 43,
+          "crc32": "ed8a4c1c",
+          "method": 2,
+          "directory": false,
+          "flags": 73,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "95e2f7fc5fdfa2d524f9ae6eb9618a8c4326150261f39c6f22b7f9a198f754ed"
+        }
+      ]
+    },
+    {
+      "name": "mixed.alz",
+      "bytes": 6729,
+      "sha256": "eba2f16032e8ba3f60eafb10403acece7357d3b4e3418aa581fde6fe083c5429",
+      "password": "secret",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "legacy.bin",
+          "bytes": 3200,
+          "packed": 3200,
+          "crc32": "ed8a4c1c",
+          "method": 0,
+          "directory": false,
+          "flags": 65,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        },
+        {
+          "name": "date-dlz.bin",
+          "bytes": 3200,
+          "packed": 64,
+          "crc32": "ed8a4c1c",
+          "method": 1,
+          "directory": false,
+          "flags": 73,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "76a77cad549986aed92b80ab08a5f6bcf49fcd3338e9c6cda666260e4ac7c602"
+        },
+        {
+          "name": "legacy-deflate.bin",
+          "bytes": 3200,
+          "packed": 43,
+          "crc32": "ed8a4c1c",
+          "method": 2,
+          "directory": false,
+          "flags": 65,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "95e2f7fc5fdfa2d524f9ae6eb9618a8c4326150261f39c6f22b7f9a198f754ed"
+        },
+        {
+          "name": "plain-date.bin",
+          "bytes": 3200,
+          "packed": 3200,
+          "crc32": "ed8a4c1c",
+          "method": 0,
+          "directory": false,
+          "flags": 72,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        }
+      ]
+    },
+    {
+      "name": "empty-crc.alz",
+      "bytes": 58,
+      "sha256": "9468877f51d1b5461a632526d79e30a72b7b5a75c0aa23edc809bddf2a47a23e",
+      "password": "secret",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 1,
+          "time": 1453658676,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "name": "empty-date.alz",
+      "bytes": 58,
+      "sha256": "9cdaf90b79f531af83e3f5cdc774a5ec581bd18429724f7fc84785b8a265d046",
+      "password": "secret",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 0,
+          "crc32": "00000000",
+          "method": 0,
+          "directory": false,
+          "flags": 9,
+          "time": 1453658676,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "name": "empty-deflate.alz",
+      "bytes": 74,
+      "sha256": "3e0ebb245ee438d98512e6c50b6c6ada633973a7a0950ed3734a584d147bb6a6",
+      "password": "secret",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 2,
+          "crc32": "00000000",
+          "method": 2,
+          "directory": false,
+          "flags": 73,
+          "time": 1453658676,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "9b4fb24edd6d1d8830e272398263cdbf026b97392cc35387b991dc0248a628f9"
+        }
+      ]
+    },
+    {
+      "name": "empty-bzh.alz",
+      "bytes": 86,
+      "sha256": "ca5245f176d8a3ffa00c68d18f4810063544841aea7d553e856c93b0256d5d39",
+      "password": "secret",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "empty.txt",
+          "bytes": 0,
+          "packed": 14,
+          "crc32": "00000000",
+          "method": 1,
+          "directory": false,
+          "flags": 73,
+          "time": 1453658676,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "encodedSha256": "d3dda84eb03b9738d118eb2be78e246106900493c0ae07819ad60815134a8058"
+        }
+      ]
+    },
+    {
+      "name": "date-korean.alz",
+      "bytes": 3273,
+      "sha256": "10d3e8b02e5b4a6051fd7ff9163304bb11e8e9d6fb6f60fa0a571a8545357ae4",
+      "password": "비밀",
+      "encoding": 0,
+      "expected": [
+        {
+          "name": "korean.txt",
+          "bytes": 3200,
+          "packed": 3200,
+          "crc32": "ed8a4c1c",
+          "method": 0,
+          "directory": false,
+          "flags": 73,
+          "time": 0,
+          "sha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4",
+          "encodedSha256": "e32b08e888928c39a890684d603299391f6105611210c2ce164f13d829c8e2d4"
+        }
+      ]
+    }
+  ],
+  "reference": {
+    "rustCrypto": "src/crypto.rs at repository commit above, unchanged source, 23 encrypted members checked",
+    "unAlzArchiveSha256": "4c26699eb7545072de2ef7de79b4fff1f01c4db09cebff2d8d50ec03d5d74db0",
+    "unAlzVersion": "0.65",
+    "unAlzResults": [
+      {
+        "name": "bzip2_dlz.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "deflate_empty.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "deflate_pure.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "dir_tree.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "enc_deflate.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "enc_store.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "low.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "normal.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "store.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "store_empty.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "store_old.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "zip20.alz",
+        "kind": "external",
+        "exit": 0
+      },
+      {
+        "name": "date-all.alz",
+        "kind": "generated",
+        "exit": 0
+      },
+      {
+        "name": "mixed.alz",
+        "kind": "generated",
+        "exit": 5
+      },
+      {
+        "name": "empty-crc.alz",
+        "kind": "generated",
+        "exit": 0
+      },
+      {
+        "name": "empty-date.alz",
+        "kind": "generated",
+        "exit": 5
+      },
+      {
+        "name": "empty-deflate.alz",
+        "kind": "generated",
+        "exit": 5
+      },
+      {
+        "name": "empty-bzh.alz",
+        "kind": "generated",
+        "exit": 5
+      },
+      {
+        "name": "date-korean.alz",
+        "kind": "generated",
+        "exit": 0
+      }
+    ]
+  }
+}

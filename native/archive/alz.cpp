@@ -27,7 +27,7 @@ struct Handle {
     ~Handle(){if(value!=INVALID_HANDLE_VALUE)CloseHandle(value);}
     Handle(const Handle&)=delete;
 };
-struct Member {Entry entry;uint64_t offset;uint32_t crc,dos_time;uint8_t method;std::array<unsigned char,12> crypto{};};
+struct Member {Entry entry;uint64_t offset;uint32_t crc,dos_time;uint8_t method;std::array<unsigned char,12> crypto{};bool date_check=false;};
 struct Budget {
     ExtractionLimits limits=extraction_limits();uint64_t bytes=0;ULONGLONG started=GetTickCount64();
     void check(){if(archive_cancelled())fail("Archive operation cancelled","cancelled");
@@ -118,16 +118,18 @@ public:
             if(members.size()>=1000000)fail("ALZ directory exceeds its entry budget","resource");
             const auto name_length=number(2),attributes=number(1),time=number(4),descriptor=number(1),reserved=number(1);
             const auto width=descriptor>>4;
-            if(!name_length||name_length>32767||reserved||(descriptor&0x0e)||(width!=0&&width!=1&&width!=2&&width!=4&&width!=8))
+            if(!name_length||name_length>32767||reserved||(descriptor&0x06)||(width!=0&&width!=1&&width!=2&&width!=4&&width!=8))
                 fail("Invalid or unsupported ALZ member descriptor");
             const bool directory=(attributes&0x10)!=0,encrypted=(descriptor&1)!=0;
             if(attributes&~0x37)fail("Unsupported ALZ member attributes","safety");
             Member member{{members.size(),{},directory,0,0,encrypted},0,0,(uint32_t)time,0};
+            // Bit 3 selects a DOS-time password check for this member only.
+            member.date_check=(descriptor&8)!=0;
             if(width){member.method=(uint8_t)number(1);if(number(1))fail("Unsupported ALZ compression flags");
                 member.crc=(uint32_t)number(4);member.entry.compressed=number((unsigned)width);member.entry.size=number((unsigned)width);}
             if(member.method>2)fail("Unsupported ALZ compression method");
             if(member.entry.size>9007199254740991ull||member.entry.compressed>9007199254740991ull)fail("ALZ size exceeds its supported range","resource");
-            if((directory&&(member.entry.size||member.entry.compressed||encrypted))||(!width&&encrypted))fail("Invalid ALZ directory or empty member");
+            if(directory&&(member.entry.size||member.entry.compressed||encrypted))fail("Invalid ALZ directory or empty member");
             if((names+=name_length)>64ull*1024*1024)fail("ALZ directory exceeds its name budget","resource");
             std::string name((size_t)name_length,0);read(name.data(),name.size());member.entry.name=decode_name(name,encoding);
             if(encrypted)read(member.crypto.data(),member.crypto.size());
@@ -173,7 +175,8 @@ void decode(AlzReader &reader,const Member &member,const std::string &password,H
     budget.check();const auto &entry=member.entry;if(entry.directory)return;
     Crypto crypto(password);
     if(entry.encrypted){if(password.empty())fail("ALZ password is required","password");auto check=member.crypto;crypto.decode(check.data(),check.size());
-        if(check.back()!=(member.crc>>24))fail("ALZ password is incorrect","password");}
+        const auto expected=(unsigned char)(member.date_check?member.dos_time>>8:member.crc>>24);
+        if(check.back()!=expected)fail("ALZ password is incorrect","password");}
     reader.seek(member.offset);uint64_t remaining=entry.compressed,written=0;uLong crc=crc32(0,nullptr,0);
     std::array<unsigned char,65536> input{},out{};
     auto write=[&](size_t count){budget.add(count);if(count>entry.size-written)fail("ALZ member exceeds its declared size","safety");

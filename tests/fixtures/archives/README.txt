@@ -13,3 +13,8 @@ UU decoding preserves the original bytes. The Nero Joliet ISO was independently 
 LHA header levels 0, 1 and 2 contain symbolic links and are retained as safe-browser/extraction refusal cases; integrity testing can still check their bytes. The ordinary `bugfix_0` sample is a positive case. The CP932 fixture checks the current engine's byte-preserving extraction against the independent oracle, without claiming the original Japanese names decode correctly under every system code page. Level 3 is deliberately retained as an unsupported-format rejection case. The ZIPX corpus covers BZIP2, LZMA, PPMd8, XZ and ZSTD methods. This small corpus does not claim support for every variant, encrypted ZIPX, multi-volume CAB/WIM, Rock Ridge links or all UDF versions.
 
 Run `npm run test:archive-formats` after building the native helper. Tests require no network, Python or system-installed 7-Zip.
+
+ALZ known-size date-check and encrypted empty-file variants are maintained
+in alz-variants/: twelve additional fixed external samples and seven original
+generated cases, 73 entries, independent output/crypto checks and explicit
+reference limitations. See its README.txt and validate-reference.py.

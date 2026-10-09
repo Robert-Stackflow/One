@@ -55,6 +55,12 @@ async function main(){
    const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));
    await run(['test','--json',...options,source],password);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',...options,source],password);assert((await fs.readdir(output)).length>0);
   }
+  for(const [name,password] of [['mixed.alz','secret'],['empty-date.alz','secret'],['empty-crc.alz','secret'],['date-korean.alz','비밀']]){
+   const source=path.resolve('tests/fixtures/archives/alz-variants',name),options=['--encoding','949','--password-stdin'];
+   const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));
+   await run(['test','--json',...options,source],password);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',...options,source],password);assert((await fs.readdir(output)).length>0);
+   if(name.startsWith('empty-'))assert.equal((await fs.stat(path.join(output,'empty.txt'))).size,0);
+  }
   for(const name of ['split.alz','split.a06','split_store.a01']){
    const source=path.resolve('tests/fixtures/archives/alz-split',name),listed=await run(['list','--json',source]);assert(listed.records.some(record=>record.type==='entry'));
    await run(['test','--json',source]);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',source]);assert((await fs.readdir(output)).length>0);
