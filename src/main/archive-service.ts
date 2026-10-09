@@ -49,8 +49,10 @@ async function recordedStage(value:ArchiveRecoveryRecord){
   if(value.kind!=='volume-update')return false;
   const present=async(name:string)=>!!await lstat(join(value.path,name)).catch(error=>{if((error as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw error;});
   const [stage,published]=await Promise.all([present('stage.jsonl'),present('manifest.jsonl')]);
-  if(stage&&published)throw Error('暂存与发布清单同时存在，保存阶段无法确认；请保留全部资料');
-  return stage;
+  // A complete publication plan can coexist with its staging journal after an
+  // interrupted atomic handoff. Native restore/cleanup validates their identity
+  // link before touching any file; the presence of two names grants no authority.
+  return stage&&!published;
 }
 function stageInspectionDiagnostic(message:string){
   if(message.includes('missing'))return '暂存来源记录缺失，无法确认清理范围；请保留资料';
@@ -198,8 +200,8 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'update-stage'|'volume-publish'|'volume-recover'|'volume-cleanup'|'stage-inspect'|'stage-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
-    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'||nativeOperation==='stage-cleanup'?'cleanup':nativeOperation==='stage-inspect'?'list':nativeOperation==='volume-publish'?'publish':nativeOperation==='update-stage'?'update':nativeOperation;
+  private async execute(owner:number,id:string,nativeOperation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish'|'recover'|'cleanup'|'update-stage'|'update-recorded-stage'|'volume-publish'|'volume-recover'|'volume-cleanup'|'stage-inspect'|'stage-cleanup',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+    const operation=nativeOperation==='volume-recover'?'recover':nativeOperation==='volume-cleanup'||nativeOperation==='stage-cleanup'?'cleanup':nativeOperation==='stage-inspect'?'list':nativeOperation==='volume-publish'?'publish':nativeOperation==='update-stage'||nativeOperation==='update-recorded-stage'?'update':nativeOperation;
     this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
@@ -227,7 +229,7 @@ export class ArchiveService {
           try{const message=JSON.parse(line) as Message;
             if(message.type==='heartbeat'){watchdog.heartbeat(message.activity);}
             else if(message.type==='ready'){
-              if(nativeOperation==='update-stage'||!['update','drag','publish','recover','cleanup'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
+              if(nativeOperation==='update-stage'||nativeOperation==='update-recorded-stage'||!['update','drag','publish','recover','cleanup'].includes(operation)||failed||child.killed||task.committing){child.kill();failed=true;error='压缩程序返回无效提交状态';}
               else{task.committing=true;if(operation==='publish'||operation==='recover'||operation==='cleanup'){child.stdin.write(Buffer.from([this.jobs.get(id)?.cancelled?2:1]));this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});}else{const job=this.jobs.get(id);if(job)job.committing=true;this.notify(owner,{id,operation:operation==='drag'?'drag':'commit',done:0,total:0});child.stdin.end(Buffer.from([1]));}}
             }
             else if(message.type==='progress'){
@@ -562,7 +564,7 @@ export class ArchiveService {
     // but its partially written directory must remain discoverable after restart.
     const recovery=await this.recovery.register(id,source,parent,{kind:'volume-update',stage});
     try{
-      const prepared=await this.execute(owner,id,'update-stage',[source,stage,String(encoding(request.encoding)),request.revision],password(request.password),'update',packet);
+      const prepared=await this.execute(owner,id,'update-recorded-stage',[source,stage,recovery.path,String(encoding(request.encoding)),request.revision],password(request.password),'update',packet);
       const staged=prepared.find((item):item is NativeResult=>item.type==='result');
       if(!staged||staged.staged!==true||typeof staged.path!=='string'||staged.path.toLowerCase()!==primary.toLowerCase()||!validArchiveRevision(staged.revision)||!Number.isSafeInteger(staged.count)||staged.count<0||staged.count>1000000||typeof staged.volumes!=='number'||!Number.isSafeInteger(staged.volumes)||staged.volumes<1||staged.volumes>4096)throw Error('压缩程序未返回有效的新卷组，请保留暂存资料');
       this.checkpoint(id);

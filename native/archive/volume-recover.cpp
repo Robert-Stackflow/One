@@ -1,4 +1,5 @@
 #include "recovery-common.h"
+#include "stage-ownership.h"
 
 using namespace archive_recovery;
 
@@ -156,6 +157,11 @@ struct VolumeState {
 struct Recovery {
     Directories dirs;
     std::unique_ptr<Locked> manifest;
+    struct JournalLock {
+        HANDLE value=INVALID_HANDLE_VALUE;
+        ~JournalLock(){close();}
+        void close(){if(value!=INVALID_HANDLE_VALUE){CloseHandle(value);value=INVALID_HANDLE_VALUE;}}
+    } staging_journal;
     VolumePlan plan;
     std::vector<VolumeState> states;
     std::set<std::wstring> recovery_names{L"manifest.jsonl"},stage_names;
@@ -165,6 +171,9 @@ struct Recovery {
         scope(p,r);dirs.ancestors(parent);dirs.hold(recovery,FILE_READ_ATTRIBUTES|(cleanup?DELETE:0));
         manifest=std::make_unique<Locked>(recovery/L"manifest.jsonl",false,GENERIC_READ|DELETE);
         const auto before=stamp(manifest->value);plan=read_volume_plan(*manifest,parent,recovery);
+        if(attributes(recovery/L"stage.jsonl")!=INVALID_FILE_ATTRIBUTES){
+            staging_journal.value=archive_stage::lock_published_journal(plan.primary,plan.stage,recovery,manifest->value);recovery_names.insert(L"stage.jsonl");
+        }
         if(before!=stamp(manifest->value)||plan.parent_identity!=stamp(dirs.held.at(key(parent))->value,true)||
             plan.recovery_identity!=stamp(dirs.held.at(key(recovery))->value,true))fail("Volume recovery directory or journal changed","safety");
         stage_exists=attributes(plan.stage)!=INVALID_FILE_ATTRIBUTES;
@@ -238,11 +247,12 @@ void cleanup_volume_update(const fs::path &parent,const fs::path &recovery){
         }
         progress(++done,job.states.size());
     }
-    job.verify(true);check_contents(recovery,{L"manifest.jsonl"});
+    job.verify(true);check_contents(recovery,job.staging_journal.value==INVALID_HANDLE_VALUE?std::set<std::wstring>{L"manifest.jsonl"}:std::set<std::wstring>{L"manifest.jsonl",L"stage.jsonl"});
     if(job.stage_exists){
         check_contents(job.plan.stage,{});erase(job.dirs.held.at(key(job.plan.stage))->value);job.dirs.held.erase(key(job.plan.stage));job.stage_exists=false;
         crash("cleanup-stage-directory");
     }
+    if(job.staging_journal.value!=INVALID_HANDLE_VALUE){check_cancel();erase(job.staging_journal.value);job.staging_journal.close();crash("cleanup-handoff-journal");}
     check_cancel();erase(job.manifest->value);job.manifest->close();crash("cleanup-manifest");
     erase(job.dirs.held.at(key(recovery))->value);job.dirs.held.erase(key(recovery));crash("cleanup-directory");
     emit("{\"type\":\"result\",\"count\":"+std::to_string(removed)+",\"cancelled\":false}");

@@ -8,6 +8,7 @@
 #include "zip-common.h"
 #include "update-common.h"
 #include "heartbeat.h"
+#include "stage-ownership.h"
 
 // Private second half of update-stage, called by the owning save lifecycle.
 namespace {
@@ -85,6 +86,7 @@ struct Journal {
     const std::string injected=test_point(L"ONE_ARCHIVE_VOLUME_JOURNAL_FAIL_AT_SEQUENCE");
     explicit Journal(const fs::path &path):handle(CreateFileW(path.c_str(),GENERIC_WRITE|DELETE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)){
         if(handle==INVALID_HANDLE_VALUE)fail("Cannot create volume recovery journal","write");}
+    explicit Journal(HANDLE owned):handle(owned){if(handle==INVALID_HANDLE_VALUE)fail("Cannot acquire staging publication plan","safety");}
     ~Journal(){if(handle!=INVALID_HANDLE_VALUE)CloseHandle(handle);}
     void drain(){if(broken)fail("Volume journal write failed","write");if(pending.empty())return;DWORD written=0;
         if(!WriteFile(handle,pending.data(),(DWORD)pending.size(),&written,nullptr)||written!=pending.size()){broken=true;fail("Volume journal write failed","write");}pending.clear();}
@@ -176,10 +178,13 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
         !private_name(stage,L".one-update-")||!private_name(recovery,L".one-volume-recovery-")||
         key(source.filename())!=key(prepared.filename()))fail("Invalid volume publishing scope","safety");
     Directories dirs;dirs.ancestors(parent);dirs.hold(stage);
-    if(attributes(recovery)!=INVALID_FILE_ATTRIBUTES)fail("Volume recovery directory already exists","safety");
+    std::unique_ptr<archive_stage::Handoff> handoff;
+    if(attributes(recovery)!=INVALID_FILE_ATTRIBUTES)handoff=std::make_unique<archive_stage::Handoff>(source,stage,recovery,revision);
+    const bool recorded_staging=bool(handoff);
     const auto old=verify(source,revision,encoding,password,format),next=verify(prepared,prepared_revision,encoding,password,format);
     if(format==0&&old.size()<2)fail("Volume publishing requires a split ZIP source","safety");
     family(source,old,format,false);family(prepared,next,format,true);
+    if(handoff){for(const auto &member:next)handoff->member(member.path,member.stamp);handoff->release_outputs();}
     const auto mark=origin(source);
     std::map<std::wstring,Item> planned;std::set<std::string> identities;
     auto remember=[&](const std::string &value){const auto first=value.find(':'),second=value.find(':',first+1),end=value.find(':',second+1);
@@ -207,9 +212,10 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
         if(!FlushFileBuffers(item.new_file->handle))fail("Cannot flush prepared volume before publishing","write");
         item.source_stamp=stamp(item.new_file->handle);
     }
-    if(!CreateDirectoryW(recovery.c_str(),nullptr))fail("Cannot create new volume recovery directory","write");dirs.hold(recovery);
+    if(!handoff&&!CreateDirectoryW(recovery.c_str(),nullptr))fail("Cannot create new volume recovery directory","write");dirs.hold(recovery);
     std::unique_ptr<Journal> log;
-    try{log=std::make_unique<Journal>(recovery/L"manifest.jsonl");}catch(...){dirs.release(recovery);RemoveDirectoryW(recovery.c_str());throw;}
+    try{log=handoff?std::make_unique<Journal>(handoff->take_pending()):std::make_unique<Journal>(recovery/L"manifest.jsonl");}catch(...){if(!handoff){dirs.release(recovery);RemoveDirectoryW(recovery.c_str());}throw;}
+    bool handoff_ready=!handoff;
     std::string failure;bool aborted=false,commit_attempted=false;size_t removed=0;for(const auto &item:items)if(!item.new_file)++removed;
     ULONGLONG last_flush=GetTickCount64();
     auto record=[&](const std::string &type,size_t index){log->append("{\"type\":"+json(type)+",\"index\":"+std::to_string(index)+"}");
@@ -225,7 +231,9 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
             log->append("{\"type\":\"item\",\"index\":"+std::to_string(i)+",\"source\":"+json(utf8(item.source.wstring()))+
                 ",\"target\":"+json(utf8(item.target.wstring()))+",\"backup\":"+json(utf8(item.backup.wstring()))+
                 ",\"sourceStamp\":"+json(item.source_stamp)+",\"targetStamp\":"+json(item.target_stamp)+"}");}
-        log->append("{\"type\":\"prepared\",\"items\":"+std::to_string(items.size())+"}");log->flush();crash_at("prepared");fault_at("prepared");
+        log->append("{\"type\":\"prepared\",\"items\":"+std::to_string(items.size())+"}");log->flush();
+        if(handoff){handoff->publish(log->handle);handoff->retire();handoff.reset();handoff_ready=true;}
+        crash_at("prepared");fault_at("prepared");
         emit("{\"type\":\"ready\"}");const auto acknowledgement=archive_acknowledgement();if(acknowledgement!=1){aborted=acknowledgement==2;fail("Volume update cancelled before publishing","cancelled");}
         // Sharing modes block content writes and renames, but Windows can still
         // add hard links. Recheck the ENTIRE locked plan after the handshake,
@@ -252,13 +260,18 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
         log->append("{\"type\":\"committed\",\"count\":"+std::to_string(next.size())+",\"removed\":"+std::to_string(removed)+"}");log->flush(true);
     }catch(const std::exception &error){failure=error.what();const auto *archive=dynamic_cast<const ArchiveError*>(&error);if(archive&&archive->code=="cancelled")aborted=true;}
     if(!failure.empty()){
+        if(!handoff_ready)fail(failure+"; staging publication handoff retained at "+utf8(recovery.wstring()),"recovery");
         if(commit_attempted)fail(failure+"; volume commit decision is uncertain; recovery retained at "+utf8(recovery.wstring()),"recovery");
         bool complete=true;try{log->append("{\"type\":\"rollback-started\"}");log->flush();}catch(...){complete=false;}
         // Restore in two phases, reversing the order above. If an unknown file
         // blocks a path, keep every remaining copy and the durable plan.
         for(auto it=items.rbegin();it!=items.rend();++it)try{if(it->moved){same(*it->new_file,it->source_stamp);move(*it->new_file,it->source);it->moved=false;}}catch(...){complete=false;}
         for(auto it=items.rbegin();it!=items.rend();++it)try{if(it->saved){same(*it->old_file,it->target_stamp);move(*it->old_file,it->target);it->saved=false;}}catch(...){complete=false;}
-        if(complete)try{recovery_contents(recovery,items);log->append("{\"type\":\"rolled-back\"}");log->flush();log->remove();dirs.release(recovery);if(!RemoveDirectoryW(recovery.c_str()))complete=false;}catch(...){complete=false;}
+        if(complete)try{recovery_contents(recovery,items);log->append("{\"type\":\"rolled-back\"}");log->flush();
+            // Recorded generation must keep cleanup authority for its staged
+            // outputs after rollback. Legacy unrecorded callers retain behavior.
+            if(!recorded_staging){log->remove();dirs.release(recovery);if(!RemoveDirectoryW(recovery.c_str()))complete=false;}
+        }catch(...){complete=false;}
         if(!complete)fail(failure+"; volume recovery retained at "+utf8(recovery.wstring()),"recovery");
         if(aborted){emit("{\"type\":\"result\",\"count\":0,\"committed\":false,\"cancelled\":true}");return;}fail(failure,"write");
     }
