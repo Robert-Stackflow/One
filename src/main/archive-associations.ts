@@ -16,11 +16,12 @@ export function archiveAssociation(operation:unknown):Promise<ArchiveAssociation
 async function run(operation:string):Promise<ArchiveAssociationState>{
  const script=join(__dirname,'archive-associations.ps1').replace('app.asar','app.asar.unpacked');
  const icon=process.execPath;
- const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-Operation',operation==='defaults'?'status':operation,'-Executable',process.execPath,'-Icon',icon],{windowsHide:true,timeout:15000,maxBuffer:65536});
- const state=JSON.parse(stdout.replace(/^\uFEFF/,'')) as {registered:boolean};
+ const iconDirectory=join(__dirname,'../icons/archive').replace('app.asar','app.asar.unpacked');
+ const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-Operation',operation==='defaults'?'status':operation,'-Executable',process.execPath,'-Icon',icon,'-IconDirectory',iconDirectory],{windowsHide:true,timeout:15000,maxBuffer:65536});
+ const state=JSON.parse(stdout.replace(/^\uFEFF/,'')) as {registered:boolean;needsUpdate?:boolean};
  if(operation==='defaults'){
   if(!state.registered)throw Error('请先注册压缩包打开方式');
   await shell.openExternal('ms-settings:defaultapps?registeredAppUser='+encodeURIComponent('One 压缩与解压'));
  }
- return {registered:state.registered,available:true};
+ return {registered:state.registered,available:true,needsUpdate:state.needsUpdate===true};
 }

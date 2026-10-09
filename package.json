@@ -22,6 +22,7 @@
     "test:installer:integration": "node tests/electron-installer-install.cjs",
     "test:refinement": "npm run build && node tests/refinement-smoke.cjs",
     "icons": "node scripts/export-icons.cjs",
+    "icons:archive": "node scripts/export-archive-icons.mjs",
     "test:experience": "npm run build && node tests/experience-smoke.cjs",
     "test:redesign": "npm run build && node tests/redesign-smoke.cjs",
     "test:utilities": "npm run build && node tests/utilities-smoke.cjs",
@@ -41,6 +42,7 @@
     "test:file-tools": "npm run build && node tests/file-tools-smoke.cjs",
     "test:archive": "node scripts/build-archive.mjs && node tests/archive-native.cjs && node tests/archive-rar.cjs && node tests/archive-revision.cjs && node tests/archive-browser.cjs && node tests/archive-details.cjs && node tests/archive-update.cjs && node tests/archive-seven-update.cjs && node tests/archive-folder-edit.cjs && node tests/archive-password.cjs && node tests/archive-tasks.cjs && node tests/archive-resources.cjs && node tests/archive-space.cjs && node tests/archive-risk.cjs && node tests/archive-queue.cjs && node tests/archive-shared-budget.cjs && node tests/archive-watchdog.cjs && node tests/archive-origin.cjs && node tests/archive-scan.cjs && node tests/archive-drag.cjs && node tests/archive-drag-cache.cjs && node tests/archive-publish.cjs",
     "test:archive-journal": "node scripts/build-archive.mjs && node tests/archive-journal.cjs && node tests/archive-publish.cjs",
+    "test:archive-icons": "node tests/archive-icons.cjs",
     "test:archive-large": "node scripts/build-archive.mjs && node tests/archive-large.cjs",
     "test:archive-cli": "node scripts/build-archive.mjs && node scripts/build-archive-cli.mjs && node tests/archive-cli-parallel.cjs && node tests/archive-cli.cjs",
     "test:archive-shell": "npm run build && node tests/explorer-menu-state.cjs && node --test tests/shell-request.test.cjs && node tests/archive-shell-smoke.cjs && node tests/archive-file-menu.cjs"
@@ -109,6 +111,7 @@
       "!node_modules/pdfjs-dist/types/**/*"
     ],
     "asarUnpack": [
+      "dist/icons/archive/*.ico",
       "dist/main/maintenance.ps1",
       "node_modules/koffi/**/*",
       "node_modules/@koromix/koffi-win32-x64/**/*",

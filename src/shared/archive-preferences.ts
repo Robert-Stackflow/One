@@ -24,4 +24,4 @@ export function validateArchivePreferences(value:unknown):ArchivePreferences {
   const resources=archiveResources(input);
   return {doubleClick:input.doubleClick,defaultFormat:input.defaultFormat,openCompleted:input.openCompleted,propagateZone,scanOnExtract,conflict,compressionLevel:archiveLevel(input.compressionLevel===undefined?defaults.compressionLevel:input.compressionLevel),...resources,...archiveBudget(input,resources)};
 }
-export interface ArchiveAssociationState {registered:boolean;available:boolean}
+export interface ArchiveAssociationState {registered:boolean;available:boolean;needsUpdate?:boolean}

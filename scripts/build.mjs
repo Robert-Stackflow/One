@@ -7,6 +7,8 @@ import {mainOptions,preloadOptions} from './bundle-options.mjs';
 await mkdir('dist/main', { recursive: true });
 await mkdir('dist/icons', { recursive: true });
 for (const name of await readdir('assets/icons')) if (/^one-(?:taskbar-)?\d+\.png$/.test(name) || name === 'one.ico') await copyFile('assets/icons/'+name,'dist/icons/'+name);
+await mkdir('dist/icons/archive',{recursive:true});
+for (const name of await readdir('assets/icons/archive')) if (/\.ico$/.test(name)) await copyFile('assets/icons/archive/'+name,'dist/icons/archive/'+name);
 await bundle(mainOptions);
 await bundle(preloadOptions);
 await writeFile('dist/main/system-info.ps1',Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),await readFile('src/main/system-info.ps1')]));

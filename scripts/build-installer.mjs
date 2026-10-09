@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdir,readFile,stat,writeFile,copyFile} from 'node:fs/promises';
+import {mkdir,readFile,stat,writeFile,copyFile,readdir} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {workspace} from './workspace.mjs';
@@ -28,6 +28,11 @@ if(reuseBuild){
   const sourceHash=createHash('sha256').update(await readFile(resolve('assets/icons',name))).digest('hex');
   const builtHash=createHash('sha256').update(await readFile(resolve('dist/icons',name))).digest('hex');
   if(sourceHash!==builtHash)throw new Error(`Build icon is stale: ${name}`);
+ }
+ for(const name of (await readdir(resolve('assets/icons/archive'))).filter(name=>name.endsWith('.ico'))){
+  const sourceHash=createHash('sha256').update(await readFile(resolve('assets/icons/archive',name))).digest('hex');
+  const builtHash=createHash('sha256').update(await readFile(resolve('dist/icons/archive',name))).digest('hex');
+  if(sourceHash!==builtHash)throw new Error(`Build archive icon is stale: ${name}`);
  }
 }else await run('cmd.exe',['/d','/c',resolve('scripts/build-windows.cmd')]);
 await run(process.execPath,['node_modules/electron-builder/out/cli/cli.js','--win','nsis','--x64','--publish','never','--config.directories.output='+output]);
