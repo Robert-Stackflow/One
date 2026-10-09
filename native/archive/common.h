@@ -24,6 +24,7 @@ bool safe_entry(const std::string &name, bool directory);
 fs::path entry_path(const std::string &name);
 
 void seven_list(const fs::path &source, size_t offset, size_t limit, const std::string &password, int format);
+void seven_details(const fs::path &source,size_t index,const std::string &password,int format);
 void seven_test(const fs::path &source, const std::string &password, int format,bool result=true);
 size_t seven_extract(const fs::path &source, const fs::path &destination,
                    const std::set<size_t> &selected, const std::string &password, int format, bool result = true,

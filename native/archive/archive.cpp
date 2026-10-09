@@ -28,6 +28,7 @@
 #include "zip-common.h"
 #include "extract-space.h"
 #include "extract-risk.h"
+#include "entry-details.h"
 
 std::string utf8(const std::wstring &value) {
     if (value.empty()) return {};
@@ -222,6 +223,21 @@ static void list(Reader &reader, const std::string &revision, size_t offset, siz
         }
         if (i + 1 < offset + limit && i + 1 < total) {archive_activity();err = mz_zip_reader_goto_next_entry(reader.value);}
     }
+}
+
+static void details(Reader &reader,size_t index){
+    if(index>=1000000)fail("Entry index is out of range");
+    int error=mz_zip_reader_goto_first_entry(reader.value);
+    for(size_t i=0;i<index&&error==MZ_OK;i++){archive_activity();error=mz_zip_reader_goto_next_entry(reader.value);}
+    if(error!=MZ_OK)fail("Entry index is out of range");
+    mz_zip_file *info=nullptr;if(mz_zip_reader_entry_get_info(reader.value,&info)!=MZ_OK||!info)fail("Cannot read ZIP entry");
+    const bool directory=mz_zip_reader_entry_is_dir(reader.value)==MZ_OK;
+    const Entry entry{index,zip_name(reader,info->filename,info->flag,info->extrafield,info->extrafield_size),directory,(uint64_t)std::max<int64_t>(0,info->uncompressed_size),(uint64_t)std::max<int64_t>(0,info->compressed_size),(info->flag&MZ_ZIP_FLAG_ENCRYPTED)!=0};
+    // AE-2 omits the CRC in favor of authentication; zero is not a checksum.
+    const auto crc=!directory&&info->aes_version!=2?entry_crc(info->crc):"";
+    std::optional<int64_t> modified;if(info->modified_date>0&&info->modified_date<=253402300799ll)modified=(int64_t)info->modified_date*1000;
+    const auto method=mz_zip_get_compression_method_string(info->compression_method);
+    emit_details(entry,info->compressed_size>=0,modified,crc,method?method:std::to_string(info->compression_method));
 }
 
 void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string &password, bool result) {
@@ -432,7 +448,7 @@ int wmain(int argc, wchar_t **argv) {
         ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
-        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
+        if(mode==L"create"||mode==L"list"||mode==L"browse"||mode==L"details"||mode==L"extract"||mode==L"test"||mode==L"update"||mode==L"drag"||mode==L"drag-test")password=zip_password(password,archive_format(argv[2]));
         if (mode == L"create") {
             if (argc < 4) fail("Create requires input paths");
             int first_source = 3;
@@ -478,6 +494,13 @@ int wmain(int argc, wchar_t **argv) {
                 if(extension!=L".7z")fail("Split 7Z editing is not supported yet");
                 seven_update(argv[2],argv[3],argv[4],utf8(argv[6]),password);
             }else fail("Editing requires a single-volume ZIP or 7Z archive");
+        } else if(mode==L"details"){
+            if(argc!=6)fail("Details require an index, encoding and revision");
+            const auto revision=utf8(argv[5]);if(revision.empty()||zip_revision(argv[2])!=revision)fail("Archive changed; reopen it before viewing details");
+            const auto index=std::stoull(argv[3]);if(index>=1000000)fail("Entry index is out of range");
+            const auto format=archive_format(argv[2]);
+            if(format==0){Reader reader(argv[2],_wtoi(argv[4]));details(reader,index);}else seven_details(argv[2],index,password,format);
+            if(zip_revision(argv[2])!=revision)fail("Archive changed during reading; reopen it");
         } else if (mode == L"list" || mode == L"browse" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
             bool selected_folders=false;std::string expected_revision;

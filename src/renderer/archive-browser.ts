@@ -11,7 +11,7 @@ const folderPath=(name:string)=>name.replaceAll('\\','/').replace(/\/?$/,'/');
 const entryKey=(entry:ArchiveEntry)=>entry.implicit?'folder:'+folderPath(entry.name):'index:'+entry.index;
 const bytes=(value:number)=>value<1024?`${value} B`:value<1024**2?`${(value/1024).toLocaleString(undefined,{maximumFractionDigits:1})} KB`:`${(value/1024**2).toLocaleString(undefined,{maximumFractionDigits:1})} MB`;
 
-export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:number)=>void;status:(message:string)=>void;selectionChanged?:(count:number)=>void}){
+export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:number)=>void;status:(message:string)=>void;selectionChanged?:(count:number)=>void;details?:(entry:ArchiveEntry)=>void}){
  const find=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
  let query:ArchiveBrowse={directory:'',search:'',flat:false},listing:ArchiveListing|undefined,busy=false;
  const selected=new Map<string,ArchiveEntry>(),folderPages=new Map<string,string[]>();
@@ -39,6 +39,7 @@ export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:n
   if(input.checked){if(selected.size>=10000){input.checked=false;options.status('最多选择 10000 项；较多内容请直接选择文件夹');return;}selected.set(entryKey(entry),entry);}else selected.delete(entryKey(entry));summary();
  };
  root.addEventListener('click',event=>{const button=(event.target as Element).closest<HTMLButtonElement>('[data-archive-directory]');if(button&&root.contains(button))nav(button.dataset.archiveDirectory!);});
+ find('#archive-list').addEventListener('click',event=>{const button=(event.target as Element).closest<HTMLButtonElement>('[data-archive-details]');if(!button||busy||!listing)return;const entry=listing.entries.find(entry=>entryKey(entry)===button.dataset.archiveDetails);if(entry)options.details?.(entry);});
  const search=()=>{if(!busy){query={...query,search:find<HTMLInputElement>('#archive-search').value.trim()};options.navigate(0);}};
  find('#archive-search-run').onclick=search;find<HTMLInputElement>('#archive-search').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();search();}};
  find<HTMLInputElement>('#archive-search').addEventListener('search',()=>{if(!find<HTMLInputElement>('#archive-search').value)search();});
@@ -56,7 +57,7 @@ export function setupArchiveBrowser(root:HTMLElement,options:{navigate:(offset:n
    if(!query.search&&!query.flat){folderPages.delete(query.directory);folderPages.set(query.directory,value.entries.filter(entry=>entry.directory).map(entry=>folderPath(entry.name)));while(folderPages.size>5)folderPages.delete(folderPages.keys().next().value!);}
    navigation();find('#archive-list').innerHTML=value.entries.length?value.entries.map(entry=>{
     const path=entry.name.replaceAll('\\','/'),name=query.search||query.flat?path:path.slice(query.directory.length).replace(/\/$/,'');
-    return `<div class="archive-entry" draggable="true" data-archive-key="${esc(entryKey(entry))}"><input type="checkbox" aria-label="选择 ${esc(entry.name)}" data-archive-key="${esc(entryKey(entry))}" value="${entry.index}"${selected.has(entryKey(entry))?' checked':''}><span class="archive-entry-icon">${icon(entry.directory?'folder':'file')}</span>${entry.directory?`<button class="archive-entry-name quiet" type="button" data-archive-directory="${esc(folderPath(entry.name))}" title="${esc(entry.name)}">${esc(name)}</button>`:`<span class="archive-entry-name" title="${esc(entry.name)}">${esc(name)}</span>`}<span>${entry.encrypted?'已加密':''}</span><span>${entry.directory?'文件夹':bytes(entry.size)}</span></div>`;
+    return `<div class="archive-entry" draggable="true" data-archive-key="${esc(entryKey(entry))}"><input type="checkbox" aria-label="选择 ${esc(entry.name)}" data-archive-key="${esc(entryKey(entry))}" value="${entry.index}"${selected.has(entryKey(entry))?' checked':''}><span class="archive-entry-icon">${icon(entry.directory?'folder':'file')}</span>${entry.directory?`<button class="archive-entry-name quiet" type="button" data-archive-directory="${esc(folderPath(entry.name))}" title="${esc(entry.name)}">${esc(name)}</button>`:`<span class="archive-entry-name" title="${esc(entry.name)}">${esc(name)}</span>`}<span>${entry.encrypted?'已加密':''}</span><span>${entry.directory?'文件夹':bytes(entry.size)}</span><button type="button" class="icon-button quiet archive-entry-details-button" data-archive-details="${esc(entryKey(entry))}" aria-label="查看 ${esc(entry.name)} 的文件信息" title="文件信息">${icon('info')}</button></div>`;
    }).join(''):'<div class="archive-empty">'+(query.search?'没有匹配的项目':'此目录为空')+'</div>';summary();controls();
   },
   selectDrag(input:HTMLInputElement){if(!listing)return false;const entry=listing.entries.find(entry=>entryKey(entry)===input.dataset.archiveKey);if(!entry)return false;

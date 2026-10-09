@@ -5,6 +5,7 @@
 #include "sevenzip-update.h"
 #include "extract-space.h"
 #include "extract-risk.h"
+#include "entry-details.h"
 #include <windows.h>
 #include <oleauto.h>
 #include <propidl.h>
@@ -341,6 +342,30 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
             ",\"compressed\":"+std::to_string(item.compressed)+",\"encrypted\":"+(item.encrypted?"true":"false")+"}");
     }
     if(zip_revision(source)!=revision)fail("Archive changed during listing; reopen it");
+}
+
+void seven_details(const fs::path &source,size_t index,const std::string &password,int format){
+    OpenArchive reader(source,password,format);if(index>=reader.count())fail("Entry index is out of range");
+    const auto item=reader.item((U32)index);
+    auto packed=reader.property((U32)index,packed_prop);const bool known=packed.vt==VT_UI8||packed.vt==VT_UI4;PropVariantClear(&packed);
+    // Property ids follow 7-Zip's PropID.h: MTime=12, Solid=13, CRC=19, Method=22.
+    auto time=reader.property((U32)index,12);std::optional<int64_t> modified;
+    if(time.vt==VT_FILETIME){ULARGE_INTEGER ticks{};ticks.LowPart=time.filetime.dwLowDateTime;ticks.HighPart=time.filetime.dwHighDateTime;
+        const auto milliseconds=ticks.QuadPart/10000;if(milliseconds<=265046774399999ull)modified=(int64_t)milliseconds-11644473600000ll;}
+    PropVariantClear(&time);
+    auto checksum=reader.property((U32)index,19);std::string crc;if(!item.directory&&checksum.vt==VT_UI4)crc=entry_crc(checksum.ulVal);PropVariantClear(&checksum);
+    auto compression=reader.property((U32)index,22);std::string method;
+    if(compression.vt==VT_BSTR&&SysStringLen(compression.bstrVal)<=1024)method=utf8(std::wstring(compression.bstrVal,SysStringLen(compression.bstrVal)));
+    PropVariantClear(&compression);
+    // Single-stream handlers may expose the method on the archive instead.
+    // Gzip's validated header fixes CM=8 (Deflate); its SDK handler omits it.
+    if(method.empty()&&(format==0x0c||format==0xef)){
+        PROPVARIANT stream_method{};PropVariantInit(&stream_method);
+        if(reader.get()->GetArchiveProperty(22,&stream_method)==S_OK&&stream_method.vt==VT_BSTR&&SysStringLen(stream_method.bstrVal)<=1024)method=utf8(std::wstring(stream_method.bstrVal,SysStringLen(stream_method.bstrVal)));
+        PropVariantClear(&stream_method);if(method.empty()&&format==0xef)method="Deflate";
+    }
+    PROPVARIANT solid{};PropVariantInit(&solid);const bool shared=reader.get()->GetArchiveProperty(13,&solid)==S_OK&&solid.vt==VT_BOOL&&solid.boolVal==VARIANT_TRUE;PropVariantClear(&solid);
+    emit_details({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted},known,modified,crc,method,shared);
 }
 
 void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query){

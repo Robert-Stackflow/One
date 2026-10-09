@@ -8,6 +8,7 @@ import type {ArchiveListing,ArchiveEncoding,ArchivePasswordEncoding,ArchiveProgr
 import {isArchivePath,type ArchiveOpenAction} from '../shared/archive-actions';
 import './archive-view.css';
 import {archiveRiskRunner,ArchiveRiskNotice} from './archive-risk';
+import {showArchiveDetails} from './archive-details';
 
 const passwordEncodingOptions=()=>'<option value="65001">UTF-8（默认）</option><option value="0">Windows 系统编码</option><option value="936">GBK / CP936</option><option value="932">Shift JIS / CP932</option><option value="950">Big5 / CP950</option><option value="437">CP437</option>';
 
@@ -87,7 +88,12 @@ export function setupArchiveView(){
  const archiveRun=archiveRiskRunner();
  let idle=Promise.resolve(),finished=()=>{},shellQueue=Promise.resolve();
  const run=async<T>(work:(id:string)=>Promise<T>,success:(value:T)=>void)=>{if(busy)return false;taskId=crypto.randomUUID();idle=new Promise<void>(resolve=>finished=resolve);setBusy(true);status('正在处理…',true);try{const value=await work(taskId);success(value);return true;}catch(error){if(error instanceof ArchiveRiskNotice)status(error.message);else statusError(error);return false;}finally{taskId='';setBusy(false);finished();}};
- const browser=setupArchiveBrowser(root,{navigate:offset=>void load(offset,false),status,selectionChanged:count=>{selectionCount=count;updateExtractActions();}});
+ const browser=setupArchiveBrowser(root,{navigate:offset=>void load(offset,false),status,selectionChanged:count=>{selectionCount=count;updateExtractActions();},details:entry=>{
+  if(!listing||busy||batchActive)return;
+  if(entry.implicit){showArchiveDetails({entry,packedKnown:false,packedShared:false});return;}
+  const source=listing;
+  void run(id=>archiveRun({operation:'details',path:source.path,index:entry.index,revision:source.revision!,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),value=>{if(!('details'in value)||!value.details)throw Error('无法读取文件信息');showArchiveDetails(value.details);status('已读取文件信息');});
+ }});
  const editor=setupArchiveEditor(root,{listing:()=>listing,selected:()=>browser.entries(),status,save:changes=>run(id=>archiveRun({operation:'update',path:listing!.path,revision:listing!.revision!,changes,password:field('#archive-password'),passwordEncoding:readPasswordEncoding(),encoding:Number(field('#archive-encoding')) as ArchiveEncoding},id),()=>status('已保存压缩包修改')),saved:async()=>{if(await load())status('已保存压缩包修改');}});
  const invalidateListing=(message?:string)=>{listing=undefined;editor.invalidate();browser.clear(message);find('#archive-list-head').hidden=true;find('#archive-comment').textContent='';};
  const render=()=>{if(!listing)return;find('#archive-list-head').hidden=false;find('#archive-count').textContent=`${listing.total.toLocaleString()} 项`;

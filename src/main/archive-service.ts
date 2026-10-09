@@ -15,8 +15,9 @@ import {archiveResources,archiveLevel,archiveBudget,archivePasswordEncoding,type
 import {ArchiveScheduler} from './archive-scheduler';
 import {ArchiveWatchdog,archiveWatchdogLimits} from './archive-watchdog';
 import {extractionBudget,riskApproval,validArchiveRisk,type ArchiveRisk,type ArchiveRiskApproval,type ExtractionBudget} from '../shared/archive-risk';
+import {archiveEntryDetails} from '../shared/archive-details';
 
-type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
+type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
 const helper=()=>join(__dirname,'../native/One.Archive.exe').replace('app.asar\\','app.asar.unpacked\\');
 const path=(value:unknown)=>{if(typeof value!=='string'||!isAbsolute(value)||value.length>32768||value.includes('\0'))throw Error('路径无效');return resolve(value);};
@@ -91,7 +92,7 @@ export class ArchiveService {
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
     return task;
   }
-  private async execute(owner:number,id:string,operation:'list'|'browse'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
+  private async execute(owner:number,id:string,operation:'list'|'browse'|'details'|'create'|'extract'|'test'|'update'|'drag'|'publish',args:string[],secret:string,progressOperation?:ArchiveProgress['operation'],packet?:Buffer,origin?:{path:string;stamp?:string}):Promise<Message[]> {
     this.checkpoint(id);
     return new Promise((done,reject)=>{
       // CLI cancellation is handled by this service, not a console-wide signal
@@ -150,7 +151,7 @@ export class ArchiveService {
       if(operation==='update'||operation==='drag'||operation==='publish')child.stdin.write(input);else child.stdin.end(input);
       // Initial progress can synchronously request cancellation. Write the
       // private request frame first so a cooperative cancel byte cannot corrupt it.
-      if(operation!=='list'&&operation!=='browse')this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
+      if(operation!=='list'&&operation!=='browse'&&operation!=='details')this.notify(owner,{id,operation:progressOperation??(operation==='publish'?'extract':operation),done:0,total:0});
     });
   }
   private scanResult(messages:Message[]):{scan?:ArchiveScan}{const scan=messages.find((item):item is Extract<Message,{type:'scan'}>=>item.type==='scan');return scan?{scan:copyArchiveScan(scan)}:{};}
@@ -229,6 +230,19 @@ export class ArchiveService {
         const meta=messages.find((item):item is Extract<Message,{type:'meta'}>=>item.type==='meta');
         if(!meta)throw Error('无法读取压缩包目录');
         return {path:source,total:meta.total,matched:meta.matched,browse:browser?.query,comment:meta.comment,revision:meta.revision,editable:meta.editable===true,offset,entries:messages.filter((item):item is Extract<Message,{type:'entry'}>=>item.type==='entry').map(({type,...entry})=>entry)};
+      }finally{prepared.release();}
+    }
+    if(request.operation==='details'){
+      const source=archiveSource(request.path);
+      if(!Number.isInteger(request.index)||request.index<0||request.index>=1000000)throw Error('文件编号无效');
+      if(typeof request.revision!=='string'||!/^\d+(?::\d+){6}$/.test(request.revision))throw Error('请重新打开压缩包后查看文件信息');
+      const prepared=await this.acquireSource(owner,id,source);
+      try{
+        const messages=await this.execute(owner,id,'details',[prepared.path,String(request.index),String(encoding(request.encoding)),request.revision],password(request.password));
+        const response=messages.filter((item):item is Extract<Message,{type:'details'}>=>item.type==='details');
+        if(response.length!==1)throw Error('无法读取文件信息');
+        const details=archiveEntryDetails(response[0]);if(details.entry.index!==request.index)throw Error('文件信息与当前选择不一致');
+        return {path:source,count:1,details};
       }finally{prepared.release();}
     }
     if(request.operation==='drag'){
