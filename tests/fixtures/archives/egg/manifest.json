@@ -1,0 +1,1103 @@
+{
+  "repository": "https://github.com/akolman/EggDotNet",
+  "commit": "78b64f54026a8687dac1cdd4c86eb5fe5abf04ae",
+  "license": "LICENSE.EggDotNet.txt",
+  "sourceArchive": {
+    "name": "EggDotNet-reference-source.tar.gz",
+    "sha256": "3675bb80fc445ac562432e5bfac8bd4bfbbdf2b6330ac5006bf9aa6099665fe1",
+    "files": [
+      {
+        "path": "LICENSE.txt",
+        "bytes": 1080,
+        "sha256": "b030cc3a9d1c4ff9d7c108e2cc1e1926ffefa8de6654549ce74733b319bbe6e0"
+      },
+      {
+        "path": "src/EggDotNet/Callbacks.cs",
+        "bytes": 3029,
+        "sha256": "df1ca0e95623e243c127576ef8b8c3a8687822f66d29e6b369de36ea34787bf3"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/AZODecoder.cs",
+        "bytes": 567,
+        "sha256": "71812d0c7a4ebf9c15e6255302f740cd5264a1317523146035493e5f672ce580"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/AZOStream.cs",
+        "bytes": 1622,
+        "sha256": "de17ea33fb1b2dad83ae9bbde93f001b492165ec21ba3bb7381fc835765b25ad"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Common/AZOOption.cs",
+        "bytes": 1178,
+        "sha256": "b3b61c805cb59a308cd62bfa8ece443c7aba64e6745300d48e1ea966b1c2ce64"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Common/MatchCodeTable.cs",
+        "bytes": 3337,
+        "sha256": "983cc0d3ff831f400cabb0e42fd55e0364badd7d7041682e9a48bf1f97fac80d"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Common/MathUtilities.cs",
+        "bytes": 189,
+        "sha256": "837644d90c970d81d912b1c694da3281a720d573c1f8aad937be0a1895038016"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/AlphaCode.cs",
+        "bytes": 442,
+        "sha256": "2efb4baf1ac4d250c26f6574e17c1c5eebd55919cb658d1fda408c841f246fe5"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/BitCode.cs",
+        "bytes": 1791,
+        "sha256": "c1c0a983c95cea3482740b8cdde4d509b901601a0703f32a50f6646b5764ced6"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/BlockCode.cs",
+        "bytes": 1502,
+        "sha256": "62decb0fde9c230dbd8970ad513dc2caf3e2abe38d422ba8b06bac847b32b9d0"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/BoolState.cs",
+        "bytes": 1008,
+        "sha256": "519d387888ddc533f01cafa47f01a7342c88f2612de4afe68dfa0a02c683833a"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/DictionaryTable.cs",
+        "bytes": 1590,
+        "sha256": "d31114aaf81f64a32c09e019420adc36dc148216e9fa5443b44f8d9429e090a3"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/DistanceCode.cs",
+        "bytes": 819,
+        "sha256": "711c3caf2359ec599f3fd14470ed5208f16333f379a60bb858417c4c9eae287e"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/EntropyBitProb.cs",
+        "bytes": 2001,
+        "sha256": "fba17b99c0661d376c3bc4962855141e202a5050290a38ceb35dc0ef6fe12887"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/EntropyCode.cs",
+        "bytes": 1914,
+        "sha256": "ea037a25a99dbc62ec866e71252e0c2985c3a114c27802785f29b04f06840cef"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/HistoryList.cs",
+        "bytes": 963,
+        "sha256": "619a9ebaff2b411e4519ce305e27a12c6a60f21ba481ba60444d6755518beb9d"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/LengthCode.cs",
+        "bytes": 709,
+        "sha256": "bb27a30739f30faa77e407f2ece99352bf9e3af6ed9b4e2766c137ce4c83b224"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/MainCode.cs",
+        "bytes": 5731,
+        "sha256": "40e3c7f55982869317380af806310f7f65647a58d83171ecdf424bed044d2b20"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/MatchCode.cs",
+        "bytes": 794,
+        "sha256": "834eaaaf9143531578b7fe3907c6eb8c255c9fd0b47cfb86c7b78cee4fe84a55"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/PredictProb.cs",
+        "bytes": 1097,
+        "sha256": "f4c71ef2fac96adf68c0c5743970f007827fcc3534bbd2e34c6a6313fa5087d0"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/Decoder/SymbolCode.cs",
+        "bytes": 484,
+        "sha256": "b123f6adea7a9e216a9496fa2ccabfa47d318f949fc70f00ff0e157d1dcb72a0"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AZO/DecompressedBufferCache.cs",
+        "bytes": 821,
+        "sha256": "b45c6cc079959a44e01c757e3155525f1d52c8f208bc5073affee88ccfa99939"
+      },
+      {
+        "path": "src/EggDotNet/Compression/AzoCompressionProvider.cs",
+        "bytes": 459,
+        "sha256": "eb177efc8ac64b0e6f2e59a7d7d32582d6ce4556a783d1c02df4a00cef6cce9e"
+      },
+      {
+        "path": "src/EggDotNet/Compression/Bzip2/BZip2Constants.cs",
+        "bytes": 4244,
+        "sha256": "ca776c5ecf118aa97ff53e8feed462e3aa3d9d389c0c2fbc49a7b55285c7ca0e"
+      },
+      {
+        "path": "src/EggDotNet/Compression/Bzip2/BZip2Crc.cs",
+        "bytes": 5972,
+        "sha256": "129623ad2b6bc581b5d1f8e97661f9bd20d5737876cef94b9dc1186dfc169e98"
+      },
+      {
+        "path": "src/EggDotNet/Compression/Bzip2/BZip2InputStream.cs",
+        "bytes": 21899,
+        "sha256": "f38c235159344c140e47805406aacb23cdcf65156f2ac8626cecdfa2b5654d81"
+      },
+      {
+        "path": "src/EggDotNet/Compression/Bzip2/CrcUtilities.cs",
+        "bytes": 6825,
+        "sha256": "f2ce71b4a5947dc865bdce460e6978d3657a8af855ec7c1f2e3b0aa984728295"
+      },
+      {
+        "path": "src/EggDotNet/Compression/Bzip2/IChecksum.cs",
+        "bytes": 1324,
+        "sha256": "64a4445222d53aac6d073633975459f70bf6adb012fb2c51225c86ffcffff860"
+      },
+      {
+        "path": "src/EggDotNet/Compression/BZip2CompressionProvider.cs",
+        "bytes": 274,
+        "sha256": "36e8b2b43cf346a96776b5f974bad9cca8a8da961c4e64dcbdaac426abfa095d"
+      },
+      {
+        "path": "src/EggDotNet/Compression/DeflateCompressionProvider.cs",
+        "bytes": 317,
+        "sha256": "f53a1b7ff27a85e24cb72634cff49bfe5a97e3eef563d3f2e90c692dfde30d46"
+      },
+      {
+        "path": "src/EggDotNet/Compression/IStreamCompressionProvider.cs",
+        "bytes": 155,
+        "sha256": "c5a90ceff81b2605d0f76135cb39a9500b4d3228b2a5ee9896b9fef1c106e71a"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/ICoder.cs",
+        "bytes": 3545,
+        "sha256": "33e306ab00b0c7553b7c40f5598fc6d017c7d2b40c79d3be9fe4b208d89dbf1d"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/LZ/LzOutWindow.cs",
+        "bytes": 3566,
+        "sha256": "a200d9b0ee02ab4f06474e562111b697f757f4848e88fba429bb21f2580befce"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/LzmaBase.cs",
+        "bytes": 2975,
+        "sha256": "8b07ce982c99ccdb43551463b7720069ed053365ae4f7295cd02d897431db01d"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/LzmaDecoder.cs",
+        "bytes": 12431,
+        "sha256": "34fe9114c6aeae9759cc0ad8e3be3769d726d4d6e2f5b5277795bec0ce128ee4"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/LzmaEncoderProperties.cs",
+        "bytes": 1252,
+        "sha256": "c1c411b0feb0f37a7cde8cfe679f904c3b690096da7be31a02b36a27f2757d4a"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/LzmaStream.cs",
+        "bytes": 6659,
+        "sha256": "1fc9ec9d6c9ecac60e18fd698f215f4d2ca2c7d2a739ec2accd30d2fd9cca6f5"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/RangeCoder/RangeCoder.cs",
+        "bytes": 2265,
+        "sha256": "eb39371fbfca529ae488ec80cafbf7f6887feabf255ec9d89bebd89da6d13192"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/RangeCoder/RangeCoderBit.cs",
+        "bytes": 1413,
+        "sha256": "fa0aeafda7c8f23a48160fcd57d3b7a96b21f069782e62626d11d28ba009f39d"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LZMA/RangeCoder/RangeCoderBitTree.cs",
+        "bytes": 1403,
+        "sha256": "e71b490b4f036f76232dd2a3e67de006fbe10fcce57c4996145bf6cc1c36b61b"
+      },
+      {
+        "path": "src/EggDotNet/Compression/LzmaCompressionProvider.cs",
+        "bytes": 629,
+        "sha256": "570473b814699220b3024c84ac266880f62b007961eb225b1d4883b3e3bf1b7e"
+      },
+      {
+        "path": "src/EggDotNet/Compression/StoreCompressionProvider.cs",
+        "bytes": 217,
+        "sha256": "ac7c03297bf63c3c0f199de88dd5532e39ebd1dbefd1cc6c535f47e14acd8214"
+      },
+      {
+        "path": "src/EggDotNet/CompressionMethod.cs",
+        "bytes": 533,
+        "sha256": "11e1769abb7510abf211281a4d698d3c209363a779d23d768a94038092a7a8f6"
+      },
+      {
+        "path": "src/EggDotNet/Configuration/SolidStreamCacheLocation.cs",
+        "bytes": 696,
+        "sha256": "ad70945e1d933e00198ccf2cdcd33daedad7e8220034dc99125b76aa2b7ee392"
+      },
+      {
+        "path": "src/EggDotNet/Configuration/SolidStreamConfiguration.cs",
+        "bytes": 979,
+        "sha256": "79dbd2c89e02826b6f583e96e938043e45afa56ad1235baa34531d5c778aa13d"
+      },
+      {
+        "path": "src/EggDotNet/DefaultStreamCallbacks.cs",
+        "bytes": 1263,
+        "sha256": "7775666deeb4d8599cc1ea57c2156dadef60cd91147aaad428935c2dc06f0f1b"
+      },
+      {
+        "path": "src/EggDotNet/EggArchive.cs",
+        "bytes": 4962,
+        "sha256": "c863a67622599e0e79549041625ffde36662d7846870b6223bcc0c7acb8a3c92"
+      },
+      {
+        "path": "src/EggDotNet/EggArchiveEntry.cs",
+        "bytes": 3785,
+        "sha256": "e3f7dbe4fb4746ec92e839301d534fd7472e4b05b051d897acbd3827bb1b0b10"
+      },
+      {
+        "path": "src/EggDotNet/EggFile.cs",
+        "bytes": 4445,
+        "sha256": "77ce43a0a5fe7e031e76368ed539af5ac0576b71704fe2d660f22ff618a6a5e8"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Aes/CryptoMode.cs",
+        "bytes": 95,
+        "sha256": "4361ec51bc7c9834908e0b203673d744dc01b3a2688a7471ad797332e4db0e7b"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Aes/EggAesCipherStream.cs",
+        "bytes": 8616,
+        "sha256": "d341cd7c5bfd39d088b4ac19a2543bb356b36b007ad3f84b5880c30da2011138"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Aes/EggAesCrypto.cs",
+        "bytes": 2248,
+        "sha256": "8004a000de84083f30343631936bd3860fa85189caee8ec30bedf56a68b994d4"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/AesStreamDecryptionProvider.cs",
+        "bytes": 1111,
+        "sha256": "53bf0092c0afe56f8b0f54c8f10da0f3062f1bca675874353bbd121f0e8e84c5"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/IStreamDecryptionProvider.cs",
+        "bytes": 205,
+        "sha256": "f9794eceae72b6ba3a2f2a78984d902c6c5fa9e93e19c99734fc386291c7ccb3"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Lea/Imp/CTRModeLeaTransformer.cs",
+        "bytes": 1629,
+        "sha256": "144d20efca0f1bed8361d69c4392130ac1484186a05ae5d52c8830776c0786d2"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Lea/Imp/Lea.cs",
+        "bytes": 2649,
+        "sha256": "2e02ab8c8d7aba5c4ee0fdb0d1bb350f44d2e3d4cdb778131ebdf09bab2d4151"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Lea/Imp/LeaCryptoTransform.cs",
+        "bytes": 8335,
+        "sha256": "e7222784fcdd91612aca07712cfc5a750b82d48d4362b363372953c6a187fdca"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Lea/LeaStream.cs",
+        "bytes": 2821,
+        "sha256": "08a8b25f068f0192ef80597cfeb255eb6dacbfda9b592122626081585fed8427"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/LeaStreamDecryptionProvider.cs",
+        "bytes": 976,
+        "sha256": "10a91bbfeb96a7a941279f706b0fd4f41a0c7ac59f6ce8361db38584c16ec721"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/Zip/ZipDecryptStream.cs",
+        "bytes": 5468,
+        "sha256": "3acdc3792e27a4c08cc03e70feab2742bf3adfeb223b730c1e2ab3392c382648"
+      },
+      {
+        "path": "src/EggDotNet/Encryption/ZipStreamDecryptionProvider.cs",
+        "bytes": 793,
+        "sha256": "ee080ebf8f0c9e5fc897b74e7a463e3558b2561cec0137a4adb623135df168eb"
+      },
+      {
+        "path": "src/EggDotNet/EncryptionMethod.cs",
+        "bytes": 541,
+        "sha256": "c5905e7e2477f4c7f9413250cb5640fe0648d76f93911ab8cae9fb841193e0e9"
+      },
+      {
+        "path": "src/EggDotNet/EntryInfoType.cs",
+        "bytes": 403,
+        "sha256": "52f3434be81574e17a658c01c541a3167ba761314488f42048d2c6fb8d90697b"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/DecompressionDataException.cs",
+        "bytes": 361,
+        "sha256": "306076ec033a9029150e3b54c098086045025378343354d380eb3cedfd14389e"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/DecryptFailedException.cs",
+        "bytes": 282,
+        "sha256": "6de8590007ca3431b151514e173846a71bda846402d8e9efa0a3381c135054bc"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/MissingVolumeException.cs",
+        "bytes": 317,
+        "sha256": "11b9837483f604984c7cc4a3e35d811c911636dd80ea0b94278fbb4c5f7c9679"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/UnknownCompressionException.cs",
+        "bytes": 370,
+        "sha256": "0243de95f3f11fd8b7d014392cc6afd5c28f9a07968f10826e06c5f094a84c56"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/UnknownEggException.cs",
+        "bytes": 436,
+        "sha256": "af9dbf9b03c72150d28ec24eedd02cf1e60e67905dfb9c27ba273f2a066361bb"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/UnsupportedCompressionException.cs",
+        "bytes": 370,
+        "sha256": "065ba43ea3728eb3e7a0db43fb9c1fadde1bf43e22b5756f041ff54c58c88fa2"
+      },
+      {
+        "path": "src/EggDotNet/Exceptions/UnsupportedLocaleException.cs",
+        "bytes": 485,
+        "sha256": "cc73556a500dcaf8f126be2c18465f83ac81dbd7429f1226996c68ca256d1735"
+      },
+      {
+        "path": "src/EggDotNet/Extensions/EggArchiveEntryExtensions.cs",
+        "bytes": 3315,
+        "sha256": "62b185c89644f936e87127f3cd38baee3765ace215f67d3d1788df9c19c17f97"
+      },
+      {
+        "path": "src/EggDotNet/ExtraAttributeType.cs",
+        "bytes": 496,
+        "sha256": "f3adfcf41cef1e44cf0ddf0ac99591dab2fa45c90365157a4db7e9d599a56967"
+      },
+      {
+        "path": "src/EggDotNet/Format/Alz/AlzEntry.cs",
+        "bytes": 2103,
+        "sha256": "b4953373311ae3016c8acb008f0eab9d645cdef698830b803ffdb625bd0b3552"
+      },
+      {
+        "path": "src/EggDotNet/Format/Alz/AlzFormat.cs",
+        "bytes": 2006,
+        "sha256": "31d3d44ab7d26ca9f6b993991ba63c472770a981f478a0508080c6f1ff374225"
+      },
+      {
+        "path": "src/EggDotNet/Format/Alz/AlzVolume.cs",
+        "bytes": 1099,
+        "sha256": "ad93efd99a0108d3a52a39e4dd44783c952fefbf08060108db5a722d3fa341fe"
+      },
+      {
+        "path": "src/EggDotNet/Format/Alz/FileHeader.cs",
+        "bytes": 4281,
+        "sha256": "ac3c690f9ed54de71c9f9960a5086bfe283f5030c06a10369bfeca7f6fd276f2"
+      },
+      {
+        "path": "src/EggDotNet/Format/Alz/Header.cs",
+        "bytes": 941,
+        "sha256": "252e212fcd90e0b412ca991484991e8f766295fea6abd048ba52984bf8bee67c"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/BlockHeader.cs",
+        "bytes": 1734,
+        "sha256": "2cf74dc88813915389c8bdf5f48855c90276313d0d1f9e3fb391024648da1217"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/CommentHeader.cs",
+        "bytes": 1222,
+        "sha256": "8f52ce75a4176b2131faf6bac9458a72e7ce3315cc936470258bb01aad172c74"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/DummyHeader.cs",
+        "bytes": 903,
+        "sha256": "f50978f1967375d121f7c0e69df3fcc0d31bac27c3ce67f653bf38cde0e528c3"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/EggEntry.cs",
+        "bytes": 7443,
+        "sha256": "557e920361bdf8f9130d98ad0a1995db94c84eaeb9640e4fc51a0f1905b43f67"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/EggFormat.cs",
+        "bytes": 7932,
+        "sha256": "fdaed1a00106dc6184ae66c85ce57e9514bbe374a4a9ffed362ce8244a22dbee"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/EggVolume.cs",
+        "bytes": 1658,
+        "sha256": "c3ddb56593fdd2b745a8675a414e49c6e42d984f444e43ad94f79b3555a43e52"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/EncryptHeader.cs",
+        "bytes": 3023,
+        "sha256": "b35bb98fc47a6c66cf2374761779b0a788caef10f7a7821a5b4ddd33aab4584d"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/FileHeader.cs",
+        "bytes": 1017,
+        "sha256": "f9bacd5978f397d6860027f3bb10a7fe834a39a3b1268daefb828cb4b99e9ac8"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/FilenameHeader.cs",
+        "bytes": 2385,
+        "sha256": "f91ef21080bf239c26f8c04339220021cb3bac0237aa2f9df8652a3410db81c9"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/Header.cs",
+        "bytes": 2699,
+        "sha256": "c9c0d8006ed07c1387e1138d465484bf31418d48e23902d62704be1e3aff9491"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/PosixFileInfo.cs",
+        "bytes": 1140,
+        "sha256": "add892a613daea9ddb2c370bf2bb9351f7887a6bbab364d681d82a992b5d2405"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/SolidHeader.cs",
+        "bytes": 525,
+        "sha256": "9cf4e1dd72215d79c18861cf1bcdc0d89ee29e4bdb164560462cfa2615692414"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/SolidStreamManager.cs",
+        "bytes": 1496,
+        "sha256": "c272544f974784a56d9287d0bd5fc14118d0be8b9997c2d946c6e724e88f2f08"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/SplitHeader.cs",
+        "bytes": 974,
+        "sha256": "37212ac43e7b6d95559cd2c7e87fac7834ce794e9717db1a38b9e658f10a2c35"
+      },
+      {
+        "path": "src/EggDotNet/Format/Egg/WinFileInfo.cs",
+        "bytes": 936,
+        "sha256": "37a91fd19ae8e4e7871f5401dcc2b427822528d3e5d540c6e5b2452b74cf98b7"
+      },
+      {
+        "path": "src/EggDotNet/Format/EggFileEntryBase.cs",
+        "bytes": 809,
+        "sha256": "32dcddc00097eaf8dcb4dccbd1da0c48caf8a0121bd02d7a77977ab9113b2087"
+      },
+      {
+        "path": "src/EggDotNet/Format/EggFileFormatBase.cs",
+        "bytes": 1292,
+        "sha256": "462f88ee610a05da616304dd082988d19169caf1585add5292fb945ac2ba83ad"
+      },
+      {
+        "path": "src/EggDotNet/Format/EggFileFormatFactory.cs",
+        "bytes": 1039,
+        "sha256": "63f47727e332dc2d8a6773697cbab281cf446ad1f67bd89c74aae58f51e9d710"
+      },
+      {
+        "path": "src/EggDotNet/Format/Global.cs",
+        "bytes": 108,
+        "sha256": "63c42edd4b95924cd520c014ab6ef9292282b0967ae756db12209dedc0b0bd33"
+      },
+      {
+        "path": "src/EggDotNet/InternalExtensions/ArrayExtensions.cs",
+        "bytes": 347,
+        "sha256": "354134997a1aafd0b3e0f15d0ccd232e81dcb2484c3b579005d780e43cb3e0f0"
+      },
+      {
+        "path": "src/EggDotNet/InternalExtensions/BitConverterWrapper.cs",
+        "bytes": 634,
+        "sha256": "b279b9818993f4ab6a11fe47e13b601317e90ee14f3bf204c1bf31527f59bb69"
+      },
+      {
+        "path": "src/EggDotNet/InternalExtensions/CacheLocationDeducer.cs",
+        "bytes": 1425,
+        "sha256": "b4daf9d841f833ed56fa97c49eb6350808c8cd7bc20cc365d819280aba3bae12"
+      },
+      {
+        "path": "src/EggDotNet/InternalExtensions/StreamExtensions.cs",
+        "bytes": 284,
+        "sha256": "f1b6fa8c6af25c58fbc115f98fcb2bdfc60475ef9e6557b9f1903928bdb3ebc5"
+      },
+      {
+        "path": "src/EggDotNet/InternalExtensions/Utilities.cs",
+        "bytes": 776,
+        "sha256": "f3f7e2ce092c6f66e98f48c3633abc9181608beb70d10c84e6c38efad28f1380"
+      },
+      {
+        "path": "src/EggDotNet/PosixFileAttributes.cs",
+        "bytes": 741,
+        "sha256": "6fb2f2d9ade07f03e6c2c1f048ea6c58e5eef630bc7f03caa6d6a92bfdf7512d"
+      },
+      {
+        "path": "src/EggDotNet/SpecialStreams/CollectiveEggStream.cs",
+        "bytes": 4185,
+        "sha256": "7afbc3ae344b0f53b76bb2f2267979425fa1c21b2032cd2173e38616527c1cb8"
+      },
+      {
+        "path": "src/EggDotNet/SpecialStreams/Crc32Stream.cs",
+        "bytes": 6643,
+        "sha256": "df622bb580d0d008e8abd8320f54754b91c13f9ad2b013adc71cf8f77faa2fbd"
+      },
+      {
+        "path": "src/EggDotNet/SpecialStreams/EggStream.cs",
+        "bytes": 1181,
+        "sha256": "b5544d9e6a1e594b42039eb762a73dd64387d96ba5781a0838df419e768f7b22"
+      },
+      {
+        "path": "src/EggDotNet/SpecialStreams/SubStream.cs",
+        "bytes": 3113,
+        "sha256": "7ece755e316fe113b2a7b59ade0be8c32ce55da260368688ded9343653aa6f6e"
+      },
+      {
+        "path": "src/EggDotNet/WindowsFileAttributes.cs",
+        "bytes": 675,
+        "sha256": "9bd7dca8d3c800210c95dc6d50bf9001469bd04a9005e45f97d6dd044069886e"
+      }
+    ]
+  },
+  "fixtures": [
+    {
+      "name": "azoshort_txt.egg",
+      "bytes": 206,
+      "sha256": "cff553f8b0be8dad82fafa0b991be9a06cf5f5387fb206ed072323cdf649c1f3",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "azoshorttxt.sys",
+            "size": 128,
+            "actual": 128,
+            "encrypted": false,
+            "method": "Azo",
+            "sha256": "9f3a883f59a4b6b9265e6de22ed112329db3555beb486745f1ba7f12c7ef477c"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "defaults_bz_optimized.egg",
+      "bytes": 2484912,
+      "sha256": "53542b39047c5b8466c5ca4ca7f879792cdd8c3a40ed2122c0db133eda870ef4",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long.txt",
+            "size": 15238,
+            "actual": 15238,
+            "encrypted": false,
+            "method": "Bzip2",
+            "sha256": "d63cff6c64ab12f1c08a298f7b3a0c27f19a9822d2c6c7156d676d62265db46e"
+          },
+          {
+            "name": "lorem_ipsum_medium.txt",
+            "size": 3950,
+            "actual": 3950,
+            "encrypted": false,
+            "method": "Bzip2",
+            "sha256": "5dea92ab15a3a73af46b0afbf793c109b576e35c62ce9db703e7f4088f2e8a07"
+          },
+          {
+            "name": "lorem_ipsum_short.txt",
+            "size": 525,
+            "actual": 525,
+            "encrypted": false,
+            "method": "Bzip2",
+            "sha256": "acfe59afcffcbe68a4dee454d11f5bf78dfdee32c77a03c1a50cf384418fe38f"
+          },
+          {
+            "name": "lorem_ipsum.zip",
+            "size": 1242971,
+            "actual": 1242971,
+            "encrypted": false,
+            "method": "Store",
+            "sha256": "f7e4474594f6b6c8eb4a38a86c5391761ac8c8b8f8cfe2d35101a1b43b467bcc"
+          },
+          {
+            "name": "lorem_ipsum_long.pdf",
+            "size": 66431,
+            "actual": 66431,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "4b3e49290b2399c2ab63886b0585b819ae7c6d9fa947f1b3db53bd9da62a2b10"
+          },
+          {
+            "name": "lorem_ipsum_long.tif",
+            "size": 1195080,
+            "actual": 1195080,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "162d8b99fd7e695bd3e8c790493c93b649a76996f4e129c818a366614977ec67"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "directories.egg",
+      "bytes": 128,
+      "sha256": "c0e01422b150116b27f9abc365efe19b996c8f4dda6fa5c3f6992edbe9b5ce1a",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "dir1/dir2/dir3/test.txt",
+            "size": 18,
+            "actual": 18,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "85152fd0c127cadb14bfbba5544c94d9fdd7c41f59ce7ab8d791236f5f474883"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "extattr.egg",
+      "bytes": 463,
+      "sha256": "920a89c6e92ee133a4c24f46d2d16f19ae443c34b001e84d1da608a44cd32bb3",
+      "password": null,
+      "result": {
+        "error": "NullReferenceException",
+        "message": "Object reference not set to an instance of an object."
+      },
+      "oracleStatus": "known-reference-failure"
+    },
+    {
+      "name": "globalcomment.egg",
+      "bytes": 148,
+      "sha256": "119778e2cbfca30e4481f3fb330797565b71b8e74e92bbd073e09a6fe32de029",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 30,
+            "actual": 30,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "0c70e4fb86df61033e78c3243b6a791e893fa4df12d9f98a2bc7750869c9e6df"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "globalencrypt.egg",
+      "bytes": 163,
+      "sha256": "ec36473955417143ed4e188577fca005ff1c413cbe93a8e30a021234fc8bdbd6",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 30,
+            "actual": 30,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "0c70e4fb86df61033e78c3243b6a791e893fa4df12d9f98a2bc7750869c9e6df"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lorem_long_aes128.egg",
+      "bytes": 4918,
+      "sha256": "6b296554d443bd4ffd896946ab855ec4ace7051fe2d1f72ffefc6443fe89b736",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long.txt",
+            "size": 15238,
+            "actual": 15238,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "d63cff6c64ab12f1c08a298f7b3a0c27f19a9822d2c6c7156d676d62265db46e"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lorem_long_aes256.egg",
+      "bytes": 4926,
+      "sha256": "5b4aa19e558168c76e1b183c30d21e6006f788718dd2eeb1a6c45c4996731a9d",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long.txt",
+            "size": 15238,
+            "actual": 15238,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "d63cff6c64ab12f1c08a298f7b3a0c27f19a9822d2c6c7156d676d62265db46e"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lorem_long_store_lea128.egg",
+      "bytes": 15373,
+      "sha256": "f0b67af7e03737e7732009b2c42891dcd8ee80606e8d7bc538620ced70188dc3",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long.txt",
+            "size": 15238,
+            "actual": 15238,
+            "encrypted": true,
+            "method": "Store",
+            "sha256": "d63cff6c64ab12f1c08a298f7b3a0c27f19a9822d2c6c7156d676d62265db46e"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lorem_long_store_lea256.egg",
+      "bytes": 15381,
+      "sha256": "379fa4e487801cf78db492cd900ea3e97275c7ba64e5021489dc39ebfee1196d",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long.txt",
+            "size": 15238,
+            "actual": 15238,
+            "encrypted": true,
+            "method": "Store",
+            "sha256": "d63cff6c64ab12f1c08a298f7b3a0c27f19a9822d2c6c7156d676d62265db46e"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lorem_long_zipEnc.egg",
+      "bytes": 4909,
+      "sha256": "e2058ad03f8ea47119ec7a4d30c1f0f0d38f16373626cd80a8d0787c6ffc512c",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_long.txt",
+            "size": 15238,
+            "actual": 15238,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "d63cff6c64ab12f1c08a298f7b3a0c27f19a9822d2c6c7156d676d62265db46e"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lorem_short_readonlyhidden.egg",
+      "bytes": 806,
+      "sha256": "3c482c06885e24d7b0eff34fa7cbb6f9de281a56cc8d3adb38c47c1325e44b72",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "lorem_ipsum_short_readonly.txt",
+            "size": 525,
+            "actual": 525,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "acfe59afcffcbe68a4dee454d11f5bf78dfdee32c77a03c1a50cf384418fe38f"
+          },
+          {
+            "name": "lorem_ipsum_short_hidden.txt",
+            "size": 525,
+            "actual": 525,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "acfe59afcffcbe68a4dee454d11f5bf78dfdee32c77a03c1a50cf384418fe38f"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "lzma_simple.egg",
+      "bytes": 5926,
+      "sha256": "66a15cea0a7725423acd1121ca6f48b8dc50ce61fd012aa926fc7286211f5898",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 15,
+            "actual": 15,
+            "encrypted": false,
+            "method": "Lzma",
+            "sha256": "a8a2f6ebe286697c527eb35a58b5539532e9b3ae3b64d4eb0a46fb657b41562c"
+          },
+          {
+            "name": "lorem_ipsum.txt",
+            "size": 34446,
+            "actual": 34446,
+            "encrypted": false,
+            "method": "Lzma",
+            "sha256": "a9c13fd8c69a511bf6c2ef4496a32515a15b70d7e37bb3ed3ed1f9831803007a"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "number.vol1.egg",
+      "bytes": 1457664,
+      "sha256": "cf81600e079506a02d75f8e1f64bd2e3939618d5f92f017670b6d9808de93f87",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": true,
+        "entries": [
+          {
+            "name": "number.txt",
+            "size": 6999999,
+            "actual": 6999999,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "af5dab14d15e1377c0ac3ca1b217296a87be5cc3cd3a063cc3c5a937e0acb364"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "posix_small.egg",
+      "bytes": 124,
+      "sha256": "ba695eb8376e0ad20fd6eb38eb092d7975e29b6d4e3ec731c6dc7ee6f698a841",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "posix.txt",
+            "size": 17,
+            "actual": 17,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "1669594220a92d73d62727293e988b4213b5b4829de36c3afe43c9b4f3ddf35e"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "small_kor.egg",
+      "bytes": 110,
+      "sha256": "833558be65a14bf261e3a74b9b75cebe0437544902a3cdeafa4320b91cc20662",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "작은.txt",
+            "size": 13,
+            "actual": 13,
+            "encrypted": false,
+            "method": "Store",
+            "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "small_shift.egg",
+      "bytes": 112,
+      "sha256": "d68a59c4c71b02d94d4c67e6d9308240e55ce67f9f804d080dd731f14123c275",
+      "password": null,
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "小さい.txt",
+            "size": 13,
+            "actual": 13,
+            "encrypted": false,
+            "method": "Store",
+            "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "solid.egg",
+      "bytes": 493,
+      "sha256": "04c5a6e85bcbb39a50a38840d386aa90dd3ba1e4cfe976b39f0e4d7d31c63704",
+      "password": null,
+      "result": {
+        "solid": true,
+        "split": false,
+        "entries": [
+          {
+            "name": "s/lorem_ipsum_short.txt",
+            "size": 525,
+            "actual": 525,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "acfe59afcffcbe68a4dee454d11f5bf78dfdee32c77a03c1a50cf384418fe38f"
+          },
+          {
+            "name": "s/lorem_ipsum_short2.txt",
+            "size": 525,
+            "actual": 525,
+            "encrypted": false,
+            "method": "Deflate",
+            "sha256": "acfe59afcffcbe68a4dee454d11f5bf78dfdee32c77a03c1a50cf384418fe38f"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "test128.egg",
+      "bytes": 155,
+      "sha256": "6bdc308415a3b93f63b6c9d5f459ef3c186173e72cef60febee742815d466b04",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 30,
+            "actual": 30,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "0c70e4fb86df61033e78c3243b6a791e893fa4df12d9f98a2bc7750869c9e6df"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "test256.egg",
+      "bytes": 163,
+      "sha256": "9719e3cab3763472687f74385ad3246813ae50b26e1b823dfaeb3244713f41d4",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 30,
+            "actual": 30,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "0c70e4fb86df61033e78c3243b6a791e893fa4df12d9f98a2bc7750869c9e6df"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "test_lea128_store.egg",
+      "bytes": 138,
+      "sha256": "d3092eda2cdd748e52e4f2e68c37577510f6930fdce53203338a9d71f20b0a76",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 15,
+            "actual": 15,
+            "encrypted": true,
+            "method": "Store",
+            "sha256": "5322fecfc92a5e3248a297a3df3eddfb9bd9049504272e4f572b87fa36d4b3bd"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "test_lea256_store.egg",
+      "bytes": 146,
+      "sha256": "0e1d174fe89191089312a6d9522a41316ad762b823f855633e306c20618d3b7e",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 15,
+            "actual": 15,
+            "encrypted": true,
+            "method": "Store",
+            "sha256": "5322fecfc92a5e3248a297a3df3eddfb9bd9049504272e4f572b87fa36d4b3bd"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "testzipenc.egg",
+      "bytes": 151,
+      "sha256": "2bf946ce73d32c2b285c4ed0e46aa7f0c0018b665cd0c2439ac3e70d7724b0e3",
+      "password": "password12345!",
+      "result": {
+        "solid": false,
+        "split": false,
+        "entries": [
+          {
+            "name": "test.txt",
+            "size": 30,
+            "actual": 30,
+            "encrypted": true,
+            "method": "Deflate",
+            "sha256": "0c70e4fb86df61033e78c3243b6a791e893fa4df12d9f98a2bc7750869c9e6df"
+          }
+        ]
+      },
+      "oracleStatus": "decoded"
+    },
+    {
+      "name": "zeros.egg",
+      "bytes": 434,
+      "sha256": "3e4df943f77bcea153322916ab2be6e5c041a19925d7bf778e8ee516a90f2e56",
+      "password": null,
+      "result": {
+        "error": "InvalidDataException",
+        "message": "Oracle fixture exceeded 64 MiB"
+      },
+      "oracleStatus": "output-limit"
+    }
+  ],
+  "additionalVolumes": [
+    {
+      "name": "number.vol2.egg",
+      "bytes": 692233,
+      "sha256": "1eb0f62272677811dd86d73a230f923a6790d88c2f75182431508ecc05186410"
+    }
+  ]
+}

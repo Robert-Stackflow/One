@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net6.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>USE_SPAN</DefineConstants><Nullable>disable</Nullable>
+    <AssemblyName>EggReferenceOracle</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="reference/src/EggDotNet/**/*.cs"/><Compile Include="Program.cs"/></ItemGroup>
+</Project>

@@ -61,6 +61,7 @@
     "test:archive-authentication": "node tests/archive-authentication.cjs",
     "test:archive-zipx-password": "node tests/archive-zipx-password.cjs",
     "test:archive-zipx-password-ui": "node tests/archive-zipx-password-ui.cjs",
+    "test:archive-egg-reference": "node tests/archive-egg-reference.cjs",
     "test:archive-ads-update": "node tests/archive-ads-update.cjs",
     "test:archive-edit-recovery": "node tests/archive-edit-recovery.cjs",
     "test:archive-edit-launch": "node tests/archive-edit-launch.cjs",
