@@ -6,7 +6,7 @@ import {archivePreferences,archiveLevelOptions,archiveThreadOptions,archiveSolid
 import {archiveEditorMarkup,archiveEditPreviewMarkup,setupArchiveEditor} from './archive-editor';
 import {archiveBrowserMarkup,setupArchiveBrowser} from './archive-browser';
 import type {ArchiveListing,ArchiveEncoding,ArchivePasswordEncoding,ArchiveProgress,ArchiveConflict,ArchiveResult} from '../shared/archive';
-import {isArchivePath,type ArchiveOpenAction} from '../shared/archive-actions';
+import {isAlzPath,isArchivePath,type ArchiveOpenAction} from '../shared/archive-actions';
 import './archive-view.css';
 import {showArchiveRecovery} from './archive-recovery';
 import {showArchiveEditSessions} from './archive-edit-sessions';
@@ -88,7 +88,7 @@ export function setupArchiveView(){
  find('#archive-result-done').onclick=()=>void finishOptions('#archive-result-dialog');
  const field=(selector:string)=>{const input=find<HTMLInputElement>(selector);return input.type==='password'?input.value:input.value.trim();};
  const readPasswordEncoding=():ArchivePasswordEncoding=>supportsArchivePasswordEncoding(field('#archive-source'))?Number(field('#archive-password-encoding')) as ArchivePasswordEncoding:65001;
- const syncPasswordEncoding=()=>{find('#archive-password-encoding-row').hidden=!supportsArchivePasswordEncoding(field('#archive-source'));const note=find('#archive-alz-encoding-note'),egg=/\.egg$/i.test(field('#archive-source'));note.hidden=!egg&&!/\.alz$/i.test(field('#archive-source'));note.textContent=egg?'EGG 的“自动”使用包内声明的文件名编码；密码使用 UTF-8。':'ALZ 的“自动”使用韩文 CP949；密码沿用本次文件名编码。';};
+ const syncPasswordEncoding=()=>{find('#archive-password-encoding-row').hidden=!supportsArchivePasswordEncoding(field('#archive-source'));const note=find('#archive-alz-encoding-note'),egg=/\.egg$/i.test(field('#archive-source'));note.hidden=!egg&&!isAlzPath(field('#archive-source'));note.textContent=egg?'EGG 的“自动”使用包内声明的文件名编码；密码使用 UTF-8。':'ALZ 的“自动”使用韩文 CP949；密码沿用本次文件名编码。';};
  const decodeSummary=()=>{find('#archive-decode-summary').textContent=`${field('#archive-password')?'已设置密码':'未设置密码'} · ${field('#archive-encoding')==='0'?'自动识别文件名':'指定文件名编码'}`;};
  let mode:'create'|'browse'='create',listing:ArchiveListing|undefined,busy=false,taskId='',creationFormat='zip',selectionCount=0,stopping=false,cancelAllowed=true;
  type BatchItem={path:string;state:'待处理'|'正在处理'|'已完成'|'失败'|'已取消'|'待打开'|'已读取';detail:string};

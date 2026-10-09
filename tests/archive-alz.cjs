@@ -65,7 +65,7 @@ async function main(){
   for(const offset of [44,45,46,47,48,49,50,51,100,1000,Math.floor(damagedDlz.length/2),damagedDlz.length-17]){
    const bytes=Buffer.from(damagedDlz);bytes[offset]^=128;const source=path.join(root,'damaged-dlz-'+offset+'.alz');await fs.writeFile(source,bytes);const result=await native(['test',source]);assert([1,2].includes(result.code),`Corrupt DLZ offset ${offset}: exit ${result.code}`);assert.equal(result.events.at(-1)?.type,'error');checks++;
   }
-  await fs.writeFile(path.join(root,'methods.a00'),Buffer.from('volume'));await assert.rejects(run({operation:'list',path:methods}),/Split ALZ/);await fs.unlink(path.join(root,'methods.a00'));checks++;
+  await fs.writeFile(path.join(root,'methods.a00'),Buffer.from('volume'));assert.equal((await run({operation:'list',path:methods})).total,editableCheck.total);await assert.rejects(run({operation:'list',path:path.join(root,'methods.a00')}),/未被首卷声明/);await fs.unlink(path.join(root,'methods.a00'));checks++;
   // Enforce the common budget during integrity testing, before allocating the
   // full decoded member. Repeat across multiple entries to cover accumulation.
   for(const name of ['dlz-multiblock.alz','uncompressed.alz']){const result=await native(['test',path.join(root,name)],{ONE_ARCHIVE_EXTRACT_MAX_BYTES:'8'});assert.notEqual(result.code,0);assert.equal(result.events.at(-1)?.code,'resource');checks++;}

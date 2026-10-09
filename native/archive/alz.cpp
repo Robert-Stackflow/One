@@ -3,6 +3,7 @@
 #include <array>
 #include <cwctype>
 #include <limits>
+#include <memory>
 #include "alz.h"
 #include "entry-details.h"
 #include "extract-risk.h"
@@ -22,7 +23,7 @@ namespace {
 constexpr uint32_t local_signature=0x015a4c42,central_signature=0x015a4c43,end_signature=0x025a4c43;
 struct Handle {
     HANDLE value=INVALID_HANDLE_VALUE;
-    explicit Handle(HANDLE value):value(value){}
+    explicit Handle(HANDLE handle):value(handle){}
     ~Handle(){if(value!=INVALID_HANDLE_VALUE)CloseHandle(value);}
     Handle(const Handle&)=delete;
 };
@@ -60,24 +61,56 @@ std::string password_bytes(const std::string &password,int selected){
     if(decode_name(bytes,selected)!=password)fail("ALZ password cannot be represented exactly in the selected encoding","password");
     return bytes;
 }
+uint64_t little(const unsigned char *bytes,unsigned count){uint64_t value=0;for(unsigned i=0;i<count;++i)value|=uint64_t(bytes[i])<<(8*i);return value;}
+struct AlzVolume {
+    Handle file;fs::path path;uint64_t size=0,start=0,skip=0,count=0;bool next=false;
+    AlzVolume(const fs::path &source,size_t ordinal,Budget &budget):file(CreateFileW(source.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr)),path(source){
+        if(file.value==INVALID_HANDLE_VALUE)fail("Cannot open required ALZ volume: "+utf8(source.filename().wstring()),"read");
+        BY_HANDLE_FILE_INFORMATION info{};LARGE_INTEGER length{};
+        if(!GetFileInformationByHandle(file.value,&info)||(info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))||
+           !GetFileSizeEx(file.value,&length)||length.QuadPart<24)fail("Invalid or truncated ALZ volume");
+        size=(uint64_t)length.QuadPart;unsigned char header[8]{},tail[16]{};read(0,header,sizeof(header),budget);read(size-sizeof(tail),tail,sizeof(tail),budget);
+        if(little(header,4)!=0x015a4c41||little(header+4,2)!=10||little(header+6,2)!=ordinal)
+            fail("Unsupported ALZ version or incorrect volume order");
+        const auto end=little(tail+12,4);
+        if(little(tail,4)!=central_signature||little(tail+4,8)||(end!=end_signature&&end!=0x035a4c43))fail("Invalid ALZ volume trailer");
+        next=end==0x035a4c43;skip=ordinal?8:0;count=size-skip-(next?16:0);
+    }
+    void read(uint64_t offset,void *buffer,size_t remaining,Budget &budget){
+        if(offset>size||remaining>size-offset)fail("Truncated ALZ volume");LARGE_INTEGER where{};where.QuadPart=(LONGLONG)offset;
+        if(!SetFilePointerEx(file.value,where,nullptr,FILE_BEGIN))fail("Cannot seek ALZ volume","read");auto data=static_cast<unsigned char*>(buffer);
+        while(remaining){budget.check();const auto chunk=(DWORD)std::min<size_t>(remaining,65536);DWORD actual=0;
+            if(!ReadFile(file.value,data,chunk,&actual,nullptr)||actual!=chunk)fail("Cannot read ALZ volume","read");remaining-=chunk;data+=chunk;archive_activity();}
+    }
+};
 class AlzReader {
-    Handle file;uint64_t length=0,position=0;
+    Budget io_budget;std::vector<std::unique_ptr<AlzVolume>> volumes;uint64_t length=0,position=0;
 public:
     std::vector<Member> members;
-    explicit AlzReader(const fs::path &source,int encoding):file(CreateFileW(source.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr)){
-        if(file.value==INVALID_HANDLE_VALUE)fail("Cannot open ALZ archive");
-        auto sibling=source;sibling.replace_extension(L".a00");
-        if(fs::exists(sibling))fail("Split ALZ archives are not supported yet");
-        BY_HANDLE_FILE_INFORMATION info{};LARGE_INTEGER size{};
-        if(!GetFileInformationByHandle(file.value,&info)||(info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))||!GetFileSizeEx(file.value,&size)||size.QuadPart<8)
-            fail("Cannot read ALZ archive");
-        length=(uint64_t)size.QuadPart;
+    explicit AlzReader(const fs::path &source,int encoding){
+        auto primary=source;auto extension=source.extension().wstring();for(auto &c:extension)c=(wchar_t)std::towlower(c);size_t entry_volume=0;
+        if(extension!=L".alz"){
+            if(extension.size()!=4||extension[0]!=L'.'||extension[1]<L'a'||extension[1]>L'k'||extension[2]<L'0'||extension[2]>L'9'||extension[3]<L'0'||extension[3]>L'9')fail("Invalid ALZ volume extension");
+            entry_volume=1+size_t(extension[1]-L'a')*100+size_t(extension[2]-L'0')*10+size_t(extension[3]-L'0');primary.replace_extension(L".alz");
+        }
+        constexpr size_t max_volumes=1024;if(entry_volume>=max_volumes)fail("ALZ volume count exceeds its resource limit","resource");
+        std::vector<fs::path> paths;
+        for(size_t ordinal=0;;++ordinal){io_budget.check();auto path=primary;
+            if(ordinal){const auto piece_number=ordinal-1;std::wstring suffix=L".a00";suffix[1]=(wchar_t)(L'a'+piece_number/100);suffix[2]=(wchar_t)(L'0'+piece_number%100/10);suffix[3]=(wchar_t)(L'0'+piece_number%10);path.replace_extension(suffix);}
+            if(ordinal==entry_volume)path=source;
+            auto volume=std::make_unique<AlzVolume>(path,ordinal,io_budget);volume->start=length;
+            if(volume->count>UINT64_MAX-length)fail("ALZ volumes exceed their size limit","resource");length+=volume->count;
+            const bool next=volume->next;paths.push_back(path);volumes.push_back(std::move(volume));if(!next)break;
+            if(ordinal+1==max_volumes)fail("ALZ volume count exceeds its resource limit","resource");
+        }
+        if(entry_volume>=volumes.size())fail("Selected ALZ volume is not declared by the first volume");
+        std::rotate(paths.begin(),paths.begin()+entry_volume,paths.begin()+entry_volume+1);bind_archive_members(source,paths);
         if(number(4)!=0x015a4c41||number(4)!=10)fail("Unsupported ALZ header or version");
         uint64_t names=0;Budget budget;bool ended=false;
         while(position<length){
             budget.check();auto signature=number(4);
             if(signature==central_signature){
-                // Verified single-volume v10 footer: two reserved words and end.
+                // Only the final volume trailer remains in the logical stream.
                 if(number(4)||number(4)||number(4)!=end_signature||position!=length)fail("Invalid or unsupported ALZ footer");
                 ended=true;break;
             }
@@ -101,14 +134,15 @@ public:
             member.offset=position;seek(position+bounded(member.entry.compressed));
             members.push_back(std::move(member));
         }
-        if(!ended)fail("ALZ footer is missing; split or truncated archives are unsupported");
-        bind_archive_members(source,{source});
+        if(!ended)fail("ALZ footer is missing or the archive is truncated");
     }
     uint64_t bounded(uint64_t count){if(count>length-position)fail("Truncated ALZ archive");return count;}
-    void seek(uint64_t offset){if(offset>length)fail("Invalid ALZ offset");LARGE_INTEGER where{};where.QuadPart=(LONGLONG)offset;
-        if(!SetFilePointerEx(file.value,where,nullptr,FILE_BEGIN))fail("Cannot seek ALZ archive");position=offset;}
-    void read(void *buffer,size_t count){bounded(count);DWORD actual=0;
-        if(count>MAXDWORD||!ReadFile(file.value,buffer,(DWORD)count,&actual,nullptr)||actual!=count)fail("Cannot read ALZ archive");position+=count;archive_activity();}
+    void seek(uint64_t offset){if(offset>length)fail("Invalid ALZ offset");position=offset;}
+    void read(void *buffer,size_t count){bounded(count);auto data=static_cast<unsigned char*>(buffer);
+        auto volume=std::upper_bound(volumes.begin(),volumes.end(),position,[](uint64_t value,const auto &part){return value<part->start;});
+        if(volume==volumes.begin())fail("Invalid ALZ volume offset");--volume;
+        while(count){if(volume==volumes.end())fail("Truncated ALZ archive");const auto local=position-(*volume)->start;
+            const auto chunk=(size_t)std::min<uint64_t>(count,(*volume)->count-local);if(chunk){(*volume)->read((*volume)->skip+local,data,chunk,io_budget);count-=chunk;data+=chunk;position+=chunk;}++volume;}}
     uint64_t number(unsigned width){unsigned char bytes[8]{};read(bytes,width);uint64_t result=0;for(unsigned i=0;i<width;i++)result|=uint64_t(bytes[i])<<(i*8);return result;}
     std::vector<Entry> entries()const{std::vector<Entry> result;result.reserve(members.size());for(const auto &member:members)result.push_back(member.entry);return result;}
 };

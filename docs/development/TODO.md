@@ -14,7 +14,7 @@
 
 | 编号 | 状态 | 剩余范围 |
 | --- | --- | --- |
-| ARCH-FMT | 首批只读已实现，待扩展兼容 | ZIPX、CAB、BZ2/ZSTD、LHA/LZH、ISO/WIM、JAR/APK 及 TAR.BZ2/TAR.ZST 已接通浏览、测试和解压；样本、方法和限制见用户指南及 `tests/fixtures/archives/`。ALZ 单卷 v10 的存储/Deflate/BZip2-DLZ、加密及 CP949 已接通；EGG 五方法、AES/LEA/ZipCrypto、固实和同族分卷已接通浏览/校验/选择解压/预览/拖出/CLI，25 组真实样本输出及 274 项产品检查通过；核心 946 项检查另已通过普通/ASan，更多变体限制见 EGG 样本说明；ALZ 分卷/其他变体、ZIPX 更多外部组合、LHA level 3/旧编码、更多 ISO/UDF、CAB/WIM 分卷及安装版仍待推进。 |
+| ARCH-FMT | 首批只读已实现，待扩展兼容 | ZIPX、CAB、BZ2/ZSTD、LHA/LZH、ISO/WIM、JAR/APK 及 TAR.BZ2/TAR.ZST 已接通浏览、测试和解压；样本、方法和限制见用户指南及 `tests/fixtures/archives/`。ALZ v10 单卷及关联分卷的存储/Deflate/BZip2-DLZ、加密和 CP949 已接通；分卷 94 项检查、11 个固定外部卷及独立 CRC/哈希核对通过；EGG 五方法、AES/LEA/ZipCrypto、固实和同族分卷已接通浏览/校验/选择解压/预览/拖出/CLI，25 组真实样本输出及 274 项产品检查通过；核心 946 项检查另已通过普通/ASan，更多变体限制见 EGG 样本说明；ALZ 其他变体、ZIPX 更多外部组合、LHA level 3/旧编码、更多 ISO/UDF、CAB/WIM 分卷及安装版仍待推进。 |
 | ARCH-EDIT | 已实现，待兼容验收 | 自动打开副本、变化检测、连续确认写回、原包冲突核对、另存、中断恢复和暂存回收已通过开发版检查；继续验证真实 Office/图片编辑器、复用窗口、跨权限及安装版。 |
 | ARCH-RECOVERY | 已实现，待系统矩阵验收 | 生成新卷暂存与正式保存的记录式交接已验证；硬件断电、更多文件系统与权限组合仍待验收。损坏、未知或未登记资料保留。 |
 | ARCH-PERF | 待完整基准与针对性优化 | 百万条目、十万小文件、超大固实包、混合并发、慢盘及网络盘；已有分页、流式处理和预算不代表全部性能目标达成。 |

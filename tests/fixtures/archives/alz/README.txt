@@ -33,6 +33,8 @@ Real small text fixtures:
   eb8185c6ef6e5fc0ed22a495d0c7bf18bb7d8c58, tests/data/t.alz.
   GPL-3.0 license retained as PATOOL-COPYING.txt. Test data only.
 
-Runtime supports verified single-volume ALZ v10 headers and methods 0/1/2.
-Split volumes, data descriptors, unknown flag combinations and other
-versions fail explicitly. No ALZ creation or editing is enabled.
+Runtime supports verified ALZ v10 headers and methods 0/1/2, including linked
+numbered split volumes. See ../alz-split/README.txt for pinned external volumes,
+independent validation and product coverage. Data descriptors, unknown flag
+combinations and other versions still fail explicitly. No ALZ creation or
+editing is enabled.

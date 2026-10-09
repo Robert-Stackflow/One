@@ -26,6 +26,8 @@ public:explicit Items(DWORD n):count(n){}Items(std::vector<std::wstring> p,bool 
  HRESULT __stdcall EnumItems(IEnumShellItems**) override{return E_NOTIMPL;}
 };
 int wmain(){
+ assert(archive_path(L"D:\\split.a00")&&archive_path(L"D:\\split.B00")&&archive_path(L"D:\\split.k22"));
+ assert(!archive_path(L"D:\\split.l00")&&!archive_path(L"D:\\split.a0"));
  wchar_t module[32768];GetModuleFileNameW(nullptr,module,32768);std::wstring file(module);file=file.substr(0,file.find_last_of(L"\\/"))+L"\\shell-config.bin";
  auto config=[&](bool enabled){const wchar_t* fields[]={L"",L"",L"",L"",enabled?L"1":L"0",enabled?L"1":L"0",enabled?L"1":L"0",enabled?L"1":L"0"};std::ofstream stream(file,std::ios::binary);for(auto value:fields)stream.write((const char*)value,(wcslen(value)+1)*sizeof(wchar_t));};
  config(true);

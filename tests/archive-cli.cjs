@@ -55,6 +55,10 @@ async function main(){
    const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));
    await run(['test','--json',...options,source],password);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',...options,source],password);assert((await fs.readdir(output)).length>0);
   }
+  for(const name of ['split.alz','split.a06','split_store.a01']){
+   const source=path.resolve('tests/fixtures/archives/alz-split',name),listed=await run(['list','--json',source]);assert(listed.records.some(record=>record.type==='entry'));
+   await run(['test','--json',source]);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',source]);assert((await fs.readdir(output)).length>0);
+  }
   const input=path.join(root,'中文 & input');await fs.mkdir(input);await fs.writeFile(path.join(input,'hello.txt'),'hello CLI');await fs.writeFile(path.join(input,'-leading $().txt'),'literal');
   const stored=path.join(root,'store-only.zip');await run(['create','--json','--output',stored,'--level','0','--threads','1','--memory-mib','128',path.join(input,'hello.txt')]);
   const storedZip=await JSZip.loadAsync(await fs.readFile(stored));assert.equal(storedZip.file('hello.txt')._data.compressedSize,Buffer.byteLength('hello CLI'));

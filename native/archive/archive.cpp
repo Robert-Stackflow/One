@@ -428,6 +428,7 @@ static int archive_format(const std::wstring &path) {
     if (name.ends_with(L".iso")) return 0xe7;
     if (name.ends_with(L".wim")) return 0xe6;
     if (name.ends_with(L".alz")) return alz_format;
+    if(name.size()>=4){const auto end=name.substr(name.size()-4);if(end[0]==L'.'&&end[1]>=L'a'&&end[1]<=L'k'&&end[2]>=L'0'&&end[2]<=L'9'&&end[3]>=L'0'&&end[3]<=L'9')return alz_format;}
     if (name.ends_with(L".egg")) return egg_format;
     fail("Unsupported archive format");
 }
