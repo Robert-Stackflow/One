@@ -5,6 +5,7 @@
 #include <cwctype>
 #include <map>
 #include <memory>
+#include <zlib.h>
 #include "common.h"
 
 namespace {
@@ -64,6 +65,43 @@ unsigned test_value(const wchar_t *name){
     wchar_t mode[2]{},text[24]{};GetEnvironmentVariableW(L"ONE_TEST_MODE",mode,2);
     if(std::wstring(mode)!=L"1")return 0;GetEnvironmentVariableW(name,text,24);return (unsigned)_wtoi(text);
 }
+// Abrupt termination deliberately bypasses destructors and rollback. This is
+// only available to isolated native regressions, never a production setting.
+void crash_at(const std::string &point){
+    static const auto selected=[](){wchar_t mode[2]{},value[64]{};GetEnvironmentVariableW(L"ONE_TEST_MODE",mode,2);
+        if(std::wstring(mode)!=L"1")return std::string{};
+        GetEnvironmentVariableW(L"ONE_ARCHIVE_PUBLISH_CRASH_POINT",value,64);return utf8(value);}();
+    if(selected==point){TerminateProcess(GetCurrentProcess(),77);ExitProcess(77);}
+}
+struct Journal {
+    HANDLE value=INVALID_HANDLE_VALUE;uint64_t bytes=0,sequence=0;uLong checksum=0;
+    std::string pending;bool broken=false;unsigned injected=test_value(L"ONE_ARCHIVE_PUBLISH_JOURNAL_FAIL_AT_SEQUENCE");
+    explicit Journal(const fs::path &path):value(CreateFileW(path.c_str(),GENERIC_WRITE|DELETE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)){
+        if(value==INVALID_HANDLE_VALUE)fail("Cannot create extraction recovery journal");
+    }
+    ~Journal(){if(value!=INVALID_HANDLE_VALUE)CloseHandle(value);}
+    Journal(const Journal&)=delete;
+    void drain(){
+        if(broken)fail("Cannot write extraction recovery journal");if(pending.empty())return;
+        DWORD written=0;if(!WriteFile(value,pending.data(),(DWORD)pending.size(),&written,nullptr)||written!=pending.size()){broken=true;fail("Cannot write extraction recovery journal");}
+        pending.clear();
+    }
+    void append(const std::string &record){
+        if(injected&&sequence==injected)fail("Injected extraction recovery journal failure");
+        const auto data="{\"sequence\":"+std::to_string(sequence)+",\"record\":"+record;
+        const auto next=crc32(checksum,reinterpret_cast<const Bytef*>(data.data()),(uInt)data.size());
+        char hex[9]{};std::snprintf(hex,sizeof(hex),"%08lx",(unsigned long)next);
+        const auto line=data+",\"crc32\":\""+hex+"\"}\n";
+        // Bound both individual records and cumulative recovery metadata. No
+        // per-entry flush: the complete plan and decision records are barriers.
+        if(line.size()>512*1024||bytes+line.size()>512ull*1024*1024)fail("Extraction recovery journal exceeds size limit");
+        if(broken)fail("Cannot write extraction recovery journal");pending+=line;
+        checksum=next;bytes+=line.size();++sequence;
+        if(pending.size()>=64*1024)drain();
+    }
+    void flush(){drain();if(!FlushFileBuffers(value))fail("Cannot flush extraction recovery journal");}
+    void remove(){erase(value);CloseHandle(value);value=INVALID_HANDLE_VALUE;}
+};
 std::set<std::string> archive_identities(const fs::path &archive){
     std::set<std::string> ids;if(archive.empty())return ids;
     auto remember=[&](const fs::path &file){Handle input(file);ids.insert(stamp(input.value,true));};remember(archive);
@@ -134,42 +172,57 @@ void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path
     // A failed rollback retains this directory, never treats it as a cache.
     if(!CreateDirectoryW(recovery.c_str(),nullptr))fail("Recovery directory already exists or cannot be created");
     dirs.hold(recovery);const auto journal=recovery/L"manifest.jsonl";
-    HANDLE log=CreateFileW(journal.c_str(),GENERIC_WRITE|DELETE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
-    if(log==INVALID_HANDLE_VALUE){dirs.release(recovery);RemoveDirectoryW(recovery.c_str());fail("Cannot create extraction recovery journal");}
+    std::unique_ptr<Journal> log;
+    try{log=std::make_unique<Journal>(journal);}catch(...){dirs.release(recovery);RemoveDirectoryW(recovery.c_str());throw;}
     bool aborted=false;size_t count=0,skipped=0;std::string failure;
     try{
-        for(const auto &item:items)if(!item.skip){
+        log->append("{\"type\":\"header\",\"version\":2,\"parent\":"+json(utf8(parent.wstring()))+",\"stage\":"+json(utf8(stage.wstring()))+",\"recovery\":"+json(utf8(recovery.wstring()))+
+            ",\"parentIdentity\":"+json(stamp(dirs.held.at(key(parent))->value,true))+",\"stageIdentity\":"+json(stamp(dirs.held.at(key(stage))->value,true))+
+            ",\"recoveryIdentity\":"+json(stamp(dirs.held.at(key(recovery))->value,true))+",\"conflict\":"+json(conflict)+"}");
+        size_t planned=0;
+        for(size_t index=0;index<items.size();++index){const auto &item=items[index];if(item.skip)continue;
             if(cancelled()){aborted=true;fail("Extraction publishing cancelled");}
-            const auto line="{\"source\":"+json(utf8(item.source.wstring()))+",\"target\":"+json(utf8(item.target.wstring()))+",\"backup\":"+json(utf8(item.backup.wstring()))+",\"directory\":"+(item.directory?"true":"false")+",\"sourceStamp\":"+json(item.source_stamp)+",\"targetStamp\":"+json(item.target_stamp)+"}\n";
-            DWORD written=0;if(!WriteFile(log,line.data(),(DWORD)line.size(),&written,nullptr)||written!=line.size())fail("Cannot write extraction recovery journal");
+            log->append("{\"type\":\"item\",\"index\":"+std::to_string(index)+",\"source\":"+json(utf8(item.source.wstring()))+",\"target\":"+json(utf8(item.target.wstring()))+",\"backup\":"+json(utf8(item.backup.wstring()))+",\"directory\":"+(item.directory?"true":"false")+",\"existing\":"+(item.existing?"true":"false")+",\"sourceStamp\":"+json(item.source_stamp)+",\"targetStamp\":"+json(item.target_stamp)+"}");
+            ++planned;
         }
-        if(!FlushFileBuffers(log))fail("Cannot flush extraction recovery journal");
+        log->append("{\"type\":\"prepared\",\"items\":"+std::to_string(planned)+",\"skipped\":"+std::to_string(items.size()-planned)+"}");log->flush();
+        crash_at("prepared");
         emit("{\"type\":\"ready\"}");const auto acknowledgement=std::fgetc(stdin);if(acknowledgement!=1){aborted=acknowledgement==2;fail("Extraction cancelled before publishing");}
-        ULONGLONG last=0;
+        ULONGLONG last=0,last_flush=GetTickCount64();
         const auto fail_after=test_value(L"ONE_ARCHIVE_PUBLISH_FAIL_AFTER"),wait_after=test_value(L"ONE_ARCHIVE_PUBLISH_WAIT_AFTER");
-        for(auto &item:items){
+        for(size_t index=0;index<items.size();++index){auto &item=items[index];
             if(cancelled()){aborted=true;fail("Extraction publishing cancelled");}
             if(item.skip){++skipped;continue;}
             if(item.directory){
                 if(!item.existing){if(!CreateDirectoryW(item.target.c_str(),nullptr))fail("Extraction directory appeared or cannot be created: "+utf8(item.target.wstring()));item.created=true;dirs.hold(item.target);}
                 item.identity=stamp(dirs.held.at(key(item.target))->value,true);
+                if(item.created)log->append("{\"type\":\"directory-created\",\"index\":"+std::to_string(index)+",\"identity\":"+json(item.identity)+"}");
             }else{
                 Handle input(item.source,false,GENERIC_READ|DELETE);if(stamp(input.value)!=item.source_stamp)fail("Staged file changed before publishing");
                 if(item.existing){
                     Handle old(item.target,false,GENERIC_READ|DELETE);if(stamp(old.value)!=item.target_stamp)fail("Existing file changed; extraction stopped: "+utf8(item.target.wstring()));
                     move(old.value,item.backup);item.saved=true;
+                    crash_at("backup:"+std::to_string(index));
                 }
                 move(input.value,item.target);item.moved=true;
             }
+            log->append("{\"type\":\"published\",\"index\":"+std::to_string(index)+"}");
             ++count;const auto now=GetTickCount64();
+            if(now-last_flush>=250){log->flush();last_flush=now;}
+            crash_at("published:"+std::to_string(index));
             if(!last||now-last>=100||count+skipped==items.size()){emit("{\"type\":\"progress\",\"done\":"+std::to_string(count+skipped)+",\"total\":"+std::to_string(items.size())+"}");last=now;}
             if(fail_after==count)fail("Injected extraction publishing failure");
             if(wait_after==count){while(!cancelled())Sleep(10);aborted=true;fail("Extraction publishing cancelled");}
         }
         if(cancelled()){aborted=true;fail("Extraction publishing cancelled");}
+        // The completion decision must be durable before deleting any original
+        // file. A crash in cleanup must never be interpreted as a failed publish.
+        log->append("{\"type\":\"committed\",\"count\":"+std::to_string(count)+",\"skipped\":"+std::to_string(skipped)+"}");log->flush();
+        crash_at("committed");
     }catch(const std::exception &error){failure=error.what();}
     if(!failure.empty()){
         bool complete=true;
+        try{log->append("{\"type\":\"rollback-started\"}");log->flush();}catch(...){complete=false;}
         for(auto it=items.rbegin();it!=items.rend();++it){
             auto &item=*it;
             try{
@@ -181,17 +234,17 @@ void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path
                 }
             }catch(...){complete=false;}
         }
-        if(complete){erase(log);CloseHandle(log);dirs.release(recovery);RemoveDirectoryW(recovery.c_str());}
-        else{CloseHandle(log);fail(failure+"; recovery retained at "+utf8(recovery.wstring()));}
+        if(complete)try{log->append("{\"type\":\"rolled-back\"}");log->flush();log->remove();dirs.release(recovery);if(!RemoveDirectoryW(recovery.c_str()))complete=false;}catch(...){complete=false;}
+        if(!complete)fail(failure+"; recovery retained at "+utf8(recovery.wstring()));
         if(aborted){cancelled_result();return;}
         fail(failure);
     }
     // Commit succeeded. Backups are removed by identity, with every ancestor
     // still locked; a changed recovery copy is kept and reported.
     try{
-        for(auto &item:items)if(item.saved){Handle old(item.backup,false,GENERIC_READ|DELETE);if(stamp(old.value)!=item.target_stamp)fail("Recovery file changed");erase(old.value);}
-        erase(log);CloseHandle(log);log=INVALID_HANDLE_VALUE;dirs.release(recovery);
+        for(size_t index=0;index<items.size();++index){auto &item=items[index];if(item.saved){Handle old(item.backup,false,GENERIC_READ|DELETE);if(stamp(old.value)!=item.target_stamp)fail("Recovery file changed");erase(old.value);crash_at("cleanup:"+std::to_string(index));}}
+        log->remove();dirs.release(recovery);
         if(!RemoveDirectoryW(recovery.c_str()))fail("Cannot remove empty recovery directory");
-    }catch(...){if(log!=INVALID_HANDLE_VALUE)CloseHandle(log);fail("Extraction completed but recovery files remain at "+utf8(recovery.wstring()));}
+    }catch(...){fail("Extraction completed but recovery files remain at "+utf8(recovery.wstring()));}
     emit("{\"type\":\"result\",\"count\":"+std::to_string(count)+",\"skipped\":"+std::to_string(skipped)+",\"cancelled\":false}");
 }

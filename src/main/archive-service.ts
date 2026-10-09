@@ -397,7 +397,20 @@ export class ArchiveService {
         const result=messages.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
         if(!result)throw Error('压缩程序未确认解压成功');
         if(destination==='here'){
-          const published=await this.execute(owner,id,'publish',[temporary,parent,join(parent,`.one-recovery-${id}`),conflict,source],'');
+          const recovery=join(parent,`.one-recovery-${id}`);
+          let published:Message[];
+          try{published=await this.execute(owner,id,'publish',[temporary,parent,recovery,conflict,source],'');}
+          catch(error){
+            // A terminated helper cannot emit its usual retained-backup error.
+            // Check only this request's exact directory; never scan or clean
+            // other recovery directories as if they were extraction caches.
+            const directory=await lstat(recovery).catch(()=>undefined),manifest=directory?.isDirectory()&&!directory.isSymbolicLink()?await lstat(join(recovery,'manifest.jsonl')).catch(()=>undefined):undefined;
+            if(manifest?.isFile()&&!manifest.isSymbolicLink()){
+              this.diagnostic('archive-recovery-retained',JSON.stringify({id,path:recovery}),true);
+              throw new ArchiveFailure(`解压发布异常结束，请检查目标目录。恢复资料保留在：${recovery}。请勿删除该目录。\n${error instanceof Error?error.message:String(error)}`,error instanceof ArchiveFailure?error.code:'archive',error instanceof ArchiveFailure?error.scan:undefined);
+            }
+            throw error;
+          }
           const outcome=published.find((item):item is Extract<Message,{type:'result'}>=>item.type==='result');
           if(!outcome)throw Error('压缩程序未确认提交成功');
           if(!outcome.cancelled)this.seal(owner,id,true);
