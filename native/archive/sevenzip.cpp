@@ -461,10 +461,11 @@ size_t seven_extract(const fs::path &source,const fs::path &destination,
 }
 
 void seven_update(const fs::path &source,const fs::path &temporary,const fs::path &backup,
-                  const std::string &revision,const std::string &password){
+                  const std::string &revision,const std::string &password,bool prepare){
     using namespace archive_update;
     check_staging(source,temporary,backup);File original(source,GENERIC_READ,FILE_SHARE_READ);
-    if(stamp(original.handle)!=revision)fail("Archive changed; reopen it before saving changes");
+    if(prepare)expect_archive_revision(source,revision);
+    else if(stamp(original.handle)!=revision)fail("Archive changed; reopen it before saving changes");
     Plan plan;std::vector<OutputEntry> nodes;std::vector<std::string> names;
     bool encrypted=false,headers=false;
     {
@@ -472,8 +473,8 @@ void seven_update(const fs::path &source,const fs::path &temporary,const fs::pat
         for(const auto &item:items){auto name=canonical(item.name,item.directory);nodes.push_back({name,item.directory,false,{},item.encrypted});names.push_back(name);encrypted=encrypted||item.encrypted;}
         seven_test(source,password,7,false);
         apply_plan(plan,nodes,source,encrypted,nullptr);check_tree(nodes);
-        U64 needed=fs::file_size(source);
-        for(const auto &node:nodes)if(!node.removed){const auto size=node.source.empty()||node.directory?0:fs::file_size(node.source);if(size>UINT64_MAX-needed-65536)fail("7Z update size exceeds limits");needed+=size+65536;}
+        U64 needed=0;for(const auto &member:archive_source_members(source)){const auto size=fs::file_size(member);if(size>UINT64_MAX-needed)fail("7Z volume size exceeds limits");needed+=size;}
+        for(const auto &node:nodes)if(!node.removed){const auto size=node.source.empty()||node.directory?0:fs::file_size(node.source);if(needed>UINT64_MAX-65536||size>UINT64_MAX-needed-65536)fail("7Z update size exceeds limits");needed+=size+65536;}
         auto capacity=fs::space(source.parent_path());constexpr U64 reserve=256ull*1024*1024;
         if(capacity.available!=UINTMAX_MAX&&(capacity.available<reserve||needed>capacity.available-reserve))fail("Not enough free disk space to update the archive","write");
         seven_rewrite(reader.get(),temporary,nodes,names,password,encrypted,headers,[&](U32 index,U32 prop,PROPVARIANT *value){return reader.get()->GetProperty(index,prop,value);});
@@ -484,9 +485,11 @@ void seven_update(const fs::path &source,const fs::path &temporary,const fs::pat
         std::map<std::string,const OutputEntry*> expected;for(const auto &node:nodes)if(!node.removed)expected.emplace(node.name,&node);
         if(items.size()!=expected.size())fail("Updated 7Z directory does not match the requested changes");
         for(const auto &item:items){auto found=expected.find(canonical(item.name,item.directory));if(found==expected.end()||found->second->directory!=item.directory)fail("Updated 7Z directory does not match the requested changes");
-            if(item.size&&found->second->encrypt&&!item.encrypted)fail("Updated 7Z did not preserve encryption");}
+            if(item.size&&found->second->encrypt&&!item.encrypted)fail("Updated 7Z did not preserve encryption");expected.erase(found);}
         if(headers&&!items.empty()&&!verify.encryptedHeaders())fail("Updated 7Z did not preserve encrypted headers");
         count=items.size();
     }
-    seven_test(temporary,password,7,false);commit(original,source,temporary,backup,revision,count);
+    seven_test(temporary,password,7,false);
+    if(prepare){OpenArchive recheck(source,password,7);finish_preparation(source,temporary,revision,count);}
+    else commit(original,source,temporary,backup,revision,count);
 }

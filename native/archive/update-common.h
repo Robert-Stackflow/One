@@ -65,4 +65,5 @@ void check_source(const fs::path &source);
 void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &source,bool encrypted,std::string *comment);
 void check_staging(const fs::path &source,const fs::path &temporary,const fs::path &backup);
 void commit(File &original,const fs::path &source,const fs::path &temporary,const fs::path &backup,const std::string &revision,size_t count);
+void finish_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,size_t count);
 }

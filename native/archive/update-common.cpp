@@ -60,6 +60,11 @@ void check_source(const fs::path &source) {
 
 void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &source,bool encrypted,std::string *comment){
     const size_t old_count=nodes.size();
+    // Reject every member of the opened source family, including hard-link
+    // aliases, without a volume-by-input quadratic scan for recursive adds.
+    const auto identity=[](const std::string &stamp){size_t end=0;for(int i=0;i<3;++i){end=stamp.find(':',end);if(end==std::string::npos)fail("Invalid archive file identity");++end;}return stamp.substr(0,end-1);};
+    std::set<std::string> source_ids;
+    for(const auto &member:archive_source_members(source)){File file(member);source_ids.insert(identity(stamp(file.handle)));}
     uint32_t count = plan.number();
     if (!count || count > 10000) fail("Archive update has too many or no changes");
     // Resolve path selectors against the opened revision before any rename.
@@ -136,7 +141,7 @@ void apply_plan(Plan &plan,std::vector<OutputEntry> &nodes,const fs::path &sourc
                     if (!replace || folder || node.directory) fail("Adding this item would overwrite an existing entry: " + target);
                     encrypt = node.encrypt; node.removed = true;
                 }
-                if (fs::equivalent(file, source)) fail("Cannot add the archive to itself");
+                if(!folder){File input(file);if(source_ids.contains(identity(stamp(input.handle))))fail("Cannot add an archive volume to its own update");}
                 nodes.push_back({target, folder, false, file, encrypt});
                 if (nodes.size() > 1000000) fail("Archive contains too many entries");
             };
@@ -188,5 +193,17 @@ void commit(File &original,const fs::path &source,const fs::path &temporary,cons
     }
     DeleteFileW(backup.c_str()); // A failed deletion leaves a recoverable original.
     emit("{\"type\":\"result\",\"count\":" + std::to_string(count) + "}");
+}
+void finish_preparation(const fs::path &source,const fs::path &temporary,const std::string &revision,size_t count){
+    File flush(temporary,GENERIC_WRITE,FILE_SHARE_READ);if(!FlushFileBuffers(flush.handle))fail("Cannot flush prepared archive","write");
+    if(zip_revision(source)!=revision)fail("Archive volume set changed during rewrite","safety");
+    const auto members=archive_source_members(source);
+    const bool zip=key(utf8(source.extension().wstring()))==L".zip";
+    // ZIP does not record the creator's configured split limit. Preserve an
+    // observed member size, not an invented original setting; ZIP records can
+    // end a disk slightly below that limit. 7Z is a byte-split stream.
+    uint64_t volume_bytes=0;
+    if(members.size()>1){if(zip){for(size_t i=1;i<members.size();++i)volume_bytes=std::max<uint64_t>(volume_bytes,fs::file_size(members[i]));}else volume_bytes=fs::file_size(members[0]);}
+    emit("{\"type\":\"result\",\"count\":"+std::to_string(count)+",\"prepared\":true,\"volumeBytes\":"+std::to_string(volume_bytes)+",\"volumes\":"+std::to_string(members.size())+"}");
 }
 }

@@ -74,3 +74,7 @@ std::string zip_revision(const fs::path &source){
     const auto found=sources.find(key(source));
     return revision(found!=sources.end()&&!found->second.members.empty()?found->second.members:std::vector<fs::path>{source});
 }
+std::vector<fs::path> archive_source_members(const fs::path &source){
+    std::lock_guard guard(source_mutex);const auto found=sources.find(key(source));
+    return found!=sources.end()&&!found->second.members.empty()?found->second.members:std::vector<fs::path>{source};
+}

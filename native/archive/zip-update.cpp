@@ -48,12 +48,13 @@ struct Writer {
 
 
 void zip_update(const fs::path &source, const fs::path &temporary, const fs::path &backup,
-                int encoding, const std::string &revision, const std::string &password) {
+                int encoding, const std::string &revision, const std::string &password,bool prepare) {
     check_staging(source,temporary,backup);
-    if(revision.starts_with("v2:"))fail("Split ZIP editing is not supported yet");
+    if(!prepare&&revision.starts_with("v2:"))fail("Split ZIP editing is not supported yet");
+    if(prepare)expect_archive_revision(source,revision);
     // Deny writes/deletion throughout preflight, rewrite and verification.
     File original(source, GENERIC_READ, FILE_SHARE_READ);
-    if (stamp(original.handle) != revision) fail("Archive changed; reopen it before saving changes");
+    if (!prepare&&stamp(original.handle) != revision) fail("Archive changed; reopen it before saving changes");
     Plan plan;
     std::vector<OutputEntry> nodes;
     std::string comment;
@@ -65,7 +66,7 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         zip_preflight(reader, items);
         void *zip = nullptr; mz_zip_reader_get_zip_handle(reader.value, &zip);
         uint32_t disk = 0;
-        if (mz_zip_get_disk_number_with_cd(zip, &disk) != MZ_OK || disk != 0)
+        if (mz_zip_get_disk_number_with_cd(zip, &disk) != MZ_OK || (!prepare && disk != 0))
             fail("Split ZIP editing is not supported yet");
         const char *existing_comment = nullptr;
         mz_zip_reader_get_comment(reader.value, &existing_comment);
@@ -83,7 +84,7 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         uint64_t needed = 0;
         for (size_t i = 0; i < nodes.size(); ++i) if (!nodes[i].removed) {
             uint64_t bytes = i < old_count ? items[i].compressed : nodes[i].directory ? 0 : fs::file_size(nodes[i].source);
-            if (bytes > UINT64_MAX - needed - 65536) fail("ZIP update size exceeds limits");
+            if (needed > UINT64_MAX - 65536 || bytes > UINT64_MAX - needed - 65536) fail("ZIP update size exceeds limits");
             needed += bytes + 65536;
         }
         auto capacity = fs::space(source.parent_path());
@@ -145,7 +146,24 @@ void zip_update(const fs::path &source, const fs::path &temporary, const fs::pat
         auto items = zip_entries(verify);
         final_count = items.size();
         zip_preflight(verify, items);
+        std::map<std::string, const OutputEntry *> expected;
+        for (const auto &node : nodes) if (!node.removed) expected.emplace(node.name, &node);
+        if (items.size() != expected.size()) fail("Updated ZIP directory does not match the requested changes");
+        for (const auto &item : items) {
+            const auto found = expected.find(canonical(item.name, item.directory));
+            if (found == expected.end() || found->second->directory != item.directory)
+                fail("Updated ZIP directory does not match the requested changes");
+            if (item.size && found->second->encrypt && !item.encrypted)
+                fail("Updated ZIP did not preserve encryption");
+            expected.erase(found);
+        }
+        const char *saved_comment = nullptr;
+        const int comment_status = mz_zip_reader_get_comment(verify.value, &saved_comment);
+        if ((comment_status != MZ_OK && !(comment_status == MZ_EXIST_ERROR && comment.empty())) ||
+            zip_comment(verify, saved_comment) != comment)
+            fail("Updated ZIP did not preserve the requested comment");
         zip_test(verify, items, password, false);
     }
-    commit(original,source,temporary,backup,revision,final_count);
+    if(prepare){Reader recheck(source.wstring(),encoding);finish_preparation(source,temporary,revision,final_count);}
+    else commit(original,source,temporary,backup,revision,final_count);
 }
