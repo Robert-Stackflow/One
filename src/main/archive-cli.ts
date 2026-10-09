@@ -36,7 +36,8 @@ Update add-source paths resolve from the changes file. Passwords must be piped t
 No main window or Explorer folder is opened. Existing archive targets are never overwritten.
 Malware scanning is off by default. --scan requires a local AMSI provider; incomplete scans do not publish files.
 Parallel results may interleave; JSON records include the original job index and request id.
-Overlapping reads/writes keep plan order; update jobs are ordered barriers. Independent CLI instances have separate budgets.
+Overlapping reads/writes keep plan order; update jobs are ordered barriers.
+GUI and CLI instances in the same user/session share quotas; the strictest participating budget applies.
 Exit: 0 success, 1 operation failure, 2 arguments, 3 password, 4 invalid archive,
       5 read, 6 write, 7 unsafe content, 8 mixed batch results, 9 resources, 10 scan incomplete, 11 scan blocked, 12 timed out, 13 risk confirmation required, 130 cancelled, 126 runtime missing.
 `;

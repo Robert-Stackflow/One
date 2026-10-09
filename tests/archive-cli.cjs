@@ -10,9 +10,15 @@ const execute=promisify(execFile);
 
 async function main(){
  await fs.mkdir('work/temp',{recursive:true});const parent=path.resolve('work/temp'),root=await fs.mkdtemp(path.join(parent,'archive-cli-test-'));
- const profile=path.join(root,'profile'),cli=path.resolve('dist/native/One.Cli.exe');
- const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,TEMP:root,TMP:root};
+ const profile=path.join(root,'profile'),runtimeRoot=path.join(root,'runtime'),cli=path.join(runtimeRoot,'dist/native/One.Cli.exe');
+ const env={...process.env,ONE_TEST_MODE:'1',ONE_ARCHIVE_TEST_BUDGET_SCOPE:'test-'+require('node:crypto').randomUUID(),ONE_DATA_DIR:profile,TEMP:root,TMP:root};
+ async function linkTree(from,to,renameElectron=false){await fs.mkdir(to,{recursive:true});for(const item of await fs.readdir(from,{withFileTypes:true})){if(item.isDirectory())await linkTree(path.join(from,item.name),path.join(to,item.name),renameElectron);else await fs.link(path.join(from,item.name),path.join(to,renameElectron&&item.name==='electron.exe'?'One.exe':item.name));}}
  try{
+  await fs.mkdir(path.join(runtimeRoot,'dist/native'),{recursive:true});
+  const {mainOptions}=await import('../scripts/bundle-options.mjs');
+  await build({...mainOptions,entryPoints:['src/main/archive-cli-entry.ts'],outdir:path.join(runtimeRoot,'dist/main'),sourcemap:false});
+  for(const file of ['One.Cli.exe','One.Archive.exe','One.ArchiveBudget.dll','7z.dll'])await fs.copyFile(path.resolve('dist/native',file),path.join(runtimeRoot,'dist/native',file));
+  await linkTree(path.resolve('node_modules/electron/dist'),path.join(runtimeRoot,'node_modules/electron/dist'));
   const unit=path.join(root,'cli-unit.cjs');await build({entryPoints:['src/main/archive-cli.ts'],outfile:unit,bundle:true,platform:'node'});
   const {parseCli,runCli,CliFailure}=require(unit);
   for(const args of [['create','--output','x.zip'],['create','--output','x.zip','--volume-size','1','a'],['list','--encoding','42','a.zip'],['test','--output','x','a.zip'],['extract','--output','out','--select','-1','a.zip'],['create','--output','x.zip','--format','7z','a'],['create','--output','x.tar.gz','--format','gz','a'],['list','--json','--json','a.zip'],['list','--password=SECRET','a.zip']])assert.throws(()=>parseCli(args,root),CliFailure);
@@ -99,16 +105,16 @@ async function main(){
   // Verify installed file layout and ASAR resolution without installing or
   // launching a GUI. Hard links keep the private runtime lightweight.
   const packaged=path.join(root,'packaged'),source=path.join(root,'asar-source');await fs.mkdir(path.join(source,'dist/main'),{recursive:true});await fs.mkdir(path.join(source,'dist/native'),{recursive:true});await fs.mkdir(path.join(packaged,'resources'),{recursive:true});
-  async function linkTree(from,to){await fs.mkdir(to,{recursive:true});for(const item of await fs.readdir(from,{withFileTypes:true})){if(item.isDirectory())await linkTree(path.join(from,item.name),path.join(to,item.name));else await fs.link(path.join(from,item.name),path.join(to,item.name==='electron.exe'?'One.exe':item.name));}}
-  await linkTree(path.resolve('node_modules/electron/dist'),packaged);
-  await fs.copyFile(path.resolve('dist/main/archive-cli-entry.cjs'),path.join(source,'dist/main/archive-cli-entry.cjs'));
+  await linkTree(path.resolve('node_modules/electron/dist'),packaged,true);
+  await fs.copyFile(path.join(runtimeRoot,'dist/main/archive-cli-entry.cjs'),path.join(source,'dist/main/archive-cli-entry.cjs'));
   await fs.writeFile(path.join(source,'package.json'),JSON.stringify({version:'0.16.20'}));
-  for(const file of ['One.Archive.exe','7z.dll'])await fs.copyFile(path.resolve('dist/native',file),path.join(source,'dist/native',file));
-  await asar.createPackageWithOptions(source,path.join(packaged,'resources/app.asar'),{unpackDir:'dist/native'});await fs.copyFile(cli,path.join(packaged,'One.Cli.exe'));
+  for(const file of ['One.Archive.exe','One.ArchiveBudget.dll','7z.dll'])await fs.copyFile(path.resolve('dist/native',file),path.join(source,'dist/native',file));
+  for(const dependency of ['koffi','@koromix/koffi-win32-x64'])await fs.cp(path.resolve('node_modules',dependency),path.join(source,'node_modules',dependency),{recursive:true});
+  await asar.createPackageWithOptions(source,path.join(packaged,'resources/app.asar'),{unpackDir:'dist/native',unpack:'**/*.node'});await fs.copyFile(cli,path.join(packaged,'One.Cli.exe'));
   await run(['create','--json','--output','packaged.zip',input],'',0,path.join(packaged,'One.Cli.exe'));await run(['test','--json',path.join(root,'packaged.zip')],'',0,path.join(packaged,'One.Cli.exe'));
   const packagedParallel=await run(['test','--json','--progress','--concurrency','2','--memory-mib','128',path.join(root,'packaged.zip'),stored],'',0,path.join(packaged,'One.Cli.exe'));assert.equal(packagedParallel.records.at(-1).completed,2);
   const candidate=path.join(root,'release-check');await fs.mkdir(candidate);await fs.rename(packaged,path.join(candidate,'win-unpacked'));await fs.copyFile(cli,path.join(source,'dist/native/One.Cli.exe'));
-  const {validateRelease}=await import('../scripts/release.mjs');assert.equal((await validateRelease(candidate,source,'0.16.20')).checked,4);
+  const {validateRelease}=await import('../scripts/release.mjs');assert.equal((await validateRelease(candidate,source,'0.16.20')).checked,5);
 
   // Real Windows console cancellation; isolated helper process group means
   // the service, rather than the console, owns cleanup of archive publication.

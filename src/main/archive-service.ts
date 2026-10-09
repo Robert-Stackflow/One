@@ -17,6 +17,7 @@ import {ArchiveWatchdog,archiveWatchdogLimits} from './archive-watchdog';
 import {extractionBudget,riskApproval,validArchiveRisk,type ArchiveRisk,type ArchiveRiskApproval,type ExtractionBudget} from '../shared/archive-risk';
 import {archiveEntryDetails} from '../shared/archive-details';
 import {validArchiveRevision} from '../shared/archive-revision';
+import {ArchiveSharedBudget,type ArchiveSharedLease} from './archive-shared-budget';
 
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|{type:'result';count:number;skipped?:number;cancelled?:boolean}|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'error';message:string;code?:string};
 export class ArchiveFailure extends Error {constructor(message:string,readonly code:string='archive',readonly scan?:ArchiveScan,readonly risk?:ArchiveRisk){super(message);this.name='ArchiveFailure';}}
@@ -38,8 +39,9 @@ export class ArchiveService {
   private publishing=new Map<string,{controller:AbortController;owner:number}>();
   private pending=new Set<Promise<ArchiveListing|ArchiveResult>>();
   private requests=new Set<string>();
-  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;passwordEncoding:ArchivePasswordEncoding;riskApproval?:ArchiveRiskApproval;extractionLimits:ExtractionBudget;source:string;extractionStarted?:number;propagateZone:boolean;scan:boolean;controller:AbortController}>();
+  private jobs=new Map<string,{owner:number;cancelled:boolean;committing:boolean;finishing:boolean;resources:ArchiveResources;level:number;passwordEncoding:ArchivePasswordEncoding;riskApproval?:ArchiveRiskApproval;extractionLimits:ExtractionBudget;source:string;extractionStarted?:number;propagateZone:boolean;scan:boolean;controller:AbortController;shared?:ArchiveSharedLease}>();
   private scheduler=new ArchiveScheduler();
+  private shared:ArchiveSharedBudget|undefined;
   private budgetOverride:ArchiveBudget|undefined;
   private stopped=false;
   private cached=new Map<string,CachedTar>();
@@ -52,7 +54,7 @@ export class ArchiveService {
     this.cacheMaintenance=this.dragCache.sweep();
   }
   get pendingTasks(){return this.pending.size;}
-  setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.budgetOverride=budget;}
+  setBudget(value:ArchiveBudget){const budget=archiveBudget(value);this.scheduler.configure(budget);this.shared?.configure(budget);this.budgetOverride=budget;}
   taskOverview(){return this.tasks?.overview()??Promise.resolve({active:[],recent:[],error:''});}
   cancelId(id:string){const job=this.jobs.get(id);if(!job)throw Error('任务已结束');if(!this.cancel(id,job.owner))throw Error('正在完成最终保存，请等待任务结束');return job.owner;}
   private checkpoint(id:string){if(this.jobs.get(id)?.cancelled)throw new ArchiveFailure('压缩任务已取消','cancelled');}
@@ -64,7 +66,7 @@ export class ArchiveService {
     this.publishing.get(id)?.controller.abort();return true;}
   async stop(){
     this.stopped=true;for(const [id,job] of this.jobs)this.cancel(id,job.owner);
-    await Promise.allSettled([...this.pending]);await this.tasks?.flush();await this.cacheMaintenance;
+    await Promise.allSettled([...this.pending]);await this.shared?.close();await this.tasks?.flush();await this.cacheMaintenance;
     for(const item of this.cached.values())await rm(item.directory,{recursive:true,force:true}).catch(error=>this.diagnostic('archive-cache-cleanup',String(error),true));
     this.cached.clear();await this.dragCache.sweep();
     // Another helper can outlive a crashed One instance. Never recursively
@@ -80,17 +82,19 @@ export class ArchiveService {
     let resources:ArchiveResources,level:number,propagateZone:boolean,scan:boolean,budget:ArchiveBudget,passwordEncoding:ArchivePasswordEncoding,approved:ArchiveRiskApproval|undefined,limits:ExtractionBudget;
     try{approved=riskApproval(request?.riskApproval);limits=extractionBudget(approved??request?.extractionLimits);passwordEncoding=archivePasswordEncoding(request?.passwordEncoding);if(passwordEncoding!==65001&&(typeof request?.path!=='string'||!/\.zip$/i.test(request.path)))throw Error('密码编码选项仅适用于 ZIP；其他格式请使用默认 UTF-8');password(request?.password);}catch(error){return Promise.reject(error);}
     try{const defaults=this.defaults();resources=archiveResources(request,defaults);level=archiveLevel(request?.operation==='create'&&request.level!==undefined?request.level:defaults.compressionLevel??6);propagateZone=(request?.operation==='extract'||request?.operation==='drag')&&request.propagateZone!==undefined?request.propagateZone:defaults.propagateZone??true;if(typeof propagateZone!=='boolean')throw Error('来源标记设置无效');scan=(request?.operation==='extract'||request?.operation==='drag')&&request.scan!==undefined?request.scan:defaults.scanOnExtract??false;if(typeof scan!=='boolean')throw Error('解压扫描设置无效');budget=this.budgetOverride??archiveBudget(defaults,resources);}catch(error){return Promise.reject(error);}
-    try{this.scheduler.configure(budget);}catch(error){return Promise.reject(error);}
+    try{this.scheduler.configure(budget);this.shared??=new ArchiveSharedBudget(budget);this.shared.configure(budget);}catch(error){return Promise.reject(error);}
     this.requests.add(id);
-    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,passwordEncoding,riskApproval:approved,extractionLimits:limits,source:request.path,extractionStarted:undefined as number|undefined,propagateZone,scan,controller:new AbortController()};this.jobs.set(id,job);
+    const job={owner,cancelled:false,committing:false,finishing:false,resources,level,passwordEncoding,riskApproval:approved,extractionLimits:limits,source:request.path,extractionStarted:undefined as number|undefined,propagateZone,scan,controller:new AbortController(),shared:undefined as ArchiveSharedLease|undefined};this.jobs.set(id,job);
     const task=(async()=>{let result:ArchiveListing|ArchiveResult|undefined,error:unknown,release:(()=>void)|undefined;
       try{if(request&&['create','extract','test','update','drag'].includes(request.operation))await this.tasks?.begin(id,request.operation as import('../shared/archive').ArchiveTaskOperation,path(request.path),'queue');
         this.checkpoint(id);release=await this.scheduler.acquire(resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
+        job.shared=await this.shared!.acquire(id,resources,job.controller.signal,queuePosition=>this.notify(owner,{id,operation:'queue',done:0,total:0,queuePosition}));
         this.checkpoint(id);this.diagnostic('archive-job-admitted',JSON.stringify({id,...resources,...this.scheduler.budget}));
+        this.diagnostic('archive-shared-budget',JSON.stringify({id,...job.shared.budget}));
         if(request.operation==='extract'||request.operation==='drag'||composite(request.path))this.diagnostic('archive-extraction-budget',JSON.stringify({id,...limits,confirmed:!!approved}));
         result=await this.perform(owner,request,id);return result;
       }catch(cause){error=cause;if(cause instanceof ArchiveFailure&&cause.code==='risk'&&cause.risk)return {path:request.path,count:0,risk:cause.risk};throw cause;}
-      finally{job.finishing=true;try{await this.tasks?.finish(id,result&&'count'in result?result:undefined,error,job.cancelled||error instanceof ArchiveFailure&&error.code==='cancelled');}finally{release?.();}}
+      finally{job.finishing=true;try{await this.tasks?.finish(id,result&&'count'in result?result:undefined,error,job.cancelled||error instanceof ArchiveFailure&&error.code==='cancelled');}finally{try{await job.shared?.release();}finally{release?.();}}}
     })();
     this.pending.add(task);
     void task.finally(()=>{this.pending.delete(task);this.requests.delete(id);this.jobs.delete(id);}).catch(()=>{});
@@ -102,7 +106,7 @@ export class ArchiveService {
       // CLI cancellation is handled by this service, not a console-wide signal
       // that could kill the helper during transactional publication.
       const options=this.jobs.get(id)!;
-      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
+      const child=spawn(helper(),[operation,...args],{windowsHide:true,stdio:'pipe',detached:this.independentProcessGroup,env:{...process.env,...options.shared!.environment,ONE_ARCHIVE_RISK_SOURCE:options.source,ONE_ARCHIVE_RISK_REVISION:options.riskApproval?.revision??'',ONE_ARCHIVE_EXTRACT_MAX_BYTES:String(options.extractionLimits.maxBytes),ONE_ARCHIVE_EXTRACT_MAX_MS:String(options.extractionLimits.maxMilliseconds),ONE_ARCHIVE_COMPOSITE_PREPARE:operation==='extract'&&composite(args[0])?'1':'0',ONE_ARCHIVE_PASSWORD_ENCODING:String(options.passwordEncoding),ONE_ARCHIVE_SCAN:origin&&options.scan?'1':'0',ONE_ARCHIVE_LEVEL:String(options.level),ONE_ARCHIVE_THREADS:String(options.resources.threads),ONE_ARCHIVE_MEMORY_MIB:String(options.resources.memoryMiB),ONE_ARCHIVE_PROPAGATE_ZONE:origin&&options.propagateZone?'1':'0',ONE_ARCHIVE_ZONE_SOURCE:origin?.path??'',ONE_ARCHIVE_ZONE_STAMP:origin?.stamp??''}});
       const task={child,owner,committing:false,cooperative:operation==='publish'};
       this.active.set(id,task);
       const data:Message[]=[];let buffered='',error='',errorCode='archive',failed=false,settled=false;

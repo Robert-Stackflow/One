@@ -22,6 +22,7 @@
 #include "mz_zip_rw.h"
 #include "common.h"
 #include "resources.h"
+#include "shared-budget.h"
 #include "origin.h"
 #include "scan.h"
 #include "browse.h"
@@ -452,6 +453,7 @@ int wmain(int argc, wchar_t **argv) {
         if (argc < 3) fail("Usage: One.Archive.exe list|create|extract|test ...");
         if(!GetEnvironmentVariableW(L"ONE_ARCHIVE_RISK_SOURCE",nullptr,0))SetEnvironmentVariableW(L"ONE_ARCHIVE_RISK_SOURCE",argv[2]);
         ArchiveResourceJob resources;
+        ArchiveGlobalLease global_lease;
         ArchiveHeartbeat heartbeat;
         const std::wstring mode = argv[1];
         std::string password = password_from_stdin();
