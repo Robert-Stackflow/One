@@ -80,6 +80,13 @@ static std::string password_from_stdin() {
     return password;
 }
 
+int archive_acknowledgement(){
+    // Read exactly one pipe byte. CRT fgetc can retain a following stop byte
+    // in its internal buffer, hiding it from cooperative PeekNamedPipe checks.
+    unsigned char byte=0;DWORD got=0;
+    return ReadFile(GetStdHandle(STD_INPUT_HANDLE),&byte,1,&got,nullptr)&&got==1?int(byte):-1;
+}
+
 bool safe_entry(const std::string &name, bool directory) {
     if (name.empty() || name.size() > 32767 || name[0] == '/' || name[0] == '\\') return false;
     std::string part;
@@ -487,6 +494,9 @@ int wmain(int argc, wchar_t **argv) {
             wchar_t test[4]{};
             if(argc!=3||GetEnvironmentVariableW(L"ONE_TEST_MODE",test,4)!=1||test[0]!=L'1')fail("Private scan test requires test mode");
             archive_scan(argv[2]);
+        } else if (mode == L"volume-recover" || mode == L"volume-cleanup") {
+            if(argc!=4)fail("Volume recovery requires an explicit parent and recovery directory");
+            if(mode==L"volume-recover")recover_volume_update(argv[2],argv[3]);else cleanup_volume_update(argv[2],argv[3]);
         } else if (mode == L"cleanup") {
             if(argc!=4)fail("Cleanup requires an explicit parent and recovery directory");
             extract_cleanup(argv[2],argv[3]);

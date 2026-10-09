@@ -15,7 +15,7 @@ async function main(){
  const env={...process.env,ONE_TEST_MODE:'1',TEMP:root,TMP:root};delete env.ONE_ARCHIVE_PUBLISH_CRASH_POINT;delete env.ONE_ARCHIVE_RECOVER_CRASH_POINT;
  const read=(job,name)=>fs.readFile(path.join(job.parent,name),'utf8');
  const missing=file=>assert.rejects(fs.stat(file),{code:'ENOENT'});
- const run=(job,extra={},status=0,ack=1)=>{const result=spawnSync(helper,['recover',job.parent,job.recovery],{env:{...env,...extra},input:Buffer.from([0,0,0,0,ack]),encoding:'utf8',timeout:30000});assert.equal(result.status,status,JSON.stringify(result));return result;};
+ const run=(job,extra={},status=0,ack=1)=>{const result=spawnSync(helper,['recover',job.parent,job.recovery],{env:{...env,...extra},input:Buffer.from([0,0,0,0,...[ack].flat()]),encoding:'utf8',timeout:30000});assert.equal(result.status,status,JSON.stringify(result));return result;};
  const fixture=async(point='published:0',uppercase=false)=>{
   const id=uppercase?randomUUID().toUpperCase():randomUUID(),parent=path.join(root,'中文 😀 '+serial++),stage=path.join(parent,'.one-extract-'+id),recovery=path.join(parent,'.one-recovery-'+id);await fs.mkdir(stage,{recursive:true});
   for(const name of ['a.txt','b.txt']){await fs.writeFile(path.join(parent,name),'old '+name);await fs.writeFile(path.join(stage,name),'new '+name);}
@@ -46,6 +46,7 @@ async function main(){
   job=await fixture();const good=await fs.readFile(job.manifest,'utf8'),rows=good.trimEnd().split('\n').map(line=>JSON.parse(line).record);
   for(const bad of [good.slice(0,-1),good.replace('"version":2','"version":3'),journal([{...rows[0],version:3},...rows.slice(1)]),journal([rows[0],{...rows[1],target:path.join(root,'escape.txt')},...rows.slice(2)]),journal([rows[0],{...rows[1],sourceStamp:rows[1].targetStamp},...rows.slice(2)]),journal([rows[0],rows[1],rows[1],...rows.slice(2)]),journal([...rows,{type:'committed',count:4,skipped:0}])]){await fs.writeFile(job.manifest,bad);run(job,{},2);assert.equal(await read(job,'a.txt'),'new a.txt');}
   await fs.writeFile(job.manifest,good);run(job,{},2,2);assert.equal(await read(job,'a.txt'),'new a.txt','Cancellation before acknowledgement does not move files');
+  run(job,{},2,[1,2]);assert.equal(await read(job,'a.txt'),'new a.txt','Stop queued immediately after ACK is not buffered away');
   // First restorer holds the manifest and all inspected directory ancestors.
   live=spawn(helper,['recover',job.parent,job.recovery],{env,stdio:'pipe',windowsHide:true});let output='';let readyResolve,readyReject;const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});
   const timer=setTimeout(()=>readyReject(Error('Recovery did not become ready')),10000);const ended=new Promise(resolve=>live.once('close',resolve));

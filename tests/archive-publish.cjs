@@ -21,13 +21,14 @@ async function main(){
    return {parent,stage,recovery};
   };
   const env={...process.env,ONE_TEST_MODE:'1',TEMP:root,TMP:root};
-  const run=(job,policy='rename',extra={},status=0)=>{
-   const result=spawnSync(helper,['publish',job.stage,job.parent,job.recovery,policy],{env:{...env,...extra},input:Buffer.from([0,0,0,0,1]),encoding:'utf8',timeout:30000});
+  const run=(job,policy='rename',extra={},status=0,ack=1)=>{
+   const result=spawnSync(helper,['publish',job.stage,job.parent,job.recovery,policy],{env:{...env,...extra},input:Buffer.from([0,0,0,0,...[ack].flat()]),encoding:'utf8',timeout:30000});
    assert.equal(result.status,status,result.stdout+'\n'+result.stderr+'\n'+result.error);
    return result.stdout.trim().split(/\r?\n/).filter(Boolean).map(JSON.parse).at(-1);
   };
   const noRecovery=job=>assert.rejects(fs.stat(job.recovery),{code:'ENOENT'});
   let job=await fixture();assert.equal(run(job).count,1);assert.equal(await fs.readFile(path.join(job.parent,'a.txt'),'utf8'),'old');assert.equal(await fs.readFile(path.join(job.parent,'a (2).txt'),'utf8'),'new');await noRecovery(job);
+  job=await fixture();const queuedStop=run(job,'replace',{},0,[1,2]);assert(queuedStop.cancelled);assert.equal(await fs.readFile(path.join(job.parent,'a.txt'),'utf8'),'old');assert.equal(await fs.readFile(path.join(job.stage,'a.txt'),'utf8'),'new');await noRecovery(job);
   job=await fixture();assert.equal(run(job,'skip').skipped,1);assert.equal(await fs.readFile(path.join(job.parent,'a.txt'),'utf8'),'old');await noRecovery(job);
   job=await fixture();assert.equal(run(job,'replace').count,1);assert.equal(await fs.readFile(path.join(job.parent,'a.txt'),'utf8'),'new');await noRecovery(job);
   job=await fixture({'目录/a.txt':'新','目录/empty':null},{'目录/a.txt':'旧','目录/keep.txt':'keep'});run(job,'replace');assert.equal(await fs.readFile(path.join(job.parent,'目录/a.txt'),'utf8'),'新');assert.equal(await fs.readFile(path.join(job.parent,'目录/keep.txt'),'utf8'),'keep');await fs.stat(path.join(job.parent,'目录/empty'));await noRecovery(job);

@@ -12,7 +12,7 @@ async function main(){
  const prior={ONE_TEST_MODE:process.env.ONE_TEST_MODE,ONE_ARCHIVE_RECOVER_CRASH_POINT:process.env.ONE_ARCHIVE_RECOVER_CRASH_POINT};
  const env={...process.env,ONE_TEST_MODE:'1',TEMP:root,TMP:root};delete env.ONE_ARCHIVE_PUBLISH_CRASH_POINT;delete env.ONE_ARCHIVE_RECOVER_CRASH_POINT;
  const missing=file=>assert.rejects(fs.stat(file),{code:'ENOENT'});
- const run=(job,mode='cleanup',extra={},status=0,ack=1)=>{const result=spawnSync(helper,[mode,job.parent,job.recovery],{env:{...env,...extra},input:Buffer.from([0,0,0,0,ack]),encoding:'utf8',timeout:30000});assert.equal(result.status,status,JSON.stringify(result));return result;};
+ const run=(job,mode='cleanup',extra={},status=0,ack=1)=>{const result=spawnSync(helper,[mode,job.parent,job.recovery],{env:{...env,...extra},input:Buffer.from([0,0,0,0,...[ack].flat()]),encoding:'utf8',timeout:30000});assert.equal(result.status,status,JSON.stringify(result));return result;};
  const read=(job,name)=>fs.readFile(path.join(job.parent,name),'utf8');
  const fixture=async(point='committed')=>{
   const id=randomUUID(),parent=path.join(root,'中文 😀 '+serial++),stage=path.join(parent,'.one-extract-'+id),recovery=path.join(parent,'.one-recovery-'+id);await fs.mkdir(stage,{recursive:true});
@@ -55,6 +55,7 @@ async function main(){
   for(const name of await fs.readdir(job.recovery))await fs.unlink(path.join(job.recovery,name));run(job);await missing(job.recovery);
   const outside={parent:root,recovery:path.join(root,'ordinary')};await fs.mkdir(outside.recovery);run(outside,'cleanup',{},2);assert((await fs.stat(outside.recovery)).isDirectory());
   job=await fixture();run(job,'cleanup',{},2,2);assert.equal(await fs.readFile(path.join(job.recovery,'0.original'),'utf8'),'old a.txt');
+  run(job,'cleanup',{},2,[1,2]);assert.equal(await fs.readFile(path.join(job.recovery,'0.original'),'utf8'),'old a.txt','Stop immediately after ACK preserves every recovery copy');
   let {ended}=await ready(job);run(job,'cleanup',{},2);run(job,'recover',{},2);await assert.rejects(fs.rename(job.recovery,job.recovery+'-moved'));await fs.writeFile(path.join(job.parent,'a.txt'),'late edit');live.stdin.end(Buffer.from([1]));assert.equal(await ended,2);live=undefined;assert.equal(await fs.readFile(path.join(job.recovery,'0.original'),'utf8'),'old a.txt');
   job=await fixture();({ended}=await ready(job));await fs.writeFile(path.join(job.recovery,'unknown'),'late unknown');live.stdin.end(Buffer.from([1]));assert.equal(await ended,2);live=undefined;assert.equal(await fs.readFile(path.join(job.recovery,'unknown'),'utf8'),'late unknown');assert(await fs.stat(job.manifest),'Unknown late child retains manifest for inspection');
   job=await fixture();run(job,'cleanup',{ONE_TEST_MODE:'0',ONE_ARCHIVE_RECOVER_CRASH_POINT:'cleanup:0'});await missing(job.recovery);

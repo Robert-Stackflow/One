@@ -187,7 +187,7 @@ void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path
         }
         log->append("{\"type\":\"prepared\",\"items\":"+std::to_string(planned)+",\"skipped\":"+std::to_string(items.size()-planned)+"}");log->flush();
         crash_at("prepared");
-        emit("{\"type\":\"ready\"}");const auto acknowledgement=std::fgetc(stdin);if(acknowledgement!=1){aborted=acknowledgement==2;fail("Extraction cancelled before publishing");}
+        emit("{\"type\":\"ready\"}");const auto acknowledgement=archive_acknowledgement();if(acknowledgement!=1){aborted=acknowledgement==2;fail("Extraction cancelled before publishing");}
         ULONGLONG last=0,last_flush=GetTickCount64();
         const auto fail_after=test_value(L"ONE_ARCHIVE_PUBLISH_FAIL_AFTER"),wait_after=test_value(L"ONE_ARCHIVE_PUBLISH_WAIT_AFTER");
         for(size_t index=0;index<items.size();++index){auto &item=items[index];

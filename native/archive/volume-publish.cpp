@@ -227,7 +227,7 @@ void publish_volume_update(const fs::path &source,const fs::path &prepared,const
                 ",\"target\":"+json(utf8(item.target.wstring()))+",\"backup\":"+json(utf8(item.backup.wstring()))+
                 ",\"sourceStamp\":"+json(item.source_stamp)+",\"targetStamp\":"+json(item.target_stamp)+"}");}
         log->append("{\"type\":\"prepared\",\"items\":"+std::to_string(items.size())+"}");log->flush();crash_at("prepared");fault_at("prepared");
-        emit("{\"type\":\"ready\"}");const auto acknowledgement=std::fgetc(stdin);if(acknowledgement!=1){aborted=acknowledgement==2;fail("Volume update cancelled before publishing","cancelled");}
+        emit("{\"type\":\"ready\"}");const auto acknowledgement=archive_acknowledgement();if(acknowledgement!=1){aborted=acknowledgement==2;fail("Volume update cancelled before publishing","cancelled");}
         // Sharing modes block content writes and renames, but Windows can still
         // add hard links. Recheck the ENTIRE locked plan after the handshake,
         // before moving any original, and again before the commit decision.

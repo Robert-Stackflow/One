@@ -24,7 +24,7 @@ async function main(){
  const fingerprint=async file=>({hash:hash(await fs.readFile(file)),ino:(await fs.stat(file,{bigint:true})).ino,stamp:nativeStamp(file)});
  const native=(args,input,status=0,extra={})=>{const result=spawnSync(helper,args,{input,env:{...env,...extra},windowsHide:true,encoding:'utf8',timeout:60000,maxBuffer:4*1024**2});assert([status].flat().includes(result.status),JSON.stringify(result));return result.stdout.trim().split(/\r?\n/).filter(Boolean).map(JSON.parse);};
  const publishArgs=job=>['volume-publish',job.source,job.primary,job.recovery,'0',job.oldRevision,job.newRevision];
- const publish=(job,status=0,extra={},ack=1)=>native(publishArgs(job),Buffer.concat([secret(job.password),Buffer.from([ack])]),status,extra);
+ const publish=(job,status=0,extra={},ack=1)=>native(publishArgs(job),Buffer.concat([secret(job.password),Buffer.from([ack].flat())]),status,extra);
  const seven=(args)=>{const result=spawnSync('7z',args,{env,windowsHide:true,encoding:'utf8',timeout:60000,maxBuffer:4*1024**2});assert.equal(result.status,0,result.stdout+'\n'+result.stderr);};
  const pending=async job=>{
   const child=spawn(helper,publishArgs(job),{env,windowsHide:true,stdio:'pipe'});live.add(child);let output='',timer,readyResolve,readyReject;
@@ -110,6 +110,7 @@ async function main(){
   // Hold at the handshake: OS locks deny writes/renames of every family member.
   // A late collision at a NEW target is preserved and triggers complete rollback.
   job=await fixture();let waiting=await pending(job);waiting.child.stdin.end(Buffer.from([2]));const cancelled=await waiting.result;assert.equal(cancelled.code,0);assert(cancelled.messages.some(row=>row.type==='result'&&row.cancelled&&!row.committed));await original(job);await staged(job);assert(!await exists(job.recovery));
+  job=await fixture();const queuedStop=publish(job,0,{},[1,2]);assert(queuedStop.some(row=>row.type==='result'&&row.cancelled&&!row.committed));await original(job);await staged(job);assert(!await exists(job.recovery));
   job=await fixture();waiting=await pending(job);for(const file of [job.source,path.join(job.parent,Object.keys(job.old).at(-1))])await assert.rejects(fs.writeFile(file,'tamper'));for(const file of [job.primary,path.join(job.stage,Object.keys(job.next).at(-1))])await assert.rejects(fs.rename(file,file+'.moved'));
   const newName=Object.keys(job.next).find(name=>!job.old[name]);assert(newName);const foreignTarget=path.join(job.parent,newName);await fs.writeFile(foreignTarget,'unowned target');waiting.child.stdin.end(Buffer.from([1]));assert.equal((await waiting.result).code,2);await original(job);await staged(job);assert.equal(await fs.readFile(foreignTarget,'utf8'),'unowned target');assert(!await exists(job.recovery));
   job=await fixture();waiting=await pending(job);const unowned=path.join(job.recovery,'unknown.txt');await fs.writeFile(unowned,'unowned recovery');waiting.child.stdin.end(Buffer.from([1]));const kept=await waiting.result;assert.equal(kept.code,0);assert(kept.messages.some(row=>row.type==='result'&&row.committed&&row.cleanupPending));await published(job);assert.equal(await fs.readFile(unowned,'utf8'),'unowned recovery');

@@ -13,9 +13,12 @@ std::wstring wide(const std::string &value);
 std::string json(const std::string &value);
 void emit(const std::string &line);
 bool archive_cancelled();
+int archive_acknowledgement();
 void extract_publish(const fs::path &stage,const fs::path &parent,const fs::path &recovery,const std::string &conflict,const fs::path &archive={});
 void extract_recover(const fs::path &parent,const fs::path &recovery);
 void extract_cleanup(const fs::path &parent,const fs::path &recovery);
+void recover_volume_update(const fs::path &parent,const fs::path &recovery);
+void cleanup_volume_update(const fs::path &parent,const fs::path &recovery);
 class ArchiveError final:public std::runtime_error {
 public:
     std::string code;
