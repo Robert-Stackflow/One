@@ -1,0 +1,502 @@
+{
+  "sourceCommit": "9d5a5a899361f09d0414b3dfc55f7d874f9db47d",
+  "baselineSourceCommit": "ab5aaf85cb5811a0b6e961d6e582982afc7764ec",
+  "fixture": {
+    "name": "solid-large.7z",
+    "bytes": 687431,
+    "sha256": "a055829e1be86896568d7d7552d0ab60f8dccd087ee0aa867298c50ee36ec71b",
+    "solid": true,
+    "blocks": 1
+  },
+  "diagnosticSources": {
+    "profile.h": "6fe68f7403cb392422cbc37a40fc6f0f1b0eee4b5f27336a199250c009fd8dde",
+    "build-profile.cjs": "9354f09ec857d7183879451017ba68a5e4e895cf4500159e264a41430da830e9",
+    "run-profile.cjs": "cb29bd798e934ad948e5893452cfbf461e7f57f5da5868f4e3ccf4c792d85187",
+    "profile2-probe.cjs": "24b0bb79c62a71b285484f5629b1627c1be8af7dac0d396dae588f11b95f9fb4"
+  },
+  "binaries": {
+    "baseline-profile2": {
+      "One.Archive.exe": "cc4f4ec6bb6093a9dc8ae7d755b4792db2178f397b2cbf2ddf1491732aa129b1",
+      "One.ArchiveBudget.dll": "e280d645c8fdc50e3cc5e65acbb98a996c5b488af96c104076b1407591fb45ee",
+      "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36"
+    },
+    "fixed-profile2": {
+      "One.Archive.exe": "bcf8ad19d69dbafc988aec5a2ec798931574e5c7717b2da86d7db76bbabfaba8",
+      "One.ArchiveBudget.dll": "ed801c6ee0d2858c2ab5fe3593af8929456b56c9809cf67fe7f0602d2fe97afe",
+      "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36"
+    }
+  },
+  "instrumentedFiles": [
+    "native/archive/sevenzip.cpp",
+    "native/archive/extract-space.cpp"
+  ],
+  "measurementScope": "Counters cover selected Win32 APIs in these two instrumented translation units. Extract interval runs from immediately before SDK Extract until seven_extract returns, excluding outer process startup/publication and later input destruction. Logical process I/O is not physical disk traffic.",
+  "runs": [
+    {
+      "variant": "baseline-profile2",
+      "report": "work/current/archive-solid/profile2-1-probe.json",
+      "milliseconds": 3826.2366,
+      "api": {
+        "create": {
+          "calls": 4,
+          "ms": 0.429,
+          "maxMs": 0.158
+        },
+        "read": {
+          "calls": 5,
+          "ms": 0.292,
+          "maxMs": 0.178
+        },
+        "write": {
+          "calls": 4226,
+          "ms": 1420.859,
+          "maxMs": 9.771
+        },
+        "close": {
+          "calls": 3,
+          "ms": 0.225,
+          "maxMs": 0.113
+        },
+        "space": {
+          "calls": 605,
+          "ms": 29.796,
+          "maxMs": 0.182
+        },
+        "extract": {
+          "calls": 1,
+          "ms": 3780.978,
+          "maxMs": 3780.978
+        }
+      },
+      "verified": 3,
+      "expectedHashes": [
+        {
+          "name": "00-first.bin",
+          "bytes": 134217728,
+          "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+        },
+        {
+          "name": "10-prefix.bin",
+          "bytes": 4294971392,
+          "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+        },
+        {
+          "name": "99-tail.txt",
+          "bytes": 1024,
+          "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+        }
+      ],
+      "metrics": {
+        "available": true,
+        "pid": 36508,
+        "peakWorkingBytes": 43737088,
+        "peakCommitBytes": 36777984,
+        "sampledPeakPrivateBytes": 36777984,
+        "seconds": 3.8115132,
+        "kernelSeconds": 1.375,
+        "userSeconds": 2.265625,
+        "logicalIo": {
+          "readOperations": 6,
+          "writeOperations": 4241,
+          "otherOperations": 1983,
+          "readBytes": 687435,
+          "writeBytes": 4429190749,
+          "otherBytes": 18048
+        }
+      }
+    },
+    {
+      "variant": "fixed-profile2",
+      "report": "work/current/archive-solid/profile2-2-probe.json",
+      "milliseconds": 3788.7312,
+      "api": {
+        "create": {
+          "calls": 4,
+          "ms": 0.367,
+          "maxMs": 0.16
+        },
+        "read": {
+          "calls": 5,
+          "ms": 0.207,
+          "maxMs": 0.116
+        },
+        "write": {
+          "calls": 4226,
+          "ms": 1430.619,
+          "maxMs": 5.214
+        },
+        "close": {
+          "calls": 3,
+          "ms": 9.474,
+          "maxMs": 9.339
+        },
+        "space": {
+          "calls": 605,
+          "ms": 26.669,
+          "maxMs": 0.31
+        },
+        "extract": {
+          "calls": 1,
+          "ms": 3755.285,
+          "maxMs": 3755.285
+        }
+      },
+      "verified": 3,
+      "expectedHashes": [
+        {
+          "name": "00-first.bin",
+          "bytes": 134217728,
+          "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+        },
+        {
+          "name": "10-prefix.bin",
+          "bytes": 4294971392,
+          "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+        },
+        {
+          "name": "99-tail.txt",
+          "bytes": 1024,
+          "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+        }
+      ],
+      "metrics": {
+        "available": true,
+        "pid": 58136,
+        "peakWorkingBytes": 43696128,
+        "peakCommitBytes": 36704256,
+        "sampledPeakPrivateBytes": 36704256,
+        "seconds": 3.7829781,
+        "kernelSeconds": 1.265625,
+        "userSeconds": 2.421875,
+        "logicalIo": {
+          "readOperations": 6,
+          "writeOperations": 4241,
+          "otherOperations": 1983,
+          "readBytes": 687435,
+          "writeBytes": 4429190749,
+          "otherBytes": 18036
+        }
+      }
+    },
+    {
+      "variant": "fixed-profile2",
+      "report": "work/current/archive-solid/profile2-3-probe.json",
+      "milliseconds": 3912.4932,
+      "api": {
+        "create": {
+          "calls": 4,
+          "ms": 0.378,
+          "maxMs": 0.15
+        },
+        "read": {
+          "calls": 5,
+          "ms": 0.227,
+          "maxMs": 0.119
+        },
+        "write": {
+          "calls": 4226,
+          "ms": 1543.215,
+          "maxMs": 18.788
+        },
+        "close": {
+          "calls": 3,
+          "ms": 6.532,
+          "maxMs": 6.393
+        },
+        "space": {
+          "calls": 605,
+          "ms": 27.066,
+          "maxMs": 0.134
+        },
+        "extract": {
+          "calls": 1,
+          "ms": 3875.62,
+          "maxMs": 3875.62
+        }
+      },
+      "verified": 3,
+      "expectedHashes": [
+        {
+          "name": "00-first.bin",
+          "bytes": 134217728,
+          "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+        },
+        {
+          "name": "10-prefix.bin",
+          "bytes": 4294971392,
+          "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+        },
+        {
+          "name": "99-tail.txt",
+          "bytes": 1024,
+          "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+        }
+      ],
+      "metrics": {
+        "available": true,
+        "pid": 8248,
+        "peakWorkingBytes": 43704320,
+        "peakCommitBytes": 36712448,
+        "sampledPeakPrivateBytes": 36712448,
+        "seconds": 3.9068288,
+        "kernelSeconds": 1.421875,
+        "userSeconds": 2.296875,
+        "logicalIo": {
+          "readOperations": 6,
+          "writeOperations": 4241,
+          "otherOperations": 1983,
+          "readBytes": 687435,
+          "writeBytes": 4429190750,
+          "otherBytes": 18036
+        }
+      }
+    },
+    {
+      "variant": "baseline-profile2",
+      "report": "work/current/archive-solid/profile2-4-probe.json",
+      "milliseconds": 3965.568,
+      "api": {
+        "create": {
+          "calls": 4,
+          "ms": 0.389,
+          "maxMs": 0.135
+        },
+        "read": {
+          "calls": 5,
+          "ms": 0.226,
+          "maxMs": 0.104
+        },
+        "write": {
+          "calls": 4226,
+          "ms": 1557.222,
+          "maxMs": 19.597
+        },
+        "close": {
+          "calls": 3,
+          "ms": 0.245,
+          "maxMs": 0.124
+        },
+        "space": {
+          "calls": 605,
+          "ms": 28.676,
+          "maxMs": 0.226
+        },
+        "extract": {
+          "calls": 1,
+          "ms": 3927.729,
+          "maxMs": 3927.729
+        }
+      },
+      "verified": 3,
+      "expectedHashes": [
+        {
+          "name": "00-first.bin",
+          "bytes": 134217728,
+          "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+        },
+        {
+          "name": "10-prefix.bin",
+          "bytes": 4294971392,
+          "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+        },
+        {
+          "name": "99-tail.txt",
+          "bytes": 1024,
+          "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+        }
+      ],
+      "metrics": {
+        "available": true,
+        "pid": 42144,
+        "peakWorkingBytes": 43683840,
+        "peakCommitBytes": 36700160,
+        "sampledPeakPrivateBytes": 36700160,
+        "seconds": 3.959105,
+        "kernelSeconds": 1.5625,
+        "userSeconds": 2.125,
+        "logicalIo": {
+          "readOperations": 6,
+          "writeOperations": 4241,
+          "otherOperations": 1983,
+          "readBytes": 687435,
+          "writeBytes": 4429190750,
+          "otherBytes": 18048
+        }
+      }
+    },
+    {
+      "variant": "baseline-profile2",
+      "report": "work/current/archive-solid/profile2-5-probe.json",
+      "milliseconds": 3982.5588,
+      "api": {
+        "create": {
+          "calls": 4,
+          "ms": 0.432,
+          "maxMs": 0.151
+        },
+        "read": {
+          "calls": 5,
+          "ms": 0.208,
+          "maxMs": 0.118
+        },
+        "write": {
+          "calls": 4226,
+          "ms": 1594.459,
+          "maxMs": 22.427
+        },
+        "close": {
+          "calls": 3,
+          "ms": 10.391,
+          "maxMs": 10.261
+        },
+        "space": {
+          "calls": 605,
+          "ms": 27.793,
+          "maxMs": 0.18
+        },
+        "extract": {
+          "calls": 1,
+          "ms": 3943.314,
+          "maxMs": 3943.314
+        }
+      },
+      "verified": 3,
+      "expectedHashes": [
+        {
+          "name": "00-first.bin",
+          "bytes": 134217728,
+          "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+        },
+        {
+          "name": "10-prefix.bin",
+          "bytes": 4294971392,
+          "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+        },
+        {
+          "name": "99-tail.txt",
+          "bytes": 1024,
+          "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+        }
+      ],
+      "metrics": {
+        "available": true,
+        "pid": 5936,
+        "peakWorkingBytes": 43683840,
+        "peakCommitBytes": 36700160,
+        "sampledPeakPrivateBytes": 36700160,
+        "seconds": 3.9737573,
+        "kernelSeconds": 1.234375,
+        "userSeconds": 2.328125,
+        "logicalIo": {
+          "readOperations": 6,
+          "writeOperations": 4241,
+          "otherOperations": 1983,
+          "readBytes": 687435,
+          "writeBytes": 4429190752,
+          "otherBytes": 18048
+        }
+      }
+    },
+    {
+      "variant": "fixed-profile2",
+      "report": "work/current/archive-solid/profile2-6-probe.json",
+      "milliseconds": 3842.8401,
+      "api": {
+        "create": {
+          "calls": 4,
+          "ms": 0.439,
+          "maxMs": 0.143
+        },
+        "read": {
+          "calls": 5,
+          "ms": 0.222,
+          "maxMs": 0.101
+        },
+        "write": {
+          "calls": 4226,
+          "ms": 1489.02,
+          "maxMs": 23.411
+        },
+        "close": {
+          "calls": 3,
+          "ms": 0.264,
+          "maxMs": 0.147
+        },
+        "space": {
+          "calls": 605,
+          "ms": 27.128,
+          "maxMs": 0.381
+        },
+        "extract": {
+          "calls": 1,
+          "ms": 3805.216,
+          "maxMs": 3805.216
+        }
+      },
+      "verified": 3,
+      "expectedHashes": [
+        {
+          "name": "00-first.bin",
+          "bytes": 134217728,
+          "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+        },
+        {
+          "name": "10-prefix.bin",
+          "bytes": 4294971392,
+          "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+        },
+        {
+          "name": "99-tail.txt",
+          "bytes": 1024,
+          "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+        }
+      ],
+      "metrics": {
+        "available": true,
+        "pid": 19356,
+        "peakWorkingBytes": 43700224,
+        "peakCommitBytes": 36696064,
+        "sampledPeakPrivateBytes": 36696064,
+        "seconds": 3.8360069,
+        "kernelSeconds": 1.390625,
+        "userSeconds": 2.328125,
+        "logicalIo": {
+          "readOperations": 6,
+          "writeOperations": 4241,
+          "otherOperations": 1983,
+          "readBytes": 687435,
+          "writeBytes": 4429190750,
+          "otherBytes": 18036
+        }
+      }
+    }
+  ],
+  "mixed": {
+    "records": [
+      {
+        "case": "concurrent-browse-create-test",
+        "browseMilliseconds": 47.998400000000004,
+        "createCompletedAt": 435.5496,
+        "testCompletedAt": 460.6647,
+        "tailCompletedAt": 2482.1135999999997,
+        "hashes": 2
+      },
+      {
+        "case": "single-slot-fifo-and-queued-cancel",
+        "hashes": 1
+      },
+      {
+        "case": "cross-process-memory-fifo-and-cancel",
+        "hashes": 1
+      },
+      {
+        "case": "cross-process-threads-running-cancel-and-reuse",
+        "hashes": 0
+      }
+    ],
+    "report": "work/current/archive-solid/mixed-final.json",
+    "reportSha256": "36f2cca636df1ce33eecaa0e01a2e1bcfacbb27887f757ed99d28eaee520f3f7"
+  },
+  "conclusion": "Six diagnostic full-output runs did not reproduce the earlier 13.76–14.98 second baseline waits. No throughput gain or environmental cause is established. Mixed regressions passed with four output hashes.",
+  "outputHashChecks": 22
+}
