@@ -155,6 +155,10 @@ export interface OneAPI {
   pickDirectory(initialPath?: string): Promise<string | null>; scan(path: string): Promise<ScanSummary>; cancelScan(): Promise<void>;
   displayList():Promise<import('./display-management').ManagedDisplay[]>;
   displayProbe(id:string):Promise<import('./display-management').ManagedDisplay>;
+  displayProfileSave(name:string,id?:string):Promise<{profiles:import('./display-profiles').DisplayProfile[];profileId:string;warnings:import('./display-profiles').DisplayProfileWarning[]}>;
+  displayProfileRename(id:string,name:string):Promise<import('./display-profiles').DisplayProfile[]>;
+  displayProfileDelete(id:string):Promise<import('./display-profiles').DisplayProfile[]>;
+  displayProfileApply(id:string):Promise<import('./display-profiles').DisplayProfileResult[]>;
   displaySetBrightness(id:string,value:number):Promise<import('./display-management').DisplayWriteResult[]>;
   displaySet(id:string,parameter:import('./display-management').DisplayParameter,value:number):Promise<import('./display-management').DisplayControl>;
   displayCancel():Promise<void>;

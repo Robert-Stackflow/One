@@ -1,3 +1,4 @@
+import {validateDisplayProfile,type DisplayProfile,type DisplayProfileCapture,type DisplayProfileResult} from '../shared/display-profiles';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {join} from 'node:path';
@@ -47,8 +48,8 @@ export class DisplayManagementService {
  stop(){this.stopped=true;this.invalidate();}
  private target(id:string){if(typeof id!=='string'||!/^[0-9a-f]{64}$/.test(id))throw Error('显示器标识无效');const row=this.rows.get(id);if(!row)throw Error('显示器列表已变化，请刷新后重试');if(row.cloned)throw Error('镜像模式无法唯一控制此屏幕，请使用扩展模式');return row;}
  private publicRow(id:string,row:NativeDisplay):ManagedDisplay {const {path,key,...rest}=row;return {...rest,id};}
- list():Promise<ManagedDisplay[]>{
-  return this.enqueue('list',async()=>{
+ list():Promise<ManagedDisplay[]>{return this.enqueue('list',()=>this.inventory());}
+ private async inventory():Promise<ManagedDisplay[]>{
    const raw=await this.call(['list']);if(!Array.isArray(raw?.displays)||raw.displays.length>64)throw invalid();
    const found=new Map<string,NativeDisplay>();
    for(const row of raw.displays){
@@ -60,12 +61,12 @@ export class DisplayManagementService {
     const {name,source,path,key,identity,internal,virtual,primary,cloned,width,height,left,top,rotation,refreshRate}=row;found.set(id,{name,source,path,key,identity,internal,virtual,primary,cloned,width,height,left,top,rotation,refreshRate});
    }
    this.controller!.signal.throwIfAborted();this.rows=found;return [...found].map(([id,row])=>this.publicRow(id,row));
-  });
  }
- probe(id:string):Promise<ManagedDisplay>{return this.enqueue('probe:'+id,async()=>{
+ probe(id:string):Promise<ManagedDisplay>{return this.enqueue('probe:'+id,()=>this.detect(id));}
+ private async detect(id:string):Promise<ManagedDisplay>{
   const row=this.target(id),raw=await this.call(['probe',row.path,row.key]);const values=Object.fromEntries(displayParameters.map(key=>[key,control(raw?.controls?.[key])])) as Record<DisplayParameter,DisplayControl>;
   this.controller!.signal.throwIfAborted();row.controls=values;return this.publicRow(id,row);
- });}
+ }
  set(id:string,parameter:DisplayParameter,value:number):Promise<DisplayControl>{
   if(!displayParameters.includes(parameter)||!Number.isInteger(value)||value<0||value>100)return Promise.reject(Error('显示器参数需为 0 至 100 的整数'));
   return this.enqueue(`set:${id}:${parameter}`,()=>this.write(id,parameter,value));
@@ -88,6 +89,36 @@ export class DisplayManagementService {
     this.controller!.signal.throwIfAborted();
     try{results.push({id:target,control:await this.write(target,'brightness',value)});}
     catch(error){this.controller!.signal.throwIfAborted();results.push({id:target,error:error instanceof Error?error.message:'显示器设置失败'});}
+   }
+   return results;
+  });
+ }
+ captureProfile():Promise<DisplayProfileCapture>{return this.enqueue('profile:capture',async()=>{
+  await this.inventory();const targets:DisplayProfileCapture['targets']=[],warnings:DisplayProfileCapture['warnings']=[];
+  for(const [id,row] of this.rows){
+   if(row.cloned)continue;this.controller!.signal.throwIfAborted();
+   try{const found=await this.detect(id),values:DisplayProfileCapture['targets'][number]['values']={};
+    for(const parameter of displayParameters){const c=found.controls?.[parameter];if(c?.supported)values[parameter]=c.value!;}
+    if(Object.keys(values).length)targets.push({id,name:row.name,identity:row.identity,values});else warnings.push({name:row.name,error:'未提供可保存的控制参数'});
+   }catch(error){this.controller!.signal.throwIfAborted();warnings.push({name:row.name,error:error instanceof Error?error.message:'读取失败'});}
+  }
+  if(!targets.length)throw Error('没有可保存的显示器参数，请检测控制能力后重试');return {targets,warnings};
+ });}
+ applyProfile(value:DisplayProfile):Promise<DisplayProfileResult[]>{
+  let profile:DisplayProfile;try{profile=validateDisplayProfile(value);}catch(error){return Promise.reject(error);}
+  return this.enqueue('profile:apply',async()=>{
+   await this.inventory();const results:DisplayProfileResult[]=[];
+   for(const target of profile.targets){
+    this.controller!.signal.throwIfAborted();const result:DisplayProfileResult={id:target.id,name:target.name,controls:{},errors:{}};results.push(result);
+    const row=this.rows.get(target.id);if(!row){result.error='显示器未连接或身份已变化';continue;}
+    if(row.cloned||row.identity!==target.identity){result.error='当前显示器无法唯一匹配方案目标';continue;}
+    try{await this.detect(target.id);}catch(error){this.controller!.signal.throwIfAborted();result.error=error instanceof Error?error.message:'检测失败';continue;}
+    for(const parameter of displayParameters){
+     const desired=target.values[parameter];if(desired===undefined)continue;this.controller!.signal.throwIfAborted();
+     if(!row.controls?.[parameter].supported){result.errors[parameter]=row.controls?.[parameter].error||'当前接口不可用';continue;}
+     // Profiles carry per-screen values and intentionally do not trigger brightness linking.
+     try{result.controls[parameter]=await this.write(target.id,parameter,desired);}catch(error){this.controller!.signal.throwIfAborted();result.errors[parameter]=error instanceof Error?error.message:'设置失败';}
+    }
    }
    return results;
   });

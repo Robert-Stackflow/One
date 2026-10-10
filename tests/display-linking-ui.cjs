@@ -1,5 +1,5 @@
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),{_electron:electron,expect}=require('@playwright/test');
-const output=path.resolve('work/current/display-linking/ui');let checks=0;
+const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/display-linking','ui');let checks=0;
 const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};
 async function main(){
  await fs.mkdir(output,{recursive:true});const profile=await fs.mkdtemp(path.join(output,'profile-'));const env={...process.env,ONE_TEST_MODE:'1',ONE_TEST_DISPLAY_MANAGEMENT:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
