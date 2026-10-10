@@ -8,7 +8,7 @@ async function main(){
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const application=await electron.launch({args:[resolve('.')],env});const errors=[];application.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
  try{
-  const main=await application.firstWindow();await main.waitForSelector('[data-page=color]');await main.locator('[data-page=color]').click();await main.screenshot({path:join(output,'ruler-mode-selector.png')});
+  const main=await application.firstWindow();await main.waitForSelector('[data-page=images]');await main.locator('[data-page=images]').click();await main.screenshot({path:join(output,'ruler-mode-selector.png')});
   const rulerReady=application.waitForEvent('window',{predicate:page=>page.url().includes('view=screen-ruler')&&page.url().includes('mode=live')});await main.locator('#start-screen-ruler').click();const ruler=await rulerReady;await ruler.waitForSelector('#ruler-surface');
   await expect.poll(()=>main.evaluate(()=>document.hasFocus())).toBe(true);
   assert.equal(await application.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Escape')),true);

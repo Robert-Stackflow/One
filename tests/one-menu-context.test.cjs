@@ -9,6 +9,7 @@ test('One 目录命令使用真实当前目录，占用优先选中项；无路�
  assert.deepEqual(await oneMenuTarget(builtinById('file-locks'),{...context,selected:[path.join(root,'deleted')]}),{page:'locksmith',paths:[folder]});
  for(const currentFolder of [undefined,'shell:Downloads',path.join(root,'deleted'),file,'relative',folder+'\0'])for(const [id,page]of [['space-analysis','disk'],['file-tools','tools'],['file-locks','locksmith']])assert.deepEqual(await oneMenuTarget(builtinById(id),{...context,currentFolder,selected:[]}),{page});
  assert.deepEqual(await oneMenuTarget(builtinById('main-window'),context),{page:'home'});assert.deepEqual(await oneMenuTarget(builtinById('text-tools'),context),{page:'text'});assert.equal(await oneMenuTarget(builtinById('pick-color'),context),undefined);
+ for(const [id,page]of [['developer-tools','developer'],['image-tools','images']])assert.deepEqual(await oneMenuTarget(builtinById(id),context),{page});
  await assert.rejects(()=>oneMenuTarget(builtinById('file-locks'),{...context,selected:Array.from({length:33},(_,i)=>path.join(folder,String(i)))}),/32/);
 });
 test('One 操作栏与菜单行使用执行时上下文，并保留执行快照',async()=>{

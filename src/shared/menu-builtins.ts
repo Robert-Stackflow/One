@@ -1,4 +1,4 @@
-export type OneMenuPage='home'|'tools'|'archive'|'text'|'disk'|'system'|'hardware'|'locksmith'|'settings'|'preview'|'barcode';
+export type OneMenuPage='home'|'tools'|'archive'|'text'|'disk'|'system'|'hardware'|'locksmith'|'settings'|'preview'|'barcode'|'developer'|'images';
 export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'|'archive'|'barcode'>}|{page:'barcode';path?:string}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]}|{page:'archive';action?:import('./archive-actions').ArchiveOpenAction;paths?:string[]};
 export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'|'screen-ruler'}
 export const menuBuiltins:readonly MenuBuiltin[]=[
@@ -34,6 +34,8 @@ export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'main-window',label:'打开主窗口',category:'One',icon:'arrow-up-right',onePage:'home',keywords:'概览 One'},
  {id:'file-tools',label:'文件工具',category:'One',icon:'folder',onePage:'tools',oneContext:'folder',keywords:'重复 文件比较 重命名 全文搜索 当前目录'},
  {id:'text-tools',label:'文本处理',category:'One',icon:'text',onePage:'text'},
+ {id:'developer-tools',label:'开发工具',category:'One',icon:'braces',onePage:'developer',keywords:'条码 二维码'},
+ {id:'image-tools',label:'图片工具',category:'One',icon:'color',onePage:'images',keywords:'屏幕 取色'},
  {id:'space-analysis',label:'空间分析',category:'One',icon:'disk',onePage:'disk',oneContext:'folder',keywords:'当前目录 扫描'},
  {id:'file-locks',label:'文件占用',category:'One',icon:'lock',onePage:'locksmith',oneContext:'paths',keywords:'当前目录 选中文件'},
  {id:'system-maintenance',label:'系统维护',category:'One',icon:'system',onePage:'system'},

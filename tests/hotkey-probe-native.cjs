@@ -66,7 +66,7 @@ async function main(){
           assert.equal(answer.status,'found',JSON.stringify(answer));
           assert.equal(answer.pid,target.pid,JSON.stringify(answer));
           process.stdout.write('Electron IPC hotkey owner lookup: found target\n');
-          await page.locator('[data-page=color]').click();
+          await page.locator('[data-page=images]').click();
           await page.locator('#color-shortcut').focus();
           await page.evaluate(()=>{
             document.querySelector('#color-shortcut').dispatchEvent(new KeyboardEvent('keydown',{

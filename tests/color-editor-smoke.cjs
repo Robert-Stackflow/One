@@ -6,7 +6,7 @@ async function run(){
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;const app=await electron.launch({args:[path.resolve('.')],env}),errors=[],reports=[];
  const child=app.process();app.on('window',p=>p.on('pageerror',e=>errors.push(String(e))));
  try{
-  const main=await app.firstWindow();await main.waitForSelector('[data-page=color]');
+  const main=await app.firstWindow();await main.waitForSelector('[data-page=images]');
   await app.evaluate(({BrowserWindow,clipboard,dialog,screen})=>{
    global.colorErrors=[];process.on('uncaughtException',e=>global.colorErrors.push(e.stack));process.on('unhandledRejection',e=>global.colorErrors.push(String(e)));dialog.showErrorBox=(...v)=>global.colorErrors.push(v.join(' '));
    global.copiedColor='';clipboard.writeText=value=>{global.copiedColor=value;};
@@ -17,7 +17,7 @@ async function run(){
    // Exercise the complete sampling-to-editor lifecycle without hooking the user's mouse.
    threads.Worker=class extends EventEmitter{constructor(file,...args){super();if(!/color-(?:position-)?worker\.cjs$/.test(file))return new Original(file,...args);this.file=file;global.colorWorkers.push(this);}postMessage(value){if(value==='stop'){this.stopped=true;queueMicrotask(()=>this.emit('exit',0));}}terminate(){this.postMessage('stop');return Promise.resolve(0);}};
   });
-  await main.locator('[data-page=color]').click();await expect(main.locator('#color-show-editor')).toBeChecked();
+  await main.locator('[data-page=images]').click();await expect(main.locator('#color-show-editor')).toBeChecked();
   const start=performance.now();await main.locator('#open-color-editor').click();await expect.poll(()=>app.windows().some(p=>p.url().includes('view=color-editor'))).toBe(true);const editor=app.windows().find(p=>p.url().includes('view=color-editor'));await editor.waitForSelector('#color-editor-hex');
   await expect(editor.locator('#color-editor-hex')).toHaveValue('#F0F3F9');await expect(editor.locator('[data-color-copy]')).toHaveCount(3);
   const win=await app.browserWindow(editor),id=await win.evaluate(w=>w.id);reports.push({firstOpenMs:performance.now()-start});

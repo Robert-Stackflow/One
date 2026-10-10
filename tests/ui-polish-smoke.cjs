@@ -31,7 +31,7 @@ async function run() {
     await expect(page.locator('#map-depth')).toHaveAttribute('role','combobox');
     await page.locator('#map-depth').click();await page.getByRole('option',{name:'3 层'}).click();
     assert.equal(await page.locator('#map-depth').evaluate(control=>control.value),'3');
-    await page.locator('[data-page=color]').click();
+    await page.locator('[data-page=images]').click();
     await expect(page.locator('#color-default-format')).toHaveAttribute('role','combobox');
     await page.locator('#color-default-format').click();await page.getByRole('option',{name:'RGB',exact:true}).click();
     await expect.poll(()=>page.evaluate(async()=>(await window.one.settings()).colorFormat)).toBe('rgb');

@@ -1,4 +1,4 @@
-.content[data-current-page=color] .page-heading{padding-bottom:20px}
+.content[data-current-page=images] .page-heading{padding-bottom:20px}
 .color-header-actions{display:flex;align-items:center;gap:8px}
 .color-ruler-split{position:relative;display:inline-flex;align-items:stretch;height:32px;border:1px solid var(--line);border-radius:9px;background:var(--surface);z-index:5}
 .color-ruler-split>button{border:0;background:transparent;border-radius:0;min-height:0;height:100%;padding:0 10px;gap:6px}

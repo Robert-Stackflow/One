@@ -11,7 +11,7 @@ async function run() {
   const app=await electron.launch({args:[path.resolve('.')],env});
   try {
     const page=await app.firstWindow();
-    await page.locator('[data-page=color]').click();
+    await page.locator('[data-page=images]').click();
     const input=page.locator('#color-shortcut');
     await input.click();
     await page.keyboard.press('Shift+Meta+C');

@@ -31,17 +31,18 @@ import { customControls, closeControls } from './controls';
 import { api, q, esc, icon, button, switchControl, toast, action } from './ui';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const settingRow = (title: string, description: string, control: string) => `<div class="setting-row"><div><h2>${title}</h2><p>${description}</p></div>${control}</div>`;
+const toolGroupPage=(name:string,id:string,label:string,body:string)=>`<div class="toolbar module-toolbar"><div class="tabs" role="tablist" aria-label="${esc(name)}"><button id="tool-tab-${id}" type="button" role="tab" aria-selected="true" aria-controls="page-${id}" class="selected">${esc(label)}</button></div></div><section id="page-${id}" role="tabpanel" aria-labelledby="tool-tab-${id}">${body}</section>`;
 export function renderMain() {
   const groups = [
     {name:'文件',items:[['tools','文件工具'],['text','文本处理'],['search','文件搜索'],['disk','空间分析'],['archive','压缩与解压']]},
-    {name:'工具',items:[['input','操作增强'],['preview','快速预览'],['color','屏幕取色'],['barcode','条码识别']]},
+    {name:'工具',items:[['input','操作增强'],['preview','快速预览'],['developer','开发工具'],['images','图片工具']]},
     {name:'系统',items:[['system','系统维护'],['hardware','系统信息'],['ports','端口与服务']]}
   ];
   const modules = [['home','概览'],...groups.flatMap(group=>group.items),['settings','设置']];
   const nav = ([id,name]:string[]) => `<button class="nav ${id==='home'?'active':''}" data-page="${id}" title="${name}" aria-label="${name}" ${id==='home'?'aria-current="page"':''}>${icon(id)}<span class="nav-label">${name}</span></button>`;
   const navigation = `<nav class="sidebar-navigation" aria-label="功能导航">${nav(['home','概览'])}${groups.map(group=>`<section class="sidebar-group" aria-label="${group.name}"><h2 class="sidebar-group-caption" aria-hidden="true">${group.name}</h2>${group.items.map(nav).join('')}</section>`).join('')}</nav>${nav(['settings','设置'])}`;
-  app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="color" hidden></div><div id="barcode-heading-actions" data-heading-for="barcode" hidden></div></div>
-  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-color" hidden></section><section class="page" id="page-barcode" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
+  app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="images" hidden></div><div id="barcode-heading-actions" data-heading-for="developer" hidden></div></div>
+  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-developer" hidden></section><section class="page" id="page-images" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
   </div><div class="toast-layer"><div class="toast" id="toast" hidden role="status"></div></div></main></div>${dialogMarkup({id:"issues-dialog",title:"未完成的扫描项目",closeId:"issues-dismiss",className:"dialog-wide",body:`<pre id="issues-text"></pre>`,actions:`${button('close-issues','关闭')}`})}`;
   setupChrome(); customControls(app);
   const content=document.querySelector<HTMLElement>('.content')!;
@@ -64,9 +65,9 @@ export function renderMain() {
     else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='ports'){const {portsPage,setupPorts}=await import('./ports-view');page.innerHTML=portsPage();portsController=setupPorts();}
     else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);inputController=setupInput();}
-    else if(id==='barcode'){const {barcodePage,setupBarcode}=await import('./barcode-view');page.innerHTML=barcodePage();q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();}
+    else if(id==='developer'){const {barcodePage,setupBarcode}=await import('./barcode-view');page.innerHTML=toolGroupPage('开发工具','barcode','条码识别',barcodePage());q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
-    else if(id==='color'){const {colorPage,setupColorPage}=await import('./color-view');page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
+    else if(id==='images'){const {colorPage,setupColorPage}=await import('./color-view');page.innerHTML=toolGroupPage('图片工具','color','屏幕取色',colorPage());customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
     else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
     else if(id==='settings'){const {settingsPage,setupSettingsPage}=await import('./settings-view');page.innerHTML=settingsPage();customControls(page);settingsController=setupSettingsPage();}
     else return;
@@ -86,9 +87,11 @@ export function renderMain() {
     else if(id==='ports')portsController?.activate(value);
     else if(id==='settings')settingsController?.activate(value);
     else if(id==='input')inputController?.activate(value);
-    else if(id==='barcode')barcodeController?.activate(value);
+    else if(id==='developer')barcodeController?.activate(value);
   };
+  const canonicalPage=(id:string)=>id==='barcode'?'developer':id==='color'?'images':id;
   const navigate=async(id:string)=>{
+    id=canonicalPage(id);
     const revision=++navigationRevision,current=content.dataset.currentPage||'home';
     if(id!==current)activate(current,false);
     await mount(id);
@@ -109,7 +112,7 @@ export function renderMain() {
   api.onSearchSettings(tab=>{void navigate('search').then(active=>{if(active)q(tab==='entry'?'search-tab-entry':'search-tab-menu').click();}).catch(toast);});
   let externalNavigation=Promise.resolve();
   api.onNavigatePage(target=>{const work=async()=>{
-    const page=target.page==='locksmith'?'tools':target.page;
+    const page=canonicalPage(target.page==='locksmith'?'tools':target.page);
     if(!modules.some(item=>item[0]===page)||!await navigate(page))return;
     if(target.page==='barcode'&&target.path)await barcodeController!.openPath(target.path);
     else if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);

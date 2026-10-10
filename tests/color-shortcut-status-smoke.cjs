@@ -9,10 +9,10 @@ async function run() {
   const profile = await fs.mkdtemp(path.join(output, 'profile-'));
   const env = { ...process.env, ONE_TEST_MODE: '1', ONE_DATA_DIR: profile };
   delete env.ELECTRON_RUN_AS_NODE;
-  const app = await electron.launch({ args: [path.resolve('.')], env });
+  const app = await electron.launch({ args: [path.resolve(process.env.ONE_TEST_APP_ROOT || '.')], env });
   try {
     const page = await app.firstWindow();
-    await page.locator('[data-page=color]').click();
+    await page.locator('[data-page=images]').click();
     await expect(page.locator('#color-shortcut')).toBeVisible();
     await app.evaluate(({ globalShortcut }) => {
       globalThis.originalColorRegister = globalShortcut.register;

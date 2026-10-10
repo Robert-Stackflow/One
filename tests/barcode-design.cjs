@@ -15,7 +15,7 @@ async function main(){
    await expect(page.locator('#barcode-name')).toHaveText(name,{timeout:20000});
    await expect(page.locator('#barcode-output')).toHaveAttribute('aria-busy','false');
   };
-  await page.locator('[data-page=barcode]').click();await resize(1280,900);
+  await page.locator('[data-page=developer]').click();await resize(1280,900);
   eq(await page.locator('.page-heading #barcode-actions button').count(),3,'Source actions share the page heading');
   eq(await page.evaluate(()=>{const a=document.querySelector('#page-name').getBoundingClientRect(),b=document.querySelector('#barcode-actions').getBoundingClientRect();return Math.abs((a.top+a.bottom-b.top-b.bottom)/2)<2&&b.left>a.right;}),true,'Sources align right of title');
   eq(await page.locator('.barcode-local').count(),0,'Redundant local label removed');
@@ -72,7 +72,7 @@ async function main(){
   await page.locator('[data-page=tools]').click();await page.locator('#tool-tab-locksmith').click();
   const locksmithHover=await hover('#tool-pane-locksmith');
   eq(barcodeHover,locksmithHover,'Barcode reuses the same spacious hover layout as file lock inspection');
-  await page.locator('[data-page=barcode]').click();await expect(page.locator('#barcode-actions')).toBeVisible();
+  await page.locator('[data-page=developer]').click();await expect(page.locator('#barcode-actions')).toBeVisible();
   eq(await page.locator('#page-barcode .file-drop-overlay').getAttribute('aria-hidden'),'true','Navigation leaves no stale barcode hover');
   eq(errors,[],'No page errors');
   const report={result:'PASS',checks,profile,scope:'Real Electron and bundled decoder after complete barcode layout redesign: initial state, multi-code/keyboard/region selection, zoom/fit alignment, failure retention, clear/reuse, narrow geometry, light/dark screenshots. Screenshots use generated samples only.'};
