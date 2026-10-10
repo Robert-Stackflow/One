@@ -1,0 +1,13 @@
+.developer-data{display:grid;gap:14px;min-width:0}
+.developer-data-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.developer-data-toolbar label,.developer-data-columns label{font-size:12px;font-weight:600}
+.developer-data-toolbar select{min-width:90px}
+.developer-data-spacer{flex:1}
+.developer-data-status{min-height:20px;color:var(--muted);font-size:12px}
+.developer-data-status[data-state=error]{color:var(--danger,#c34848)}
+.developer-data-status[data-state=success]{color:var(--fg)}
+.developer-data-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.developer-data-columns section{display:flex;flex-direction:column;gap:8px;min-width:0}
+.developer-data-columns textarea{width:100%;min-height:420px;resize:vertical;padding:14px;border:1px solid var(--line);border-radius:var(--panel-radius);background:var(--surface);color:var(--fg);font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2}
+.developer-data-result-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}
+@media(max-width:900px){.developer-data-columns{grid-template-columns:minmax(0,1fr)}.developer-data-columns textarea{min-height:240px}}

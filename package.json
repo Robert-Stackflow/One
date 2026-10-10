@@ -102,11 +102,13 @@
     "test:archive-shell": "npm run build && node tests/explorer-menu-state.cjs && node --test tests/shell-request.test.cjs && node tests/archive-shell-smoke.cjs && node tests/archive-file-menu.cjs"
   },
   "dependencies": {
+    "@lezer/json": "1.0.3",
     "iconv-lite": "^0.7.3",
     "koffi": "^3.3.2",
     "loudness": "^0.4.2",
     "opencc-js": "^1.4.2",
     "pdfjs-dist": "^6.3.289",
+    "sharp": "0.35.5",
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
@@ -175,6 +177,8 @@
       "node_modules/@koromix/koffi-win32-x64/**/*",
       "node_modules/uiohook-napi/**/*",
       "node_modules/loudness/**/*",
+      "node_modules/sharp/**/*",
+      "node_modules/@img/sharp-win32-x64/**/*",
       "dist/native/One.Native.exe",
       "dist/native/One.Thumbnail.exe",
       "dist/native/One.Search.exe",

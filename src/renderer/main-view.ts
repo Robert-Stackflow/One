@@ -31,7 +31,13 @@ import { customControls, closeControls } from './controls';
 import { api, q, esc, icon, button, switchControl, toast, action } from './ui';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const settingRow = (title: string, description: string, control: string) => `<div class="setting-row"><div><h2>${title}</h2><p>${description}</p></div>${control}</div>`;
-const toolGroupPage=(name:string,id:string,label:string,body:string)=>`<div class="toolbar module-toolbar"><div class="tabs" role="tablist" aria-label="${esc(name)}"><button id="tool-tab-${id}" type="button" role="tab" aria-selected="true" aria-controls="page-${id}" class="selected">${esc(label)}</button></div></div><section id="page-${id}" role="tabpanel" aria-labelledby="tool-tab-${id}">${body}</section>`;
+const toolGroupPage=(name:string,tabs:{id:string;label:string;body:string}[])=>`<div class="toolbar module-toolbar"><div class="tabs" role="tablist" aria-label="${esc(name)}">${tabs.map((tab,index)=>`<button id="tool-tab-${tab.id}" type="button" role="tab" aria-selected="${index===0}" aria-controls="page-${tab.id}" class="${index===0?'selected':''}">${esc(tab.label)}</button>`).join('')}</div></div>${tabs.map((tab,index)=>`<section id="page-${tab.id}" role="tabpanel" aria-labelledby="tool-tab-${tab.id}" ${index?'hidden':''}>${tab.body}</section>`).join('')}`;
+function setupToolGroupTabs(page:HTMLElement,onChange:(id:string)=>void){
+ const buttons=[...page.querySelectorAll<HTMLButtonElement>('.tabs [role=tab]')];
+ const select=(id:string)=>{for(const button of buttons){const chosen=button.id==='tool-tab-'+id;button.setAttribute('aria-selected',String(chosen));button.classList.toggle('selected',chosen);page.querySelector<HTMLElement>('#'+button.getAttribute('aria-controls'))!.hidden=!chosen;}onChange(id);};
+ buttons.forEach((button,index)=>{button.onclick=()=>select(button.id.slice('tool-tab-'.length));button.onkeydown=event=>{const step=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:0;if(!step&&event.key!=='Home'&&event.key!=='End')return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+step+buttons.length)%buttons.length;buttons[next].focus();buttons[next].click();};});
+ return select;
+}
 export function renderMain() {
   const groups = [
     {name:'文件',items:[['tools','文件工具'],['text','文本处理'],['search','文件搜索'],['disk','空间分析'],['archive','压缩与解压']]},
@@ -41,7 +47,7 @@ export function renderMain() {
   const modules = [['home','概览'],...groups.flatMap(group=>group.items),['settings','设置']];
   const nav = ([id,name]:string[]) => `<button class="nav ${id==='home'?'active':''}" data-page="${id}" title="${name}" aria-label="${name}" ${id==='home'?'aria-current="page"':''}>${icon(id)}<span class="nav-label">${name}</span></button>`;
   const navigation = `<nav class="sidebar-navigation" aria-label="功能导航">${nav(['home','概览'])}${groups.map(group=>`<section class="sidebar-group" aria-label="${group.name}"><h2 class="sidebar-group-caption" aria-hidden="true">${group.name}</h2>${group.items.map(nav).join('')}</section>`).join('')}</nav>${nav(['settings','设置'])}`;
-  app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="images" hidden></div><div id="barcode-heading-actions" data-heading-for="developer" hidden></div></div>
+  app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="images" data-heading-tab="color" hidden></div><div id="barcode-heading-actions" data-heading-for="developer" data-heading-tab="barcode" hidden></div></div>
   <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-developer" hidden></section><section class="page" id="page-images" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
   </div><div class="toast-layer"><div class="toast" id="toast" hidden role="status"></div></div></main></div>${dialogMarkup({id:"issues-dialog",title:"未完成的扫描项目",closeId:"issues-dismiss",className:"dialog-wide",body:`<pre id="issues-text"></pre>`,actions:`${button('close-issues','关闭')}`})}`;
   setupChrome(); customControls(app);
@@ -49,6 +55,9 @@ export function renderMain() {
   let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,archiveController:ReturnType<typeof import('./archive-view').setupArchiveView>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
   let maintenanceController:ReturnType<typeof import('./maintenance-view').setupMaintenance>|undefined,informationController:ReturnType<typeof import('./system-info-view').setupSystemInformation>|undefined,portsController:ReturnType<typeof import('./ports-view').setupPorts>|undefined;
   let barcodeController:ReturnType<typeof import('./barcode-view').setupBarcode>|undefined;
+  let developerDataController:ReturnType<typeof import('./developer-data-view').setupDeveloperData>|undefined;
+  let base64Controller:ReturnType<typeof import('./base64-view').setupBase64>|undefined;
+  let developerTabSelect:((id:string)=>void)|undefined;
   let inputController:ReturnType<typeof import('./enhancement-view').setupInput>|undefined;
   let settingsController:ReturnType<typeof import('./settings-view').setupSettingsPage>|undefined;
   const mounted=new Set(['home']),mounting=new Map<string,Promise<void>>();
@@ -65,9 +74,9 @@ export function renderMain() {
     else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='ports'){const {portsPage,setupPorts}=await import('./ports-view');page.innerHTML=portsPage();portsController=setupPorts();}
     else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);inputController=setupInput();}
-    else if(id==='developer'){const {barcodePage,setupBarcode}=await import('./barcode-view');page.innerHTML=toolGroupPage('开发工具','barcode','条码识别',barcodePage());q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();}
+    else if(id==='developer'){const [{barcodePage,setupBarcode},{developerDataPage,setupDeveloperData},{base64Page,setupBase64}]=await Promise.all([import('./barcode-view'),import('./developer-data-view'),import('./base64-view')]);page.innerHTML=toolGroupPage('开发工具',[{id:'barcode',label:'条码识别',body:barcodePage()},{id:'developer-data',label:'JSON / YAML',body:developerDataPage()},{id:'base64',label:'Base64',body:base64Page()}]);q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();developerDataController=setupDeveloperData();base64Controller=setupBase64();developerTabSelect=setupToolGroupTabs(page,tab=>{const visible=content.dataset.currentPage==='developer';barcodeController?.activate(visible&&tab==='barcode');developerDataController?.activate(visible&&tab==='developer-data');base64Controller?.activate(visible&&tab==='base64');if(visible)updateHeadingActions('developer');});}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
-    else if(id==='images'){const {colorPage,setupColorPage}=await import('./color-view');page.innerHTML=toolGroupPage('图片工具','color','屏幕取色',colorPage());customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
+    else if(id==='images'){const [{colorPage,setupColorPage},{imageConvertPage,setupImageConvert}]=await Promise.all([import('./color-view'),import('./image-convert-view')]);page.innerHTML=toolGroupPage('图片工具',[{id:'color',label:'屏幕取色',body:colorPage()},{id:'image-convert',label:'图片转换',body:imageConvertPage()}]);customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();setupImageConvert();setupToolGroupTabs(page,()=>{if(content.dataset.currentPage==='images')updateHeadingActions('images');});}
     else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
     else if(id==='settings'){const {settingsPage,setupSettingsPage}=await import('./settings-view');page.innerHTML=settingsPage();customControls(page);settingsController=setupSettingsPage();}
     else return;
@@ -76,7 +85,8 @@ export function renderMain() {
     mounting.set(id,work);return work;
   };
   let navigationRevision=0;
-  const activate=(id:string,value:boolean)=>{
+   const updateHeadingActions=(id:string)=>{document.querySelectorAll<HTMLElement>('[data-heading-for]').forEach(actions=>{const tab=actions.dataset.headingTab;actions.hidden=actions.dataset.headingFor!==id||!!tab&&q('page-'+id).querySelector('[role=tab][aria-selected="true"]')?.id!=='tool-tab-'+tab;});};
+   const activate=(id:string,value:boolean)=>{
     if(id==='home')overviewController.activate(value);
     else if(id==='tools')toolsController?.activate(value);
     else if(id==='archive')archiveController?.activate(value);
@@ -87,7 +97,7 @@ export function renderMain() {
     else if(id==='ports')portsController?.activate(value);
     else if(id==='settings')settingsController?.activate(value);
     else if(id==='input')inputController?.activate(value);
-    else if(id==='developer')barcodeController?.activate(value);
+    else if(id==='developer'){const tab=q('page-developer').querySelector('[role=tab][aria-selected="true"]')?.id;barcodeController?.activate(value&&tab==='tool-tab-barcode');developerDataController?.activate(value&&tab==='tool-tab-developer-data');base64Controller?.activate(value&&tab==='tool-tab-base64');}
   };
   const canonicalPage=(id:string)=>id==='barcode'?'developer':id==='color'?'images':id;
   const navigate=async(id:string)=>{
@@ -97,7 +107,7 @@ export function renderMain() {
     await mount(id);
     if(revision!==navigationRevision)return false;
     activate(id,true);closeControls();content.scrollTop=0;content.dataset.currentPage=id;
-    document.querySelectorAll<HTMLElement>('[data-heading-for]').forEach(actions=>actions.hidden=actions.dataset.headingFor!==id);
+    updateHeadingActions(id);
     document.querySelectorAll<HTMLElement>('.page').forEach(page=>page.hidden=page.id!=='page-'+id);
     document.querySelectorAll('.nav').forEach(node=>{const active=node.getAttribute('data-page')===id;node.classList.toggle('active',active);if(active)node.setAttribute('aria-current','page');else node.removeAttribute('aria-current');});
     q('page-name').textContent=modules.find(item=>item[0]===id)?.[1]||'One';return true;
@@ -114,7 +124,7 @@ export function renderMain() {
   api.onNavigatePage(target=>{const work=async()=>{
     const page=canonicalPage(target.page==='locksmith'?'tools':target.page);
     if(!modules.some(item=>item[0]===page)||!await navigate(page))return;
-    if(target.page==='barcode'&&target.path)await barcodeController!.openPath(target.path);
+    if(target.page==='barcode'){developerTabSelect?.('barcode');if(target.path)await barcodeController!.openPath(target.path);}
     else if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
     else if(target.page==='tools'&&target.tool==='rename')await toolsController!.openSelection(target.paths||[]);
     else if(target.page==='tools'&&target.tool==='diff')await toolsController!.openComparison(target.paths||[]);
