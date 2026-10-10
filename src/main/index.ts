@@ -589,6 +589,8 @@ function registerIPC() {
   handle('echo-position',()=>echoes.edit());handle('echo-finish',e=>echoes.finish(BrowserWindow.fromWebContents(e.sender)!),['echo']);
   handle('system-information',(_e,kind,refresh)=>{if(!validInformationKind(kind)||refresh!==undefined&&typeof refresh!=='boolean')throw new Error('系统信息请求无效');return systemInformation.read(kind,refresh);});
   handle('proxy-diagnostics',(_e,refresh)=>{if(refresh!==undefined&&typeof refresh!=='boolean')throw new Error('代理检测请求无效');return proxyDiagnostics.read(refresh);});
+  handle('proxy-connectivity',(_e,request)=>proxyDiagnostics.test(request));
+  handle('proxy-connectivity-cancel',(_e,id)=>proxyDiagnostics.cancel(id));
   handle('dns-check',(_e,domain)=>checkDns(domain),['main']);
   handle('export-system-information',async(_e,reports)=>{if(!Array.isArray(reports)||reports.length>16||JSON.stringify(reports).length>8*1024*1024)throw new Error('系统信息报告无效');const path=await pickPath('save','导出系统信息','系统信息.json');if(!path)return null;await writeFile(path,JSON.stringify({created:new Date().toISOString(),reports},null,2),'utf8');return path;});
   handle('disk-monitor',(event,active,source='maintenance')=>{if(!['maintenance','information'].includes(source)||active!==undefined&&typeof active!=='boolean')throw new Error('磁盘监控请求无效');const w=BrowserWindow.fromWebContents(event.sender);return active===undefined?diskMonitor.state:diskMonitor.subscribe(active&&!!w?.isVisible()&&!w.isMinimized(),source);});

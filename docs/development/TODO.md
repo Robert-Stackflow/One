@@ -66,6 +66,15 @@ ZIP/7Z 外部编辑针对单个普通文件，大小不超过 256 MiB。RAR 及�
 - [ ] 调研 SQLite/SQLCipher 引擎及 Electron 集成方式，核对开源许可、Windows 原生打包、版本兼容和资源预算，不以普通 SQLite 可打开代表 SQLCipher 已支持。
 - [ ] 验收包含多后缀/无后缀识别、非数据库 `.db`、普通与加密样本、错误密码与兼容参数、表切换/分页/SQL/DDL、WAL 数据库、只读/锁定文件、大表深分页、查询取消和关闭后文件可释放。
 
+## 系统信息 · 代理：扩展连通性测试
+
+- [x] 扩展预置网站，覆盖 TikTok、X/Twitter、Grok、Gemini、Instagram 等，并考虑 ChatGPT、YouTube、Google、GitHub 等更多常用网站；X 与 Twitter 兼顾域名差异及重定向。
+- [x] 支持用户输入网址测试连通性，支持完整 URL 与常见域名输入，并明确显示实际测试地址。
+- [x] 明确测试使用的代理或直连路径；显示连通状态、响应耗时与失败原因，区分 DNS、连接、TLS、超时、HTTP 错误以及需要登录/访问限制等情况，不能简单以非 200 响应认定网络不通。
+- [x] 支持单站测试与批量测试，限制并发和超时、支持取消，避免测试阻塞页面交互；不将完整网址中的敏感参数写入日志。
+
+2026-10-10 开发版实现完成：20 个预置网站、地址预览、自定义下拉、共用结果表格、4 并发与取消、HTTP/网络分类和参数隐藏。自动验证及边界见[实现记录](../history/projects/代理连通性测试实现记录.md)；安装发布未执行。
+
 ## 显示器管理 · Power Display
 
 - [ ] 参考 [Microsoft PowerToys Power Display](https://learn.microsoft.com/en-us/windows/powertoys/power-display)，评估独立显示器管理入口；复用 One 现有亮度控制，新增逐屏列表、支持能力与明确的不可用状态。调研及验收条件见 [Power Display 调研](../research/PowerDisplay显示器管理调研.md)。

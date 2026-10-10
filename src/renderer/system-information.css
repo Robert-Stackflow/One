@@ -14,3 +14,15 @@
 .proxy-exit-spinner{width:12px;height:12px;border:1.5px solid var(--line);border-top-color:var(--fg);border-radius:50%;animation:proxy-exit-spin .8s linear infinite}
 @keyframes proxy-exit-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.proxy-exit-spinner{animation:none;border-top-color:var(--muted)}}
+.proxy-test-panel{border:1px solid var(--line);background:var(--soft);border-radius:var(--panel-radius);padding:16px;margin:0 0 16px}
+.proxy-test-fields{display:grid;grid-template-columns:minmax(0,1fr) 168px;gap:16px;align-items:end}.proxy-test-fields>div{min-width:0;display:flex;flex-direction:column;gap:8px}.proxy-test-fields label{font-size:11px;color:var(--muted)}
+.proxy-test-fields input,.proxy-test-fields .custom-select{width:100%;height:36px;min-width:0}.proxy-test-fields .custom-select{justify-content:space-between}
+.proxy-test-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px}.proxy-test-address{flex:1;min-width:0;font-size:10px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere;margin:0;user-select:text}
+.proxy-test-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex-shrink:0}.proxy-test-actions .btn{height:34px}
+.proxy-site-head,.proxy-site-row{grid-template-columns:minmax(140px,1.2fr) minmax(130px,1fr) minmax(130px,1fr) 56px}
+.proxy-site-row .proxy-result-detail,.proxy-site-row .proxy-result-route,.proxy-site-row .proxy-result-address{white-space:normal;overflow-wrap:anywhere;line-height:1.5;user-select:text}
+.proxy-site-row .proxy-result-detail{color:var(--fg)}.proxy-site-row .btn{padding:5px 9px;font-size:10px}
+.proxy-custom-result{margin-bottom:16px}.proxy-custom-result h4{font-size:11px;font-weight:500;margin:0 0 10px}
+@media(max-width:700px){.proxy-site-head,.proxy-site-row{grid-template-columns:minmax(90px,1fr) minmax(80px,1fr) minmax(80px,1fr) 46px;gap:6px;padding:10px}.proxy-section-heading{flex-wrap:wrap;gap:6px}}
+@media(max-width:900px){.proxy-test-footer{align-items:flex-start;flex-direction:column}.proxy-test-actions{width:100%;justify-content:flex-end}}
+@media(max-width:620px){.proxy-test-fields{grid-template-columns:minmax(0,1fr)}.proxy-test-panel{padding:12px}.proxy-test-actions{justify-content:flex-start}}

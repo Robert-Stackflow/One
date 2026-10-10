@@ -75,6 +75,8 @@ export interface OneAPI {
   onFileToolsProgress(callback:(value:import('./file-tools').FileToolProgress)=>void):()=>void;
   systemInformation(kind:import('./system-info').InformationKind,refresh?:boolean):Promise<import('./system-info').InformationReport>;
   proxyDiagnostics(refresh?:boolean):Promise<import('./proxy-info').ProxyDiagnostics>;
+  proxyConnectivity(request:import('./proxy-info').ProxyConnectivityRequest):Promise<import('./proxy-info').ProxyConnectivityReport>;
+  cancelProxyConnectivity(id:string):Promise<boolean>;
   dnsCheck(domain:string):Promise<import('./dns').DnsCheckReport>;
   onProxyDiagnosticsProgress(callback:(value:import('./proxy-info').ProxyDiagnosticsProgress)=>void):()=>void;
   onSystemInformationProgress(callback:(value:import('./system-info').InformationProgress)=>void):()=>void;
