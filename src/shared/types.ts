@@ -159,6 +159,7 @@ export interface OneAPI {
   imageConvertStart(paths:string[],directory:string,options:import('./image-convert').ImageConvertOptions):Promise<import('./image-convert').ImageConvertSummary>;
   imageConvertCancel():Promise<boolean>;
   onImageConvertProgress(callback:(progress:import('./image-convert').ImageConvertProgress)=>void):()=>void;
+  imageCropPreview(path:string):Promise<import('./image-convert').ImageCropPreview>;
   base64ExportFile(value:string):Promise<string|null>;
   displayList():Promise<import('./display-management').ManagedDisplay[]>;
   displayProbe(id:string):Promise<import('./display-management').ManagedDisplay>;

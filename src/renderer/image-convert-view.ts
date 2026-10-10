@@ -40,7 +40,7 @@ export function setupImageConvert(){
   if(!directory.value)throw Error('请先选择输出文件夹');
   return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.checked};
  };
- const progress=(value:ImageConvertProgress)=>{current=value.current;if(value.result){results.set(value.result.source,value.result);current=undefined;}status.textContent=`已完成 ${value.done} / ${value.total}`;render();};
+ const progress=(value:ImageConvertProgress)=>{if(!running)return;current=value.current;if(value.result){results.set(value.result.source,value.result);current=undefined;}status.textContent=`已完成 ${value.done} / ${value.total}`;render();};
  const run=async(selected:string[])=>{
   if(!selected.length)return;
   let settings:ImageConvertOptions;try{settings=options();}catch(error){toast(error);return;}

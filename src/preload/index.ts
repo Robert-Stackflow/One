@@ -60,6 +60,7 @@ const api: OneAPI = {
   openFile: path => invoke('open-file', path), revealFile: path => invoke('reveal-file', path), startFileDrag:path=>invoke('start-file-drag',path),searchText: text => invoke('search-text', text), sendToWorkbench: text => invoke('send-workbench', text),
   pickDirectory: path => invoke('pick-directory', path), scan, cancelScan: () => invoke('cancel-scan'), scanMaintenance: kind => invoke('maintenance', kind), exportMaintenance: rows => invoke('export-maintenance', rows),
   imagePickFiles:()=>invoke('image-pick-files'),imageConvertStart:(paths,directory,options)=>invoke('image-convert-start',paths,directory,options),imageConvertCancel:()=>invoke('image-convert-cancel'),onImageConvertProgress:callback=>listen('image-convert-progress',callback),
+  imageCropPreview:path=>invoke('image-crop-preview',path),
   base64ExportFile:value=>invoke('base64-export-file',value),
   quit: () => invoke('quit'), closeWindow: () => invoke('close-window'), onProgress: callback => listen('progress', callback), onReceiveText: callback => listen('receive-text', callback), onEcho: callback => listen('echo', callback),onEchoHide:callback=>listen('echo-hide',callback), onCopyText: callback => listen('copy-text', callback), onPreviewChanged: callback => listen('preview-changed', callback)
 };
