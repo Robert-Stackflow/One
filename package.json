@@ -15,6 +15,7 @@
     "test:native-preview": "node tests/native-preview.cjs",
     "test:xlsx-preview": "node tests/xlsx-preview.cjs",
     "test:xlsx-window": "node tests/xlsx-window.cjs",
+    "test:docx-preview": "node tests/docx-outline.cjs && node tests/docx-preview.cjs",
     "check:docs": "node scripts/check-docs.mjs",
     "test": "node scripts/test.mjs",
     "test:ui": "npm run build && node tests/electron-smoke.cjs",

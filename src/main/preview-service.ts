@@ -26,6 +26,12 @@ export async function preparePreview(path:string,register:(path:string,mime:stri
   const data:PreviewData={name:basename(path)||path,path,size:info.size,type:'unsupported',siblings:[],navigation,modified:info.mtimeMs,created:info.birthtimeMs,metadata:{'类型':info.isDirectory()?'文件夹':(ext.toUpperCase()||'文件')}};
   if(info.isDirectory()){data.directory=await directory(path);data.type='folder';data.metadata!['项目']=String(data.directory.count);return data;}
   if(!info.isFile())throw new Error('此项目无法预览');
+  if(ext==='docx'){
+    if(info.size>50*1024*1024){data.error='文件超过预览大小上限';return data;}
+    try{const result=await inspect(path,'docx');Object.assign(data.metadata!,result.metadata);data.type='docx';data.url=register(path,'application/vnd.openxmlformats-officedocument.wordprocessingml.document');}
+    catch(error){const message=(error as Error).message;data.error=/超过|过大|上限|超时/.test(message)?message:'文档无法读取，文件可能已损坏或加密';}
+    return data;
+  }
   if(ext==='xlsx'){
     if(info.size>50*1024*1024){data.error='文件超过预览大小上限';return data;}
     try{const result=await inspect(path,'xlsx');Object.assign(data.metadata!,result.metadata);data.type='xlsx';data.url=register(path,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');}

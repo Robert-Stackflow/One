@@ -38,6 +38,7 @@
 - [条码识别设计与验收](development/features/条码识别.md)
 - [原生表格预览](development/features/原生表格预览.md)
 - [XLSX 网页预览](development/features/XLSX网页预览.md)
+- [Word 网页预览](development/features/Word网页预览.md)
 
 ## 调研与历史
 
