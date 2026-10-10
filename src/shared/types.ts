@@ -165,6 +165,9 @@ export interface OneAPI {
   imageAiStart(source:string,directory:string):Promise<import('./image-ai').ImageAiResult>;
   imageAiCancel():Promise<boolean>;
   onImageAiProgress(callback:(progress:import('./image-ai').ImageAiProgress)=>void):()=>void;
+  imageSuperresModelStatus():Promise<{ready:boolean;bytes:number}>;
+  imageSuperresStart(source:string,directory:string):Promise<import('./image-ai').ImageAiResult>;
+  onImageSuperresProgress(callback:(progress:import('./image-ai').ImageAiProgress)=>void):()=>void;
   imageMetadataStart(paths:string[],directory:string,options:import('./image-metadata').ImageMetadataOptions):Promise<import('./image-metadata').ImageMetadataSummary>;
   imageMetadataCancel():Promise<boolean>;
   onImageMetadataProgress(callback:(progress:import('./image-metadata').ImageMetadataProgress)=>void):()=>void;

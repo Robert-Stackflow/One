@@ -7,6 +7,9 @@ import type {ImageAiResult} from '../shared/image-ai';
 
 interface Job {source:string;output:string;temporary:string;model:string}
 const job=workerData as Job;
+let cancelled=false;
+const onCancel=(message:{type?:string})=>{if(message?.type==='cancel')cancelled=true;};
+parentPort?.on('message',onCancel);
 sharp.cache(false);sharp.concurrency(1);
 
 async function removeBackground():Promise<ImageAiResult>{
@@ -23,6 +26,7 @@ async function removeBackground():Promise<ImageAiResult>{
  const session=await ort.InferenceSession.create(job.model,{executionProviders:['cpu'],intraOpNumThreads:2,interOpNumThreads:1,graphOptimizationLevel:'all'});
  let values:Float32Array;
  try{const outputs=await session.run({'input.1':new ort.Tensor('float32',tensor,[1,3,320,320])});values=outputs['1959'].data as Float32Array;}finally{await session.release();}
+ if(cancelled)throw Error('已取消 AI 图片任务');
  let minimum=Infinity,maximumMask=-Infinity;for(const value of values){minimum=Math.min(minimum,value);maximumMask=Math.max(maximumMask,value);}
  const mask=Buffer.alloc(320*320),range=maximumMask-minimum;
  for(let index=0;index<mask.length;index++)mask[index]=range>1e-7?Math.max(0,Math.min(255,Math.round((values[index]-minimum)/range*255))):0;
@@ -32,9 +36,10 @@ async function removeBackground():Promise<ImageAiResult>{
   const rgb=await sharp(job.source,{limitInputPixels:20_000_000}).rotate().removeAlpha().raw().toBuffer();
   await sharp(rgb,{raw:{width,height,channels:3}}).joinChannel(enlarged,{raw:{width,height,channels:1}}).png({compressionLevel:9}).toFile(job.temporary);
   const result=await sharp(job.temporary).metadata();if(result.width!==width||result.height!==height||!result.hasAlpha)throw Error(`AI 输出校验失败：${result.width}×${result.height}，alpha=${result.hasAlpha}`);
+  if(cancelled)throw Error('已取消 AI 图片任务');
   await rename(job.temporary,job.output);
   return {source:job.source,output:job.output,before,after:(await stat(job.output)).size,width,height,message:'已使用本地 U²-Net-p 模型生成透明 PNG；细节由模型估计，建议检查边缘'};
  }catch(error){await rm(job.temporary,{force:true}).catch(()=>{});throw error;}
 }
 
-void removeBackground().then(result=>parentPort?.postMessage({type:'result',result})).catch(error=>parentPort?.postMessage({type:'error',message:(error as Error).message.slice(0,300)}));
+void removeBackground().then(result=>parentPort?.postMessage({type:'result',result})).catch(error=>parentPort?.postMessage({type:'error',message:(error as Error).message.slice(0,300)})).finally(()=>parentPort?.removeListener('message',onCancel));

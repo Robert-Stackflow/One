@@ -61,6 +61,7 @@ const api: OneAPI = {
   pickDirectory: path => invoke('pick-directory', path), scan, cancelScan: () => invoke('cancel-scan'), scanMaintenance: kind => invoke('maintenance', kind), exportMaintenance: rows => invoke('export-maintenance', rows),
   imagePickFiles:()=>invoke('image-pick-files'),imageConvertPickFiles:()=>invoke('image-convert-pick-files'),imageConvertCapabilities:()=>invoke('image-convert-capabilities'),imageConvertStart:(paths,directory,options)=>invoke('image-convert-start',paths,directory,options),imageConvertCancel:()=>invoke('image-convert-cancel'),onImageConvertProgress:callback=>listen('image-convert-progress',callback),
   imageAiModelStatus:()=>invoke('image-ai-model-status'),imageAiStart:(source,directory)=>invoke('image-ai-start',source,directory),imageAiCancel:()=>invoke('image-ai-cancel'),onImageAiProgress:callback=>listen('image-ai-progress',callback),
+  imageSuperresModelStatus:()=>invoke('image-superres-model-status'),imageSuperresStart:(source,directory)=>invoke('image-superres-start',source,directory),onImageSuperresProgress:callback=>listen('image-superres-progress',callback),
   imageMetadataStart:(paths,directory,options)=>invoke('image-metadata-start',paths,directory,options),imageMetadataCancel:()=>invoke('image-metadata-cancel'),onImageMetadataProgress:callback=>listen('image-metadata-progress',callback),
   imageCropPreview:path=>invoke('image-crop-preview',path),
   imageColorPreview:path=>invoke('image-color-preview',path),imageColorSample:(path,x,y)=>invoke('image-color-sample',path,x,y),

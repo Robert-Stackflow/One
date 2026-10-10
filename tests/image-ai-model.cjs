@@ -9,8 +9,8 @@ const {ensureAiModel,validAiModel,aiModelPath}=require('../dist/main/image-ai-mo
 (async()=>{
  const folder=await mkdtemp(join(tmpdir(),'one-image-ai-'));
  const content=Buffer.from('One local model cache test\n'.repeat(256));
- let served=content;
- const server=createServer((request,response)=>{response.writeHead(200,{'content-length':served.length});response.end(served);});
+ let served=content,stallNext=false;
+ const server=createServer((request,response)=>{response.writeHead(200,{'content-length':served.length});if(stallNext){stallNext=false;response.write(served.subarray(0,32));}else response.end(served);});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const model={id:'test-model',url:`http://127.0.0.1:${server.address().port}/model.onnx`,bytes:content.length,sha256:createHash('sha256').update(content).digest('hex')};
  try{
@@ -22,6 +22,7 @@ const {ensureAiModel,validAiModel,aiModelPath}=require('../dist/main/image-ai-mo
   await rm(path);served=Buffer.alloc(content.length,0);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));model.url=`http://127.0.0.1:${server.address().port}/model.onnx`;
   await assert.rejects(ensureAiModel(folder,new AbortController().signal,()=>{},model),/校验失败/);assert.equal(await stat(path).catch(()=>null),null);
   const controller=new AbortController();await assert.rejects(ensureAiModel(folder,controller.signal,()=>controller.abort(),model));assert.equal(await stat(path).catch(()=>null),null);
-  console.log('image-ai-model: download, checksum, offline cache and cancellation passed');
+  served=content;stallNext=true;await ensureAiModel(folder,new AbortController().signal,()=>{},model,80);assert.deepEqual(await readFile(path),content);
+  console.log('image-ai-model: download, checksum, offline cache, cancellation and stalled-transfer retry passed');
  }finally{server.close();await rm(folder,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});
