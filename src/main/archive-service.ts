@@ -39,6 +39,9 @@ const archiveSource=(value:unknown)=>{const source=path(value);if(!isArchivePath
 const archiveName=(source:string)=>archiveBaseName(basename(source));
 const composite=isCompositeArchive;
 const archiveDiagnostic=(message:string)=>message==='Unknown-size streams must be extracted before dragging'?'该压缩流未提供展开大小，请先解压到文件后再拖出。':
+  message.startsWith('Incomplete 7Z volume set near: ')?`7Z 分卷不完整，请检查以下位置的相邻两卷：${message.slice('Incomplete 7Z volume set near: '.length)}。补齐或重新获取文件后打开首卷。`:
+  message.startsWith('Cannot read 7Z volume: ')?`无法读取 7Z 分卷：${message.slice('Cannot read 7Z volume: '.length)}。请检查文件占用和读取权限后重新打开首卷。`:
+  message==='7Z archive is incomplete or truncated'?'7Z 压缩包不完整或已被截断，请重新获取完整文件后重试。':
   message.startsWith('Cannot open required ALZ volume: ')?`无法读取 ALZ 分卷：${message.slice('Cannot open required ALZ volume: '.length)}。请将首卷 .alz 和全部分卷放在同一文件夹，并检查读取权限。`:
   message==='Unsupported ALZ version or incorrect volume order'?'ALZ 版本暂不支持或分卷顺序不正确，请检查整组分卷。':
   message==='Invalid ALZ volume trailer'||message==='Invalid or truncated ALZ volume'?'ALZ 分卷损坏或不完整，请检查并补齐整组文件。':

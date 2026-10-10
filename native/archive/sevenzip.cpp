@@ -72,13 +72,15 @@ class FileInput final: public InStream7 {
     struct Part { HANDLE file; U64 start; U64 size; fs::path path; };
     std::vector<Part> parts;
     U64 position=0,total=0;
+    fs::path stoppedVolume;
+    DWORD stoppedError=ERROR_SUCCESS;
 public:
     explicit FileInput(const fs::path &path,bool split=false){
         for(unsigned index=1;index<=4096;++index){
             fs::path part=path;
             if(split){auto name=path.wstring();name.replace(name.size()-3,3,index<10?L"00"+std::to_wstring(index):index<100?L"0"+std::to_wstring(index):std::to_wstring(index));part=name;}
             HANDLE file=CreateFileW(part.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_RANDOM_ACCESS,nullptr);
-            if(file==INVALID_HANDLE_VALUE)break;
+            if(file==INVALID_HANDLE_VALUE){const auto error=GetLastError();if(split){stoppedVolume=part;stoppedError=error;}break;}
             LARGE_INTEGER size{};
             if(!GetFileSizeEx(file,&size)||size.QuadPart<0){CloseHandle(file);break;}
             parts.push_back({file,total,(U64)size.QuadPart,part});total+=(U64)size.QuadPart;
@@ -87,6 +89,14 @@ public:
     }
     ~FileInput(){for(const auto &part:parts)CloseHandle(part.file);}
     bool valid() const {return !parts.empty();}
+    std::string volumeFailure() const {
+        if(stoppedVolume.empty()||parts.empty())return {};
+        if(stoppedError!=ERROR_FILE_NOT_FOUND&&stoppedError!=ERROR_PATH_NOT_FOUND)
+            return "Cannot read 7Z volume: "+utf8(stoppedVolume.filename().wstring());
+        // A missing next file can also mean the preceding file was truncated.
+        // Identify the boundary without claiming which file is at fault.
+        return "Incomplete 7Z volume set near: "+utf8(parts.back().path.filename().wstring())+" -> "+utf8(stoppedVolume.filename().wstring());
+    }
     std::vector<fs::path> members()const{std::vector<fs::path> result;for(const auto &part:parts)result.push_back(part.path);return result;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **out) override {
         if(!out)return E_POINTER;*out=nullptr;
@@ -174,6 +184,16 @@ class OpenArchive final {
     int format;
     int openedFormat=0;
     static std::vector<int> formats(int format){return format==3?std::vector<int>{0xcc,3}:format==0xe7?std::vector<int>{0xe0,0xe7}:std::vector<int>{format};}
+    void checkSevenHeaders() const {
+        PROPVARIANT value{};PropVariantInit(&value);
+        U32 flags=0;
+        if(archive->GetArchiveProperty(error_flags_prop,&value)==S_OK&&value.vt==VT_UI4)flags=value.ulVal;
+        PropVariantClear(&value);
+        if(flags&(1u<<5)){
+            const auto detail=input->volumeFailure();
+            fail(detail.empty()?"7Z archive is incomplete or truncated":detail);
+        }
+    }
     void checkReadHeaders() const {
         PROPVARIANT value{};PropVariantInit(&value);
         const auto result=archive->GetArchiveProperty(error_prop,&value);
@@ -255,10 +275,12 @@ public:
                 openedFormat=candidate;
                 if(callback->additionalVolumeRequested)fail("This format currently requires a single-volume archive");
                 if(format==3)checkRar();
+                else if(format==7)checkSevenHeaders();
                 else if(format==1||format==2||format==6||format==8||format==0x0e||format==0xe7||format==0xe6)checkReadHeaders();
                 auto members=input->members();members.insert(members.end(),callback->members.begin(),callback->members.end());bind_archive_members(source,members);return;
             }
             if(opened==E_OUTOFMEMORY)fail("Opening the archive exceeded the memory budget","resource");
+            if(format==7)checkSevenHeaders();
             archive->Close();archive->Release();archive=nullptr;
             input->Seek(0,FILE_BEGIN,nullptr);
             callback->members.clear();

@@ -1,0 +1,355 @@
+{
+  "date": "2026-10-10",
+  "writer": "7-Zip 25.01 (x64)",
+  "sdk": "7-Zip 26.04, pinned repository source",
+  "baseline": {
+    "baseline": true,
+    "native": "D:\\Repositories\\One\\work\\current\\archive-solid-volumes\\final\\native\\One.Archive.exe",
+    "nativeSha256": "eab88f9c3da89534d892cc01003e61506d0fec77692475d0b5649a7d9f8422ed",
+    "records": [
+      {
+        "encryption": "none",
+        "name": "missing-middle",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "none",
+        "name": "missing-last",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "none",
+        "name": "truncated-last",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "none",
+        "name": "truncated-single",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "name": "exclusively-locked-middle-volume"
+      },
+      {
+        "encryption": "none",
+        "name": "valid-hashes-password-and-header-controls",
+        "hashes": 2
+      },
+      {
+        "encryption": "data",
+        "name": "missing-middle",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "missing-last",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "truncated-last",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "truncated-single",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "valid-hashes-password-and-header-controls",
+        "hashes": 2
+      },
+      {
+        "encryption": "header",
+        "name": "missing-middle",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "missing-last",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "truncated-last",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "truncated-single",
+        "operations": 3,
+        "messages": [
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password",
+          "Cannot open archive; check its format, volumes or password"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "valid-hashes-password-and-header-controls",
+        "hashes": 2
+      },
+      {
+        "name": "empty-and-trailing-bytes"
+      }
+    ]
+  },
+  "fixed": {
+    "baseline": false,
+    "native": "D:\\Repositories\\One\\work\\current\\archive-volume-diagnostics\\native\\One.Archive.exe",
+    "nativeSha256": "f1582acbb492a0f630c34ebefb6dbae6488ffa4bded703397be7d80b9c933752",
+    "records": [
+      {
+        "encryption": "none",
+        "name": "missing-middle",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-none.7z.002 -> 中文-none.7z.003",
+          "Incomplete 7Z volume set near: 中文-none.7z.002 -> 中文-none.7z.003",
+          "Incomplete 7Z volume set near: 中文-none.7z.002 -> 中文-none.7z.003"
+        ]
+      },
+      {
+        "encryption": "none",
+        "name": "missing-last",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-none.7z.008 -> 中文-none.7z.009",
+          "Incomplete 7Z volume set near: 中文-none.7z.008 -> 中文-none.7z.009",
+          "Incomplete 7Z volume set near: 中文-none.7z.008 -> 中文-none.7z.009"
+        ]
+      },
+      {
+        "encryption": "none",
+        "name": "truncated-last",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-none.7z.009 -> 中文-none.7z.010",
+          "Incomplete 7Z volume set near: 中文-none.7z.009 -> 中文-none.7z.010",
+          "Incomplete 7Z volume set near: 中文-none.7z.009 -> 中文-none.7z.010"
+        ]
+      },
+      {
+        "encryption": "none",
+        "name": "truncated-single",
+        "operations": 3,
+        "messages": [
+          "7Z archive is incomplete or truncated",
+          "7Z archive is incomplete or truncated",
+          "7Z archive is incomplete or truncated"
+        ]
+      },
+      {
+        "name": "exclusively-locked-middle-volume"
+      },
+      {
+        "encryption": "none",
+        "name": "valid-hashes-password-and-header-controls",
+        "hashes": 2
+      },
+      {
+        "encryption": "data",
+        "name": "missing-middle",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-data.7z.002 -> 中文-data.7z.003",
+          "Incomplete 7Z volume set near: 中文-data.7z.002 -> 中文-data.7z.003",
+          "Incomplete 7Z volume set near: 中文-data.7z.002 -> 中文-data.7z.003"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "missing-last",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-data.7z.008 -> 中文-data.7z.009",
+          "Incomplete 7Z volume set near: 中文-data.7z.008 -> 中文-data.7z.009",
+          "Incomplete 7Z volume set near: 中文-data.7z.008 -> 中文-data.7z.009"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "truncated-last",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-data.7z.009 -> 中文-data.7z.010",
+          "Incomplete 7Z volume set near: 中文-data.7z.009 -> 中文-data.7z.010",
+          "Incomplete 7Z volume set near: 中文-data.7z.009 -> 中文-data.7z.010"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "truncated-single",
+        "operations": 3,
+        "messages": [
+          "7Z archive is incomplete or truncated",
+          "7Z archive is incomplete or truncated",
+          "7Z archive is incomplete or truncated"
+        ]
+      },
+      {
+        "encryption": "data",
+        "name": "valid-hashes-password-and-header-controls",
+        "hashes": 2
+      },
+      {
+        "encryption": "header",
+        "name": "missing-middle",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-header.7z.002 -> 中文-header.7z.003",
+          "Incomplete 7Z volume set near: 中文-header.7z.002 -> 中文-header.7z.003",
+          "Incomplete 7Z volume set near: 中文-header.7z.002 -> 中文-header.7z.003"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "missing-last",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-header.7z.008 -> 中文-header.7z.009",
+          "Incomplete 7Z volume set near: 中文-header.7z.008 -> 中文-header.7z.009",
+          "Incomplete 7Z volume set near: 中文-header.7z.008 -> 中文-header.7z.009"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "truncated-last",
+        "operations": 3,
+        "messages": [
+          "Incomplete 7Z volume set near: 中文-header.7z.009 -> 中文-header.7z.010",
+          "Incomplete 7Z volume set near: 中文-header.7z.009 -> 中文-header.7z.010",
+          "Incomplete 7Z volume set near: 中文-header.7z.009 -> 中文-header.7z.010"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "truncated-single",
+        "operations": 3,
+        "messages": [
+          "7Z archive is incomplete or truncated",
+          "7Z archive is incomplete or truncated",
+          "7Z archive is incomplete or truncated"
+        ]
+      },
+      {
+        "encryption": "header",
+        "name": "valid-hashes-password-and-header-controls",
+        "hashes": 2
+      },
+      {
+        "name": "empty-and-trailing-bytes"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "typecheck",
+      "status": 0,
+      "ms": 8365,
+      "log": "work\\current\\archive-volume-diagnostics\\typecheck.log"
+    },
+    {
+      "name": "archive-password",
+      "status": 0,
+      "ms": 6452,
+      "log": "work\\current\\archive-volume-diagnostics\\archive-password.log"
+    },
+    {
+      "name": "archive-solid",
+      "status": 0,
+      "ms": 5250,
+      "log": "work\\current\\archive-volume-diagnostics\\archive-solid.log"
+    },
+    {
+      "name": "archive-formats",
+      "status": 0,
+      "ms": 7868,
+      "log": "work\\current\\archive-volume-diagnostics\\archive-formats.log"
+    },
+    {
+      "name": "archive-space",
+      "status": 0,
+      "ms": 9054,
+      "log": "work\\current\\archive-volume-diagnostics\\archive-space.log"
+    },
+    {
+      "name": "archive-rar",
+      "status": 0,
+      "ms": 4032,
+      "log": "work\\current\\archive-volume-diagnostics\\archive-rar.log"
+    },
+    {
+      "name": "archive-seven-cleanup",
+      "status": 0,
+      "ms": 633,
+      "log": "work\\current\\archive-volume-diagnostics\\archive-seven-cleanup.log"
+    }
+  ],
+  "sources": {
+    "native/archive/sevenzip.cpp": "483e553728de2c54365f20d423296671b57340c405237887c61eb8eca19ead98",
+    "src/main/archive-service.ts": "8752f80af233756dd709ac35ac35706dd57f363a33173bbb2e842655cb675861",
+    "tests/archive-seven-diagnostics.cjs": "8fc8df5cccb87680b5dc723e7603520005104ca9061aefbe711f03c1770f68a1"
+  },
+  "products": {
+    "One.Archive.exe": "f1582acbb492a0f630c34ebefb6dbae6488ffa4bded703397be7d80b9c933752",
+    "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36",
+    "One.ArchiveBudget.dll": "56fc9caa1e594f4474e7d2b367ffe0a9ff3c563f66dad507887084ac5066459b"
+  }
+}
