@@ -64,11 +64,12 @@ ZIP/7Z 外部编辑针对单个普通文件，大小不超过 256 MiB。RAR 及�
 - [x] 顶栏和底栏 tooltip 改用统一样式的透明浮层，不裁剪表格、不露出白块、不抢焦点。
 - [ ] 继续验收 WPS、图表、工作表切换、密码文件、组件焦点及多显示器 DPI；已验证的真实 Excel 样本不代表全部组件和设备矩阵。
 - [x] 按用户要求调研免费开源 Office 预览库；核验 vue-office、Univer、FortuneSheet、docx-preview、PPTXjs、ZetaOffice、LibreOffice 等的格式、导入链、授权与维护，见 [Office 预览库选型](../research/Office预览库选型.md)。
-- [ ] 优先验证 XLSX 的现成表格组件，先比较 `@vue-office/excel` 等的样式/数字/图片图表、真实 XLS、离线和大表响应；不再由 One 自绘网格。新库尚未安装或实测。
+- [x] 完成首个 XLSX 库的隔离样本试验：`@js-preview/excel@1.7.14`（vue-office 的纯 JS 入口）基础展示可用，但前导零、公式格式、错误值、图表和快速销毁未通过；已记录大表长任务与 CSP 兼容问题，暂不接入主程序。见 [实测记录](../research/Office预览库选型.md#xlsx-隔离样本核验)。
+- [ ] 继续比较 XLSX 现成渲染组件，补真实 XLS、图表、冻结/滚动、只读与取消；复用相同样本核验保真和响应，不再由 One 自绘网格。首个候选实测不等于替代引擎已选定。
 - [ ] DOC/DOCX、PPT/PPTX 比较浏览器渲染与 LibreOffice 本地转换 + PDF.js；核验版式、目录、首屏和切页性能。Windows 原生原型仍被用户反馈卡顿，暂停继续优化，不能以功能检查宣称体验验收完成。
 - [ ] Office 体验稳定后按日常需求评估 CSV 大文件表格、EPUB 导航等短板；不扩大为全部格式变体实现。
 
-2026-10-10：XLSX 原生接入和透明 tooltip 已实现，宿主 50 项、缺组件模拟 6 项及本机真实 Excel 12 项检查通过；XLSM/ODS 等原有预览回归通过。本机默认 WPS 关联失效，但实际存在可用 Excel 组件，已回退使用；未安装、修复或修改关联。Word/PPT 原生原型已做功能检查，但用户体验反馈仍卡顿；后续优先免费开源库，当前完成选型调研，替代引擎尚未决定。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
+2026-10-10：XLSX 原生接入和透明 tooltip 已实现，宿主 50 项、缺组件模拟 6 项及本机真实 Excel 12 项检查通过；XLSM/ODS 等原有预览回归通过。本机默认 WPS 关联失效，但实际存在可用 Excel 组件，已回退使用；未安装、修复或修改关联。Word/PPT 原生原型已做功能检查，但用户体验反馈仍卡顿；后续优先免费开源库，当前完成资料调研与首个 XLSX 隔离试验，替代引擎尚未决定。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
 
 ## 深浅色模式自动切换
 
