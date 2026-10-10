@@ -38,7 +38,15 @@ eq(await page.locator('#theme-enabled').isChecked(),false);eq(await page.locator
   await page.locator('#theme-longitude').fill('121.5');await expect.poll(()=>page.evaluate(()=>window.one.settings().then(s=>s.themeSchedule.longitude))).toBe(121.5);checks++;await page.locator('#theme-sunriseOffset').fill('-15');await page.locator('#theme-sunsetOffset').fill('20');await page.locator('#theme-enabled').check();await settle();
   await expect(page.locator('#theme-next')).toContainText('下次');const solar=await page.evaluate(()=>window.one.settings());eq([solar.themeSchedule.latitude,solar.themeSchedule.longitude,solar.themeSchedule.sunriseOffset,solar.themeSchedule.sunsetOffset],[31.2,121.5,-15,20]);
   await choose('Windows 夜间模式');await settle();const night=await page.evaluate(()=>window.one.themeSync());assert.ok(['automatic','unavailable'].includes(night.phase));checks++;
-  if(night.phase==='unavailable'){await expect(page.locator('#theme-status')).not.toHaveText('');await page.locator('#theme-dark').click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');eq((await page.evaluate(()=>window.one.themeStatus())).phase,'manual');}
+  if(night.phase==='unavailable'){
+    await expect(page.locator('#theme-status')).not.toHaveText('');
+    await page.evaluate(()=>{window.themeActionStates=[];for(const id of ['theme-light','theme-dark','theme-resume','theme-sync']){const button=document.getElementById(id);new MutationObserver(()=>window.themeActionStates.push({id,disabled:button.disabled})).observe(button,{attributes:true,attributeFilter:['disabled']});}});
+    await page.locator('#theme-dark').click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+    await expect(page.locator('#theme-schedule')).toHaveAttribute('aria-busy','false');
+    const states=await page.evaluate(()=>window.themeActionStates);
+    for(const id of ['theme-light','theme-dark','theme-resume','theme-sync'])eq(states.filter(state=>state.id===id).map(state=>state.disabled),[true,false],`${id} disabled during manual switch`);
+    eq((await page.evaluate(()=>window.one.themeStatus())).phase,'manual');
+  }
   await choose('固定时间');await settle();await expect(page.locator('html')).toHaveAttribute('data-theme','light');
   // Native recording must pause theme hotkeys and restore them after release.
   await page.locator('#theme-shortcut').focus();await page.keyboard.press('Control+Alt+F9');await page.locator('#theme-status').click();await expect(page.locator('#theme-shortcut')).toHaveValue('Ctrl+Alt+F9');await expect.poll(()=>page.evaluate(()=>window.one.themeStatus().then(s=>s.shortcutActive))).toBe(true);checks++;

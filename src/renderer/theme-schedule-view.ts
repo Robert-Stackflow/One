@@ -122,9 +122,10 @@ export function setupThemeSchedule(){
   const delay=event.type==='input'||['theme-lightAt','theme-darkAt','theme-latitude','theme-longitude','theme-sunriseOffset','theme-sunsetOffset'].includes(target.id)?350:0;
   timer=setTimeout(()=>void flush().catch(error),delay);
  };
+ const actions=['theme-light','theme-dark','theme-resume','theme-sync'].map(id=>q(id) as HTMLButtonElement);
  const run=async(work:()=>Promise<ThemeAutomationStatus>)=>{
-  if(busy)return;busy=true;root.setAttribute('aria-busy','true');error('');
-  try{await flush();status(await work());}catch(reason){error(reason);}finally{busy=false;root.setAttribute('aria-busy',String(!!saving));}
+  if(busy)return;busy=true;root.setAttribute('aria-busy','true');actions.forEach(action=>{action.disabled=true;});error('');
+  try{await flush();status(await work());}catch(reason){error(reason);}finally{busy=false;actions.forEach(action=>{action.disabled=false;});root.setAttribute('aria-busy',String(!!saving));}
  };
  window.addEventListener('focus',()=>{if(panelActive&&preferences)preview();});
  setInterval(()=>{if(panelActive&&preferences&&root.checkVisibility())preview();},60000);
