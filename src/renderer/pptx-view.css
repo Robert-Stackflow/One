@@ -17,6 +17,7 @@
 .pptx-preview-notes-header strong{flex:1;font-size:13px}
 .pptx-preview-notes-header button{min-height:28px;padding:3px 10px}
 .pptx-preview-notes-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.65;user-select:text}
+.pptx-preview-notes-body p{margin:0;min-height:1em}
 
 /* Remove only the viewer paper shadow, preserving effects authored in slides. */
 .pptx-preview-mount > [data-slide-index] > div:first-child{box-shadow:none!important}

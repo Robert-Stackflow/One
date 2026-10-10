@@ -1,7 +1,9 @@
 import JSZip from 'jszip';
 import {DOMParser,type Element} from '@xmldom/xmldom';
 
-export interface PptxHeading {label:string;hidden:boolean;notes:string}
+export interface PptxNoteRun {text:string;bold?:boolean;italic?:boolean;underline?:boolean;color?:string;sizePt?:number}
+export interface PptxNoteParagraph {runs:PptxNoteRun[]}
+export interface PptxHeading {label:string;hidden:boolean;notes:string;notesRich:PptxNoteParagraph[]}
 const presentation='http://schemas.openxmlformats.org/presentationml/2006/main';
 const drawing='http://schemas.openxmlformats.org/drawingml/2006/main';
 const relations='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -26,7 +28,7 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
   const title=shapes.find(shape=>elements(shape,presentation,'ph').some(node=>['title','ctrTitle'].includes(node.getAttribute('type')||'')));
   const text=(node:Element)=>elements(node,drawing,'t').map(item=>item.textContent||'').join(' ').replace(/\s+/g,' ').trim();
   const label=(title&&text(title))||shapes.map(text).find(Boolean)||`第 ${headings.length+1} 张`;
-  let notes='';
+  let notes='',notesRich:PptxNoteParagraph[]=[];
   const relPart=archive.file(`ppt/slides/_rels/${path.split('/').pop()}.rels`);
   if(relPart){
    const noteRelation=elements(parse(await relPart.async('string')),packageRelations,'Relationship').find(node=>node.getAttribute('Type')===relations+'/notesSlide'&&node.getAttribute('TargetMode')!=='External');
@@ -35,11 +37,36 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
     for(const segment of parts){if(segment==='..')resolved.pop();else if(segment&&segment!=='.')resolved.push(segment);}
     const notePath=resolved.join('/');if(!/^ppt\/notesSlides\/[^/]+\.xml$/.test(notePath))throw new Error('演示文稿备注引用无效');
     const note=await part(notePath);
-    const content=(node:Element):string=>Array.from(node.childNodes).map(child=>child.nodeType!==1?'':child.namespaceURI===drawing&&child.localName==='t'?child.textContent||'':child.namespaceURI===drawing&&child.localName==='br'?'\n':child.namespaceURI===drawing&&child.localName==='tab'?'\t':content(child as Element)).join('');
-    notes=elements(note,presentation,'sp').filter(shape=>!elements(shape,presentation,'ph').some(node=>['sldImg','sldNum','dt','hdr','ftr'].includes(node.getAttribute('type')||''))).flatMap(shape=>elements(shape,drawing,'p').map(content)).join('\n').trim();
+    const children=(node:Element)=>Array.from(node.childNodes).filter(child=>child.nodeType===1) as Element[];
+    const style=(node:Element):Omit<PptxNoteRun,'text'>=>{
+     const props=children(node).find(child=>child.namespaceURI===drawing&&child.localName==='rPr');
+     if(!props)return {};
+     const color=children(props).find(child=>child.namespaceURI===drawing&&child.localName==='solidFill');
+     const rgb=color&&elements(color,drawing,'srgbClr')[0]?.getAttribute('val');
+     const size=Number(props.getAttribute('sz'))/100;
+     return {bold:['1','true'].includes(props.getAttribute('b')||''),italic:['1','true'].includes(props.getAttribute('i')||''),underline:!!props.getAttribute('u')&&props.getAttribute('u')!=='none',
+      ...(rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?{color:'#'+rgb}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
+    };
+    const paragraph=(node:Element):PptxNoteParagraph=>{
+     const runs:PptxNoteRun[]=[];
+     const collect=(item:Element,format:Omit<PptxNoteRun,'text'>={})=>{
+      if(item.namespaceURI===drawing){
+       if(['pPr','rPr','endParaRPr'].includes(item.localName||''))return;
+       if(item.localName==='t'){runs.push({text:item.textContent||'',...format});return;}
+       if(item.localName==='br'||item.localName==='tab'){runs.push({text:item.localName==='br'?'\n':'\t'});return;}
+       if(item.localName==='r'||item.localName==='fld')format={...format,...style(item)};
+      }
+      for(const child of children(item))collect(child,format);
+     };
+     collect(node);return {runs};
+    };
+    notesRich=elements(note,presentation,'sp').filter(shape=>!elements(shape,presentation,'ph').some(node=>['sldImg','sldNum','dt','hdr','ftr'].includes(node.getAttribute('type')||''))).flatMap(shape=>elements(shape,drawing,'p').map(paragraph));
+    while(notesRich.length&&!notesRich[0].runs.some(run=>run.text.trim()))notesRich.shift();
+    while(notesRich.length&&!notesRich.at(-1)!.runs.some(run=>run.text.trim()))notesRich.pop();
+    notes=notesRich.map(item=>item.runs.map(run=>run.text).join('')).join('\n').trim();
    }
   }
-  headings.push({label:label.slice(0,240),hidden:page.getAttribute('show')==='0'||page.getAttribute('show')==='false',notes});
+  headings.push({label:label.slice(0,240),hidden:page.getAttribute('show')==='0'||page.getAttribute('show')==='false',notes,notesRich});
  }
  return {bytes,headings};
 }
