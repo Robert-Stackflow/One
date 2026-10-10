@@ -244,3 +244,5 @@
 .preview-image-controls:empty{display:none}
 .image-preview-hint{line-height:1.6;color:var(--muted);text-align:center;margin:16px;max-width:360px}
 .image-unavailable{flex-direction:column}
+
+.photo-map-link{margin-top:10px;padding:6px 10px;font-size:12px}

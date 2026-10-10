@@ -1,4 +1,5 @@
 import {parseLyrics} from '../shared/preview';
+import {photoMetadata} from '../shared/photo-metadata';
 import {extname} from 'node:path';
 import {readWorkbook} from './workbook';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -61,7 +62,7 @@ async function run(){
     let lyrics='';const sidecar=path.slice(0,-extname(path).length)+'.lrc';try{if((await stat(sidecar)).size<=200000){const b=await readFile(sidecar);if(b.length<=200000)lyrics=b.toString('utf8');}}catch{}
     if(!lyrics)for(const l of common.lyrics||[]){if(l.text)lyrics+=l.text+'\n';else if(l.syncText)lyrics+=l.syncText.map(t=>'['+Math.floor((t.timestamp||0)/60000)+':'+(((t.timestamp||0)/1000)%60).toFixed(2)+']'+t.text).join('\n');}
     return {metadata,cover,lyrics:parseLyrics(lyrics)};}
-  if(kind==='image'){const data=await exifr.parse(path,{gps:false,exif:true,tiff:true,icc:false,iptc:false,xmp:false})||{};const metadata:Record<string,string>={};for(const [key,name] of Object.entries({Make:'设备品牌',Model:'设备型号',LensModel:'镜头',DateTimeOriginal:'拍摄时间',ExposureTime:'曝光时间',FNumber:'光圈',ISO:'ISO',ColorSpace:'色彩空间',Orientation:'方向'}))if(data[key]!==undefined)metadata[name]=String(data[key]);return {metadata};}
+  if(kind==='image'){const data=await exifr.parse(path,{gps:true,exif:true,tiff:true,icc:false,iptc:true,xmp:true,translateValues:false,reviveValues:false,makerNote:false,userComment:false})||{};const result=photoMetadata(data);return {metadata:result.metadata,photoLocation:result.location};}
   return {};
 }
 if(parentPort)run().then(result=>parentPort!.postMessage({result})).catch(error=>parentPort!.postMessage({error:error.message}));
