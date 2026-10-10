@@ -47,11 +47,12 @@ async function main(){
    assert.deepEqual(await cacheEntries(),[],'failed composite preparation must release its intermediate files');
    clearFault();
   }
-  // Prove the real ZIP and 7-Zip writers reached disk before the dynamic fault.
+  // Exercise a mid-stream native space refusal and writer cleanup behavior.
   for(const archive of archives.slice(0,2)){
    fault(1024**2,reserve-1);const stage=path.join(root,'native-'+path.extname(archive).slice(1));const result=native(['extract',archive,stage,'','0']);
    assert.equal(result.status,2);assert.equal(result.events.at(-1).code,'write');assert(!result.events.some(item=>item.type==='result'));
-   const actual=(await fs.stat(path.join(stage,'large.bin'))).size;assert(actual>0&&actual<=24*1024**2);
+   if(path.extname(archive)==='.7z')await assert.rejects(fs.stat(stage),{code:'ENOENT'});
+   else{const actual=(await fs.stat(path.join(stage,'large.bin'))).size;assert(actual>0&&actual<=24*1024**2);}
    clearFault();
   }
   // A built-in test receiver requests real lazy streams without opening Explorer.

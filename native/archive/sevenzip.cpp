@@ -12,6 +12,7 @@
 #include <propidl.h>
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cwctype>
 #include <limits>
 #include <memory>
@@ -331,6 +332,22 @@ void preflight(OpenArchive &reader,const std::vector<Item> &items){
     }
 }
 
+class ExtractionDestination {
+    const fs::path &path;bool committed=false;
+public:
+    explicit ExtractionDestination(const fs::path &value):path(value){
+        // The successful atomic create is the ownership boundary. A concurrent
+        // or pre-existing destination must never be removed by this guard.
+        if(!fs::create_directory(path))fail("Extraction destination already exists");
+    }
+    ~ExtractionDestination() noexcept {
+        if(committed)return;
+        try{std::error_code error;fs::remove_all(path,error);if(!error)return;}catch(...){}
+        std::fputs("Could not remove failed extraction destination\n",stderr);
+    }
+    void commit() noexcept {committed=true;}
+};
+
 class FileOutput final:public OutStream7 {
     std::atomic<ULONG> refs{1};HANDLE file=INVALID_HANDLE_VALUE;U64 limit=0,written=0;ExtractionSpace &space;bool size_known;
 public:
@@ -503,12 +520,14 @@ size_t seven_extract(const fs::path &source,const fs::path &destination,
     ExtractionRisk risk;for(U32 index:indices){const auto &item=items[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();
     const bool expected_known=std::all_of(indices.begin(),indices.end(),[&](U32 index){return items[index].directory||items[index].size_known;});
     ExtractionSpace space(destination.parent_path(),expected,nullptr,nullptr,nullptr,expected_known);
-    fs::create_directory(destination);
-    auto callback=new ExtractRequest(items,destination,password,(U32)indices.size(),false,&space);
-    HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback);
-    const auto cancelled=archive_cancelled();const auto error=cancelled?"cancelled":callback->errorCode;callback->Release();if(!cancelled&&space.failed())fail(space.message(),space.code());if(code==E_OUTOFMEMORY)fail("Archive extraction exceeded the memory budget","resource");if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
+    ExtractionDestination output(destination);
+    const auto release=[](ExtractRequest *value){value->Release();};
+    std::unique_ptr<ExtractRequest,decltype(release)> callback(new ExtractRequest(items,destination,password,(U32)indices.size(),false,&space),release);
+    HRESULT code=reader.get()->Extract(indices.data(),(U32)indices.size(),0,callback.get());
+    const auto cancelled=archive_cancelled();const auto error=cancelled?"cancelled":callback->errorCode;callback.reset();if(!cancelled&&space.failed())fail(space.message(),space.code());if(code==E_OUTOFMEMORY)fail("Archive extraction exceeded the memory budget","resource");if(code!=S_OK)fail("Cannot extract archive; check its contents or password",error);
     space.finish();
     if(result)emit("{\"type\":\"result\",\"count\":"+std::to_string(indices.size())+"}");
+    output.commit();
     return indices.size();
 }
 

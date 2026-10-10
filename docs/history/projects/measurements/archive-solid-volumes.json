@@ -1,0 +1,470 @@
+{
+  "beforeSourceCommit": "2dde349582299d2f225e99b19ba63c90cae7b7b0",
+  "sources": {
+    "native/archive/sevenzip.cpp": "b1e34f076fc7c76dcc1ed990c4a8ae0d01c3b675a0d820c91420e048d9d7e1d6",
+    "tests/archive-space.cjs": "d4dc37cdfd65e32a5dad29a582936e623e6605b1a87fce5158c5b3f171666198",
+    "tests/archive-seven-cleanup.cjs": "29082a3e30f513118e74d2add1449cc29b6024c07e375a368d5a6d6765c122d6",
+    "tests/archive-solid-volumes.cjs": "7523e8d7c2e9427ea0ff8a2d0ab8e706002ec3b6792e313052bbd036ecea90db"
+  },
+  "writer": {
+    "sha256": "4cd7d776c686427226a151789d2d61f0b2ed2c392148cc4e69c0238362fafecf",
+    "version": "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03"
+  },
+  "input": [
+    {
+      "name": "00-first.bin",
+      "bytes": 33554432,
+      "sha256": "b1d5e080f95b65994a2651c83519f2cf9cb52d18631c814ec940a4daab1be6c8"
+    },
+    {
+      "name": "10-prefix.bin",
+      "bytes": 536870912,
+      "sha256": "3a180081a844d2d6e9d2035cfc3a5082e2c54b8b0fb147321f24c8a892745681"
+    },
+    {
+      "name": "99-tail.txt",
+      "bytes": 1024,
+      "sha256": "3fefeefca229c5773eed0d0953324b1af6d7f930e15cfa744e3cb39005504951",
+      "fnv": "2443900192577403634"
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "lzma-single.7z",
+      "source": "lzma-single.7z",
+      "method": "LZMA",
+      "split": false,
+      "volumes": [
+        {
+          "name": "lzma-single.7z",
+          "bytes": 149712,
+          "sha256": "553742a6f026703205228ce22b7042b0b6233ec4362630312cd4bbfc07d938f2"
+        }
+      ]
+    },
+    {
+      "name": "lzma-split.7z",
+      "source": "lzma-split.7z.001",
+      "method": "LZMA",
+      "split": true,
+      "volumes": [
+        {
+          "name": "lzma-split.7z.001",
+          "bytes": 32768,
+          "sha256": "a63a75924fca28fe0ed2f5895bc8e0c7b53d7a977efb066516ca0ec3768cf7f3"
+        },
+        {
+          "name": "lzma-split.7z.002",
+          "bytes": 32768,
+          "sha256": "534e714eac6a611bd8f7e4470157dc27a5e8ec36ca6957c0866ecc1ca0f45085"
+        },
+        {
+          "name": "lzma-split.7z.003",
+          "bytes": 32768,
+          "sha256": "3b83d1bcc2af6ac70bbe8660267f502781f60747614abf7809b063652d4076ce"
+        },
+        {
+          "name": "lzma-split.7z.004",
+          "bytes": 32768,
+          "sha256": "1a0ecaa47dcf5f40765d663a122af2658af54c24c698b8e47675a411bfc7b047"
+        },
+        {
+          "name": "lzma-split.7z.005",
+          "bytes": 18640,
+          "sha256": "688d8e4321bbd4fac5f8513ac6501fc2d8b688566cfcee75fc94b8630b0ed7d9"
+        }
+      ]
+    },
+    {
+      "name": "lzma2-single.7z",
+      "source": "lzma2-single.7z",
+      "method": "LZMA2",
+      "split": false,
+      "volumes": [
+        {
+          "name": "lzma2-single.7z",
+          "bytes": 152320,
+          "sha256": "b87cb4bec95d180bfa51e84d9812c91213703c3be37644479dee43925f06fa88"
+        }
+      ]
+    },
+    {
+      "name": "lzma2-split.7z",
+      "source": "lzma2-split.7z.001",
+      "method": "LZMA2",
+      "split": true,
+      "volumes": [
+        {
+          "name": "lzma2-split.7z.001",
+          "bytes": 32768,
+          "sha256": "4d22e3b997ae1e5eedf7055e8682af8216f59e0d49873fa03e36874450794dc5"
+        },
+        {
+          "name": "lzma2-split.7z.002",
+          "bytes": 32768,
+          "sha256": "3c3456f105cdc509a320411d7ec828b1da9af28c2d53346cf8736b5345796a85"
+        },
+        {
+          "name": "lzma2-split.7z.003",
+          "bytes": 32768,
+          "sha256": "e61a001f8ac22da9ee5de88faff9e59ac7a81f0118ea8ac60147441feb83b0f1"
+        },
+        {
+          "name": "lzma2-split.7z.004",
+          "bytes": 32768,
+          "sha256": "c6b50c1990eaa64fcad3ecef3cf7c9f039827db70fd428d472a20b2fe743cdf8"
+        },
+        {
+          "name": "lzma2-split.7z.005",
+          "bytes": 21248,
+          "sha256": "e05eac2e3f5d150b27e70c3df254c8abe038bdeea2d4a08cb3660c020728a56f"
+        }
+      ]
+    }
+  ],
+  "baseline": {
+    "componentHashes": {
+      "One.Archive.exe": "d983452ce9b09bdf0fbb8b2391c00d4cfb377b1b593ab091b5d60b08e161351b",
+      "One.ArchiveBudget.dll": "b4b0336cfa46c8a3d0bdaac6e9458f20480d9d18bfc900f473907a8ff895d621",
+      "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36"
+    },
+    "encryptedDeadline": {
+      "name": "lzma-single.7z",
+      "source": "lzma-single.7z",
+      "volumes": 1,
+      "checks": [
+        {
+          "operation": "extract",
+          "limit": 10,
+          "milliseconds": 82.07850000000008,
+          "status": 2,
+          "code": "timeout",
+          "remaining": true,
+          "files": []
+        }
+      ],
+      "hashes": 1,
+      "normalMilliseconds": 345.93449999999996
+    },
+    "cleanup": [
+      {
+        "case": "success",
+        "hashes": 2
+      },
+      {
+        "case": "crc-after-write",
+        "code": "archive",
+        "remaining": true,
+        "files": [
+          "00-first.bin",
+          "10-second.bin"
+        ]
+      },
+      {
+        "case": "wrong-password",
+        "code": "archive",
+        "remaining": true,
+        "files": [
+          "00-first.bin"
+        ]
+      },
+      {
+        "case": "finish-space-failure",
+        "code": "write",
+        "remaining": true,
+        "files": [
+          "00-first.bin",
+          "10-second.bin"
+        ]
+      },
+      {
+        "case": "existing-directory-preserved"
+      },
+      {
+        "case": "existing-file-and-source-preserved"
+      }
+    ]
+  },
+  "final": {
+    "componentHashes": {
+      "One.Archive.exe": "eab88f9c3da89534d892cc01003e61506d0fec77692475d0b5649a7d9f8422ed",
+      "One.ArchiveBudget.dll": "56fc9caa1e594f4474e7d2b367ffe0a9ff3c563f66dad507887084ac5066459b",
+      "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36"
+    },
+    "encrypted": [
+      {
+        "name": "lzma-single.7z",
+        "source": "lzma-single.7z",
+        "volumes": 1,
+        "checks": [
+          {
+            "operation": "extract",
+            "limit": 10,
+            "milliseconds": 39.73849999999993,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          },
+          {
+            "operation": "drag-test",
+            "limit": 10,
+            "milliseconds": 85.52359999999999,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          }
+        ],
+        "hashes": 5,
+        "normalMilliseconds": 364.0901,
+        "dragFnvVerified": true,
+        "cancelMilliseconds": 14.006199999999808,
+        "cancelRequestMilliseconds": 70.66690000000017,
+        "serviceDeadlineMilliseconds": 120.75119999999993,
+        "passed": true
+      },
+      {
+        "name": "lzma-split.7z",
+        "source": "lzma-split.7z.001",
+        "volumes": 5,
+        "checks": [
+          {
+            "operation": "extract",
+            "limit": 10,
+            "milliseconds": 48.52880000000005,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          },
+          {
+            "operation": "drag-test",
+            "limit": 10,
+            "milliseconds": 51.34009999999989,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          },
+          {
+            "failure": "missing-middle",
+            "code": "archive"
+          },
+          {
+            "failure": "missing-last",
+            "code": "archive"
+          },
+          {
+            "failure": "truncated-last",
+            "code": "archive"
+          },
+          {
+            "failure": "changed-middle",
+            "code": "archive"
+          }
+        ],
+        "hashes": 5,
+        "normalMilliseconds": 342.59839999999986,
+        "dragFnvVerified": true,
+        "cancelMilliseconds": 2.446700000000419,
+        "cancelRequestMilliseconds": 64.44480000000021,
+        "serviceDeadlineMilliseconds": 114.26000000000022,
+        "passed": true
+      },
+      {
+        "name": "lzma2-single.7z",
+        "source": "lzma2-single.7z",
+        "volumes": 1,
+        "checks": [
+          {
+            "operation": "extract",
+            "limit": 10,
+            "milliseconds": 40.36039999999957,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          },
+          {
+            "operation": "drag-test",
+            "limit": 10,
+            "milliseconds": 54.35639999999967,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          }
+        ],
+        "hashes": 5,
+        "normalMilliseconds": 330.77320000000054,
+        "dragFnvVerified": true,
+        "cancelMilliseconds": 11.583800000000338,
+        "cancelRequestMilliseconds": 67.73750000000018,
+        "serviceDeadlineMilliseconds": 121.10879999999997,
+        "passed": true
+      },
+      {
+        "name": "lzma2-split.7z",
+        "source": "lzma2-split.7z.001",
+        "volumes": 5,
+        "checks": [
+          {
+            "operation": "extract",
+            "limit": 10,
+            "milliseconds": 33.07719999999972,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          },
+          {
+            "operation": "drag-test",
+            "limit": 10,
+            "milliseconds": 58.76350000000093,
+            "status": 2,
+            "code": "timeout",
+            "remaining": false,
+            "files": []
+          },
+          {
+            "failure": "missing-middle",
+            "code": "archive"
+          },
+          {
+            "failure": "missing-last",
+            "code": "archive"
+          },
+          {
+            "failure": "truncated-last",
+            "code": "archive"
+          },
+          {
+            "failure": "changed-middle",
+            "code": "archive"
+          }
+        ],
+        "hashes": 5,
+        "normalMilliseconds": 339.2429000000011,
+        "dragFnvVerified": true,
+        "cancelMilliseconds": 7.32799999999952,
+        "cancelRequestMilliseconds": 56.475000000000364,
+        "serviceDeadlineMilliseconds": 123.9385999999995,
+        "passed": true
+      }
+    ],
+    "cleanup": [
+      {
+        "case": "success",
+        "hashes": 2
+      },
+      {
+        "case": "crc-after-write",
+        "code": "archive",
+        "remaining": false,
+        "files": []
+      },
+      {
+        "case": "wrong-password",
+        "code": "archive",
+        "remaining": false,
+        "files": []
+      },
+      {
+        "case": "finish-space-failure",
+        "code": "write",
+        "remaining": false,
+        "files": []
+      },
+      {
+        "case": "existing-directory-preserved"
+      },
+      {
+        "case": "existing-file-and-source-preserved"
+      }
+    ]
+  },
+  "verification": {
+    "fullBuild": "passed",
+    "groups": {
+      "encrypted": {
+        "passed": true,
+        "milliseconds": 12273,
+        "sourceSha256": "7523e8d7c2e9427ea0ff8a2d0ab8e706002ec3b6792e313052bbd036ecea90db"
+      },
+      "solid": {
+        "passed": true,
+        "milliseconds": 4811,
+        "sourceSha256": "6c5f2d395fb2e3ac9bd89854ce48a653ed8bab81326f74b818f207b0d236f79c"
+      },
+      "ui": {
+        "passed": true,
+        "milliseconds": 5886,
+        "sourceSha256": "869b53c0f7ad8eb60aa898fb7fd6294f1230fc0097d22589235a7ec1a6f6fa3d"
+      },
+      "formats": {
+        "passed": true,
+        "milliseconds": 7664,
+        "sourceSha256": "dfc31524daced4cb1bd186c2aff0d79550f589167841374fd93dc14e411f11a8"
+      },
+      "lha": {
+        "passed": true,
+        "milliseconds": 4025,
+        "sourceSha256": "8219b434f7dce10d23b04cc5dbf1567dddfa63b8fe8d6f497c8d6004c78211fb"
+      },
+      "rar": {
+        "passed": true,
+        "milliseconds": 3003,
+        "sourceSha256": "240974e3173fd9393da2a8b55c0935b7d98f6d3c95a349548d38827f79b9c319"
+      },
+      "rar-matrix": {
+        "passed": true,
+        "milliseconds": 13455,
+        "sourceSha256": "5152f10ca4caa39c7096163765f859a87aa524ef37bf9a9a76483a132bc8d69e"
+      },
+      "native": {
+        "passed": true,
+        "milliseconds": 2061,
+        "sourceSha256": "92725d417fba104cd3ea05ecb052bf90411c14f32aab4dbf19f02d7c4bb352d8"
+      },
+      "details": {
+        "passed": true,
+        "milliseconds": 2626,
+        "sourceSha256": "f4e242499477244a4c0ac86b39f20cdcffe3bdcc4577d0f2424a5feba146319d"
+      },
+      "drag": {
+        "passed": true,
+        "milliseconds": 3013,
+        "sourceSha256": "0193c6565ef60d864621df8c18d8c00876df56f91194b14c26edddae4b31bf5a"
+      },
+      "space": {
+        "passed": true,
+        "milliseconds": 8171,
+        "sourceSha256": "d4dc37cdfd65e32a5dad29a582936e623e6605b1a87fce5158c5b3f171666198"
+      },
+      "risk": {
+        "passed": true,
+        "milliseconds": 13765,
+        "sourceSha256": "2b7f3c6bb50757e3573bcd6248c3c93ed663fcb9dd6d2e8c7ff179febdec7238"
+      },
+      "cli": {
+        "passed": true,
+        "milliseconds": 48785,
+        "sourceSha256": "a6d5236a0611a238242b29fd125f01e71a784468a183b094e215ccbf5f68563b"
+      },
+      "seven-cleanup": {
+        "passed": true,
+        "cases": 6
+      }
+    },
+    "largeOutputSha256Checks": 20,
+    "oleFnvChecks": 4,
+    "smallSuccessSha256Checks": 2
+  },
+  "limits": "544 MiB + 1 KiB, local disk, LZMA/LZMA2 with 16 MiB dictionary and encrypted headers; single archive and five 32 KiB volumes. Native/OLE 10 ms budget includes callback/setup overhead and is not a hard real-time wall-clock bound. Cleanup covers failures inside seven_extract; outer service still owns staging and post-processing cleanup. More than 4 GiB encrypted/split cases and slow/network devices remain unverified.",
+  "cleanup": {
+    "rawInputRemaining": false,
+    "temporaryOutputs": "removed in guarded finally blocks; completed processes are terminal",
+    "compressedBytes": 604064
+  }
+}
