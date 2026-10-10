@@ -104,6 +104,20 @@ export class DisplayManagementService {
   }
   if(!targets.length)throw Error('没有可保存的显示器参数，请检测控制能力后重试');return {targets,warnings};
  });}
+ adjustBrightness(point:{x:number;y:number},delta:number,isCurrent:()=>boolean=()=>true):Promise<DisplayWriteResult[]>{
+  if(!point||!Number.isInteger(point.x)||!Number.isInteger(point.y)||Math.abs(point.x)>1000000||Math.abs(point.y)>1000000||!Number.isInteger(delta)||!delta||Math.abs(delta)>100)return Promise.reject(Error('亮度步进参数无效'));
+  return this.enqueue('shortcut:brightness',async()=>{
+   if(!isCurrent())return [];await this.inventory();if(!isCurrent())return [];
+   const matches=[...this.rows].filter(([,r])=>!r.cloned&&point.x>=r.left&&point.x<r.left+r.width&&point.y>=r.top&&point.y<r.top+r.height);
+   if(matches.length!==1)throw Error('无法唯一识别鼠标所在显示器，请刷新显示器列表');const [id]=matches[0],source=await this.detect(id),brightness=source.controls?.brightness;if(!brightness?.supported)throw Error('鼠标所在显示器未提供亮度接口');
+   const desired=Math.max(0,Math.min(100,brightness.value!+delta)),p=this.preferences(),linked=p.linkedBrightness&&!p.excluded.includes(id),targets=[id,...(linked?[...this.rows].filter(([other,r])=>other!==id&&!r.cloned&&!p.excluded.includes(other)).map(([other])=>other):[])],results:DisplayWriteResult[]=[];
+   for(const target of targets){
+    if(!isCurrent())break;const latest=this.preferences();if(target!==id&&(!latest.linkedBrightness||latest.excluded.includes(id)||latest.excluded.includes(target)))continue;
+    try{const row=target===id?source:await this.detect(target),c=row.controls?.brightness;if(!isCurrent())break;if(!c?.supported)continue;results.push({id:target,control:c.value===desired?c:await this.write(target,'brightness',desired)});}
+    catch(error){this.controller!.signal.throwIfAborted();results.push({id:target,error:error instanceof Error?error.message:'设置失败'});}
+   }return results;
+  });
+ }
  applyProfile(value:DisplayProfile):Promise<DisplayProfileResult[]>{
   let profile:DisplayProfile;try{profile=validateDisplayProfile(value);}catch(error){return Promise.reject(error);}
   return this.enqueue('profile:apply',async()=>{

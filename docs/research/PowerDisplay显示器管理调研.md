@@ -1,6 +1,6 @@
 # Power Display 显示器管理调研
 
-2026-10-10 查阅 Microsoft Learn 和 PowerToys 官方源码目录，并核对 One 现有亮度实现。本文保留调研依据；开发版已实现「操作增强 → 显示器管理」首阶段，后续任务统一见 [TODO](../development/TODO.md)。调研阶段未修改屏幕设置；首阶段验证仅读取真实设备清单与控制能力。
+2026-10-10 查阅 Microsoft Learn 和 PowerToys 官方源码目录，并核对 One 现有亮度实现。本文保留调研依据；开发版已实现「操作增强 → 显示器管理」首阶段，当前状态见 [TODO](../development/TODO.md)，延期扩展见 [Roadmap](../development/Roadmap.md#显示器管理后续扩展)。调研阶段未修改屏幕设置；首阶段验证仅读取真实设备清单与控制能力。
 
 ## 官方能力与限制
 
@@ -31,7 +31,7 @@ One 的 [native/levels.cpp](../../native/levels.cpp) 已按光标所在屏幕调
 
 以下为 One 的实施建议，不是已验证的上游或 One 行为：
 
-- 按用户最新要求，显示器管理位于「操作增强」的独立 tab，采用左列表/右参数布局；进入及刷新自动检测常用接口，后续扩展方案、联动和脚本。
+- 按用户最新要求，显示器管理位于「操作增强」的独立 tab，采用屏幕列表、参数方案、快捷键三个 tab，每屏独立卡片；进入及刷新自动检测常用接口。方案和联动已实现，其余扩展转入 Roadmap。
 - 用稳定设备身份关联设置；显示序号只用于展示，不能在热插拔或重排后把旧参数套给另一块屏幕。区分内置、外接、镜像及暂时离线设备。
 - 原生辅助进程承担发现、查询和写入；按设备排队、合并滑块更新、限制并发及重试，设置超时，及时释放句柄。探测与写入不能阻塞窗口。
 - 旋转走 Windows 显示配置接口单独评估；显示器音量、输入源、色温和电源按硬件能力启用。不能用遮罩冒充硬件亮度，也不能把系统音量当显示器音量。
@@ -41,13 +41,13 @@ One 的 [native/levels.cpp](../../native/levels.cpp) 已按光标所在屏幕调
 
 ## 开发版首阶段
 
-入口遵循用户最新要求放在「操作增强 → 显示器管理」tab，左侧选屏、右侧参数；左栏 header 放刷新及读取状态，右栏 header 放检测状态。进入、刷新和设备拓扑变化后自动检测亮度、对比度和显示器音量，串行检测当前选择屏优先，其余在后台依次完成。
+入口遵循用户最新要求放在「操作增强 → 显示器管理」tab，现已改为「屏幕列表、参数方案、快捷键」三个 tab，每屏独立卡片，列表顶部刷新，各屏顶部展示检测状态。进入、刷新和设备拓扑变化后自动检测亮度、对比度和显示器音量，在后台串行依次检测。
 
 实现使用 [QueryDisplayConfig](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig) 获取活动目标、GDI 来源、内置/虚拟类型、分辨率、刷新率及旋转。优先采用经过 EDID 头、校验和及重复检查的厂商/产品/序列标识，否则退回连接路径与 EDID 摘要。ID 不依赖显示序号；镜像目标和重复序列不会被当作唯一物理屏。每次控制重新发现并核对路径与身份，拓扑变化和唤醒清空旧映射。弱连接标识仍需真实扩展坞和相同型号替换验收；本阶段不提供自动应用方案。
 
 外接屏按 [GetMonitorBrightness](https://learn.microsoft.com/en-us/windows/win32/api/highlevelmonitorconfigurationapi/nf-highlevelmonitorconfigurationapi-getmonitorbrightness)、[GetMonitorContrast](https://learn.microsoft.com/en-us/windows/win32/api/highlevelmonitorconfigurationapi/nf-highlevelmonitorconfigurationapi-getmonitorcontrast) 及 VCP 0x10/0x12/0x62 的有效读值开放控制；内置屏亮度使用与原有边缘操作共用的 WMI 实现。百分比按实际硬件最小/最大值换算，写入后读回当前值；显示器音量不调用系统音频端点。原生辅助进程一次一项操作、8 秒超时、无自动重试，使用 RAII 释放物理句柄；主进程串行、有界队列和拖动合并，失败后暂停控制直到重新检测。离开 tab 取消未完成任务。
 
-代码入口为 [原生辅助程序](../../native/display.cpp)、[主进程服务](../../src/main/display-management.ts)和[界面](../../src/renderer/display-management-view.ts)。原生/服务 72 项、Electron 桌面 25 项及共用 WMI 后的旧亮度服务回归通过；实际两屏仅作清单与控制接口读取，不测试改值。证据在 verification/display-management/latest.json；亮度联动与逐屏排除另通过 26 项逻辑、15 项桌面检查及上述回归，证据在 verification/display-linking/latest.json。联动默认关闭、配置自动保存，以稳定 ID 排除；仅手动拖动参与屏时按相同比例依次写入有效目标，启动和开启不自动应用。单屏失败分别返回结果，关闭/排除在设备间重新检查并停止剩余对应写入。参数方案现支持保存、更新、重命名、删除和手动应用，46 项逻辑及 14 项桌面流程检查通过；证据在 verification/display-profiles/latest.json。保存重新读取所有非镜像目标的有效参数，最多 16 个方案、每个最多 64 屏；应用重新枚举并核对身份、能力和读回，逐参数报告缺失/失败，不触发亮度联动。启动、选择与主题变化不自动应用，后续手动操作覆盖对应参数。取消停止剩余操作，已完成值保留。输入源、色温、电源、旋转写入、方案自动恢复/主题联动、快捷键、托盘滚轮及 CLI 继续在 TODO 中保留，真实改值与完整硬件验收尚未完成。
+代码入口为 [原生辅助程序](../../native/display.cpp)、[主进程服务](../../src/main/display-management.ts)和[界面](../../src/renderer/display-management-view.ts)。原生/服务 72 项、Electron 桌面 25 项及共用 WMI 后的旧亮度服务回归通过；实际两屏仅作清单与控制接口读取，不测试改值。证据在 verification/display-management/latest.json；亮度联动与逐屏排除另通过 26 项逻辑、15 项桌面检查及上述回归，证据在 verification/display-linking/latest.json。联动默认关闭、配置自动保存，以稳定 ID 排除；仅手动拖动参与屏时按相同比例依次写入有效目标，启动和开启不自动应用。单屏失败分别返回结果，关闭/排除在设备间重新检查并停止剩余对应写入。参数方案现支持保存、更新、重命名、删除和手动应用，46 项逻辑及 14 项桌面流程检查通过；证据在 verification/display-profiles/latest.json。保存重新读取所有非镜像目标的有效参数，最多 16 个方案、每个最多 64 屏；应用重新枚举并核对身份、能力和读回，逐参数报告缺失/失败，不触发亮度联动。启动、选择与主题变化不自动应用，后续手动操作覆盖对应参数。取消停止剩余操作，已完成值保留。亮度快捷键已完成，支持鼠标所在屏幕、步长、联动/排除、连按合并、录入暂停及注册冲突重试；46 项逻辑、19 项桌面检查通过，证据在 verification/display-shortcuts/latest.json。按用户要求，显示器功能开发在此收尾；输入源、色温、电源、旋转写入、方案自动恢复/主题联动、托盘滚轮、CLI、更多兼容性及真实改值/完整硬件验收统一移入 Roadmap。
 
 ## 验收条件
 

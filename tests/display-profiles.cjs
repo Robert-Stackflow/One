@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{buildSync}=require('esbuild');
-const root=path.resolve('work/current/display-profiles');fs.mkdirSync(root,{recursive:true});buildSync({entryPoints:['src/main/display-management.ts','src/main/display-profiles.ts','src/shared/settings.ts'],bundle:true,platform:'node',format:'cjs',outdir:root,outbase:'src'});
+const root=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/display-profiles');fs.mkdirSync(root,{recursive:true});buildSync({entryPoints:['src/main/display-management.ts','src/main/display-profiles.ts','src/shared/settings.ts'],bundle:true,platform:'node',format:'cjs',outdir:root,outbase:'src'});
 const {DisplayManagementService}=require(path.join(root,'main/display-management.js')),{DisplayProfilesService}=require(path.join(root,'main/display-profiles.js')),{defaultSettings,validateSettings,mergeSettings}=require(path.join(root,'shared/settings.js'));
 let checks=0;const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};const rejects=async(p,re)=>{await assert.rejects(p,re);checks++;};
 const pid='11111111-1111-4111-8111-111111111111',target={id:'a'.repeat(64),name:'a',identity:'serial',values:{brightness:30}},profile={id:pid,name:'日常',targets:[target]};

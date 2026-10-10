@@ -7,7 +7,7 @@ const control=value=>({supported:true,method:'fixture',error:'',minimum:5,maximu
 const metadata=['a','b','unsupported','clone'].map((key,i)=>({key,path:'path-'+key,name:key,identity:'serial',source:'DISPLAY'+i,internal:i===0,virtual:false,primary:i===0,cloned:key==='clone',width:1920,height:1080,left:i*1920,top:0,rotation:0,refreshRate:60}));
 const unsupported={supported:false,method:'',error:'not supported'};
 async function main(){
- const defaults=defaultSettings();eq(defaults.displays,{linkedBrightness:false,excluded:[],profiles:[]});const old={...defaults};delete old.displays;eq(validateSettings(old).displays,defaults.displays,'Old settings migrate with linking disabled');
+ const defaults=defaultSettings();eq(defaults.displays,{linkedBrightness:false,excluded:[],profiles:[],shortcuts:{increase:'',decrease:'',step:5}});const old={...defaults};delete old.displays;eq(validateSettings(old).displays,defaults.displays,'Old settings migrate with linking disabled');
  for(const bad of [null,{linkedBrightness:'true',excluded:[]},{linkedBrightness:true,excluded:['DISPLAY1']},{linkedBrightness:true,excluded:Array(129).fill('a'.repeat(64))}]){assert.throws(()=>mergeSettings(defaults,{displays:bad}));checks++;}
  const id='a'.repeat(64);eq(mergeSettings(defaults,{displays:{excluded:[id,id]}}).displays.excluded,[id]);eq(defaults.displays.excluded,[],'Settings merge does not mutate defaults');
  let prefs={linkedBrightness:false,excluded:[]},calls=[],fail='',afterWrite=()=>{},hold,release;

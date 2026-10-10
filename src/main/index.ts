@@ -53,6 +53,7 @@ import {ClickerService} from './clicker';
 import {elevationCommand} from './elevation-command';
 import {ThemeAutomation} from './theme-automation';
 import {ThemeLocationService} from './theme-location';
+import {DisplayShortcutController} from './display-shortcuts';
 import {DisplayProfilesService} from './display-profiles';
 import {DisplayManagementService} from './display-management';
 import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme, powerMonitor } from 'electron';
@@ -133,6 +134,7 @@ const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
 let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let themeAutomation:ThemeAutomation|undefined;const themeLocation=new ThemeLocationService();
 const displayManagement=new DisplayManagementService(()=>{if(main&&!main.isDestroyed())main.webContents.send('one:display-changed');},undefined,()=>settings.displays);
+let displayShortcuts:DisplayShortcutController|undefined;let displayShortcutRefresh=false,lastDisplayShortcutError='';
 const displayProfiles=new DisplayProfilesService(displayManagement,()=>settings.displays.profiles,async change=>(await saveSettings(current=>mergeSettings(current,{displays:{profiles:change(current.displays.profiles)}}))).displays.profiles);
 if(testMode&&process.env.ONE_TEST_DISPLAY_MANAGEMENT==='1')(globalThis as typeof globalThis&{oneTestDisplayManagement?:DisplayManagementService}).oneTestDisplayManagement=displayManagement;
 if(testMode&&process.env.ONE_TEST_THEME_LOCATION==='1')(globalThis as typeof globalThis&{oneTestThemeLocation?:ThemeLocationService}).oneTestThemeLocation=themeLocation;
@@ -392,6 +394,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortc
     if(themeShortcutChanged&&!recordingShortcut){try{themeAutomation?.registerShortcut(next.themeSchedule.shortcut);}catch(error){if(!allowShortcutConflict){try{themeAutomation?.registerShortcut(previous.themeSchedule.shortcut);}catch{}if(changed('colorShortcut'))try{colorShortcut(previous.colorShortcut);}catch{}throw error;}}}
     try{await persistSettings(next);}catch(error){if(changed('colorShortcut')&&!recordingShortcut)try{colorShortcut(previous.colorShortcut);}catch{}if(themeShortcutChanged&&!recordingShortcut)try{themeAutomation?.registerShortcut(previous.themeSchedule.shortcut);}catch{}throw error;}
     if(themeShortcutChanged&&!recordingShortcut)try{themeAutomation?.registerShortcut(next.themeSchedule.shortcut);}catch{}
+    if(JSON.stringify(next.displays.shortcuts)!==JSON.stringify(previous.displays.shortcuts)&&!recordingShortcut&&!inputPaused)displayShortcuts?.configure(next.displays.shortcuts);
     if(changed('themeSchedule'))void themeAutomation?.configure(next.themeSchedule);
     const inputKeys=['quickActions','capsLock','echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings','utilities'] as const;
     if(inputKeys.some(changed)){if(inputPaused)input?.stop();else input?.update(next);}
@@ -525,7 +528,7 @@ function hotkeyConflict(shortcut:string,field:string){
  if(!recordingShortcut||typeof shortcut!=='string'||shortcut.length>100||typeof field!=='string'||field.length>80)throw new Error('快捷键查询无效');
  const normalize=(value:string)=>value.toLowerCase().replace(/\b(control|ctrl)\b/g,'ctrl').replace(/\b(super|meta|win)\b/g,'win').split('+').map(part=>part.trim()).sort().join('+');
  const wanted=normalize(shortcut);
- const own:[string,string,string,boolean][]=[['theme-shortcut','主题切换',settings.themeSchedule.shortcut,true],['color-shortcut','屏幕取色',settings.colorShortcut,true],['topmost-shortcut','窗口置顶',settings.utilities.topmost.shortcut,settings.utilities.topmost.enabled],['clicker-shortcut','鼠标连点',settings.utilities.clicker.shortcut,settings.utilities.clicker.enabled],['search-shortcut','文件搜索',settings.search.shortcut,true],['search-programShortcut','程序搜索',settings.search.programShortcut,true]];
+ const own:[string,string,string,boolean][]=[['display-shortcut-increase','显示器调亮',settings.displays.shortcuts.increase,true],['display-shortcut-decrease','显示器调暗',settings.displays.shortcuts.decrease,true],['theme-shortcut','主题切换',settings.themeSchedule.shortcut,true],['color-shortcut','屏幕取色',settings.colorShortcut,true],['topmost-shortcut','窗口置顶',settings.utilities.topmost.shortcut,settings.utilities.topmost.enabled],['clicker-shortcut','鼠标连点',settings.utilities.clicker.shortcut,settings.utilities.clicker.enabled],['search-shortcut','文件搜索',settings.search.shortcut,true],['search-programShortcut','程序搜索',settings.search.programShortcut,true]];
  const match=own.find(([id,,value,enabled])=>id!==field&&enabled&&value&&normalize(value)===wanted);
  if(match)return {source:'one' as const,label:`One 的「${match[1]}」正在使用`};
  const accelerator=shortcut.replace(/\bCtrl\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');
@@ -547,10 +550,11 @@ function stopShortcutRecording(token?:string){
   recordingShortcut=false;input.setModalActive(!!colorWorker);topmost.record(false);searchBridge.record(false);
   try{colorShortcut(settings.colorShortcut);}catch{}
   try{themeAutomation?.registerShortcut(settings.themeSchedule.shortcut);}catch{}
+  if(!inputPaused)displayShortcuts?.configure(settings.displays.shortcuts);
 }
 async function startShortcutRecording(token:string){
   stopShortcutRecording();activeShortcutToken=token;recordingShortcut=true;
-  input.setModalActive(true);topmost.record(true);searchBridge.record(true);themeAutomation?.pauseShortcut();
+  input.setModalActive(true);topmost.record(true);searchBridge.record(true);themeAutomation?.pauseShortcut();displayShortcuts?.pause();
   if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
   const hwnd=main.getNativeWindowHandle().readBigUInt64LE();
   await shortcutCapture.start(hwnd,key=>{
@@ -693,7 +697,7 @@ function registerIPC() {
     if(action==='open')showMain();
     else if(action==='search')showSearch();
     else if(action==='preview'||action==='disk'){showMain();main.webContents.send('one:navigate-page',{page:action});}
-    else if(action==='pause'){inputPaused=!inputPaused;if(inputPaused){input.stop();echoes?.hide();}else input.update(settings);trayMenuPanel?.changed();}
+    else if(action==='pause'){inputPaused=!inputPaused;if(inputPaused){input.stop();displayShortcuts?.pause();echoes?.hide();}else{input.update(settings);displayShortcuts?.configure(settings.displays.shortcuts);}trayMenuPanel?.changed();}
     else if(action==='startup')await saveSettings(current=>({...current,general:{...current.general,launchAtLogin:!current.general.launchAtLogin}}));
     else if(action==='restart')restartOne();
     else if(action==='quit')app.quit();
@@ -730,6 +734,8 @@ function registerIPC() {
   handle('display-profile-rename',(_event,id,name)=>displayProfiles.rename(id,name),['main']);
   handle('display-profile-delete',(_event,id)=>displayProfiles.remove(id),['main']);
   handle('display-profile-apply',(_event,id)=>displayProfiles.apply(id),['main']);
+  handle('display-shortcut-status',()=>displayShortcuts!.state(),['main']);
+  handle('display-shortcut-retry',()=>{if(!recordingShortcut&&!inputPaused)displayShortcuts!.configure(settings.displays.shortcuts);return displayShortcuts!.state();},['main']);
   handle('display-cancel',()=>displayManagement.cancel(),['main']);
   handle('theme-locate',()=>{if(!main||main.isDestroyed()||!main.isVisible()||!main.isFocused())return {state:'unavailable',detail:'请在 One 窗口中获取当前位置，或手动填写经纬度。'};return themeLocation.locate();},['main']);
   handle('theme-location-cancel',()=>themeLocation.cancel(),['main']);
@@ -884,6 +890,11 @@ async function start() {
     publish:status=>{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:theme-status',status);},
     register:(shortcut,callback)=>globalShortcut.register(shortcut,callback),unregister:shortcut=>globalShortcut.unregister(shortcut)});
   void themeAutomation.configure(settings.themeSchedule);
+  displayShortcuts=new DisplayShortcutController({register:(key,callback)=>!globalShortcut.isRegistered(key)&&globalShortcut.register(key,callback),unregister:key=>globalShortcut.unregister(key),enabled:()=>!inputPaused&&!recordingShortcut,
+    point:()=>{const display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),p=screen.dipToScreenPoint({x:Math.round(display.bounds.x+display.bounds.width/2),y:Math.round(display.bounds.y+display.bounds.height/2)});return {key:String(display.id),...p};},adjust:(point,delta,current)=>displayManagement.adjustBrightness(point,delta,current),
+    complete:results=>{if(results.length){displayShortcutRefresh=true;const c=results[0].control;if(!testMode&&c?.supported)echoes?.level({action:'brightness',value:c.value!});}},
+    publish:state=>{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed()){main.webContents.send('one:display-shortcut-state',state);if(!state.busy&&displayShortcutRefresh){displayShortcutRefresh=false;main.webContents.send('one:display-adjusted');}}if(!testMode&&state.operationError&&state.operationError!==lastDisplayShortcutError)echo(state.operationError);lastDisplayShortcutError=state.operationError;}});
+  if(testMode&&process.env.ONE_TEST_DISPLAY_MANAGEMENT==='1')(globalThis as typeof globalThis&{oneTestDisplayShortcuts?:DisplayShortcutController}).oneTestDisplayShortcuts=displayShortcuts;
   screen.on('display-added',()=>displayManagement.invalidate());screen.on('display-removed',()=>displayManagement.invalidate());screen.on('display-metrics-changed',()=>displayManagement.invalidate());
   powerMonitor.on('resume',()=>displayManagement.invalidate());
   const renderer = resolve(__dirname, '../renderer');
@@ -930,6 +941,7 @@ async function start() {
     if (!globalShortcut.register('CommandOrControl+Alt+O', showMain)) console.warn('Ctrl+Alt+O 已被其他程序使用，可从托盘打开 One');
     try{colorShortcut(settings.colorShortcut);}catch(error){console.warn(String(error));}
     try{themeAutomation.registerShortcut(settings.themeSchedule.shortcut);}catch(error){console.warn(String(error));}
+    displayShortcuts.configure(settings.displays.shortcuts);
     input.update(settings);
   }
 }
@@ -942,5 +954,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

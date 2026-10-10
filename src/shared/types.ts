@@ -155,6 +155,10 @@ export interface OneAPI {
   pickDirectory(initialPath?: string): Promise<string | null>; scan(path: string): Promise<ScanSummary>; cancelScan(): Promise<void>;
   displayList():Promise<import('./display-management').ManagedDisplay[]>;
   displayProbe(id:string):Promise<import('./display-management').ManagedDisplay>;
+  displayShortcutStatus():Promise<import('./display-shortcuts').DisplayShortcutState>;
+  displayShortcutRetry():Promise<import('./display-shortcuts').DisplayShortcutState>;
+  onDisplayShortcutState(callback:(state:import('./display-shortcuts').DisplayShortcutState)=>void):()=>void;
+  onDisplayAdjusted(callback:()=>void):()=>void;
   displayProfileSave(name:string,id?:string):Promise<{profiles:import('./display-profiles').DisplayProfile[];profileId:string;warnings:import('./display-profiles').DisplayProfileWarning[]}>;
   displayProfileRename(id:string,name:string):Promise<import('./display-profiles').DisplayProfile[]>;
   displayProfileDelete(id:string):Promise<import('./display-profiles').DisplayProfile[]>;
