@@ -31,7 +31,9 @@ export function renderDocx(host:HTMLElement,url:string,metadata:(value:Record<st
   void(async()=>{
    const response=await fetch(url,{signal:session.controller.signal});if(!response.ok)throw new Error('文档读取失败');const bytes=await response.arrayBuffer();if(session.closed)return;
    const prepared=await prepare(session,bytes);if(session.closed)return;
-   const document=await DocxDocument.load(prepared.bytes,{mode:'worker',useGoogleFonts:false,cjkFallback:'sc',workerTimeoutMs:20000,resourceLimits:{maxArchiveEntries:20000,maxArchiveEntryBytes:32*1024*1024,maxTotalInflatedBytes:128*1024*1024}});
+   // Obtain the document after the first layout publication so cancellation can
+   // destroy its worker while the remaining pages are still being paginated.
+   const document=await DocxDocument.load(prepared.bytes,{mode:'worker',progressiveLayout:true,useGoogleFonts:false,cjkFallback:'sc',workerTimeoutMs:20000,resourceLimits:{maxArchiveEntries:20000,maxArchiveEntryBytes:32*1024*1024,maxTotalInflatedBytes:128*1024*1024}});
    if(session.closed||disposed){document.destroy();return;}session.document=document;await document.waitUntilLayoutComplete();if(session.closed)return;
    const surface=window.document.createElement('div');surface.className='docx-preview-surface';stage.replaceChildren(surface);
    // Supersample small text at low/fractional Windows scales. Keep the page's
