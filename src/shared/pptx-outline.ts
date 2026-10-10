@@ -9,6 +9,37 @@ const drawing='http://schemas.openxmlformats.org/drawingml/2006/main';
 const relations='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const packageRelations='http://schemas.openxmlformats.org/package/2006/relationships';
 const elements=(node:Element,namespace:string,name:string)=>Array.from(node.getElementsByTagNameNS(namespace,name));
+const clamp=(value:number)=>Math.max(0,Math.min(1,value));
+const noteColor=(hex:string,model:Element):string=>{
+ const transforms=Array.from(model.childNodes).filter(node=>node.nodeType===1&&node.namespaceURI===drawing) as Element[];
+ if(!transforms.length)return hex;
+ let rgb=[1,3,5].map(at=>parseInt(hex.slice(at,at+2),16)/255),alpha=1,changed=false;
+ const hsl=()=>{
+  const [r,g,b]=rgb,max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+  let hue=0,saturation=0;const lightness=(max+min)/2;
+  if(delta){saturation=delta/(1-Math.abs(2*lightness-1));
+   switch(max){case r:hue=((g-b)/delta)%6;break;case g:hue=(b-r)/delta+2;break;default:hue=(r-g)/delta+4;}
+   hue=(hue*60+360)%360;
+  }
+  return {hue,saturation,lightness};
+ };
+ const fromHsl=(hue:number,saturation:number,lightness:number)=>{
+  const chroma=(1-Math.abs(2*lightness-1))*saturation,segment=hue/60,part=chroma*(1-Math.abs(segment%2-1));
+  const [r,g,b]=segment<1?[chroma,part,0]:segment<2?[part,chroma,0]:segment<3?[0,chroma,part]:segment<4?[0,part,chroma]:segment<5?[part,0,chroma]:[chroma,0,part];
+  const shift=lightness-chroma/2;rgb=[r+shift,g+shift,b+shift];
+ };
+ for(const item of transforms){
+  const raw=item.getAttribute('val');if(!raw||!/^[-+]?\d+$/.test(raw))continue;
+  const amount=Number(raw)/100000;if(!Number.isFinite(amount))continue;
+  if(item.localName==='tint'&&amount>=0&&amount<=1){rgb=rgb.map(value=>value*amount+1-amount);changed=true;}
+  else if(item.localName==='shade'&&amount>=0&&amount<=1){rgb=rgb.map(value=>value*amount);changed=true;}
+  else if((item.localName==='lumMod'||item.localName==='lumOff')&&amount>=-1&&amount<=2){const color=hsl();fromHsl(color.hue,color.saturation,clamp(item.localName==='lumMod'?color.lightness*amount:color.lightness+amount));changed=true;}
+  else if(item.localName==='alpha'&&amount>=0&&amount<=1){alpha=amount;changed=true;}
+ }
+ if(!changed)return hex;
+ const channels=rgb.map(value=>Math.round(clamp(value)*255+1e-9));
+ return alpha<1?`rgba(${channels.join(', ')}, ${alpha})`:'#'+channels.map(value=>value.toString(16).padStart(2,'0')).join('').toUpperCase();
+};
 const autoNumber=(type:string|null,value:number):string|undefined=>{
  if(!Number.isInteger(value)||value<1||value>32767||!type)return;
  let number:string;
@@ -101,13 +132,17 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
     const style=(props:Element|undefined):Omit<PptxNoteRun,'text'>=>{
      if(!props)return {};
      const color=children(props).find(child=>child.namespaceURI===drawing&&child.localName==='solidFill');
-     const rgb=color&&child(color,drawing,'srgbClr')?.getAttribute('val');
-     const scheme=color&&child(color,drawing,'schemeClr')?.getAttribute('val');
+     const rgbModel=color&&child(color,drawing,'srgbClr');
+     const schemeModel=color&&child(color,drawing,'schemeClr');
+     const rgb=rgbModel?.getAttribute('val');
+     const scheme=schemeModel?.getAttribute('val');
      const resolved=scheme&&theme.get(colorMap.get(scheme)||scheme);
+     const base=rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?'#'+rgb:resolved||undefined;
+     const model=rgbModel||schemeModel;
      const size=Number(props.getAttribute('sz'))/100;
      const bold=props.getAttribute('b'),italic=props.getAttribute('i'),underline=props.getAttribute('u');
      return {...(bold!==null?{bold:['1','true'].includes(bold)}:{}),...(italic!==null?{italic:['1','true'].includes(italic)}:{}),...(underline!==null?{underline:underline!=='none'}:{}),
-      ...(rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?{color:'#'+rgb}:resolved?{color:resolved}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
+      ...(base&&model?{color:noteColor(base,model)}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
     };
     const paragraph=(node:Element,counters:Map<number,number>,localLevels:Map<number,Element>):PptxNoteParagraph=>{
      const props=children(node).find(child=>child.namespaceURI===drawing&&child.localName==='pPr');
