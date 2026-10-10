@@ -9,6 +9,26 @@ const drawing='http://schemas.openxmlformats.org/drawingml/2006/main';
 const relations='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const packageRelations='http://schemas.openxmlformats.org/package/2006/relationships';
 const elements=(node:Element,namespace:string,name:string)=>Array.from(node.getElementsByTagNameNS(namespace,name));
+const autoNumber=(type:string|null,value:number):string|undefined=>{
+ if(!Number.isInteger(value)||value<1||value>32767||!type)return;
+ let number:string;
+ if(type.startsWith('arabic'))number=String(value);
+ else if(type.startsWith('alphaLc')||type.startsWith('alphaUc')){
+  let current=value,letters='';
+  while(current>0){current--;letters=String.fromCharCode(65+current%26)+letters;current=Math.floor(current/26);}
+  number=type.startsWith('alphaLc')?letters.toLowerCase():letters;
+ }else if(type.startsWith('romanLc')||type.startsWith('romanUc')){
+  let current=value,roman='';
+  for(const [amount,digit] of [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']] as const){
+   while(current>=amount){roman+=digit;current-=amount;}
+  }
+  number=type.startsWith('romanLc')?roman.toLowerCase():roman;
+ }else return;
+ if(type==='arabicPlain')return number;
+ if(/^(arabic|alphaLc|alphaUc|romanLc|romanUc)Period$/.test(type))return number+'.';
+ if(/^(arabic|alphaLc|alphaUc|romanLc|romanUc)ParenR$/.test(type))return number+')';
+ if(/^(arabic|alphaLc|alphaUc|romanLc|romanUc)ParenBoth$/.test(type))return '('+number+')';
+};
 
 /** Read titles in presentation order off the UI thread; never rewrite the file. */
 export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:ArrayBuffer;headings:PptxHeading[]}>{
@@ -99,12 +119,12 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
      if(bullet?.localName==='buChar')marker=Array.from(bullet.getAttribute('char')||'').slice(0,4).join('');
      if(bullet?.localName==='buAutoNum'){
       const type=bullet.getAttribute('type');
-      if(type==='arabicPeriod'||type==='arabicParenR'){
+      if(type&&(type==='arabicPlain'||/^(arabic|alphaLc|alphaUc|romanLc|romanUc)(Period|ParenR|ParenBoth)$/.test(type))){
        const start=Number(bullet.getAttribute('startAt'));
        const number=Number.isInteger(start)&&start>=1&&start<=32767?start:(counters.get(level)||0)+1;
        counters.set(level,number);
        for(const key of counters.keys())if(key>level)counters.delete(key);
-       marker=type==='arabicPeriod'?`${number}.`:`${number})`;
+       marker=autoNumber(type,number);
       }
      }
      const runs:PptxNoteRun[]=[];
