@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import {DOMParser,type Element} from '@xmldom/xmldom';
 
 export interface PptxNoteRun {text:string;bold?:boolean;italic?:boolean;underline?:boolean;color?:string;sizePt?:number}
-export interface PptxNoteParagraph {runs:PptxNoteRun[]}
+export interface PptxNoteParagraph {runs:PptxNoteRun[];marker?:string;level?:number}
 export interface PptxHeading {label:string;hidden:boolean;notes:string;notesRich:PptxNoteParagraph[]}
 const presentation='http://schemas.openxmlformats.org/presentationml/2006/main';
 const drawing='http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -47,7 +47,22 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
      return {bold:['1','true'].includes(props.getAttribute('b')||''),italic:['1','true'].includes(props.getAttribute('i')||''),underline:!!props.getAttribute('u')&&props.getAttribute('u')!=='none',
       ...(rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?{color:'#'+rgb}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
     };
-    const paragraph=(node:Element):PptxNoteParagraph=>{
+    const paragraph=(node:Element,counters:Map<number,number>):PptxNoteParagraph=>{
+     const props=children(node).find(child=>child.namespaceURI===drawing&&child.localName==='pPr');
+     const level=props?Math.max(0,Math.min(8,Number(props.getAttribute('lvl'))||0)):0;
+     const bullet=props&&children(props).find(child=>child.namespaceURI===drawing&&['buChar','buAutoNum','buNone'].includes(child.localName||''));
+     let marker:string|undefined;
+     if(bullet?.localName==='buChar')marker=Array.from(bullet.getAttribute('char')||'').slice(0,4).join('');
+     if(bullet?.localName==='buAutoNum'){
+      const type=bullet.getAttribute('type');
+      if(type==='arabicPeriod'||type==='arabicParenR'){
+       const start=Number(bullet.getAttribute('startAt'));
+       const number=Number.isInteger(start)&&start>=1&&start<=32767?start:(counters.get(level)||0)+1;
+       counters.set(level,number);
+       for(const key of counters.keys())if(key>level)counters.delete(key);
+       marker=type==='arabicPeriod'?`${number}.`:`${number})`;
+      }
+     }
      const runs:PptxNoteRun[]=[];
      const collect=(item:Element,format:Omit<PptxNoteRun,'text'>={})=>{
       if(item.namespaceURI===drawing){
@@ -58,12 +73,15 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
       }
       for(const child of children(item))collect(child,format);
      };
-     collect(node);return {runs};
+     collect(node);return {runs,...(marker?{marker,level}:{})};
     };
-    notesRich=elements(note,presentation,'sp').filter(shape=>!elements(shape,presentation,'ph').some(node=>['sldImg','sldNum','dt','hdr','ftr'].includes(node.getAttribute('type')||''))).flatMap(shape=>elements(shape,drawing,'p').map(paragraph));
-    while(notesRich.length&&!notesRich[0].runs.some(run=>run.text.trim()))notesRich.shift();
-    while(notesRich.length&&!notesRich.at(-1)!.runs.some(run=>run.text.trim()))notesRich.pop();
-    notes=notesRich.map(item=>item.runs.map(run=>run.text).join('')).join('\n').trim();
+    notesRich=elements(note,presentation,'sp').filter(shape=>!elements(shape,presentation,'ph').some(node=>['sldImg','sldNum','dt','hdr','ftr'].includes(node.getAttribute('type')||''))).flatMap(shape=>{
+     const counters=new Map<number,number>();
+     return elements(shape,drawing,'p').map(node=>paragraph(node,counters));
+    });
+    while(notesRich.length&&!notesRich[0].runs.some(run=>run.text.trim())&&!notesRich[0].marker)notesRich.shift();
+    while(notesRich.length&&!notesRich.at(-1)!.runs.some(run=>run.text.trim())&&!notesRich.at(-1)!.marker)notesRich.pop();
+    notes=notesRich.map(item=>`${item.marker?item.marker+' ':''}${item.runs.map(run=>run.text).join('')}`).join('\n').trim();
    }
   }
   headings.push({label:label.slice(0,240),hidden:page.getAttribute('show')==='0'||page.getAttribute('show')==='false',notes,notesRich});

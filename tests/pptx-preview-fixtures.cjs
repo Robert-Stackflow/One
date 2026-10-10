@@ -25,7 +25,8 @@ module.exports=async function fixtures(root){
    const slideLinks=[['layout','slideLayout','../slideLayouts/slideLayout1.xml']];
    if(i===1||i===count){
     slideLinks.push(['notes','notesSlide',`../notesSlides/notesSlide${i}.xml`]);override(`ppt/notesSlides/notesSlide${i}.xml`,'presentationml.notesSlide');
-    const body=shape(70,`NOTES_${i}_中文`,0,0,4000000,2000000).replace('<p:nvPr></p:nvPr>','<p:nvPr><p:ph type="body"/></p:nvPr>').replace('lang="zh-CN" sz="2400"','lang="zh-CN" sz="1800" b="1" i="1" u="sng"').replace(`NOTES_${i}_中文</a:t>`,`NOTES_${i}_中文</a:t></a:r><a:br/><a:r><a:t>第二行 &lt;script&gt;</a:t>`);
+    let body=shape(70,`NOTES_${i}_中文`,0,0,4000000,2000000).replace('<p:nvPr></p:nvPr>','<p:nvPr><p:ph type="body"/></p:nvPr>').replace('lang="zh-CN" sz="2400"','lang="zh-CN" sz="1800" b="1" i="1" u="sng"').replace(`NOTES_${i}_中文</a:t>`,`NOTES_${i}_中文</a:t></a:r><a:br/><a:r><a:t>第二行 &lt;script&gt;</a:t>`);
+    if(i===count)body=body.replace('</p:txBody>',`<a:p><a:pPr lvl="1"><a:buChar char="•"/></a:pPr><a:r><a:t>重点事项</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>第三步</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buAutoNum type="arabicPeriod"/></a:pPr><a:r><a:t>第四步</a:t></a:r></a:p></p:txBody>`);
     const number=shape(71,'NOTES_SLIDE_NUMBER',0,0,500000,200000).replace('<p:nvPr></p:nvPr>','<p:nvPr><p:ph type="sldNum"/></p:nvPr>');
     zip.file(`ppt/notesSlides/notesSlide${i}.xml`,`<p:notes xmlns:p="${p}" xmlns:a="${a}"><p:cSld>${tree(body+number)}</p:cSld></p:notes>`);
    }
