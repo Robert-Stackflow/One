@@ -83,7 +83,7 @@ export function setupBarcode(){
   q('barcode-results-empty').hidden=!!result.results.length;
   if(result.results.length)select(0);
   else{q('barcode-empty-title').textContent='没有识别到条码';q('barcode-empty-description').textContent='尝试更清晰的图片，或框选条码附近区域';}
-  setStatus((result.results.length?`识别到 ${result.results.length} 个条码 · ${result.elapsed} ms`:'未识别到支持的条码；可能格式不支持或图像不够清晰。')+(result.warnings.length?'；'+result.warnings.join('；'):''),result.results.length?'success':'empty');
+  setStatus((result.results.length?`${result.elapsed} ms`:'未识别到支持的条码；可能格式不支持或图像不够清晰。')+(result.warnings.length?'；'+result.warnings.join('；'):''),result.results.length?'success':'empty');
  };
  const run=async(source:()=>Promise<BarcodeImage|null>)=>{
   if(!active||busy)return;
