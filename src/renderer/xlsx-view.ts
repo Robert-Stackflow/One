@@ -6,6 +6,7 @@ type Viewer = ReturnType<typeof XlsxViewer.fromWorkbook>;
 interface Session {
   closed: boolean;
   controller: AbortController;
+  timer?: number;
   workbook?: XlsxWorkbook;
   viewer?: Viewer;
 }
@@ -28,6 +29,7 @@ export function renderXlsx(
     if (!session || session.closed) return;
     session.closed = true;
     session.controller.abort();
+    if (session.timer !== undefined) window.clearInterval(session.timer);
     session.viewer?.destroy();
     // fromWorkbook borrows the engine; the caller must release it separately.
     session.workbook?.destroy();
@@ -59,6 +61,7 @@ export function renderXlsx(
     button('用默认程序打开', openDefault);
     content.append(actions);
     stage.append(content);
+    return label;
   };
   const fail = (session: Session, error: unknown) => {
     if (disposed || current !== session || session.closed) return;
@@ -75,12 +78,24 @@ export function renderXlsx(
     const session: Session = {closed: false, controller: new AbortController()};
     current = session;
     outline([]);
-    panel('正在加载工作簿…', 'loading');
+    const label = panel('正在读取工作簿…', 'loading');
+    let phase = '读取', phaseStarted = Date.now();
+    const loading = (next: string) => {
+      phase = next;
+      phaseStarted = Date.now();
+      if (!session.closed && current === session) label.textContent = `正在${phase}工作簿…`;
+    };
+    session.timer = window.setInterval(() => {
+      if (!session.closed && current === session) {
+        label.textContent = `正在${phase}工作簿…（已等待 ${Math.floor((Date.now() - phaseStarted) / 1000)} 秒）`;
+      }
+    }, 1000);
     void (async () => {
       const response = await fetch(url, {signal: session.controller.signal});
       if (!response.ok) throw new Error('工作簿读取失败');
       const bytes = await response.arrayBuffer();
       if (session.closed) return;
+      loading('解析');
       const workbook = await XlsxWorkbook.load(bytes, {
         useGoogleFonts: false,
         cjkFallback: 'sc',
@@ -94,6 +109,7 @@ export function renderXlsx(
       });
       if (session.closed || disposed) { workbook.destroy(); return; }
       session.workbook = workbook;
+      loading('打开');
       const visible = workbook.sheetNames.flatMap((label, index) => workbook.isHidden(index) ? [] : [{label, index}]);
       if (!visible.length) throw new Error('工作簿没有可见的工作表');
       // A fulfilled load may contain parser diagnostic pages. Check the model,
@@ -110,6 +126,8 @@ export function renderXlsx(
         resizable: false,
         onReady: () => {
           if (session.closed || disposed) return;
+          if (session.timer !== undefined) window.clearInterval(session.timer);
+          session.timer = undefined;
           stage.dataset.state = 'ready';
           metadata({'工作表': String(visible.length)});
           outline(visible.map(({label, index}) => ({label, icon: 'file', activate: () => {
