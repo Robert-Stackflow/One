@@ -29,8 +29,12 @@ test('image conversion tab converts a picked file and reports results',async()=>
   await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
   const compressed=(await readdir(output)).find(name=>name.includes('-compressed-')&&name.endsWith('.png'));assert.ok(compressed);
   assert.equal((await sharp(path.join(output,compressed)).metadata()).width,6);
+  await page.locator('#image-convert-mode').click();await page.locator('#image-convert-mode-options [role="option"][aria-label="无损像素优化（PNG / WebP / TIFF）"]').click();
+  await expect(page.locator('#image-convert-width')).toHaveValue('');await expect(page.locator('#image-convert-width')).toBeDisabled();
+  await page.locator('#image-convert-metadata-policy').click();await page.locator('#image-convert-metadata-policy-options [role="option"][aria-label="仅保留 ICC 色彩配置"]').click();
+  await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
   await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="ICO 多尺寸图标"]').click();
-  await expect(page.locator('#image-convert-metadata')).toBeDisabled();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
+  await expect(page.locator('#image-convert-metadata-policy')).toBeDisabled();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
   assert.equal((await readdir(output)).filter(name=>name.endsWith('.ico')).length,1);
   await expect(page.locator('#image-codec-status')).toContainText('HEIC',{timeout:10000});
   await app.evaluate(({dialog},chosen)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[chosen]});},svg);

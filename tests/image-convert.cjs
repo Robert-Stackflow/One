@@ -42,6 +42,20 @@ test('local image batch conversion preserves source, animation and cancellation 
   const jpegCompressed=await service.start(1,[jpeg],out,{format:'original',quality:20,preserveMetadata:false},()=>{});
   assert.equal(jpegCompressed.results[0].status,'done',JSON.stringify(jpegCompressed.results[0]));
   assert.ok(jpegCompressed.results[0].after<jpegCompressed.results[0].before);
+  const webp=join(root,'photo.webp');await sharp(source).webp({quality:70}).toFile(webp);
+  for(const file of [source,webp,tiff]){
+   const lossless=await service.start(1,[file],out,{format:'original',quality:80,preserveMetadata:false,metadataPolicy:'none',compressionMode:'lossless'},()=>{});
+   assert.equal(lossless.results[0].status,'done',`${file}: ${lossless.results[0].message}`);
+   const firstPixels=await sharp(file).ensureAlpha().raw().toBuffer(),lastPixels=await sharp(lossless.results[0].output).ensureAlpha().raw().toBuffer();assert(firstPixels.equals(lastPixels),`${file}: pixels changed`);
+  }
+  const jpegLossless=await service.start(1,[jpeg],out,{format:'original',quality:80,preserveMetadata:false,compressionMode:'lossless'},()=>{});assert.equal(jpegLossless.results[0].status,'error');
+  const profile=join(root,'profile.jpg');await sharp({create:{width:8,height:6,channels:3,background:'#dc6092'}}).jpeg().withIccProfile('p3').toFile(profile);
+  const setArtist=require('node:child_process').spawnSync(require('exiftool-vendored.exe'),['-overwrite_original','-Artist=One Test','-Orientation#=6',profile],{encoding:'utf8'});assert.equal(setArtist.status,0,setArtist.stderr||setArtist.stdout);
+  const profileInfo=await sharp(profile).metadata();
+  for(const policy of ['all','color','none']){
+   const result=await service.start(1,[profile],out,{format:'png',quality:80,preserveMetadata:policy==='all',metadataPolicy:policy},()=>{});assert.equal(result.results[0].status,'done',`${policy}: ${result.results[0].message}`);
+   const info=await sharp(result.results[0].output).metadata();assert.equal(info.width,6);assert.equal(info.height,8);assert(!info.orientation||info.orientation===1);assert.equal(Boolean(info.exif),policy==='all');assert.equal(Boolean(info.icc),policy!=='none');if(policy!=='none')assert(info.icc.equals(profileInfo.icc));
+  }
   const icons=await service.start(1,[source],out,{format:'ico',quality:80,preserveMetadata:false},()=>{});
   assert.equal(icons.results[0].status,'done',icons.results[0].message);const ico=await readFile(icons.results[0].output);
   assert.equal(ico.readUInt16LE(2),1);assert.equal(ico.readUInt16LE(4),7);

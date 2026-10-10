@@ -14,8 +14,10 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>JPEG / WebP 质量 <span id="image-convert-quality-value">85</span><input id="image-convert-quality" type="range" min="1" max="100" value="85"></label>
       <label>最大宽度<input id="image-convert-width" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
       <label>最大高度<input id="image-convert-height" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
-      <label class="image-convert-metadata"><input id="image-convert-metadata" type="checkbox" checked>保留图片元数据</label><label class="image-convert-metadata"><input id="image-convert-motion-still" type="checkbox">动态照片仅导出静态图（不保留视频）</label></div>
-    <p class="image-convert-note">选择“保持原格式”可批量压缩；质量仅作用于 JPEG / WebP，其他格式采用无损重新编码。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
+      <label>处理模式<select id="image-convert-mode"><option value="quality">按质量重新编码</option><option value="lossless">无损像素优化（PNG / WebP / TIFF）</option></select></label>
+      <label>元数据策略<select id="image-convert-metadata-policy"><option value="all">保留全部</option><option value="color">仅保留 ICC 色彩配置</option><option value="none">移除全部</option></select></label>
+      <label class="image-convert-metadata"><input id="image-convert-motion-still" type="checkbox">动态照片仅导出静态图（不保留视频）</label></div>
+    <p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
     <p id="image-codec-status" class="image-convert-note" role="status">正在检测 HEIC 编解码能力…</p>
     <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div>
   </section></div>`;}
@@ -24,7 +26,7 @@ export function setupImageConvert(){
  const files=q<HTMLElement>('image-convert-files'),count=q<HTMLElement>('image-convert-count'),status=q<HTMLElement>('image-convert-status'),codecStatus=q<HTMLElement>('image-codec-status');
  const add=q<HTMLButtonElement>('image-convert-add'),clear=q<HTMLButtonElement>('image-convert-clear'),pickDirectory=q<HTMLButtonElement>('image-convert-pick-directory');
  const directory=q<HTMLInputElement>('image-convert-directory'),format=q<HTMLSelectElement>('image-convert-format'),quality=q<HTMLInputElement>('image-convert-quality');
- const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),metadata=q<HTMLInputElement>('image-convert-metadata'),motionStill=q<HTMLInputElement>('image-convert-motion-still');
+ const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),mode=q<HTMLSelectElement>('image-convert-mode'),metadata=q<HTMLSelectElement>('image-convert-metadata-policy'),motionStill=q<HTMLInputElement>('image-convert-motion-still');
  const start=q<HTMLButtonElement>('image-convert-start'),cancel=q<HTMLButtonElement>('image-convert-cancel'),retry=q<HTMLButtonElement>('image-convert-retry');
  let paths:string[]=[],results=new Map<string,ImageConvertResult>(),running=false,current:string|undefined;
  const render=()=>{
@@ -32,15 +34,15 @@ export function setupImageConvert(){
   files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'转换中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始批量转换。</p>';
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pickDirectory.disabled=running;cancel.disabled=!running;
   for(const input of [directory,format])input.disabled=running;
-  for(const input of [width,height,metadata])input.disabled=running||format.value==='ico'||format.value==='svg';motionStill.disabled=running;
-  quality.disabled=running||!['original','jpeg','webp'].includes(format.value);
+  const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special;mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;
+  quality.disabled=running||mode.value==='lossless'||!['original','jpeg','webp'].includes(format.value);
   retry.hidden=running||![...results.values()].some(result=>result.status!=='done');
   retry.disabled=running;
  };
  const options=():ImageConvertOptions=>{
   const dimension=(value:string,label:string)=>{if(!value.trim())return undefined;const parsed=Number(value);if(!Number.isInteger(parsed)||parsed<1||parsed>16384)throw Error(`${label}需在 1 至 16384 像素之间`);return parsed;};
   if(!directory.value)throw Error('请先选择输出文件夹');
-  return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.checked,motionPolicy:motionStill.checked?'still':'reject'};
+  return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.value==='all',metadataPolicy:metadata.value as 'all'|'color'|'none',compressionMode:mode.value as 'quality'|'lossless',motionPolicy:motionStill.checked?'still':'reject'};
  };
  const progress=(value:ImageConvertProgress)=>{if(!running)return;current=value.current;if(value.result){results.set(value.result.source,value.result);current=undefined;}status.textContent=`已完成 ${value.done} / ${value.total}`;render();};
  const run=async(selected:string[])=>{
@@ -54,7 +56,8 @@ export function setupImageConvert(){
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};
  pickDirectory.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  quality.oninput=()=>{q('image-convert-quality-value').textContent=quality.value;};
- format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':format.value==='svg'?'开始优化':'开始转换';if(format.value==='ico'||format.value==='svg'){width.value='';height.value='';metadata.checked=false;}render();};
+ format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':format.value==='svg'?'开始优化':'开始转换';if(format.value==='ico'||format.value==='svg'){width.value='';height.value='';metadata.value='none';metadata.dispatchEvent(new Event('change',{bubbles:true}));}if(!['original','png','webp','tiff'].includes(format.value)){mode.value='quality';mode.dispatchEvent(new Event('change',{bubbles:true}));}render();};
+ mode.onchange=()=>{if(mode.value==='lossless'){width.value='';height.value='';}render();};
  start.onclick=()=>void run(paths);
  retry.onclick=()=>void run(paths.filter(path=>results.get(path)?.status!=='done'));
  cancel.onclick=()=>void api.imageConvertCancel().catch(toast);
