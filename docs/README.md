@@ -39,6 +39,8 @@
 
 ## 调研与历史
 
+- [预览格式支持与体验调研](research/预览格式支持与体验调研.md)
+
 - [空间分析调研](research/SpaceSniffer调研.md)
 - [屏幕取色调研](research/取色实现调研.md)
 - [Power Display 显示器管理调研](research/PowerDisplay显示器管理调研.md)
