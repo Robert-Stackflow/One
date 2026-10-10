@@ -1,5 +1,6 @@
 import {execFile} from 'node:child_process';
 import './build-shell.mjs';
+import './build-theme.mjs';
 import {promisify} from 'node:util';
 import {mkdir,writeFile,copyFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
