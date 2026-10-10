@@ -61,6 +61,7 @@ const api: OneAPI = {
   pickDirectory: path => invoke('pick-directory', path), scan, cancelScan: () => invoke('cancel-scan'), scanMaintenance: kind => invoke('maintenance', kind), exportMaintenance: rows => invoke('export-maintenance', rows),
   imagePickFiles:()=>invoke('image-pick-files'),imageConvertStart:(paths,directory,options)=>invoke('image-convert-start',paths,directory,options),imageConvertCancel:()=>invoke('image-convert-cancel'),onImageConvertProgress:callback=>listen('image-convert-progress',callback),
   imageCropPreview:path=>invoke('image-crop-preview',path),
+  imageColorPreview:path=>invoke('image-color-preview',path),imageColorSample:(path,x,y)=>invoke('image-color-sample',path,x,y),
   base64ExportFile:value=>invoke('base64-export-file',value),
   quit: () => invoke('quit'), closeWindow: () => invoke('close-window'), onProgress: callback => listen('progress', callback), onReceiveText: callback => listen('receive-text', callback), onEcho: callback => listen('echo', callback),onEchoHide:callback=>listen('echo-hide',callback), onCopyText: callback => listen('copy-text', callback), onPreviewChanged: callback => listen('preview-changed', callback)
 };

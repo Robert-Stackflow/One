@@ -56,6 +56,7 @@ import {ThemeLocationService} from './theme-location';
 import {BarcodeCapture,barcodeFile,barcodeClipboard} from './barcode';
 import {ImageConvertService} from './image-convert-service';
 import {imageCropPreview} from './image-crop-preview';
+import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
 import {barcodeURL} from '../shared/barcode';
 import {DisplayShortcutController} from './display-shortcuts';
@@ -755,6 +756,8 @@ function registerIPC() {
   handle('image-convert-start',(event,paths,directory,options)=>imageConvert.start(event.sender.id,paths,directory,options,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-convert-progress',progress);}));
   handle('image-convert-cancel',event=>imageConvert.cancel(event.sender.id));
   handle('image-crop-preview',(_event,path)=>imageCropPreview(filePath(path)),['main']);
+  handle('image-color-preview',(_event,path)=>imageColorPreview(filePath(path)),['main']);
+  handle('image-color-sample',(_event,path,x,y)=>imageColorSample(filePath(path),x,y),['main']);
   handle('base64-export-file',async(_event,value)=>{const source=normalizeBase64(textValue(value,10_000_000)),bytes=Buffer.from(source,'base64');if(!bytes.length||bytes.length>maxBase64FileBytes)throw Error('解码后的文件不能超过 6 MB');const path=await pickPath('save','保存解码文件','解码文件.bin');if(!path)return null;await writeFile(path,bytes);return path;},['main']);
   handle('barcode-clipboard',()=>barcodeClipboard());
   handle('barcode-capture',()=>barcodeCapture.start(main));

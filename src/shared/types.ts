@@ -160,6 +160,8 @@ export interface OneAPI {
   imageConvertCancel():Promise<boolean>;
   onImageConvertProgress(callback:(progress:import('./image-convert').ImageConvertProgress)=>void):()=>void;
   imageCropPreview(path:string):Promise<import('./image-convert').ImageCropPreview>;
+  imageColorPreview(path:string):Promise<import('./image-color').ImageColorPreview>;
+  imageColorSample(path:string,x:number,y:number):Promise<import('./image-color').ImagePixelSample>;
   base64ExportFile(value:string):Promise<string|null>;
   displayList():Promise<import('./display-management').ManagedDisplay[]>;
   displayProbe(id:string):Promise<import('./display-management').ManagedDisplay>;
