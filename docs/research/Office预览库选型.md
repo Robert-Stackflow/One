@@ -4,20 +4,23 @@
 
 ## 选型结论
 
-当前核验的候选里，没有可直接认定满足“免费开源、轻量离线、完整覆盖 DOC/DOCX、XLS/XLSX、PPT/PPTX、Office 保真”的单一 npm 库。应区分文件解析器、网页排版器、电子表格组件和完整 Office 引擎；能读取文件不等于能忠实展示。
+已发现同时提供 DOCX/XLSX/PPTX 查看器的 MIT 候选 `@silurus/ooxml`，其中 XLSX 已通过下方日常样本核验；其 DOCX/PPTX 尚未实测。当前仍没有可直接认定满足“免费开源、轻量离线、完整覆盖 DOC/DOCX、XLS/XLSX、PPT/PPTX、Office 保真”的单一 npm 库，尤其不能把现代格式通过扩大成旧格式通过。应区分文件解析器、网页排版器、电子表格组件和完整 Office 引擎；能读取文件不等于能忠实展示。
 
 继续按格式验证，不因 XLSX 首个候选失利而停止其他格式的筛选：
 
-1. **XLSX：现成表格库值得继续比较，但首个候选暂不采用。** 已实测 vue-office 同项目的纯 JavaScript 入口 `@js-preview/excel@1.7.14`，无需引入 Vue，也无需 One 自绘网格。基础样式和加载速度有可取之处，但数字格式、错误值和图表不满足替换条件，见下方证据。真实旧二进制 XLS 尚未验证，不能仅改后缀测试。
+1. **XLSX：优先候选改为 `@silurus/ooxml@0.88.0` 的现成 `XlsxViewer`。** 同组样本的前导零、公式金额、错误值、1904 日期、图片、柱状图、工作表切换和末行定位已通过，Electron 下也能显示。由库负责整个表格画布与交互，One 不重写网格。大表仍有主线程长任务，下一步核验库内 worker 渲染路径及真实复杂文件；首个 `@js-preview/excel` 候选仍不采用。真实旧二进制 XLS 尚未验证，不能仅改后缀测试。
 2. **PPTX：新增优先候选 `@aiden0z/pptx-renderer@1.3.0`。** 新一轮检索发现了持续维护的浏览器渲染项目，不能只依据旧 PPTXjs 判断免费方案。自有样本的组合文字、母版/布局装饰、表格、图片、柱状图和目录 API 已通过隔离验证；列表模式需要稳定滚动条布局。尚未完整对照真实 PowerPoint 输出，也未完成 One 内集成与可见窗口验收，不宣称全格式保真。
-3. **DOC/DOCX、旧 PPT：继续比较浏览器渲染与 LibreOffice 本地转换 + 现有 PDF.js。** 后者可利用 PDF 书签/页码导航，但需测转换冷启动和字体差异。本机常见安装路径及命令入口未发现 LibreOffice，本轮未安装或下载整套引擎。这里的转换是后台处理，正文由 PDF.js 展示，不嵌入 Office HWND，也不经 UI Automation 定位。旧 PPT 另有 Rust/WASM 候选，见下表，尚未实测。
+3. **DOCX：先核验统一候选的自动分页与目录；旧 DOC/PPT 独立验证。** `@silurus/ooxml` 已提供 DOCX 查看器和文档引擎 API，但本轮仅实测其 XLSX，不把 API 存在算作 Word 保真通过。LibreOffice 本地转换 + 现有 PDF.js 保留作对照，可利用 PDF 书签/页码导航，仍需测冷启动与字体差异。本机常见路径及命令入口未发现 LibreOffice，未下载整套引擎。旧 PPT 另有 Rust/WASM 候选，尚未实测。
 4. **ZetaOffice/ZetaJS 作为统一引擎备选。** 它在浏览器内提供 LibreOffice 能力，方向符合无需安装 Office，但整套引擎的冷启动、内存、资源体积和 Electron 离线集成尚未测量，不能预先承诺比原生快。
 
 ## 候选比较
 
 | 候选 | 已核验能力与授权 | 对 One 的判断 |
 | --- | --- | --- |
+| `@silurus/ooxml` | 主项目 MIT，提供第三方声明；Rust/WASM 解析与现成 Canvas 查看器，独立 DOCX/XLSX/PPTX 入口 | XLSX 新增优先候选，已实测日常保真及生命周期。无需 Vue/React 或 Office 安装；DOCX/PPTX、旧格式、worker 绘制仍需分别验证，不能据统一 API 宣称全部格式已通过。 |
 | `@vue-office/excel` / `@js-preview/excel` | 发布包 MIT；支持本地二进制输入；底层 ExcelJS + x-data-spreadsheet，同项目提供纯 JavaScript 入口 | 已隔离测试 JS 入口；基础展示可用，但前导零、公式数字格式、错误值、图表与快速销毁存在问题。暂不接入主程序，不能把“可打开”当作保真通过。 |
+| `@extend-ai/react-xlsx` | 仓库 MIT；React 查看器，使用 `@dukelib/sheets-wasm` 解析/计算，官方说明图片与图表展示及部分旧格式边界 | 新增备选，当前只核验 README/源码入口，未实测；上游 WASM 对应源码、许可和 React 引入成本需进一步核验。优先验证无需 React 的上述查看器。 |
+| SheetXL | 官方模块表区分 MIT UI/IO 与商业 `@sheetxl/sdk` 核心 | UI 开源不等于整个 Excel 引擎免费开源，不作为当前优先方案。 |
 | Univer | 核心 Apache-2.0；Sheets/Docs/Slides；官方将 Office 导入/导出归入 Pro，当前导入 API 明确需要转换后端 | 适合作为能力较全的长期选项，但不是免费核心包直接打开所有 Office 文件。不能为“免费开源”目标偷偷改为维护自有 OOXML 转换器。 |
 | FortuneSheet | MIT；现成电子表格组件，支持格式、合并、冻结、图片等 | 可作 XLSX 备选。README 提到导入插件，但本轮只确认官方 packages 中 core/formula-parser/react，尚未确认可直接采用的完整导入包；图表/透视表保真不能按 README 泛称保证。 |
 | SheetJS CE / ExcelJS | 读取、处理或生成表格数据的工具 | 不是 Office 展示引擎。把它们接到自绘 HTML 网格会回到原先问题；SheetJS CE 的数据 interchange 示例也不能视为完整样式、图片、图表预览。 |
@@ -57,6 +60,26 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 
 复现材料位于 `work/current/office-preview/research/excel/`：`package-metadata.json`、`make-fixtures.cjs` + `validate-fixtures.cjs`、`run-probe.cjs`、`probe-baseline-csp.json`、`probe-first-pass.json`、`probe-results.json` 和 `daily-render.png`。研究目录不参与应用打包；原始文件未离开本机。运行方式为先生成并校验样本，再运行隔离探针；需要已核对的发布包文件和项目既有 Electron/Playwright/JSZip。
 
+## 统一候选的 XLSX 隔离核验
+
+新增下载并校验 `@silurus/ooxml@0.88.0`：npm SHA-512 通过，压缩包约 5.56 MB、全部解包约 16.78 MB；本轮实际读取的 XLSX 静态资源去重约 3.15 MB，其中解析 WASM 约 1.73 MB。未执行安装脚本、未修改应用依赖或 CSP。官方项目创建于 2026-04-18，尚需评估成熟度；MIT 主项目和第三方声明不等于已完成独立的全部依赖审计。
+
+| 检查项 | 实测结果 |
+| --- | --- |
+| 同组日常样本 | 合并表头、中文、金额、百分比、日期、隐藏行、`000123`、公式缓存 `$1,235.50`、错误值 `#DIV/0!` 正确显示。`date1904="1"` 与 `"true"` 均显示 `1904-01-01`。选区上下文中的 `displayText` 与画布文字一致。 |
+| 图片/图表 | ImageBitmap 绘制为 96×64 的自有 PNG，柱状图及标题/轴标签可见；已进行一次画面检查。不是任意图表、锚点、裁剪或条件格式的完整保真结论。 |
+| 大表与切换 | 10,000 行×12 列可显示；两个工作表切换成功，定位 A10000 后确实绘制 `ROW_10000`。未完整验证冻结、筛选、隐藏工作表、拖动滚动和键盘只读入口。 |
+| Electron 与安全策略 | 本机 Electron 的 Chromium 152 能加载、显示并切换日常样本；Chrome 154 无界面测试也通过。脚本使用原有 `wasm-unsafe-eval`，无须普通 `unsafe-eval` 或放宽 `connect-src`；关闭 Google Fonts 与外链点击，本轮无外部请求。 |
+| 关闭与替换 | 加载大表约 10 ms 后销毁，加载请求结束并拒绝，DOM 清空；大表加载中改为日常表，最终仅绘制日常表标记，旧请求可正常 fulfilled 但失效结果被忽略。不能把所有取消都等同 `AbortError`。各轮观察到的 worker 创建/终止数量相等。 |
+| 损坏与限额 | 资源条目限额会拒绝为 `OoxmlResourceLimitError`。非 ZIP 和损坏 ZIP 的 `load()` 却正常 fulfilled，画布显示 `ZIP central directory preflight failed` 诊断页；并非有效工作表，也不是静默成功。集成时不能只据 Promise 完成或 sheetCount 判定有效预览，需统一诊断提示。 |
+| Blob 生命周期观察 | 主页面看到每次加载创建一个脚本 Blob URL，但撤销发生在 worker 内的首句 `URL.revokeObjectURL(import.meta.url)`，主页面钩子不会收到。已定位源码与 worker 创建/终止；不能把主页面未观察到 revoke 的计数当作已确认泄漏，也未据此宣称完整内存回收审计通过。 |
+
+一轮 Chrome 154 测量中，模块加载后日常样本 `load()` 约 **287 ms**、首次文字绘制约 **212 ms**、包含图表的检查点约 **296 ms**；再次打开约 **85 ms**。12 万单元格约 **960 ms**，有 **123/101 ms** 两个主线程长任务，JS 堆采样约 **33 MB**；工作表切换约 **3–12 ms**，末行定位 API 约 **3.5 ms**。独立隐藏 Electron 的日常样本加载约 **263 ms**、图表检查点约 **280 ms**。均非应用冷启动、峰值内存或真实前台点击延迟；两个浏览器版本不混作一次公平性能对比。默认路径为 worker 解析、主线程绘制，尚未测试 `mode: 'worker'` 的完整绘制路径。
+
+**决策：XLSX 进入优先集成评估，保真优先于单项速度。** 当前结果比首个候选更接近日常需求，但下一步仍需 worker 绘制、大表进度/中止、真实文件、冻结和统一错误提示。DOCX 自动分页/目录与 PPTX 应分别测试后再决定是否共用这套库；暂未替换主程序。
+
+材料位于 `work/current/office-preview/research/unified/`：`package-metadata.json`、`probe-results.json`、`probe-electron-results.json`、`probe-lifecycle-results.json`、`daily-render.png` 与探针源码。沿用同组自有 XLSX，并只派生合法布尔标记的 1904 样本；用户文件未参与，测试进程已退出。
+
 ## PPTX 隔离样本核验
 
 新增实测 `@aiden0z/pptx-renderer@1.3.0`。官方仓库创建于 2026-02-12、最近推送为 2026-10-08；核对了源码、类型接口、Apache-2.0 许可与 `THIRD_PARTY_NOTICES.md`。发布包 SHA-512 校验通过，下载约 839 KB，独立浏览器入口约 1.83 MB（未压缩），包含图表所需代码。传递许可仍需在正式分发时完整保留。新仓库的持续更新不等于长期稳定性已经得到证明。
@@ -73,7 +96,9 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 
 **决策：PPTX 优先推进这个现成库的集成评估，旧 PPT 独立验证。** 与 XLSX 首个候选不同，该库已提供可用的内容渲染与导航接口；下一步重点是真实复杂文件、字体、缩略图/目录、异步图表就绪、窗口缩放、解析中取消和统一提示层。动画、任意 EMF/WMF、可执行 OLE、备注及完整数学排版不在已证明的能力内。继续保留失败后的默认应用打开入口，不能用静默漏内容掩盖不支持。
 
-材料位于 `work/current/office-preview/research/pptx/`：校验后的包、`make-fixtures.cjs`、`run-probe.cjs`、`probe-first-pass.json`、`probe-results.json`、`probe-chrome-results.json` 和 `daily-render.png`。数据全部为自有样本，不涉及用户文档；测试进程已退出。Chrome 仅用于区分隐藏 Electron 调度干扰，两种运行环境的数据分别记录，不混成一次对比。
+材料位于 `work/current/office-preview/research/pptx/`：校验后的包、`make-fixtures.cjs`、`run-probe.cjs`、`probe-first-pass.json`、`probe-results.json`、`probe-chrome-results.json` 和 `daily-render.png`。前述基础数据为自有样本，不涉及用户文档；测试进程已退出。Chrome 仅用于区分隐藏 Electron 调度干扰，两种运行环境的数据分别记录，不混成一次对比。
+
+补充对照作者公开的 `docs/example/1-chart-and-complex/source.pptx` 及 `slides/Slide1.png`（各自 Git blob 校验通过）：两页可打开，第一页的 OpenTelemetry 组合示意图、中文说明和图片可见；对照页面显示字形、换行与留白有差异，不宣称像素一致。比较页容器与参考图的边距尚未完全归一化，不能把所有差异都归因于解析器；第二页只核验到跳页与文字，不算整页表格/图表保真通过。结果与来源保存在 `probe-oracle-results.json`、`oracle-provenance.json` 和 `oracle-comparison.png`，均为上游公开资料，不涉及用户文档。
 
 ## 目录与性能应如何验收
 
@@ -82,11 +107,12 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 - **PPT：** HTML 路线按幻灯片节点定位；PDF 路线按页定位。组合形状、母版/主题、裁剪图片、表格、中文和嵌入对象必须做内容完整性对照。
 - **实际测量：** 同一设备、同一批自有样本，分别记录冷启动、热启动、第一屏、目录点击、滚动掉帧、主线程长任务、峰值内存、资源体积、失败恢复和连续切文件。先测再选，不用一个标题的约 90 ms 原生调用推导整个预览已经流畅。
 - **建议通过条件：** 日常文件热打开第一屏目标 500 ms 内、目录响应目标 100 ms 左右，较大文件应能显示进度并取消；这是待测目标。保真必须同时通过，不能靠丢图片/图表换速度。旧格式与新版格式分别记录。
-- **离线与隔离：** 只读本地文件；组件静态资源本地打包，禁用外链获取。保持统一 tooltip/toast、缩放、主题、侧栏与文件切换；每个候选均要验收。目前完成上述 XLSX/PPTX 隔离试验，PPTX 有优先候选，主程序替代引擎尚未接入。
+- **离线与隔离：** 只读本地文件；组件静态资源本地打包，禁用外链获取。保持统一 tooltip/toast、缩放、主题、侧栏与文件切换；每个候选均要验收。目前 XLSX 与 PPTX 均有优先候选，主程序替代引擎尚未接入。
 
 ## 一手资料与复现
 
 - [vue-office 官方源码与引擎说明](https://github.com/501351981/vue-office)、[组件输入及 Excel 配置](https://501351981.github.io/vue-office/examples/docs/config/)、[纯 JavaScript 入口](https://501351981.github.io/vue-office/examples/docs/guide/js-preview.html)。
+- [统一查看器源码、只读边界与 API](https://github.com/yukiyokotani/office-open-xml-viewer)、[统一查看器第三方声明](https://github.com/yukiyokotani/office-open-xml-viewer/blob/main/THIRD_PARTY_NOTICES.md)、[react-xlsx 上游与格式边界](https://github.com/extend-hq/react-xlsx)、[SheetXL 模块许可表](https://github.com/sheetxl/sheetxl)。
 - [Univer 官方 OSS/Pro 能力表](https://github.com/dream-num/univer#-what-you-can-build)、[当前 Sheets 导入与转换后端要求](https://docs.univer.ai/guides/sheets/features/import-export)。
 - [FortuneSheet 官方仓库](https://github.com/ruilisi/fortune-sheet)、[官方包目录](https://github.com/ruilisi/fortune-sheet/tree/master/packages)。
 - [SheetJS CE 数据网格说明](https://docs.sheetjs.com/docs/demos/grid/)、[docx-preview 分页边界](https://github.com/VolodymyrBaydalka/docxjs#breaks)、[Mammoth 的语义 HTML 定位](https://github.com/mwilliamson/mammoth.js)。
@@ -97,6 +123,6 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 - [ONLYOFFICE 自托管接入](https://api.onlyoffice.com/docs/docs-api/get-started/installation/self-hosted)、[Community 许可说明](https://helpcenter.onlyoffice.com/docs/faq/docs-community.aspx)。
 - [Apryse 支持格式](https://docs.apryse.com/web/guides/file-format-support)、[SpreadJS 支持格式](https://developer.mescius.com/spreadjs/docs/features/spreadjs-file-format)。
 
-2026-10-10 查询 GitHub/npm：vue-office/excel 与 js-preview/excel 1.7.14（MIT）、vue-office/pptx 1.0.1（MIT）、FortuneSheet/react 1.0.4（MIT）、pptx-preview 1.0.7（ISC）、docx-preview 0.4.1（Apache-2.0）、aiden0z/pptx-renderer 1.3.0（主项目 Apache-2.0）、office-kit/pptx 0.24.0 与 office-kit/xlsx 0.24.1（MIT）。声明许可不等于全部上游源码及传递许可/兼容性已经核验。元数据与必要源码片段保存在 work/current/office-preview/research/；仅下载并隔离测试上述 js-preview/excel 和 aiden0z/pptx-renderer 发布包，未下载完整 Office 引擎或用户文档。
+2026-10-10 查询 GitHub/npm：vue-office/excel 与 js-preview/excel 1.7.14（MIT）、vue-office/pptx 1.0.1（MIT）、FortuneSheet/react 1.0.4（MIT）、pptx-preview 1.0.7（ISC）、docx-preview 0.4.1（Apache-2.0）、aiden0z/pptx-renderer 1.3.0（主项目 Apache-2.0）、office-kit/pptx 0.24.0 与 office-kit/xlsx 0.24.1（MIT）、silurus/ooxml 0.88.0（主项目 MIT）。声明许可不等于全部上游源码及传递许可/兼容性已经核验。元数据与必要源码片段保存在 work/current/office-preview/research/；仅下载并隔离测试上述 js-preview/excel、aiden0z/pptx-renderer、silurus/ooxml 发布包，未下载完整 Office 引擎或用户文档。
 
 当前事项见 [TODO](../development/TODO.md)，原格式问题见 [预览格式支持与体验调研](预览格式支持与体验调研.md)。
