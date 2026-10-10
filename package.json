@@ -72,6 +72,7 @@
     "test:archive-solid": "node tests/archive-solid.cjs",
     "test:archive-solid-ui": "node tests/archive-solid-ui.cjs",
     "test:archive-mixed": "node tests/archive-mixed.cjs",
+    "test:archive-solid-matrix": "node tests/archive-solid-matrix.cjs",
     "test:archive-zipx-password": "node tests/archive-zipx-password.cjs",
     "test:archive-zipx-password-ui": "node tests/archive-zipx-password-ui.cjs",
     "test:archive-egg-reference": "node tests/archive-egg-reference.cjs",
