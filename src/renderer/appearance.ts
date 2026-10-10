@@ -14,6 +14,8 @@ export function applyAppearance(value:Appearance){
   current=value;const dark=value.mode==='dark'||value.mode==='system'&&system.matches;const root=document.documentElement;
   root.dataset.theme=dark?'dark':'light';root.dataset.density=value.density;root.dataset.toastPosition=value.toastPosition||'bottom-center';
   root.style.setProperty('--surface',dark?value.darkBackground:value.lightBackground);root.style.setProperty('--fg',dark?value.darkForeground:value.lightForeground);
+  root.style.setProperty('--dark-surface',value.darkBackground);root.style.setProperty('--dark-fg',value.darkForeground);
+  const darkAccent=value.accent==='#303030'?'#f2f2f2':value.accent,darkRGB=darkAccent.slice(1).match(/../g)!.map(x=>parseInt(x,16));root.style.setProperty('--dark-accent',darkAccent);root.style.setProperty('--dark-on-accent',darkRGB[0]*.299+darkRGB[1]*.587+darkRGB[2]*.114>155?'#141414':'#ffffff');
   const accent=dark&&value.accent==='#303030'?'#f2f2f2':value.accent;root.style.setProperty('--accent',accent);
   const rgb=accent.slice(1).match(/../g)!.map(x=>parseInt(x,16));root.style.setProperty('--on-accent',rgb[0]*.299+rgb[1]*.587+rgb[2]*.114>155?'#141414':'#ffffff');
   root.style.setProperty('--radius',value.radius+'px');if(appliedFont!==value.font){root.style.setProperty('--ui-font',fontStack(value.font));appliedFont=value.font;}
