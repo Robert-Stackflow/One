@@ -17,6 +17,7 @@ export interface Appearance { mode: 'system' | 'light' | 'dark'; accent: string;
 export interface ColorSample { hex: string; rgb: string; hsl: string }
 export interface ScreenCapture { url: string; data?:Uint8Array; width: number; height: number; hex: string; pixels: number; x:number; y:number; centerX?:number;centerY?:number;cropX?:number;cropY?:number;zoomFrozen?:boolean }
 export interface Settings {
+  themeSchedule:import('./theme-schedule').ThemeSchedulePreferences;
   quickActions:import('./quick-actions').QuickActions;
   capsLock:import('./quick-actions').CapsPreferences;
   diskMonitor:import('./disk-monitor').DiskMonitorSettings;
@@ -126,6 +127,13 @@ export interface OneAPI {
   selectPreview(path: string): Promise<void>; directoryOpen(path:string):Promise<import('./directory').DirectoryInfo>;directoryPage(id:string,offset:number,limit:number,query?:string):Promise<import('./directory').DirectoryPage>;directoryRelease(id:string):Promise<void>;
   previewResource(path:string):Promise<string|null>;previewImage(path:string):Promise<{url:string;width?:number;height?:number}|null>;previewDisplayImage(url:string,width:number,height:number):Promise<string|null>;previewReleaseDisplayImage(url:string):Promise<void>;previewThumbnail(url:string):Promise<string|null>;previewLinkCard(url:string):Promise<LinkCard>;previewOpenLink(url:string):Promise<void>;
   previewFlags(value?: {pinned?:boolean;held?:boolean}): Promise<{pinned:boolean;held:boolean}>;
+  themeStatus():Promise<import('./theme-schedule').ThemeAutomationStatus>;
+  themeManual(mode:'light'|'dark'|'toggle'):Promise<import('./theme-schedule').ThemeAutomationStatus>;
+  themeResume():Promise<import('./theme-schedule').ThemeAutomationStatus>;
+  themeSync():Promise<import('./theme-schedule').ThemeAutomationStatus>;
+  themeShortcutRetry():Promise<import('./theme-schedule').ThemeAutomationStatus>;
+  themeOneMode(mode:Appearance['mode']):Promise<Appearance>;
+  onThemeStatus(callback:(value:import('./theme-schedule').ThemeAutomationStatus)=>void):()=>void;
   appearance(): Promise<Appearance>; installedFonts(refresh?:boolean):Promise<import('./fonts').InstalledFont[]>; onAppearance(callback: (value:Appearance) => void): () => void;
   uiFontSource(family:string):Promise<import('./fonts').UIFontSource|null>;
   pickColor(mode?:'live'|'frozen'): Promise<void>;colorFrozenStatus():Promise<boolean>;onColorFrozen(callback:(frozen:boolean)=>void):()=>void; colorCapture(): Promise<ScreenCapture|null>; chooseColor(hex: string): Promise<void>; onColor(callback: (value:string) => void): () => void;

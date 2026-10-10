@@ -51,7 +51,8 @@ import {TopmostService} from './topmost';
 import {PortService} from './port-service';
 import {ClickerService} from './clicker';
 import {elevationCommand} from './elevation-command';
-import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme } from 'electron';
+import {ThemeAutomation} from './theme-automation';
+import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme, powerMonitor } from 'electron';
 import { readFile, writeFile, mkdir, stat, readdir, rename, realpath, lstat } from 'node:fs/promises';
 import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -127,7 +128,7 @@ const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
-let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
+let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let themeAutomation:ThemeAutomation|undefined;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
 let colorFreezeWindows:BrowserWindow[]=[],colorFreezeBusy=false,colorSession=0;
 let colorZoomActive=false,colorZoomCardBounds:Electron.Rectangle|undefined;
 const shortcutCapture=new ShortcutCapture();let activeShortcutToken='';
@@ -212,7 +213,7 @@ let applicationIcon: Electron.NativeImage;
 let settings: Settings = defaultSettings(); let input: InputService; let quitting = false;let finishingQuit:Promise<unknown>|undefined;let pickerQuitReady=false;
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 function windowFor(view: string, options: Electron.BrowserWindowConstructorOptions = {},query='') {
-  const a=settings.appearance;const dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;
+  const a=themeAutomation?.appearance()||settings.appearance;const dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;
   const window = new BrowserWindow({ width: 1240, height: 840, minWidth: 840, minHeight: 620, backgroundColor: dark?a.darkBackground:a.lightBackground, title: 'One', show: false,
     ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:true } });
@@ -379,7 +380,11 @@ function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortc
   const task=saving.catch(()=>{}).then(async()=>{const previous=settings,next=validateSettings(typeof value==='function'?value(settings):value);
     const changed=(key:keyof Settings)=>JSON.stringify(previous[key])!==JSON.stringify(next[key]);
     if(changed('colorShortcut')&&!recordingShortcut){try{colorShortcut(next.colorShortcut);}catch(error){if(!allowShortcutConflict){try{colorShortcut(previous.colorShortcut);}catch{}throw error;}}}
-    try{await persistSettings(next);}catch(error){if(changed('colorShortcut')&&!recordingShortcut)try{colorShortcut(previous.colorShortcut);}catch{}throw error;}
+    const themeShortcutChanged=next.themeSchedule.shortcut!==previous.themeSchedule.shortcut;
+    if(themeShortcutChanged&&!recordingShortcut){try{themeAutomation?.registerShortcut(next.themeSchedule.shortcut);}catch(error){if(!allowShortcutConflict){try{themeAutomation?.registerShortcut(previous.themeSchedule.shortcut);}catch{}if(changed('colorShortcut'))try{colorShortcut(previous.colorShortcut);}catch{}throw error;}}}
+    try{await persistSettings(next);}catch(error){if(changed('colorShortcut')&&!recordingShortcut)try{colorShortcut(previous.colorShortcut);}catch{}if(themeShortcutChanged&&!recordingShortcut)try{themeAutomation?.registerShortcut(previous.themeSchedule.shortcut);}catch{}throw error;}
+    if(themeShortcutChanged&&!recordingShortcut)try{themeAutomation?.registerShortcut(next.themeSchedule.shortcut);}catch{}
+    if(changed('themeSchedule'))void themeAutomation?.configure(next.themeSchedule);
     const inputKeys=['quickActions','capsLock','echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings','utilities'] as const;
     if(inputKeys.some(changed)){if(inputPaused)input?.stop();else input?.update(next);}
     if(changed('search')){
@@ -416,7 +421,7 @@ async function importSettingsBackup(){
   let backup:unknown;try{backup=JSON.parse(source);}catch{throw new Error('备份文件不是有效的 JSON');}
   if(!backup||typeof backup!=='object'||(backup as Partial<SettingsBackup>).format!=='one-settings-backup'||(backup as Partial<SettingsBackup>).schema!==1)throw new Error('不是 One 设置备份文件');
   const value=validateSettings((backup as SettingsBackup).settings);await saveSettings(value,{allowShortcutConflict:true});
-  const shortcutError=[colorShortcutError,topmost?.error,searchBridge?.error].filter(error=>error&&/快捷键/.test(error)).join('；');
+  const shortcutError=[themeAutomation?.state().shortcutError,colorShortcutError,topmost?.error,searchBridge?.error].filter(error=>error&&/快捷键/.test(error)).join('；');
   return {imported:true,exportedAt:(backup as SettingsBackup).exportedAt,shortcutError};
 }
 function colorDisplays(){return screen.getAllDisplays().map(d=>({bounds:screen.dipToScreenRect(null,d.bounds),workArea:screen.dipToScreenRect(null,d.workArea),scaleFactor:d.scaleFactor}));}
@@ -505,13 +510,14 @@ async function pickColor(mode:'live'|'frozen'='live'){
   catch(error){if(colorWorker===worker)closeColors();throw error;}
   finally{clearTimeout(timeout);}
 }
-function refreshWindowAppearance(){const a=settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
+function refreshWindowAppearance(){const a=themeAutomation?.appearance()||settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
+function syncThemeAfterWake(){void themeAutomation?.sync();}
 function colorShortcutStatus(){return {active:!!registeredColorShortcut,error:colorShortcutError};}
 function hotkeyConflict(shortcut:string,field:string){
  if(!recordingShortcut||typeof shortcut!=='string'||shortcut.length>100||typeof field!=='string'||field.length>80)throw new Error('快捷键查询无效');
  const normalize=(value:string)=>value.toLowerCase().replace(/\b(control|ctrl)\b/g,'ctrl').replace(/\b(super|meta|win)\b/g,'win').split('+').map(part=>part.trim()).sort().join('+');
  const wanted=normalize(shortcut);
- const own:[string,string,string,boolean][]=[['color-shortcut','屏幕取色',settings.colorShortcut,true],['topmost-shortcut','窗口置顶',settings.utilities.topmost.shortcut,settings.utilities.topmost.enabled],['clicker-shortcut','鼠标连点',settings.utilities.clicker.shortcut,settings.utilities.clicker.enabled],['search-shortcut','文件搜索',settings.search.shortcut,true],['search-programShortcut','程序搜索',settings.search.programShortcut,true]];
+ const own:[string,string,string,boolean][]=[['theme-shortcut','主题切换',settings.themeSchedule.shortcut,true],['color-shortcut','屏幕取色',settings.colorShortcut,true],['topmost-shortcut','窗口置顶',settings.utilities.topmost.shortcut,settings.utilities.topmost.enabled],['clicker-shortcut','鼠标连点',settings.utilities.clicker.shortcut,settings.utilities.clicker.enabled],['search-shortcut','文件搜索',settings.search.shortcut,true],['search-programShortcut','程序搜索',settings.search.programShortcut,true]];
  const match=own.find(([id,,value,enabled])=>id!==field&&enabled&&value&&normalize(value)===wanted);
  if(match)return {source:'one' as const,label:`One 的「${match[1]}」正在使用`};
  const accelerator=shortcut.replace(/\bCtrl\b/gi,'Control').replace(/\b(Win|Meta)\b/gi,'Super');
@@ -532,10 +538,11 @@ function stopShortcutRecording(token?:string){
   if(!recordingShortcut)return;
   recordingShortcut=false;input.setModalActive(!!colorWorker);topmost.record(false);searchBridge.record(false);
   try{colorShortcut(settings.colorShortcut);}catch{}
+  try{themeAutomation?.registerShortcut(settings.themeSchedule.shortcut);}catch{}
 }
 async function startShortcutRecording(token:string){
   stopShortcutRecording();activeShortcutToken=token;recordingShortcut=true;
-  input.setModalActive(true);topmost.record(true);searchBridge.record(true);
+  input.setModalActive(true);topmost.record(true);searchBridge.record(true);themeAutomation?.pauseShortcut();
   if(registeredColorShortcut)globalShortcut.unregister(registeredColorShortcut);registeredColorShortcut='';
   const hwnd=main.getNativeWindowHandle().readBigUInt64LE();
   await shortcutCapture.start(hwnd,key=>{
@@ -691,7 +698,7 @@ function registerIPC() {
   handle('restart',()=>restartOne());
   handle('settings-backup-export',()=>exportSettingsBackup());
   handle('settings-backup-import',()=>importSettingsBackup());
-  handle('appearance',()=>settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar']);
+  handle('appearance',()=>themeAutomation?.appearance()||settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar']);
   handle('installed-fonts',(_event,refresh)=>{if(refresh===true)fontSources.clear();return installedFonts(refresh===true);});
   handle('ui-font-source',async(event,family)=>{
     if(roles.get(event.sender.id)!=='main'&&family!==settings.appearance.font.slice(10))throw new Error('字体未被选择');
@@ -707,6 +714,25 @@ function registerIPC() {
   handle('color-editor-show',(_event,hex)=>{if(hex!==undefined&&(typeof hex!=='string'||!/^#[0-9a-f]{6}$/i.test(hex)))throw new Error('颜色无效');colorEditor.show(hex?.toUpperCase());});
   handle('color-state',()=>colorEditor.snapshot(),['main','color-editor']);
   handle('color-editor-size',(_event,height)=>{if(typeof height!=='number'||!Number.isFinite(height)||height<200||height>1800)throw new Error('窗口尺寸无效');colorEditor.resize(height);},['color-editor']);
+  handle('theme-status',()=>themeAutomation!.state(),['main']);
+  handle('theme-manual',(_event,mode)=>themeAutomation!.manual(mode),['main']);
+  handle('theme-resume',()=>themeAutomation!.resume(),['main']);
+  handle('theme-sync',()=>themeAutomation!.sync(),['main']);
+  handle('theme-shortcut-retry',()=>{try{if(!recordingShortcut)themeAutomation!.registerShortcut(settings.themeSchedule.shortcut);}catch{}return themeAutomation!.state();},['main']);
+  handle('theme-one-mode',async(_event,mode)=>{
+    if(!['system','light','dark'].includes(mode))throw Error('One 外观模式无效');
+    let releaseOnlyOne=false;
+    await saveSettings(current=>{
+      const themeSchedule={...current.themeSchedule,targets:{...current.themeSchedule.targets}};
+      if(themeSchedule.targets.one){
+        if(themeSchedule.targets.windowsApps||themeSchedule.targets.windowsSystem)themeSchedule.targets.one=false;
+        else{themeSchedule.enabled=false;releaseOnlyOne=true;}
+      }
+      return {...current,appearance:{...current.appearance,mode},themeSchedule};
+    });
+    if(releaseOnlyOne)await themeAutomation!.resume();
+    refreshWindowAppearance();return themeAutomation!.appearance();
+  },['main']);
   handle('color-shortcut-status',()=>colorShortcutStatus(),['main']);
   handle('color-shortcut-retry',()=>{try{colorShortcut(settings.colorShortcut);}catch{}return colorShortcutStatus();},['main']);
   handle('color-history-clear',()=>saveSettings(current=>({...current,colorHistory:[]})).then(()=>{}),['main','color-editor']);
@@ -835,6 +861,10 @@ async function start() {
     app.setLoginItemSettings({openAtLogin:true,args:[loginStartupArg]});
   const migratedSearch=migrateSearchDefaults(settings.search,process.env);
   if(migratedSearch!==settings.search)await persistSettings({...settings,search:migratedSearch});
+  themeAutomation=new ThemeAutomation({appearance:()=>settings.appearance,systemDark:()=>nativeTheme.shouldUseDarkColors,changedAppearance:refreshWindowAppearance,
+    publish:status=>{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:theme-status',status);},
+    register:(shortcut,callback)=>globalShortcut.register(shortcut,callback),unregister:shortcut=>globalShortcut.unregister(shortcut)});
+  void themeAutomation.configure(settings.themeSchedule);
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); return net.fetch(pathToFileURL(path).toString()); });
   protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request); });
@@ -869,6 +899,7 @@ async function start() {
   if(testMode&&process.env.ONE_TEST_TRAY_MENU==='1')(globalThis as typeof globalThis&{oneTestTrayMenu?:TrayMenuPanel}).oneTestTrayMenu=trayMenuPanel;
   main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!process.argv.some(a=>a.startsWith('--one-shell-request=')||a.startsWith('--one-archive=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
   nativeTheme.on('updated',refreshWindowAppearance);
+  powerMonitor.on('resume',syncThemeAfterWake);powerMonitor.on('unlock-screen',syncThemeAfterWake);
   main.on('blur',()=>stopShortcutRecording());
   main.on('close', event => { if(!quitting&&!testMode){event.preventDefault();if(settings.general.closeToTray)main.hide();else app.quit();} });
   if (!testMode) {
@@ -877,6 +908,7 @@ async function start() {
     tray = new Tray(trayIcon);tray.setToolTip('One');tray.on('click',()=>{trayMenuPanel?.close();showMain();});tray.on('right-click',()=>trayMenuPanel?.toggle(tray.getBounds()));
     if (!globalShortcut.register('CommandOrControl+Alt+O', showMain)) console.warn('Ctrl+Alt+O 已被其他程序使用，可从托盘打开 One');
     try{colorShortcut(settings.colorShortcut);}catch(error){console.warn(String(error));}
+    try{themeAutomation.registerShortcut(settings.themeSchedule.shortcut);}catch(error){console.warn(String(error));}
     input.update(settings);
   }
 }
@@ -889,5 +921,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

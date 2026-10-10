@@ -23,6 +23,11 @@ export interface ThemeScheduleStatus extends Omit<ThemeSchedulePlan,'phase'> {
  phase:ThemeSchedulePlan['phase']|'manual'|'error';
  updated:number;
 }
+export interface ThemeAutomationStatus extends ThemeScheduleStatus {
+ preferences:ThemeSchedulePreferences;
+ shortcutActive:boolean;
+ shortcutError:string;
+}
 export const defaultThemeSchedule=():ThemeSchedulePreferences=>({enabled:false,source:'fixed',lightAt:'07:00',darkAt:'19:00',latitude:null,longitude:null,sunriseOffset:0,sunsetOffset:0,targets:{one:true,windowsApps:false,windowsSystem:false},shortcut:''});
 const validTime=(value:unknown)=>typeof value==='string'&&/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 export function validateThemeSchedule(value:unknown):ThemeSchedulePreferences {
@@ -34,7 +39,7 @@ export function validateThemeSchedule(value:unknown):ThemeSchedulePreferences {
  if((v.latitude===null)!==(v.longitude===null))throw Error('请同时填写经度和纬度');
  if(!Number.isInteger(v.sunriseOffset)||Math.abs(v.sunriseOffset)>180||!Number.isInteger(v.sunsetOffset)||Math.abs(v.sunsetOffset)>180)throw Error('日出和日落偏移需在前后 180 分钟内');
  if(!v.targets||['one','windowsApps','windowsSystem'].some(key=>typeof v.targets[key as keyof typeof v.targets]!=='boolean')||!['one','windowsApps','windowsSystem'].some(key=>v.targets[key as keyof typeof v.targets]))throw Error('请至少选择一个主题应用范围');
- if(typeof v.shortcut!=='string'||v.shortcut.length>100||v.shortcut&&!/^(?:(?:Control|Ctrl|Alt|Shift|Super|Meta|Win)\+)+(?:[A-Z0-9]|F(?:[1-9]|1\d|2[0-4]))$/i.test(v.shortcut))throw Error('主题切换快捷键格式无效');
+ if(typeof v.shortcut!=='string'||v.shortcut.length>100||v.shortcut&&!/^(?:(?:Control|Ctrl|Alt|Shift|Super|Meta|Win)\+)+(?:[A-Z0-9]|F(?:[1-9]|1\d|2[0-4])|Space|Tab|Enter|Escape|Backspace|Delete|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight)$/i.test(v.shortcut))throw Error('主题切换快捷键格式无效');
  return {enabled:v.enabled,source:v.source,lightAt:v.lightAt,darkAt:v.darkAt,latitude:v.latitude,longitude:v.longitude,sunriseOffset:v.sunriseOffset,sunsetOffset:v.sunsetOffset,targets:{one:v.targets.one,windowsApps:v.targets.windowsApps,windowsSystem:v.targets.windowsSystem},shortcut:v.shortcut};
 }
 

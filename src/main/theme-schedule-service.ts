@@ -26,7 +26,12 @@ export class ThemeScheduleService {
  configure(value:unknown):Promise<void>{
   if(this.stopped)return Promise.reject(Error('自动主题服务已关闭'));
   const next=validateThemeSchedule(value);
-  if(JSON.stringify(next)!==JSON.stringify(this.preferences)){this.preferences=next;this.revision++;this.override=undefined;this.manualRequests=[];this.applied=undefined;}
+  if(JSON.stringify(next)!==JSON.stringify(this.preferences)){
+   const schedule=({targets,shortcut,...plan}:ThemeSchedulePreferences)=>JSON.stringify(plan);
+   const planChanged=schedule(next)!==schedule(this.preferences)&&(next.enabled||this.preferences.enabled),targetsChanged=JSON.stringify(next.targets)!==JSON.stringify(this.preferences.targets);
+   if(planChanged)this.override=undefined;
+   this.preferences=next;this.revision++;this.manualRequests=[];if(planChanged||targetsChanged)this.applied=undefined;
+  }
   return this.sync();
  }
  manual(mode:ScheduledTheme|'toggle'):Promise<void>{

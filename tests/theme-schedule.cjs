@@ -3,7 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const cp=require('node:child_process');
 const {buildSync}=require('esbuild');
-const output=path.resolve('work/current/theme-schedule');fs.mkdirSync(output,{recursive:true});
+const output=path.resolve(process.env.ONE_THEME_OUTPUT_DIR||'work/current/theme-schedule');fs.mkdirSync(output,{recursive:true});
 const files={shared:'src/shared/theme-schedule.ts',service:'src/main/theme-schedule-service.ts'};
 function bundle(){for(const [name,entry] of Object.entries(files))buildSync({entryPoints:[entry],bundle:true,platform:'node',format:'cjs',outfile:path.join(output,name+'.cjs')});}
 let checks=0;
