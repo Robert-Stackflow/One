@@ -1,0 +1,134 @@
+{
+  "date": "2026-10-10",
+  "scope": "CAB read-only associated-volume support; daily-format scope closure with deferred extensions in Roadmap",
+  "writer": "Windows makecab.exe",
+  "methods": [
+    {
+      "method": "MSZIP",
+      "volumes": 4,
+      "entries": [
+        {
+          "name": "head.txt",
+          "sha256": "e1938949b8ce8ab5e3dde04eae094c5d66bee83ce95aab99ee8aa4257f5aebf2",
+          "bytes": 12
+        },
+        {
+          "name": "large.bin",
+          "sha256": "56680ccaaab183dbf223f973155b0a81a8d50d1bd7347194460b4b62014edd28",
+          "bytes": 220000
+        },
+        {
+          "name": "tail.txt",
+          "sha256": "5a05d0241cd2be19af8726684519e25f06cd06f966460b4c079ab1c490f5bb40",
+          "bytes": 33
+        }
+      ]
+    },
+    {
+      "method": "LZX",
+      "volumes": 4,
+      "entries": [
+        {
+          "name": "head.txt",
+          "sha256": "e1938949b8ce8ab5e3dde04eae094c5d66bee83ce95aab99ee8aa4257f5aebf2",
+          "bytes": 12
+        },
+        {
+          "name": "large.bin",
+          "sha256": "56680ccaaab183dbf223f973155b0a81a8d50d1bd7347194460b4b62014edd28",
+          "bytes": 220000
+        },
+        {
+          "name": "tail.txt",
+          "sha256": "5a05d0241cd2be19af8726684519e25f06cd06f966460b4c079ab1c490f5bb40",
+          "bytes": 33
+        }
+      ]
+    },
+    {
+      "method": "NONE",
+      "volumes": 4,
+      "entries": [
+        {
+          "name": "head.txt",
+          "sha256": "e1938949b8ce8ab5e3dde04eae094c5d66bee83ce95aab99ee8aa4257f5aebf2",
+          "bytes": 12
+        },
+        {
+          "name": "large.bin",
+          "sha256": "56680ccaaab183dbf223f973155b0a81a8d50d1bd7347194460b4b62014edd28",
+          "bytes": 220000
+        },
+        {
+          "name": "tail.txt",
+          "sha256": "5a05d0241cd2be19af8726684519e25f06cd06f966460b4c079ab1c490f5bb40",
+          "bytes": 33
+        }
+      ]
+    }
+  ],
+  "reader": "Windows Cabinet.dll / FDICopy",
+  "checks": 171,
+  "outputSha256Comparisons": 57,
+  "volumeEntryPoints": 12,
+  "damagedSets": {
+    "headersAndLinks": 24,
+    "bodies": 6
+  },
+  "ui": [
+    "eight existing read-format samples",
+    "CAB second-volume browse and integrity test",
+    "CAB only tail.txt extraction",
+    "missing third cabinet clears rows and disables selected extraction"
+  ],
+  "regressions": [
+    {
+      "name": "typecheck",
+      "status": 0
+    },
+    {
+      "name": "formats",
+      "status": 0
+    },
+    {
+      "name": "lha",
+      "status": 0
+    },
+    {
+      "name": "zipx-password",
+      "status": 0
+    },
+    {
+      "name": "rar",
+      "status": 0
+    },
+    {
+      "name": "solid",
+      "status": 0
+    },
+    {
+      "name": "password",
+      "status": 0
+    },
+    {
+      "name": "zip-update",
+      "status": 0
+    },
+    {
+      "name": "seven-update",
+      "status": 0
+    }
+  ],
+  "build": {
+    "sdkRevision": "9ab3d78bd9aad23fd8209710e5852b86648bc2c88c28579cc5cd58965d0a6a92",
+    "sdkCabSourceSha256": "52cdc02af1c7fc4ee2d6146729e71720adf723c401cf023cbef05affc4d87584",
+    "enginesMatch": true,
+    "helperMatches": true,
+    "engineSha256": "e6576847eb652d55d59441a7fa805fdb8759a30b8ed73eb29c3a1353c4341ba1"
+  },
+  "limitations": [
+    "other CAB writers and installed build not accepted",
+    "Explorer and third-party cross-window drop remain unverified",
+    "split WIM and special formats deferred in docs/development/Roadmap.md"
+  ]
+}

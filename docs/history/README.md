@@ -8,6 +8,7 @@
 - [归档百万目录优化记录](projects/归档百万目录优化记录.md)
 - [归档LHA兼容记录](projects/归档LHA兼容记录.md)
 - [归档RAR兼容记录](projects/归档RAR兼容记录.md)
+- [归档CAB分卷实现记录](projects/归档CAB分卷实现记录.md)
 - [归档文件夹发布修复记录](projects/归档文件夹发布修复记录.md)
 - [归档固实包校验与修复记录](projects/归档固实包校验与修复记录.md)
 - [归档混合任务校验记录](projects/归档混合任务校验记录.md)

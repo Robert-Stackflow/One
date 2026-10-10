@@ -2,8 +2,8 @@ One changes to 7-Zip 26.04, 2026-10-10
 
 This is an altered build, based on the exact source and commit in SOURCE.json.
 The complete upstream source is provided in 7zip-26.04-source.tar.gz; the
-corresponding One changes are provided in one-password-codepage.patch and
-one-lha-headers.patch, applied in the order recorded in SOURCE.json.
+corresponding One changes are provided in one-password-codepage.patch,
+one-lha-headers.patch and one-cab-volumes.patch, applied in SOURCE.json order.
 Original copyright and licenses are retained in License.txt and DOC/ in the
 source archive (GNU LGPL, unRAR restriction and the other stated licenses).
 
@@ -28,10 +28,16 @@ the header. Invalid declared Windows code pages are refused in auto mode.
 Other LHA codecs, level-0/1/2 binary header reading and output handling
 remain upstream; no LHA writer is added.
 
+The CAB handler reports a header error if a supplied later/earlier cabinet is
+rejected or the accepted set still declares a previous/next cabinet at either
+boundary. This includes self-links that previously returned a valid prefix
+without an error flag. One checks these flags before listing or extracting;
+the CAB codecs, writer and valid-set layout handling remain upstream.
+
 Rebuild: node scripts/build-sevenzip.mjs
 Requires the repository's existing Visual Studio C++ x64 toolchain, Windows
 tar and Git. The script verifies the pinned archive hash, extracts into work,
-applies both patches and builds Format7zF with nmake PLATFORM=x64 MP_NPROC=8.
+applies all patches and builds Format7zF with nmake PLATFORM=x64 MP_NPROC=8.
 node scripts/build-archive.mjs includes this step and copies the DLL to dist.
 Applications dynamically load this replaceable DLL from the helper directory.
 
@@ -40,6 +46,7 @@ Standalone rebuild of the provided corresponding source:
   cd <empty-source-dir>
   git apply <path-to-one-password-codepage.patch>
   git apply <path-to-one-lha-headers.patch>
+  git apply <path-to-one-cab-volumes.patch>
   call <Visual-Studio>/VC/Auxiliary/Build/vcvars64.bat
   cd CPP/7zip/Bundles/Format7zF
   nmake PLATFORM=x64 MP_NPROC=8

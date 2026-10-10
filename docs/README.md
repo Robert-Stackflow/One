@@ -23,6 +23,7 @@
 ## 开发资料
 
 - [当前开发状态与功能 TODO](development/TODO.md)
+- [Roadmap：延期与候选扩展](development/Roadmap.md)
 - [开发、构建与目录管理](development/开发与缓存.md)
 - [安装器](development/安装器.md)
 - [产品需求与验收范围](development/需求.md)

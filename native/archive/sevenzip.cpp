@@ -154,7 +154,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE GetProperty(U32 prop,PROPVARIANT *value) override {
         if(!value)return E_POINTER;PropVariantInit(value);
-        // IArchiveOpenVolumeCallback requires kpidName to derive the next RAR
+        // IArchiveOpenVolumeCallback requires kpidName to derive RAR and CAB
         // volume. VT_EMPTY silently stops discovery even when later parts exist.
         if(prop==name_prop){value->vt=VT_BSTR;value->bstrVal=SysAllocStringLen(filename.data(),(UINT)filename.size());if(!value->bstrVal)return E_OUTOFMEMORY;}
         return S_OK;
@@ -250,7 +250,7 @@ public:
         const auto name=source.filename().wstring();
         input=new FileInput(source,format==7&&name.size()>=3&&name.substr(name.size()-3)==L"001");
         if(!input->valid())fail("Cannot open archive file","read");
-        callback=new OpenRequest(source,password,format==3||format==7);
+        callback=new OpenRequest(source,password,format==3||format==7||format==8);
         const U64 scan=1ull<<23;
         for(int candidate:formats(format)){
             GUID class_id=clsid(candidate),interface_id=iid(6,0x60);

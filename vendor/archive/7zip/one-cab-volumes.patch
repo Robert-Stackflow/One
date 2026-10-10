@@ -1,0 +1,26 @@
+diff --git a/CPP/7zip/Archive/Cab/CabHandler.cpp b/CPP/7zip/Archive/Cab/CabHandler.cpp
+--- a/CPP/7zip/Archive/Cab/CabHandler.cpp
++++ b/CPP/7zip/Archive/Cab/CabHandler.cpp
+@@ -419,6 +419,10 @@ Z7_COM7F_IMF(CHandler::Open(IInStream *inStream, const UInt64 *maxCheckStartPosition,
+           return res;
+         if (m_Database.Volumes.IsEmpty())
+           return S_FALSE;
++        // One: a supplied but invalid/wrong cabinet must not silently leave a
++        // valid-looking prefix. Expose the failure through kpidErrorFlags.
++        _errorInHeaders = true;
++
+         if (prevChecked)
+           break;
+         prevChecked = true;
+@@ -518,6 +522,11 @@ Z7_COM7F_IMF(CHandler::Open(IInStream *inStream, const UInt64 *maxCheckStartPosition,
+       return S_FALSE;
+     else
+     {
++      // One: a complete set has neither an unresolved previous cabinet at its
++      // front nor an unresolved next cabinet at its back (including self-links).
++      if (m_Database.Volumes.Front().ArcInfo.IsTherePrev()
++          || m_Database.Volumes.Back().ArcInfo.IsThereNext())
++        _errorInHeaders = true;
+       if (!m_Database.Fill_Sort_Shrink_and_Check())
+         return S_FALSE;
+     }

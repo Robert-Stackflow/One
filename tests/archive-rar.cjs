@@ -31,7 +31,7 @@ async function main(){
   const browse={directory:'',search:'',flat:true};
   for(const version of [4,5])for(const suffix of ['encrypted','encrypted_filenames','solid_encrypted','solid_encrypted_filenames']){
    const source=path.join(root,`test_read_format_rar${version}_${suffix}.rar`),headers=suffix.includes('filenames'),mixed=suffix==='encrypted';
-   if(headers){await assert.rejects(run({operation:'list',path:source}),error=>error.code==='password');await assert.rejects(run({operation:'list',path:source,password:'wrong'}),/Cannot open archive/);}
+   if(headers){await assert.rejects(run({operation:'list',path:source}),error=>error.code==='password');await assert.rejects(run({operation:'list',path:source,password:'wrong'}),/Cannot open archive|无法打开压缩包/);}
    const listing=await run({operation:'list',path:source,password:headers?'password':'',browse});
    assert.equal(listing.total,4);assert.equal(listing.editable,false);assert.deepEqual(listing.entries.map(entry=>entry.name),['a.txt','b.txt','c.txt','d.txt']);
    assert.deepEqual(listing.entries.map(entry=>entry.encrypted),mixed?[false,true,false,true]:[true,true,true,true]);

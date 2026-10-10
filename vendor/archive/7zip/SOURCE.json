@@ -5,7 +5,7 @@
   "url": "https://codeload.github.com/ip7z/7zip/tar.gz/9128b80e3a471108678e2b3ec3c985861c8d7b0f",
   "archive": "7zip-26.04-source.tar.gz",
   "sha256": "81cbf3d080dde52ab0ca019cee849d2da8cc1dcc8b1b2c260fd2f667f141f8a4",
-  "patches": ["one-password-codepage.patch", "one-lha-headers.patch"],
+  "patches": ["one-password-codepage.patch", "one-lha-headers.patch", "one-cab-volumes.patch"],
   "bundle": "CPP/7zip/Bundles/Format7zF",
   "platform": "x64"
 }

@@ -8,10 +8,12 @@ scripts/build-sevenzip.mjs builds Format7zF with the independent read-password
 codepage property pwcp. One explicitly supplies UTF-8/system/legacy encodings;
 the upstream ZIP password default remains CP_ACP.
 The independent LHA patch adds bounded level-3 headers, header CRC checking,
-declared/explicit filename code pages and Unix link-mode metadata. Both
-patches and corresponding source are included in the source capsule.
+declared/explicit filename code pages and Unix link-mode metadata. The CAB
+patch reports invalid or unresolved associated cabinets as header errors.
+All patches and corresponding source are included in the source capsule.
 The source capsule and patch are included in third-party/7zip in packaged builds.
-Current binary hashes are retained in verification/archive-zipx-password/latest.json.
+Current binary hashes are retained in verification/archive-cab-volumes/latest.json;
+earlier ZIPX hashes are historical in verification/archive-zipx-password/latest.json.
 Previous unmodified binary provenance (not the currently bundled DLL):
 Source: https://www.7-zip.org/download.html
 Binary: 7z2604-x64.exe

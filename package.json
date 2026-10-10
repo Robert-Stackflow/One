@@ -55,6 +55,7 @@
     "test:archive-compression": "node scripts/build-archive.mjs && node tests/archive-compression.cjs && node tests/archive-resources.cjs && node tests/archive-password.cjs",
     "test:archive-edit-sessions": "node tests/archive-edit-sessions.cjs",
     "test:archive-formats": "node tests/archive-formats.cjs",
+    "test:archive-cab-volumes": "node tests/archive-cab-volumes.cjs",
     "test:archive-formats-ui": "node tests/archive-formats-ui.cjs",
     "test:archive-alz": "node tests/archive-alz.cjs",
     "bench:archive-browser": "python tests/archive-browser-benchmark.py --label current",
@@ -197,7 +198,7 @@
     ],
     "extraFiles": [
       {"from":"dist/native/One.Cli.exe","to":"One.Cli.exe"},
-      {"from":"vendor/archive/7zip","to":"third-party/7zip","filter":["7zip-26.04-source.tar.gz","one-password-codepage.patch","one-lha-headers.patch","SOURCE.json","MODIFICATIONS.txt","License.txt"]},
+      {"from":"vendor/archive/7zip","to":"third-party/7zip","filter":["7zip-26.04-source.tar.gz","one-password-codepage.patch","one-lha-headers.patch","one-cab-volumes.patch","SOURCE.json","MODIFICATIONS.txt","License.txt"]},
       "README.md",
       "docs/**/*",
       "THIRD_PARTY_NOTICES.txt"
