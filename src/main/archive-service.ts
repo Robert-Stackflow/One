@@ -25,6 +25,7 @@ import {validArchiveRevision} from '../shared/archive-revision';
 import {ArchiveSharedBudget,type ArchiveSharedLease} from './archive-shared-budget';
 import {ArchiveRecoveryRegistry,inspectArchiveRecovery,archiveRecoveryId} from './archive-recovery';
 import {archiveStageInspection,type ArchiveRecoveryInspection,type ArchiveRecoveryRecord} from '../shared/archive-recovery';
+import {renameArchiveDirectory} from './archive-folder-publish';
 
 type NativeResult={type:'result';count:number;skipped?:number;cancelled?:boolean;retainCache?:boolean;staged?:boolean;path?:string;revision?:string;volumes?:number;committed?:boolean;cleanupPending?:boolean;recovery?:string};
 type Message = {type:'meta';total:number;comment:string;revision?:string;editable?:boolean;matched?:number}|({type:'entry'}&ArchiveEntry)|({type:'details'}&import('../shared/archive').ArchiveEntryDetails)|{type:'progress';done:number;total:number;phase?:'scan'}|{type:'heartbeat';activity:number}|({type:'scan'}&ArchiveScan)|NativeResult|{type:'ready'}|({type:'risk'}&ArchiveRisk)|{type:'stage-inspection'}|{type:'error';message:string;code?:string};
@@ -556,19 +557,26 @@ export class ArchiveService {
         }
         this.checkpoint(id);const top=destination==='smart'?await readdir(temporary):[];
         let target:string;
-        if(top.length===1){
+        try{if(top.length===1){
           const extracted=join(temporary,top[0]),info=await lstat(extracted);
           if(!info.isFile()&&!info.isDirectory())throw Error('压缩包包含无法安全提交的条目');
           target=uniqueTarget(top[0],info.isFile());
           this.seal(owner,id);
-          if(info.isFile())await link(extracted,target);else await rename(extracted,target);
+          if(info.isFile())await link(extracted,target);else await renameArchiveDirectory(extracted,target);
         }else{
           target=uniqueTarget(archiveName(source));
           this.seal(owner,id);
-          await rename(temporary,target);
+          await renameArchiveDirectory(temporary,target);
+        }}catch(error){
+          const code=(error as NodeJS.ErrnoException).code;
+          if(['EPERM','EACCES','EBUSY','EEXIST'].includes(code??'')){
+            this.diagnostic('archive-folder-publish-failed',JSON.stringify({id,code,path:temporary}),true);
+            throw new ArchiveFailure(code==='EEXIST'?'解压目标已被其他操作占用，请重新解压。':'无法保存解压文件夹：文件夹仍被占用或没有写入权限。请关闭占用程序或更换目标位置后重试。','write');
+          }
+          throw error;
         }
         return {path:target,count:result.count,...this.scanResult(messages)};
-      }finally{prepared.release();await rm(temporary,{recursive:true,force:true}).catch(()=>{});}
+      }finally{prepared.release();await rm(temporary,{recursive:true,force:true,maxRetries:3,retryDelay:100}).catch(error=>this.diagnostic('archive-extract-cleanup-failed',JSON.stringify({id,path:temporary,code:(error as NodeJS.ErrnoException).code}),true));}
     }
     throw Error('未知压缩操作');
   }
