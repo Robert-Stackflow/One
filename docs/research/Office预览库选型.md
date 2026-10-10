@@ -68,7 +68,7 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 | --- | --- |
 | 同组日常样本 | 合并表头、中文、金额、百分比、日期、隐藏行、`000123`、公式缓存 `$1,235.50`、错误值 `#DIV/0!` 正确显示。`date1904="1"` 与 `"true"` 均显示 `1904-01-01`。选区上下文中的 `displayText` 与画布文字一致。 |
 | 图片/图表 | ImageBitmap 绘制为 96×64 的自有 PNG，柱状图及标题/轴标签可见；已进行一次画面检查。不是任意图表、锚点、裁剪或条件格式的完整保真结论。 |
-| 大表与切换 | 10,000 行×12 列可显示；两个工作表切换成功，定位 A10000 后确实绘制 `ROW_10000`。未完整验证冻结、筛选、隐藏工作表、拖动滚动和键盘只读入口。 |
+| 大表与切换 | 10,000 行×12 列可显示；两个工作表切换成功，定位 A10000 后确实绘制 `ROW_10000`。冻结、隐藏工作表、滚动和只读键盘已补隔离核验，见下方；筛选与主程序集成交互仍待验证。 |
 | Electron 与安全策略 | 本机 Electron 的 Chromium 152 能加载、显示并切换日常样本；Chrome 154 无界面测试也通过。脚本使用原有 `wasm-unsafe-eval`，无须普通 `unsafe-eval` 或放宽 `connect-src`；关闭 Google Fonts 与外链点击，本轮无外部请求。 |
 | 关闭与替换 | 加载大表约 10 ms 后销毁，加载请求结束并拒绝，DOM 清空；大表加载中改为日常表，最终仅绘制日常表标记，旧请求可正常 fulfilled 但失效结果被忽略。不能把所有取消都等同 `AbortError`。各轮观察到的 worker 创建/终止数量相等。 |
 | 损坏与限额 | 资源条目限额会拒绝为 `OoxmlResourceLimitError`。非 ZIP 和损坏 ZIP 的 `load()` 却正常 fulfilled，画布显示 `ZIP central directory preflight failed` 诊断页；并非有效工作表，也不是静默成功。集成时不能只据 Promise 完成或 sheetCount 判定有效预览，需统一诊断提示。 |
@@ -81,6 +81,23 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 **决策：XLSX 进入优先集成评估，保真优先于单项速度。** 当前结果比首个候选更接近日常需求；仍需大表进度/中止、真实文件、冻结和统一错误提示。DOCX 已补自动分页/目录试验，PPTX 尚未测试统一库；暂未替换主程序。
 
 材料位于 `work/current/office-preview/research/unified/`：`package-metadata.json`、`probe-results.json`、`probe-electron-results.json`、`probe-lifecycle-results.json`、`probe-worker-results.json`、`pixel-comparison.json`、`daily-render.png`、`worker-daily-render.png` 与探针源码。沿用自有 XLSX，并只派生合法布尔标记的 1904 样本；用户文件未参与，测试进程已退出。
+
+## XLSX 日常交互隔离核验
+
+同一 `@silurus/ooxml@0.88.0` 发布包，新增自产 120 行×30 列、4 个工作表的样本：冻结前 2 行与第 1 列，第 3 行/C 列隐藏，另有 hidden 与 veryHidden 工作表。8 个内部关系目标存在；这是关系完整性检查，不是完整 OOXML Schema 或 Excel 对照验证。Chrome 154、1100×750 视口、原有安全策略下进行实际鼠标和键盘操作。
+
+| 检查项 | 实测结果及接入要求 |
+| --- | --- |
+| 冻结与双向滚动 | 定位 J80 后，横/纵偏移为 771/1202，目标单元格在视口内；A1 仍位于 x=50/y=22，行/列冻结标记实际绘制。鼠标滚轮再横移 500、纵移 300，偏移变为 1271/1502，A1 位置不变；已检查画面。 |
+| 隐藏行列 | 第 3 行高度为 0、C 列宽度为 0，隐藏格不占显示空间；直接程序选取仍能读取它们，不能把显示隐藏当成数据访问限制。 |
+| 隐藏工作表 | 默认 `hiddenSheetMode: 'show'` 会显示全部 4 张表，集成时应显式设为 `'skip'`。skip 只显示两张可见表，前后切换从索引 0 到 3；dim/show 则依序经过 0/1/2/3。实际点击最后一张可见表也定位到索引 3。 |
+| 隐藏表 API 边界 | skip 模式仍允许直接 `goToSheet(1)`，不会拒绝隐藏表索引。后续 One 自有目录/搜索/跳表入口需遵循所选显示策略，不能只凭库标签隐藏推断所有程序入口均过滤。 |
+| 只读与复制 | 实际点击网格后焦点为可聚焦的 region，方向键可将 B4 选区移到 B5。返回 B4 后输入字符、Delete 与粘贴均未改变原值，未出现单元格编辑输入框；现成复制 API 得到 `CELL_4_2`。剪贴板在探针内替身截获，未写入系统剪贴板。 |
+| 释放 | 无页面/控制台异常、无外部请求；销毁后 DOM 清空，1 个 worker 创建并终止。此前仅尝试 Canvas.focus 时焦点留在按钮，该次键盘检查不作通过证据，以上结果来自真实网格点击后的重验。 |
+
+**结论：日常冻结、滚动、隐藏与只读交互没有阻止采用现成查看器。** 主程序接入仍需显式设置隐藏表策略，并验证自有导航入口、主题、筛选、复杂文件和大表响应；这些结果不等于 One 内已完成替换或全部 Excel 交互通过。
+
+复现材料：`work/current/office-preview/research/unified/run-xlsx-interactions.cjs`、`xlsx-interaction-probe.js`、`interactions.xlsx`、`probe-xlsx-interactions.json`、`xlsx-freeze.png`。研究进程已退出，主程序依赖与 dev 未变更。
 
 ## 统一候选的 DOCX 隔离核验
 
