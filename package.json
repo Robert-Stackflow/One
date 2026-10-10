@@ -107,6 +107,7 @@
     "iconv-lite": "^0.7.3",
     "koffi": "^3.3.2",
     "loudness": "^0.4.2",
+    "onnxruntime-node": "^1.30.0",
     "opencc-js": "^1.4.2",
     "pdfjs-dist": "^6.3.289",
     "qrcode": "^1.5.4",
@@ -172,7 +173,10 @@
       "!node_modules/@napi-rs/canvas-win32-x64-msvc/**/*",
       "!node_modules/pdfjs-dist/build/**/*",
       "!node_modules/pdfjs-dist/web/**/*",
-      "!node_modules/pdfjs-dist/types/**/*"
+      "!node_modules/pdfjs-dist/types/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**/*"
     ],
     "asarUnpack": [
       "dist/icons/archive/*.ico",
@@ -182,6 +186,7 @@
       "node_modules/uiohook-napi/**/*",
       "node_modules/loudness/**/*",
       "node_modules/sharp/**/*",
+      "node_modules/onnxruntime-node/**/*",
       "node_modules/exiftool-vendored.exe/bin/**/*",
       "node_modules/@img/sharp-win32-x64/**/*",
       "dist/native/One.Native.exe",

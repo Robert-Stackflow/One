@@ -161,6 +161,10 @@ export interface OneAPI {
   imageConvertStart(paths:string[],directory:string,options:import('./image-convert').ImageConvertOptions):Promise<import('./image-convert').ImageConvertSummary>;
   imageConvertCancel():Promise<boolean>;
   onImageConvertProgress(callback:(progress:import('./image-convert').ImageConvertProgress)=>void):()=>void;
+  imageAiModelStatus():Promise<{ready:boolean;bytes:number}>;
+  imageAiStart(source:string,directory:string):Promise<import('./image-ai').ImageAiResult>;
+  imageAiCancel():Promise<boolean>;
+  onImageAiProgress(callback:(progress:import('./image-ai').ImageAiProgress)=>void):()=>void;
   imageMetadataStart(paths:string[],directory:string,options:import('./image-metadata').ImageMetadataOptions):Promise<import('./image-metadata').ImageMetadataSummary>;
   imageMetadataCancel():Promise<boolean>;
   onImageMetadataProgress(callback:(progress:import('./image-metadata').ImageMetadataProgress)=>void):()=>void;

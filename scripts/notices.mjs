@@ -37,5 +37,6 @@ output+='\n===== Native archive: EGG AZO/LEA models from EggDotNet (ported by On
 output+='\n===== Native archive: 7-Zip 26.04 (7z.dll, altered by One) =====\nSource: https://github.com/ip7z/7zip/tree/9128b80e3a471108678e2b3ec3c985861c8d7b0f\nCorresponding source and changes: vendor/archive/7zip/7zip-26.04-source.tar.gz, one-password-codepage.patch, one-lha-headers.patch, one-cab-volumes.patch and MODIFICATIONS.txt\n';
 output+=await readFile('vendor/archive/7zip/License.txt','utf8')+'\n';
 output+='\n===== ZXing-C++ WebAssembly engine =====\nSource: https://github.com/zxing-cpp/zxing-cpp/tree/2ecec3f5be0ee803f6e14a5a2c7028c0cfe525b4\nLicense: Apache-2.0\n'+await readFile('assets/licenses/zxing-cpp-LICENSE.txt','utf8')+'\n';
+output+='\n===== Optional U²-Net-p background removal model =====\nSource: https://huggingface.co/skillsafe-ai/u2netp/tree/33f0c8b5c2429bcf0cfd62bbf48669eeec80c2a2\nSHA-256: 309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8\nLicense: Apache-2.0 (downloaded only on first use)\n'+await readFile('assets/licenses/zxing-cpp-LICENSE.txt','utf8')+'\n';
 output+='\n===== vscode-icons artwork =====\nSource: https://github.com/vscode-icons/vscode-icons\n'+await readFile('assets/file-icons/LICENSE','utf8');
 await writeFile('THIRD_PARTY_NOTICES.txt', output.replace(/\r\n?/g,'\n').replace(/[ \t]+$/gm,''), 'utf8');
