@@ -37,6 +37,7 @@
 - [压缩与解压实现与验收设计](development/压缩与解压实现计划.md)
 - [条码识别设计与验收](development/features/条码识别.md)
 - [原生表格预览](development/features/原生表格预览.md)
+- [XLSX 网页预览](development/features/XLSX网页预览.md)
 
 ## 调研与历史
 

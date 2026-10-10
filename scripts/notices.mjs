@@ -11,7 +11,7 @@ for (const path of packages) {
   const root = resolve(path);
   let metadata; try { metadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')); } catch { continue; }
   output += `\n===== ${metadata.name} ${metadata.version} =====\nLicense: ${metadata.license || 'See package notices'}\n`;
-  for (const file of ['LICENSE','LICENSE.md','LICENSE.txt','THIRD_PARTY_LICENSES.md']) {
+  for (const file of ['LICENSE','LICENSE.md','LICENSE.txt','THIRD_PARTY_LICENSES.md','THIRD_PARTY_NOTICES.md']) {
     try { output += await readFile(join(root, file), 'utf8') + '\n'; } catch {}
   }
 }

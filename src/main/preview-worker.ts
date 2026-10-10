@@ -54,6 +54,11 @@ export function parseAndroidManifest(b:Buffer):Record<string,string>{
 }
 async function run(){
   const {path,kind}=workerData;
+  if(kind==='xlsx'){
+    const result=await archive(path,true),names=new Set(result.entries.map(entry=>entry.path));
+    for(const name of ['[Content_Types].xml','_rels/.rels','xl/workbook.xml','xl/_rels/workbook.xml.rels'])if(!names.has(name))throw new Error('不是有效的 XLSX 工作簿');
+    return {metadata:result.metadata};
+  }
   if(kind==='workbook'){const result=await archive(path,true);return {...result,workbook:await readWorkbook(path)};}
   if(['archive','docx','pptx','epub'].includes(kind))return archive(path,kind!=='archive');
   if(kind==='media'){const {format,common}=await parseFile(path,{skipCovers:false,duration:true});const metadata:Record<string,string>={};for(const [name,value] of Object.entries({'编码':format.codec,'容器':format.container,'时长':format.duration===undefined?undefined:`${format.duration.toFixed(2)} 秒`,'比特率':format.bitrate?`${Math.round(format.bitrate/1000)} kbps`:undefined,'采样率':format.sampleRate?`${format.sampleRate} Hz`:undefined,'声道':format.numberOfChannels,'标题':common.title,'艺术家':common.artist,'专辑':common.album}))if(value!==undefined)metadata[name]=String(value);

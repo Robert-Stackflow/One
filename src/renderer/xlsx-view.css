@@ -1,0 +1,7 @@
+.preview-body.type-xlsx{display:flex;overflow:hidden;padding:0}
+.xlsx-preview{position:relative;flex:1;min-width:0;min-height:0;background:var(--surface);--ooxml-xlsx-chrome-background:var(--surface);--ooxml-xlsx-chrome-surface:var(--surface);--ooxml-xlsx-chrome-surface-muted:var(--soft);--ooxml-xlsx-chrome-border:var(--line);--ooxml-xlsx-chrome-text:var(--fg);--ooxml-xlsx-chrome-text-muted:var(--muted);--ooxml-xlsx-chrome-selection-background:var(--soft);--ooxml-xlsx-chrome-accent:var(--accent)}
+.xlsx-preview-surface{position:absolute;inset:0;overflow:hidden}
+.xlsx-preview-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:24px;color:var(--muted);text-align:center}
+.xlsx-preview-status p{margin:0;max-width:440px}
+.xlsx-preview-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+.xlsx-preview-actions button{padding:8px 14px}
