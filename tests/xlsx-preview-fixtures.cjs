@@ -12,6 +12,11 @@ module.exports=async function fixtures(folder){
  for(const [i,text]of [[2,'HIDDEN_MARKER'],[3,'SUMMARY_MARKER']])z.file(`xl/worksheets/sheet${i}.xml`,`<worksheet xmlns="${ns}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${text}</t></is></c></row></sheetData></worksheet>`);
  const save=async(name,zip=z)=>fs.writeFile(path.join(folder,name),await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}));
  await save('daily.xlsx');
+ const interactions=await JSZip.loadAsync(await z.generateAsync({type:'nodebuffer'}));
+ const column=n=>{let label='';for(;n;n=Math.floor((n-1)/26))label=String.fromCharCode(65+(n-1)%26)+label;return label;};
+ let cells='';for(let row=1;row<=120;row++)cells+=`<row r="${row}"${row===3?' hidden="1"':''}>${Array.from({length:30},(_,index)=>`<c r="${column(index+1)}${row}" t="inlineStr"><is><t>CELL_${row}_${index+1}</t></is></c>`).join('')}</row>`;
+ interactions.file('xl/worksheets/sheet1.xml',`<worksheet xmlns="${ns}"><dimension ref="A1:AD120"/><sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="2" topLeftCell="B3" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="2" width="18" customWidth="1"/><col min="3" max="3" width="18" hidden="1"/><col min="4" max="30" width="18" customWidth="1"/></cols><sheetData>${cells}</sheetData></worksheet>`);
+ await save('zzz-interactions.xlsx',interactions);
  const malformed=await JSZip.loadAsync(await z.generateAsync({type:'nodebuffer'}));malformed.file('xl/worksheets/sheet1.xml','<worksheet><sheetData>');await save('malformed.xlsx',malformed);
  const missing=new JSZip();missing.file('readme.txt','not a workbook');await save('missing.xlsx',missing);
  await fs.writeFile(path.join(folder,'corrupt.xlsx'),'not a zip file');
