@@ -19,6 +19,7 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
  const paths=new Map(elements(rels,packageRelations,'Relationship').filter(node=>node.getAttribute('TargetMode')!=='External').map(node=>[node.getAttribute('Id'),node.getAttribute('Target')||'']));
  const slides=elements(root,presentation,'sldId');if(!slides.length)throw new Error('演示文稿没有页面');if(slides.length>5000)throw new Error('演示文稿页数超过预览上限');
  const headings:PptxHeading[]=[];
+ const notesMasterCache=new Map<string,Map<number,Element>>();
  for(const slide of slides){
   const target=paths.get(slide.getAttributeNS(relations,'id'))||'';
   const segments=(target.startsWith('/')?target.slice(1):'ppt/'+target).split('/'),normalized:string[]=[];
@@ -38,19 +39,38 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
     const notePath=resolved.join('/');if(!/^ppt\/notesSlides\/[^/]+\.xml$/.test(notePath))throw new Error('演示文稿备注引用无效');
     const note=await part(notePath);
     const children=(node:Element)=>Array.from(node.childNodes).filter(child=>child.nodeType===1) as Element[];
-    const style=(node:Element):Omit<PptxNoteRun,'text'>=>{
-     const props=children(node).find(child=>child.namespaceURI===drawing&&child.localName==='rPr');
+    const child=(node:Element|undefined,namespace:string,name:string)=>node&&children(node).find(item=>item.namespaceURI===namespace&&item.localName===name);
+    const levels=(node:Element|undefined)=>new Map(Array.from({length:9},(_,index)=>[index,child(node,drawing,`lvl${index+1}pPr`)] as const).filter((pair):pair is readonly [number,Element]=>!!pair[1]));
+    let masterLevels=new Map<number,Element>();
+    const masterRels=archive.file(`ppt/notesSlides/_rels/${notePath.split('/').pop()}.rels`);
+    if(masterRels){
+     const masterRelation=elements(parse(await masterRels.async('string')),packageRelations,'Relationship').find(item=>item.getAttribute('Type')===relations+'/notesMaster'&&item.getAttribute('TargetMode')!=='External');
+     if(masterRelation){
+      const target=masterRelation.getAttribute('Target')||'',parts=(target.startsWith('/')?target.slice(1):'ppt/notesSlides/'+target).split('/'),resolved:string[]=[];
+      for(const segment of parts){if(segment==='..')resolved.pop();else if(segment&&segment!=='.')resolved.push(segment);}
+      const masterPath=resolved.join('/');if(!/^ppt\/notesMasters\/[^/]+\.xml$/.test(masterPath))throw new Error('演示文稿备注母版引用无效');
+      if(!notesMasterCache.has(masterPath)){
+       const master=await part(masterPath);
+       notesMasterCache.set(masterPath,levels(child(master,presentation,'notesStyle')));
+      }
+      masterLevels=notesMasterCache.get(masterPath)!;
+     }
+    }
+    const style=(props:Element|undefined):Omit<PptxNoteRun,'text'>=>{
      if(!props)return {};
      const color=children(props).find(child=>child.namespaceURI===drawing&&child.localName==='solidFill');
      const rgb=color&&elements(color,drawing,'srgbClr')[0]?.getAttribute('val');
      const size=Number(props.getAttribute('sz'))/100;
-     return {bold:['1','true'].includes(props.getAttribute('b')||''),italic:['1','true'].includes(props.getAttribute('i')||''),underline:!!props.getAttribute('u')&&props.getAttribute('u')!=='none',
+     const bold=props.getAttribute('b'),italic=props.getAttribute('i'),underline=props.getAttribute('u');
+     return {...(bold!==null?{bold:['1','true'].includes(bold)}:{}),...(italic!==null?{italic:['1','true'].includes(italic)}:{}),...(underline!==null?{underline:underline!=='none'}:{}),
       ...(rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?{color:'#'+rgb}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
     };
-    const paragraph=(node:Element,counters:Map<number,number>):PptxNoteParagraph=>{
+    const paragraph=(node:Element,counters:Map<number,number>,localLevels:Map<number,Element>):PptxNoteParagraph=>{
      const props=children(node).find(child=>child.namespaceURI===drawing&&child.localName==='pPr');
      const level=props?Math.max(0,Math.min(8,Number(props.getAttribute('lvl'))||0)):0;
-     const bullet=props&&children(props).find(child=>child.namespaceURI===drawing&&['buChar','buAutoNum','buNone'].includes(child.localName||''));
+     const master=masterLevels.get(level),local=localLevels.get(level);
+     const bullet=[props,local,master].map(source=>source&&children(source).find(item=>item.namespaceURI===drawing&&['buChar','buAutoNum','buNone','buBlip'].includes(item.localName||''))).find(Boolean);
+     const inherited={...style(child(master,drawing,'defRPr')),...style(child(local,drawing,'defRPr')),...style(child(props,drawing,'defRPr'))};
      let marker:string|undefined;
      if(bullet?.localName==='buChar')marker=Array.from(bullet.getAttribute('char')||'').slice(0,4).join('');
      if(bullet?.localName==='buAutoNum'){
@@ -69,15 +89,16 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
        if(['pPr','rPr','endParaRPr'].includes(item.localName||''))return;
        if(item.localName==='t'){runs.push({text:item.textContent||'',...format});return;}
        if(item.localName==='br'||item.localName==='tab'){runs.push({text:item.localName==='br'?'\n':'\t'});return;}
-       if(item.localName==='r'||item.localName==='fld')format={...format,...style(item)};
+       if(item.localName==='r'||item.localName==='fld')format={...format,...style(child(item,drawing,'rPr'))};
       }
       for(const child of children(item))collect(child,format);
      };
-     collect(node);return {runs,...(marker?{marker,level}:{})};
+     collect(node,inherited);return {runs,...(marker?{marker,level}:{})};
     };
     notesRich=elements(note,presentation,'sp').filter(shape=>!elements(shape,presentation,'ph').some(node=>['sldImg','sldNum','dt','hdr','ftr'].includes(node.getAttribute('type')||''))).flatMap(shape=>{
      const counters=new Map<number,number>();
-     return elements(shape,drawing,'p').map(node=>paragraph(node,counters));
+     const localLevels=levels(elements(shape,drawing,'lstStyle')[0]);
+     return elements(shape,drawing,'p').map(node=>paragraph(node,counters,localLevels));
     });
     while(notesRich.length&&!notesRich[0].runs.some(run=>run.text.trim())&&!notesRich[0].marker)notesRich.shift();
     while(notesRich.length&&!notesRich.at(-1)!.runs.some(run=>run.text.trim())&&!notesRich.at(-1)!.marker)notesRich.pop();

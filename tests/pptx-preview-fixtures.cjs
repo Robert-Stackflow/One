@@ -19,6 +19,7 @@ module.exports=async function fixtures(root){
   zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels',relations([['theme','theme','../theme/theme1.xml'],['layout','slideLayout','../slideLayouts/slideLayout1.xml']]));
   const colors={dk1:'000000',lt1:'FFFFFF',dk2:'24382C',lt2:'F5F5F5',accent1:'427F5B',accent2:'C86D45',accent3:'5585B5',accent4:'9966AA',accent5:'BB9933',accent6:'55AAAA',hlink:'0000FF',folHlink:'800080'};
   zip.file('ppt/theme/theme1.xml',`<a:theme xmlns:a="${a}" name="One test"><a:themeElements><a:clrScheme name="One">${Object.entries(colors).map(([k,v])=>`<a:${k}><a:srgbClr val="${v}"/></a:${k}>`).join('')}</a:clrScheme><a:fontScheme name="One"><a:majorFont><a:latin typeface="Arial"/><a:ea typeface="Microsoft YaHei"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/><a:ea typeface="Microsoft YaHei"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="One"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/></a:fmtScheme></a:themeElements></a:theme>`);
+  if(daily){override('ppt/notesMasters/notesMaster1.xml','presentationml.notesMaster');zip.file('ppt/notesMasters/notesMaster1.xml',`<p:notesMaster xmlns:p="${p}" xmlns:a="${a}"><p:cSld>${tree('')}</p:cSld><p:notesStyle><a:lvl2pPr><a:buChar char="◆"/><a:defRPr b="1" sz="1400"><a:solidFill><a:srgbClr val="AA3355"/></a:solidFill></a:defRPr></a:lvl2pPr></p:notesStyle></p:notesMaster>`);zip.file('ppt/notesMasters/_rels/notesMaster1.xml.rels',relations([['theme','theme','../theme/theme1.xml']]));}
   for(let i=1;i<=count;i++){
    ids+=`<p:sldId id="${255+i}" r:id="slide${i}"/>`;links.push([`slide${i}`,'slide',`slides/slide${i}.xml`]);override(`ppt/slides/slide${i}.xml`,'presentationml.slide');
    let nodes=shape(2,`SLIDE_${i}_中文`,300000,250000,10000000,700000,true)+shape(3,`BODY_${i}`,300000,1100000,3200000,700000);
@@ -26,9 +27,10 @@ module.exports=async function fixtures(root){
    if(i===1||i===count){
     slideLinks.push(['notes','notesSlide',`../notesSlides/notesSlide${i}.xml`]);override(`ppt/notesSlides/notesSlide${i}.xml`,'presentationml.notesSlide');
     let body=shape(70,`NOTES_${i}_中文`,0,0,4000000,2000000).replace('<p:nvPr></p:nvPr>','<p:nvPr><p:ph type="body"/></p:nvPr>').replace('lang="zh-CN" sz="2400"','lang="zh-CN" sz="1800" b="1" i="1" u="sng"').replace(`NOTES_${i}_中文</a:t>`,`NOTES_${i}_中文</a:t></a:r><a:br/><a:r><a:t>第二行 &lt;script&gt;</a:t>`);
-    if(i===count)body=body.replace('</p:txBody>',`<a:p><a:pPr lvl="1"><a:buChar char="•"/></a:pPr><a:r><a:t>重点事项</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>第三步</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buAutoNum type="arabicPeriod"/></a:pPr><a:r><a:t>第四步</a:t></a:r></a:p></p:txBody>`);
+    if(i===count)body=body.replace('<a:lstStyle/>','<a:lstStyle><a:lvl2pPr><a:defRPr i="1"/></a:lvl2pPr></a:lstStyle>').replace('</p:txBody>',`<a:p><a:pPr lvl="1"><a:buChar char="•"/></a:pPr><a:r><a:t>重点事项</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>第三步</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buAutoNum type="arabicPeriod"/></a:pPr><a:r><a:t>第四步</a:t></a:r></a:p><a:p><a:pPr lvl="1"/><a:r><a:t>母版继承</a:t></a:r></a:p><a:p><a:pPr lvl="1"><a:buNone/><a:defRPr sz="1800"/></a:pPr><a:r><a:rPr b="0"/><a:t>无项目符号</a:t></a:r></a:p></p:txBody>`);
     const number=shape(71,'NOTES_SLIDE_NUMBER',0,0,500000,200000).replace('<p:nvPr></p:nvPr>','<p:nvPr><p:ph type="sldNum"/></p:nvPr>');
     zip.file(`ppt/notesSlides/notesSlide${i}.xml`,`<p:notes xmlns:p="${p}" xmlns:a="${a}"><p:cSld>${tree(body+number)}</p:cSld></p:notes>`);
+    if(daily)zip.file(`ppt/notesSlides/_rels/notesSlide${i}.xml.rels`,relations([['master','notesMaster','../notesMasters/notesMaster1.xml'],['slide','slide',`../slides/slide${i}.xml`]]));
    }
    if(daily&&i===1){
     nodes+=`<p:grpSp><p:nvGrpSpPr><p:cNvPr id="30" name="GROUP"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="300000" y="4200000"/><a:ext cx="5000000" cy="1000000"/><a:chOff x="0" y="0"/><a:chExt cx="5000000" cy="1000000"/></a:xfrm></p:grpSpPr>${shape(31,'GROUP_MARKER_中文',0,0,5000000,900000)}</p:grpSp>`;
@@ -44,8 +46,8 @@ module.exports=async function fixtures(root){
    zip.file(`ppt/slides/slide${i}.xml`,`<p:sld xmlns:p="${p}" xmlns:a="${a}" xmlns:r="${r}"${i===2?' show="0"':''}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:bgPr></p:bg>${tree(nodes)}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
    zip.file(`ppt/slides/_rels/slide${i}.xml.rels`,relations(slideLinks));
   }
-  links.push(['master','slideMaster','slideMasters/slideMaster1.xml']);
-  zip.file('ppt/presentation.xml',`<p:presentation xmlns:p="${p}" xmlns:r="${r}"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="master"/></p:sldMasterIdLst><p:sldIdLst>${ids}</p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`);
+  links.push(['master','slideMaster','slideMasters/slideMaster1.xml']);if(daily)links.push(['notesMaster','notesMaster','notesMasters/notesMaster1.xml']);
+  zip.file('ppt/presentation.xml',`<p:presentation xmlns:p="${p}" xmlns:r="${r}"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="master"/></p:sldMasterIdLst>${daily?'<p:notesMasterIdLst><p:notesMasterId r:id="notesMaster"/></p:notesMasterIdLst>':''}<p:sldIdLst>${ids}</p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`);
   zip.file('ppt/_rels/presentation.xml.rels',relations(links));zip.file('[Content_Types].xml',`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="png" ContentType="image/png"/>${overrides}</Types>`);
   return zip;
  }
