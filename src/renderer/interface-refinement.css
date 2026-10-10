@@ -8,6 +8,8 @@
 .one-tooltip[data-side=left]{--tooltip-x:3px;--tooltip-y:0px}
 .one-tooltip[data-side=left]::before{top:calc(var(--tooltip-arrow) - 4px);right:-5px;border-top-width:1px;border-right-width:1px}
 .one-tooltip.visible{transform:translate(0,0);opacity:1}
+.native-office-active #one-tooltip{visibility:hidden}
+html.native-tooltip-window,html.native-tooltip-window body,html.native-tooltip-window #app{margin:0!important;padding:0!important;width:100%;height:100%;min-width:0;min-height:0;background:transparent!important;overflow:hidden;border:0!important}
 .maintenance-page>.module-toolbar{height:40px;min-height:40px;align-items:center;margin:0 0 24px}
 #maintenance-actions.toolbar{margin:0;min-height:36px;align-items:center;gap:8px}
 .disk-statusbar{flex-wrap:nowrap;gap:12px;min-height:38px;padding:8px 0 0;align-items:center}

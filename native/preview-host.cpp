@@ -10,6 +10,7 @@
 #include <thread>
 #include <string>
 #include <algorithm>
+#include <vector>
 using Microsoft::WRL::ComPtr;
 static constexpr UINT updateRect=WM_APP+1;
 static HWND host=nullptr,parent=nullptr;
@@ -24,7 +25,8 @@ static void resize(){
  currentDpi=GetDpiForWindow(parent);const double scale=currentDpi/96.0;RECT area{};GetClientRect(parent,&area);
  const int x=std::clamp(static_cast<int>(bounds.x*scale),0,static_cast<int>(area.right)),y=std::clamp(static_cast<int>(bounds.y*scale),0,static_cast<int>(area.bottom));
  const int w=std::clamp(static_cast<int>(bounds.width*scale),0,static_cast<int>(area.right)-x),h=std::clamp(static_cast<int>(bounds.height*scale),0,static_cast<int>(area.bottom)-y);
- MoveWindow(host,x,y,w,h,TRUE);if(preview&&windowSet&&w>0&&h>0){RECT local{0,0,w,h};const auto hr=preview->SetRect(&local);if(FAILED(hr)){result("resize-failed",hr);PostMessageW(host,WM_CLOSE,0,0);}}
+ RECT prior{};GetClientRect(host,&prior);
+ SetWindowPos(host,HWND_TOP,x,y,w,h,SWP_NOACTIVATE);if(preview&&windowSet&&w>0&&h>0&&(prior.right!=w||prior.bottom!=h)){RECT local{0,0,w,h};const auto hr=preview->SetRect(&local);if(FAILED(hr)){result("resize-failed",hr);PostMessageW(host,WM_CLOSE,0,0);}}
 }
 class Frame final:public IPreviewHandlerFrame,public IOleWindow{
  std::atomic<ULONG> refs{1};
@@ -39,18 +41,20 @@ class Frame final:public IPreviewHandlerFrame,public IOleWindow{
 };
 static LRESULT CALLBACK procedure(HWND window,UINT message,WPARAM w,LPARAM l){
  if(message==updateRect){auto value=reinterpret_cast<Bounds*>(l);bounds=*value;delete value;resize();return 0;}
- if(message==WM_TIMER){if(!parentAlive())PostMessageW(window,WM_CLOSE,0,0);else if(currentDpi!=GetDpiForWindow(parent))resize();return 0;}
+ if(message==WM_TIMER){if(!parentAlive())PostMessageW(window,WM_CLOSE,0,0);else if(currentDpi!=GetDpiForWindow(parent))resize();else if(IsWindowVisible(host)&&GetWindow(parent,GW_CHILD)!=host)SetWindowPos(host,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);return 0;}
  if(message==WM_SETFOCUS&&preview){preview->SetFocus();return 0;}
  if(message==WM_CLOSE){ShowWindow(window,SW_HIDE);PostQuitMessage(0);return 0;}
  if(message==WM_DESTROY){PostQuitMessage(0);return 0;}
  return DefWindowProcW(window,message,w,l);
 }
-static HRESULT handlerClass(const wchar_t* file,CLSID& id){
- wchar_t value[128]{};DWORD size=128;auto hr=AssocQueryStringW(ASSOCF_NONE,ASSOCSTR_SHELLEXTENSION,PathFindExtensionW(file),L"{8895b1c6-b41f-4c1c-a562-0d564250836f}",value,&size);
- if(FAILED(hr))return hr;hr=CLSIDFromString(value,&id);if(FAILED(hr))return hr;
- const std::wstring key=std::wstring(L"CLSID\\")+value;HKEY registration=nullptr;
- if(RegOpenKeyExW(HKEY_CLASSES_ROOT,key.c_str(),0,KEY_READ,&registration)!=ERROR_SUCCESS)return REGDB_E_CLASSNOTREG;
- RegCloseKey(registration);return S_OK;
+static std::vector<CLSID> handlerClasses(const wchar_t* file){
+ std::vector<CLSID> ids;
+ const auto add=[&](const wchar_t* value){CLSID id{};if(FAILED(CLSIDFromString(value,&id)))return;for(const auto& prior:ids)if(prior==id)return;const std::wstring key=std::wstring(L"CLSID\\")+value;HKEY registration=nullptr;if(RegOpenKeyExW(HKEY_CLASSES_ROOT,key.c_str(),0,KEY_READ,&registration)==ERROR_SUCCESS){RegCloseKey(registration);ids.push_back(id);}};
+ wchar_t value[128]{};DWORD size=128;if(SUCCEEDED(AssocQueryStringW(ASSOCF_NONE,ASSOCSTR_SHELLEXTENSION,PathFindExtensionW(file),L"{8895b1c6-b41f-4c1c-a562-0d564250836f}",value,&size)))add(value);
+ // Excel's registered preview class is an explicit XLSX-capable fallback when
+ // another application leaves a stale extension association. Never guess an EXE path.
+ if(_wcsicmp(PathFindExtensionW(file),L".xlsx")==0){constexpr auto excel=L"{00020827-0000-0000-C000-000000000046}";DWORD type=0,bytes=0;if(RegGetValueW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\PreviewHandlers",excel,RRF_RT_REG_SZ,&type,nullptr,&bytes)==ERROR_SUCCESS)add(excel);}
+ return ids;
 }
 static HRESULT initialize(IUnknown* object,const wchar_t* file,ComPtr<IStream>& stream){
  ComPtr<IInitializeWithStream> withStream;
@@ -72,12 +76,14 @@ int wmain(int argc,wchar_t** argv){
  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
  const auto apartment=OleInitialize(nullptr);if(FAILED(apartment)){result("failed",apartment);return 4;}
  HRESULT hr;
-#ifdef ONE_PREVIEW_TEST
+#ifdef ONE_PREVIEW_TEST_MISSING
+ result("missing",REGDB_E_CLASSNOTREG);OleUninitialize();return 5;
+#elif defined(ONE_PREVIEW_TEST)
  preview.Attach(new TestPreview());hr=S_OK;
 #else
- CLSID id{};hr=handlerClass(argv[3],id);if(FAILED(hr)){result("missing",hr);OleUninitialize();return 5;}
+ const auto classes=handlerClasses(argv[3]);if(classes.empty()){result("missing",REGDB_E_CLASSNOTREG);OleUninitialize();return 5;}
  // Let COM use the registered surrogate. Never load an Office DLL into One.
- hr=CoCreateInstance(id,nullptr,CLSCTX_LOCAL_SERVER,IID_PPV_ARGS(&preview));
+ hr=REGDB_E_CLASSNOTREG;for(const auto& id:classes){hr=CoCreateInstance(id,nullptr,CLSCTX_LOCAL_SERVER,IID_PPV_ARGS(&preview));if(SUCCEEDED(hr))break;}
 #endif
  if(FAILED(hr)){result(hr==REGDB_E_CLASSNOTREG?"missing":"failed",hr);OleUninitialize();return 6;}
  WNDCLASSW klass{};klass.lpfnWndProc=procedure;klass.hInstance=GetModuleHandleW(nullptr);klass.lpszClassName=L"One.NativePreviewHost";klass.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);RegisterClassW(&klass);

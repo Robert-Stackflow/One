@@ -60,11 +60,13 @@ ZIP/7Z 外部编辑针对单个普通文件，大小不超过 256 MiB。RAR 及�
 - [x] 将 SQLite/SQLCipher 数据库预览整体迁入 [Roadmap](Roadmap.md#快速预览-sqlite-与-sqlcipher-数据库)，暂停当前实施。
 - [x] 调研现有预览格式，重点核验 XLSX、DOCX 和 PPT/PPTX；已完成源码巡检与自有样本复现，结论见 [预览格式支持与体验调研](../research/预览格式支持与体验调研.md)。
 - [x] XLSX 已改走 Windows 原生预览，停止自绘表格；接入 64/32 位宿主、只读初始化、区域/DPI、菜单避让、取消/超时/退出、关闭释放、缺组件提示和重试/默认打开。详见 [原生表格预览](features/原生表格预览.md)。
-- [ ] 在具有真实 Excel/WPS 预览组件的环境验收日常 XLSX：合并表头、样式/金额/日期、中文字体、图表、工作表切换、密码文件、组件焦点及多显示器 DPI。本机组件缺失，测试宿主通过不代表真实 Office 保真通过。
+- [x] 修复默认 WPS 关联失效时的已注册 Excel 组件回退，以及原生窗口层级；真实 Excel 已显示合并表头、中文、金额/日期/百分比/前导零及缓存公式，关闭后源文件哈希不变。
+- [x] 顶栏和底栏 tooltip 改用统一样式的透明浮层，不裁剪表格、不露出白块、不抢焦点。
+- [ ] 继续验收 WPS、图表、工作表切换、密码文件、组件焦点及多显示器 DPI；已验证的真实 Excel 样本不代表全部组件和设备矩阵。
 - [ ] 随后改善 DOCX 分页/字体和 PPTX 组合内容遗漏、布局继承；以日常样本确认范围，尚未开始实现。
 - [ ] Office 体验稳定后按日常需求评估 CSV 大文件表格、EPUB 导航等短板；不扩大为全部格式变体实现。
 
-2026-10-10：调研已复现 XLSX 格式错误、DOCX 超长纸页和 PPTX 组合内容遗漏。XLSX 原生接入已实现，宿主 36 项及正式宿主缺组件 6 项检查通过；XLSM/ODS 等原有预览回归通过。真实 Office 组件缺失，未安装或修复。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
+2026-10-10：XLSX 原生接入和透明 tooltip 已实现，宿主 50 项、缺组件模拟 6 项及本机真实 Excel 12 项检查通过；XLSM/ODS 等原有预览回归通过。本机默认 WPS 关联失效，但实际存在可用 Excel 组件，已回退使用；未安装、修复或修改关联。DOCX/PPTX 优化尚未开始。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
 
 ## 深浅色模式自动切换
 

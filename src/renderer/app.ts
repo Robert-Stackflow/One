@@ -10,13 +10,14 @@ import {setupTooltips} from './tooltip';
 import {setupSegments} from './segments';
 import {setupWindowVisibility} from './window-visibility';
 import {api} from './ui';
-setupAppearance();setupTextSelection();setupTooltips();setupSegments();
+const view=new URLSearchParams(location.search).get('view')||'main';
+if(view!=='native-tooltip'){setupAppearance();setupTextSelection();setupTooltips();setupSegments();}
 window.addEventListener('error',event=>{void api.diagnosticsReport('uncaught-error',event.error?.stack||`${event.message} at ${event.filename}:${event.lineno}:${event.colno}`).catch(()=>{});});
 window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
-const view=new URLSearchParams(location.search).get('view')||'main';
 if(['main','file-action','preview','picker','search','color-editor','dialog-bar'].includes(view))setupWindowVisibility();
 const render=async()=>{
- if(view==='echo')(await import('./hud')).renderHUD();
+  if(view==='native-tooltip')(await import('./native-tooltip-view')).renderNativeTooltip();
+  else if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
  else if(view==='color-zoom')await (await import('./color-zoom-view')).renderColorZoom();
  else if(view==='barcode-capture')await (await import('./barcode-capture-view')).renderBarcodeCapture();

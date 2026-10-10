@@ -1,4 +1,5 @@
 type TooltipSide = 'top' | 'right' | 'bottom' | 'left';
+export const TOOLTIP_CHANGE_EVENT = 'one-tooltip-change';
 
 /** One delegated tooltip for dynamic controls, including controls inside modal dialogs. */
 export function setupTooltips() {
@@ -33,7 +34,8 @@ export function setupTooltips() {
    const ids = (target.getAttribute('aria-describedby') || '').split(' ').filter(id => id && id !== tip.id);
    if (ids.length) target.setAttribute('aria-describedby', ids.join(' ')); else target.removeAttribute('aria-describedby');
   }
-  target = null; tip.classList.remove('visible'); last = performance.now();
+  target = null; const visible = tip.classList.contains('visible'); tip.classList.remove('visible'); last = performance.now();
+  if (visible) document.dispatchEvent(new CustomEvent(TOOLTIP_CHANGE_EVENT, {detail:false}));
  };
  const position = (el: HTMLElement) => {
   const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), margin = 8, gap = 12;
@@ -58,6 +60,7 @@ export function setupTooltips() {
    vertical ? r.top + r.height / 2 - y : r.left + r.width / 2 - x));
   tip.dataset.side = side; tip.style.left = x + 'px'; tip.style.top = y + 'px';
   tip.style.setProperty('--tooltip-arrow', arrow + 'px');
+  if (tip.classList.contains('visible')) document.dispatchEvent(new CustomEvent(TOOLTIP_CHANGE_EVENT, {detail:true}));
  };
  const show = (el: HTMLElement) => {
   if (el === target) return;
@@ -71,7 +74,7 @@ export function setupTooltips() {
    tip.textContent = label; (el.closest('dialog[open]') || document.body).append(tip);
    tip.classList.remove('visible'); tip.style.left = '0px'; tip.style.top = '0px'; position(el);
    el.setAttribute('aria-describedby', [el.getAttribute('aria-describedby') || '', tip.id].filter(Boolean).join(' '));
-   requestAnimationFrame(() => {if (target === el) tip.classList.add('visible');});
+   requestAnimationFrame(() => {if (target === el) {tip.classList.add('visible'); document.dispatchEvent(new CustomEvent(TOOLTIP_CHANGE_EVENT, {detail:true}));}});
   }, fast ? 90 : 380);
  };
  const candidate = (event: Event) => {
