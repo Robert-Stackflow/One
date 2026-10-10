@@ -1,0 +1,529 @@
+{
+  "date": "2026-10-10T01:23:42.218Z",
+  "baselineCommit": "ab5aaf85cb5811a0b6e961d6e582982afc7764ec",
+  "implementation": "This record commit; native/archive/sevenzip.cpp",
+  "machine": {
+    "cpu": "AMD Ryzen 9 7940HX with Radeon Graphics        ",
+    "logicalProcessors": 32,
+    "physicalMemoryBytes": 16331579392,
+    "fileSystem": "NTFS",
+    "drive": "D",
+    "sizeBytes": 524286947328,
+    "freeBytes": 154340470784,
+    "os": "Microsoft Windows NT 10.0.26200.0"
+  },
+  "fixture": {
+    "version": 1,
+    "created": "2026-10-10T00:58:55.855Z",
+    "archive": {
+      "name": "solid-large.7z",
+      "bytes": 687431,
+      "sha256": "a055829e1be86896568d7d7552d0ab60f8dccd087ee0aa867298c50ee36ec71b",
+      "solid": true,
+      "blocks": 1
+    },
+    "expected": [
+      {
+        "name": "00-first.bin",
+        "bytes": 134217728,
+        "sha256": "38a96f70d1a353a6dd91eaffb11b69db6ad854eec3e142dcaae192aaa5fe9452"
+      },
+      {
+        "name": "10-prefix.bin",
+        "bytes": 4294971392,
+        "sha256": "80c0486c4f73a7d50c3f68217d79343aeb8f489afc3c86eeb07f652c72138658"
+      },
+      {
+        "name": "99-tail.txt",
+        "bytes": 1024,
+        "sha256": "c6eca5d9b2b92503ac9b2070360868be23c1c0cb299226b2d378ae8574cde2be"
+      }
+    ],
+    "generation": "1MiB block of repeated deterministic 32KiB SHA256 data; first uint32LE = chunk index, reset for each file; no whole-file memory allocation",
+    "writer": {
+      "version": "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+      "sha256": "4cd7d776c686427226a151789d2d61f0b2ed2c392148cc4e69c0238362fafecf",
+      "args": [
+        "a",
+        "-t7z",
+        "-m0=lzma2:d=32m",
+        "-mx=1",
+        "-mmt=1",
+        "-ms=on",
+        "-mqs=off",
+        "-bso0",
+        "-bsp0",
+        "D:\\Repositories\\One\\work\\current\\archive-solid\\solid-large.7z",
+        "00-first.bin",
+        "10-prefix.bin",
+        "99-tail.txt"
+      ]
+    },
+    "baselineCommit": "ab5aaf85cb5811a0b6e961d6e582982afc7764ec",
+    "baselineNative": {
+      "One.Archive.exe": "dd43555bd891286073fcd4c56ee40a9844fd26e08f5deb3ea3c0ef65ce5b1231",
+      "One.ArchiveBudget.dll": "e280d645c8fdc50e3cc5e65acbb98a996c5b488af96c104076b1407591fb45ee",
+      "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36"
+    }
+  },
+  "measuredFixedNative": {
+    "One.Archive.exe": "2b6d1ec4f0dbeed2e85d7ee504a6e54138eedff6d9dc3e55c6656d48f9e850ad",
+    "One.ArchiveBudget.dll": "ed801c6ee0d2858c2ab5fe3593af8929456b56c9809cf67fe7f0602d2fe97afe",
+    "7z.dll": "eba9f04d3e8083616abc2062a9ac948fba5cd99b8d91604d2226262504962f36"
+  },
+  "records": [
+    {
+      "report": "baseline",
+      "label": "baseline",
+      "tailMilliseconds": 2226.8188999999998,
+      "fullMilliseconds": 3540.0952,
+      "fullCpuSeconds": 3.265625,
+      "peakCommitBytes": 36704256,
+      "logicalIo": {
+        "readOperations": 6,
+        "writeOperations": 4233,
+        "otherOperations": 1983,
+        "readBytes": 687435,
+        "writeBytes": 4429190445,
+        "otherBytes": 18012
+      },
+      "tailProgress": [
+        {
+          "milliseconds": 12.730500000000006,
+          "done": 0,
+          "total": 0
+        },
+        {
+          "milliseconds": 97.72089999999992,
+          "done": 1,
+          "total": 1
+        },
+        {
+          "milliseconds": 2221.4685,
+          "done": 2,
+          "total": 1
+        }
+      ],
+      "verified": 5
+    },
+    {
+      "report": "fixed",
+      "label": "fixed",
+      "tailMilliseconds": 2217.8187000000003,
+      "fullMilliseconds": 3561.1160000000004,
+      "fullCpuSeconds": 3.40625,
+      "peakCommitBytes": 36708352,
+      "logicalIo": {
+        "readOperations": 6,
+        "writeOperations": 4233,
+        "otherOperations": 1983,
+        "readBytes": 687435,
+        "writeBytes": 4429190445,
+        "otherBytes": 18000
+      },
+      "tailProgress": [
+        {
+          "milliseconds": 11.774499999999989,
+          "done": 0,
+          "total": 0
+        },
+        {
+          "milliseconds": 2210.5208000000002,
+          "done": 1,
+          "total": 1
+        }
+      ],
+      "verified": 5
+    },
+    {
+      "report": "fixed-2",
+      "label": "fixed",
+      "tailMilliseconds": 2193.0616,
+      "fullMilliseconds": 3593.0822999999996,
+      "fullCpuSeconds": 3.46875,
+      "peakCommitBytes": 36712448,
+      "logicalIo": {
+        "readOperations": 6,
+        "writeOperations": 4233,
+        "otherOperations": 1983,
+        "readBytes": 687435,
+        "writeBytes": 4429190445,
+        "otherBytes": 18000
+      },
+      "tailProgress": [
+        {
+          "milliseconds": 13.473600000000005,
+          "done": 0,
+          "total": 0
+        },
+        {
+          "milliseconds": 2187.7394,
+          "done": 1,
+          "total": 1
+        }
+      ],
+      "verified": 4
+    },
+    {
+      "report": "baseline-2",
+      "label": "baseline",
+      "tailMilliseconds": 2268.8487,
+      "fullMilliseconds": 14982.7983,
+      "fullCpuSeconds": 3.328125,
+      "peakCommitBytes": 36728832,
+      "logicalIo": {
+        "readOperations": 6,
+        "writeOperations": 4239,
+        "otherOperations": 1983,
+        "readBytes": 687435,
+        "writeBytes": 4429190667,
+        "otherBytes": 18012
+      },
+      "tailProgress": [
+        {
+          "milliseconds": 15.208699999999993,
+          "done": 0,
+          "total": 0
+        },
+        {
+          "milliseconds": 104.74839999999998,
+          "done": 1,
+          "total": 1
+        },
+        {
+          "milliseconds": 2258.1327,
+          "done": 2,
+          "total": 1
+        }
+      ],
+      "verified": 4
+    },
+    {
+      "report": "fixed-3",
+      "label": "fixed",
+      "tailMilliseconds": 2267.951,
+      "fullMilliseconds": 3689.5537000000004,
+      "fullCpuSeconds": 3.46875,
+      "peakCommitBytes": 36720640,
+      "logicalIo": {
+        "readOperations": 6,
+        "writeOperations": 4233,
+        "otherOperations": 1983,
+        "readBytes": 687435,
+        "writeBytes": 4429190445,
+        "otherBytes": 18000
+      },
+      "tailProgress": [
+        {
+          "milliseconds": 13.69919999999999,
+          "done": 0,
+          "total": 0
+        },
+        {
+          "milliseconds": 2262.7032,
+          "done": 1,
+          "total": 1
+        }
+      ],
+      "verified": 4
+    },
+    {
+      "report": "baseline-3",
+      "label": "baseline",
+      "tailMilliseconds": 2243.345,
+      "fullMilliseconds": 13758.8742,
+      "fullCpuSeconds": 3.53125,
+      "peakCommitBytes": 36704256,
+      "logicalIo": {
+        "readOperations": 6,
+        "writeOperations": 4238,
+        "otherOperations": 1983,
+        "readBytes": 687435,
+        "writeBytes": 4429190630,
+        "otherBytes": 18012
+      },
+      "tailProgress": [
+        {
+          "milliseconds": 14.023500000000013,
+          "done": 0,
+          "total": 0
+        },
+        {
+          "milliseconds": 105.1131,
+          "done": 1,
+          "total": 1
+        },
+        {
+          "milliseconds": 2236.3484,
+          "done": 2,
+          "total": 1
+        }
+      ],
+      "verified": 4
+    }
+  ],
+  "nativeDeadline": {
+    "baseline": [
+      {
+        "operation": "extract",
+        "milliseconds": 2239.1609,
+        "status": 2,
+        "error": {
+          "type": "error",
+          "code": "timeout",
+          "message": "解压超过本次时间上限，已停止解压。"
+        },
+        "progress": [
+          {
+            "type": "progress",
+            "done": 1,
+            "total": 1
+          },
+          {
+            "type": "progress",
+            "done": 2,
+            "total": 1
+          }
+        ]
+      },
+      {
+        "operation": "drag-test",
+        "milliseconds": 2174.2378,
+        "status": 2,
+        "error": {
+          "type": "error",
+          "code": "timeout",
+          "message": "解压超过本次时间上限，已停止解压。"
+        },
+        "progress": [
+          {
+            "type": "progress",
+            "done": 1,
+            "total": 1
+          },
+          {
+            "type": "progress",
+            "done": 2,
+            "total": 1
+          }
+        ]
+      }
+    ],
+    "fixed": [
+      {
+        "operation": "extract",
+        "milliseconds": 136.95770000000002,
+        "status": 2,
+        "error": {
+          "type": "error",
+          "code": "timeout",
+          "message": "解压超过本次时间上限，已停止解压。"
+        },
+        "progress": []
+      },
+      {
+        "operation": "drag-test",
+        "milliseconds": 151.1925,
+        "status": 2,
+        "error": {
+          "type": "error",
+          "code": "timeout",
+          "message": "解压超过本次时间上限，已停止解压。"
+        },
+        "progress": []
+      }
+    ]
+  },
+  "serviceLimits": {
+    "baseline": [
+      {
+        "name": "deadline",
+        "milliseconds": 131.2895,
+        "error": {
+          "code": "timeout",
+          "message": "解压超过本次时间上限，已停止解压；内容未发布"
+        },
+        "phase": {
+          "pid": 46708,
+          "progress": [
+            {
+              "milliseconds": 12.432299999999998,
+              "done": 0,
+              "total": 0
+            },
+            {
+              "milliseconds": 99.042,
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "milliseconds": 123.81019999999998,
+          "exitCode": null,
+          "metrics": {
+            "available": true,
+            "pid": 46708,
+            "peakWorkingBytes": 43216896,
+            "peakCommitBytes": 36696064,
+            "sampledPeakPrivateBytes": 36696064,
+            "seconds": 0.124955,
+            "kernelSeconds": 0.03125,
+            "userSeconds": 0.078125,
+            "logicalIo": {
+              "readOperations": 5,
+              "writeOperations": 2,
+              "otherOperations": 117,
+              "readBytes": 262364,
+              "writeBytes": 98,
+              "otherBytes": 3252
+            }
+          }
+        }
+      },
+      {
+        "name": "cancel",
+        "milliseconds": 329.8829000000005,
+        "error": {
+          "code": "cancelled",
+          "message": "压缩任务已取消或失败"
+        },
+        "phase": {
+          "pid": 56656,
+          "progress": [
+            {
+              "milliseconds": 14.476599999999962,
+              "done": 0,
+              "total": 0
+            },
+            {
+              "milliseconds": 106.84940000000097,
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "milliseconds": 322.7516000000014,
+          "exitCode": null,
+          "metrics": {
+            "available": true,
+            "pid": 56656,
+            "peakWorkingBytes": 43212800,
+            "peakCommitBytes": 36691968,
+            "sampledPeakPrivateBytes": 36691968,
+            "seconds": 0.3229159,
+            "kernelSeconds": 0.015625,
+            "userSeconds": 0.28125,
+            "logicalIo": {
+              "readOperations": 6,
+              "writeOperations": 2,
+              "otherOperations": 119,
+              "readBytes": 351531,
+              "writeBytes": 98,
+              "otherBytes": 3252
+            }
+          }
+        },
+        "cancelAccepted": true,
+        "cancelMilliseconds": 11.467999999998938
+      }
+    ],
+    "fixed": [
+      {
+        "name": "deadline",
+        "milliseconds": 129.1499,
+        "error": {
+          "code": "timeout",
+          "message": "解压超过本次时间上限，已停止解压；内容未发布"
+        },
+        "phase": {
+          "pid": 52404,
+          "progress": [
+            {
+              "milliseconds": 15.011199999999988,
+              "done": 0,
+              "total": 0
+            }
+          ],
+          "milliseconds": 121.2888,
+          "exitCode": null,
+          "metrics": {
+            "available": true,
+            "pid": 52404,
+            "peakWorkingBytes": 43225088,
+            "peakCommitBytes": 36716544,
+            "sampledPeakPrivateBytes": 36716544,
+            "seconds": 0.118844,
+            "kernelSeconds": 0.015625,
+            "userSeconds": 0.109375,
+            "logicalIo": {
+              "readOperations": 5,
+              "writeOperations": 1,
+              "otherOperations": 117,
+              "readBytes": 262364,
+              "writeBytes": 59,
+              "otherBytes": 3240
+            }
+          }
+        }
+      },
+      {
+        "name": "cancel",
+        "milliseconds": 321.09609999999884,
+        "error": {
+          "code": "cancelled",
+          "message": "压缩任务已取消或失败"
+        },
+        "phase": {
+          "pid": 28680,
+          "progress": [
+            {
+              "milliseconds": 14.213700000000244,
+              "done": 0,
+              "total": 0
+            }
+          ],
+          "milliseconds": 312.97289999999884,
+          "exitCode": null,
+          "metrics": {
+            "available": true,
+            "pid": 28680,
+            "peakWorkingBytes": 43216896,
+            "peakCommitBytes": 36712448,
+            "sampledPeakPrivateBytes": 36712448,
+            "seconds": 0.3140443,
+            "kernelSeconds": 0.03125,
+            "userSeconds": 0.265625,
+            "logicalIo": {
+              "readOperations": 6,
+              "writeOperations": 1,
+              "otherOperations": 122,
+              "readBytes": 352383,
+              "writeBytes": 59,
+              "otherBytes": 3264
+            }
+          }
+        },
+        "cancelAccepted": true,
+        "cancelMilliseconds": 11.4382999999998
+      }
+    ]
+  },
+  "ownCreate": {
+    "creationMilliseconds": 17584.055900000003,
+    "extractionMilliseconds": 3535.6963000000032,
+    "archive": {
+      "bytes": 734256,
+      "sha256": "64e794f8366b574eb33f27f341215346236e83f60e8241372d4d39b6b004c620"
+    },
+    "sourceBytes": 4429190144,
+    "verified": 3,
+    "independentSevenzipTest": true,
+    "limits": {
+      "threads": 1,
+      "memoryMiB": 256,
+      "sevenSolid": 1024,
+      "level": 1
+    }
+  },
+  "verifiedOutputs": 29,
+  "limitations": "Single local NTFS drive, one CPU/memory configuration, generated repeated nonzero data, warm/OS-managed caches, no background workload isolation; complete-output wall time has large non-CPU variation with similar CPU/logical I/O, no throughput improvement attribution. Native private/commit counters are process memory, logical I/O is not physical disk throughput.",
+  "harnessGuards": "Existing fixture/frozen helper and report overwrite attempts rejected before mutation."
+}

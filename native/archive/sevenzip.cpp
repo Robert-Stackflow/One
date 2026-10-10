@@ -356,7 +356,7 @@ public:
 class ExtractRequest final:public ExtractCallback7,public Password7 {
     std::atomic<ULONG> refs{1};
     const std::vector<Item> &items;fs::path destination;std::wstring password;FileOutput *active=nullptr;
-    U32 done=0,total=0;U64 completed=0;bool testing=false;ULONGLONG last_progress=0;ExtractionSpace *space=nullptr;
+    U32 done=0,total=0;U64 completed=0;bool testing=false,count_operation=false;ULONGLONG last_progress=0;ExtractionSpace *space=nullptr;
 public:
     std::string errorCode="archive";
     ExtractRequest(const std::vector<Item> &entries,const fs::path &path,const std::string &secret,U32 expected,bool test,ExtractionSpace *space=nullptr):
@@ -372,7 +372,13 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override{return ++refs;}
     ULONG STDMETHODCALLTYPE Release() override{ULONG value=--refs;if(!value)delete this;return value;}
     HRESULT STDMETHODCALLTYPE SetTotal(U64) override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE SetCompleted(const U64 *value) override{if(value&&*value!=completed){completed=*value;archive_activity();}return archive_cancelled()?E_ABORT:S_OK;}
+    HRESULT STDMETHODCALLTYPE SetCompleted(const U64 *value) override{
+        if(archive_cancelled())return E_ABORT;
+        // Solid decoders can spend most of their time discarding earlier files.
+        // Check the deadline even when no selected output stream is writing.
+        if(space&&!space->write(0))return E_ABORT;
+        if(value&&*value!=completed){completed=*value;archive_activity();}return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR *out) override {
         if(!out)return E_POINTER;*out=nullptr;if(password.empty()){errorCode="password";return E_ABORT;}
         *out=SysAllocStringLen(password.data(),(UINT)password.size());return *out?S_OK:E_OUTOFMEMORY;
@@ -380,8 +386,9 @@ public:
     HRESULT STDMETHODCALLTYPE GetStream(U32 index,OutStream7 **stream,int mode) override {
         if(archive_cancelled())return E_ABORT;
         if(!stream||index>=items.size())return E_INVALIDARG;*stream=nullptr;
+        if(space&&!space->write(0))return E_FAIL;
         if(testing||mode!=0)return S_OK;
-        if(!space||!space->write(0)){errorCode="write";return E_FAIL;}
+        if(!space){errorCode="write";return E_FAIL;}
         const auto &item=items[index];const auto target=destination/entry_path(item.name);
         try{if(item.directory){fs::create_directories(target);return S_OK;}fs::create_directories(target.parent_path());}
         catch(...){errorCode="write";return E_FAIL;}
@@ -389,7 +396,7 @@ public:
         if(!output->valid()){errorCode="write";output->Release();return E_FAIL;}
         active=output;active->AddRef();*stream=output;return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE PrepareOperation(int) override{return S_OK;}
+    HRESULT STDMETHODCALLTYPE PrepareOperation(int mode) override{count_operation=testing||mode==0;return S_OK;}
     HRESULT STDMETHODCALLTYPE SetOperationResult(int result) override {
         bool complete=!active||active->complete();
         if(active){active->Release();active=nullptr;}
@@ -397,6 +404,9 @@ public:
         // CRC/data errors remain archive errors; guessing would hide corruption.
         if(result==9)errorCode="password";
         if(result!=0||!complete)return E_FAIL;
+        // Skipped prefixes must still pass CRC/data checks above, but are not
+        // selected operations and must not advance the user's item count.
+        if(!count_operation)return S_OK;count_operation=false;
         ++done;const auto now=GetTickCount64();
         if(done==1||done==total||now-last_progress>=100){emit("{\"type\":\"progress\",\"done\":"+std::to_string(done)+",\"total\":"+std::to_string(total)+"}");last_progress=now;}
         return S_OK;
