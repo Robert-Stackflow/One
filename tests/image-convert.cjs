@@ -56,6 +56,11 @@ test('local image batch conversion preserves source, animation and cancellation 
    const result=await service.start(1,[profile],out,{format:'png',quality:80,preserveMetadata:policy==='all',metadataPolicy:policy},()=>{});assert.equal(result.results[0].status,'done',`${policy}: ${result.results[0].message}`);
    const info=await sharp(result.results[0].output).metadata();assert.equal(info.width,6);assert.equal(info.height,8);assert(!info.orientation||info.orientation===1);assert.equal(Boolean(info.exif),policy==='all');assert.equal(Boolean(info.icc),policy!=='none');if(policy!=='none')assert(info.icc.equals(profileInfo.icc));
   }
+  const enhance={brightness:1.2,saturation:1.1,sharpen:1,contrast:false,denoise:false};
+  const enhanced=await service.start(1,[source],out,{format:'png',quality:80,preserveMetadata:false,enhance},()=>{});assert.equal(enhanced.results[0].status,'done',enhanced.results[0].message);assert.match(enhanced.results[0].message,/画质调整/);
+  const originalPixels=await sharp(source).ensureAlpha().raw().toBuffer(),enhancedPixels=await sharp(enhanced.results[0].output).ensureAlpha().raw().toBuffer();assert(!originalPixels.equals(enhancedPixels));assert.equal(enhancedPixels.length,originalPixels.length);
+  const animatedEnhanced=await service.start(1,[gif],out,{format:'gif',quality:80,preserveMetadata:false,enhance},()=>{});assert.equal(animatedEnhanced.results[0].status,'error');assert.match(animatedEnhanced.results[0].message,/动图|多页/);
+  await assert.rejects(service.start(1,[source],out,{format:'png',quality:80,preserveMetadata:false,compressionMode:'lossless',enhance},()=>{}),/无损优化|画质调整/);
   const icons=await service.start(1,[source],out,{format:'ico',quality:80,preserveMetadata:false},()=>{});
   assert.equal(icons.results[0].status,'done',icons.results[0].message);const ico=await readFile(icons.results[0].output);
   assert.equal(ico.readUInt16LE(2),1);assert.equal(ico.readUInt16LE(4),7);

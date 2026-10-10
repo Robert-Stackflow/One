@@ -1,7 +1,8 @@
 export type ImageConvertFormat='original'|'png'|'jpeg'|'webp'|'gif'|'tiff'|'ico'|'svg';
 export interface ImageCropRule {x:number;y:number;width:number;height:number;ratio?:number}
 export type ImageResizeRule={mode:'pixels';width?:number;height?:number;keepAspect:boolean}|{mode:'percent';percent:number;keepAspect:true}|{mode:'long-edge';longEdge:number;keepAspect:true};
-export interface ImageConvertOptions {format:ImageConvertFormat;quality:number;maxWidth?:number;maxHeight?:number;preserveMetadata:boolean;metadataPolicy?:'all'|'color'|'none';compressionMode?:'quality'|'lossless';motionPolicy?:'reject'|'still';crop?:ImageCropRule;resize?:ImageResizeRule}
+export interface ImageEnhanceOptions {brightness:number;saturation:number;sharpen:0|1|2;contrast:boolean;denoise:boolean}
+export interface ImageConvertOptions {format:ImageConvertFormat;quality:number;maxWidth?:number;maxHeight?:number;preserveMetadata:boolean;metadataPolicy?:'all'|'color'|'none';compressionMode?:'quality'|'lossless';motionPolicy?:'reject'|'still';enhance?:ImageEnhanceOptions;crop?:ImageCropRule;resize?:ImageResizeRule}
 export interface ImageConvertResult {source:string;output?:string;before:number;after?:number;width?:number;height?:number;pages?:number;status:'done'|'error'|'cancelled';message?:string}
 export interface ImageConvertProgress {done:number;total:number;current?:string;result?:ImageConvertResult}
 export interface ImageConvertSummary {results:ImageConvertResult[];cancelled:boolean}
@@ -57,6 +58,9 @@ export function imageConvertOptions(value:unknown):ImageConvertOptions{
  if(['ico','svg'].includes(v.format)&&v.metadataPolicy&&v.metadataPolicy!=='none')throw Error('ICO 和 SVG 输出不支持保留图片元数据');
  if(v.compressionMode!==undefined&&!['quality','lossless'].includes(v.compressionMode))throw Error('压缩模式无效');
  if(v.compressionMode==='lossless'&&(!['original','png','webp','tiff'].includes(v.format)||v.maxWidth!==undefined||v.maxHeight!==undefined||crop||resize))throw Error('无损优化仅支持 PNG、WebP、TIFF，且不能改变尺寸');
+ let enhance:ImageEnhanceOptions|undefined;
+ if(v.enhance!==undefined){const e=v.enhance;if(!e||typeof e!=='object'||!Number.isFinite(e.brightness)||e.brightness<0.7||e.brightness>1.3||!Number.isFinite(e.saturation)||e.saturation<0.5||e.saturation>1.5||![0,1,2].includes(e.sharpen)||typeof e.contrast!=='boolean'||typeof e.denoise!=='boolean')throw Error('画质优化参数无效');enhance={brightness:e.brightness,saturation:e.saturation,sharpen:e.sharpen,contrast:e.contrast,denoise:e.denoise};}
+ if(enhance&&(v.compressionMode==='lossless'||v.format==='ico'||v.format==='svg'||crop||resize))throw Error('画质调整不能与无损优化、ICO、SVG、裁剪或缩放任务混用');
  if(v.motionPolicy!==undefined&&!['reject','still'].includes(v.motionPolicy))throw Error('动态照片处理设置无效');
- return {format:v.format,quality:v.quality,maxWidth:v.maxWidth,maxHeight:v.maxHeight,preserveMetadata:v.preserveMetadata,metadataPolicy:v.metadataPolicy??(v.preserveMetadata?'all':'none'),compressionMode:v.compressionMode||'quality',motionPolicy:v.motionPolicy||'reject',crop,resize};
+ return {format:v.format,quality:v.quality,maxWidth:v.maxWidth,maxHeight:v.maxHeight,preserveMetadata:v.preserveMetadata,metadataPolicy:v.metadataPolicy??(v.preserveMetadata?'all':'none'),compressionMode:v.compressionMode||'quality',motionPolicy:v.motionPolicy||'reject',enhance,crop,resize};
 }

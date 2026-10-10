@@ -1,6 +1,6 @@
 import './image-convert.css';
 import {api,esc,q,toast,errorMessage} from './ui';
-import type {ImageConvertFormat,ImageConvertOptions,ImageConvertProgress,ImageConvertResult} from '../shared/image-convert';
+import type {ImageConvertFormat,ImageConvertOptions,ImageConvertProgress,ImageConvertResult,ImageEnhanceOptions} from '../shared/image-convert';
 
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
@@ -17,7 +17,13 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>处理模式<select id="image-convert-mode"><option value="quality">按质量重新编码</option><option value="lossless">无损像素优化（PNG / WebP / TIFF）</option></select></label>
       <label>元数据策略<select id="image-convert-metadata-policy"><option value="all">保留全部</option><option value="color">仅保留 ICC 色彩配置</option><option value="none">移除全部</option></select></label>
       <label class="image-convert-metadata"><input id="image-convert-motion-still" type="checkbox">动态照片仅导出静态图（不保留视频）</label></div>
-    <p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
+    <fieldset class="image-enhance-options"><legend><label><input id="image-enhance-enabled" type="checkbox">画质优化（静态图片）</label></legend><div>
+      <label>亮度 <output id="image-enhance-brightness-value">100%</output><input id="image-enhance-brightness" type="range" min="70" max="130" value="100"></label>
+      <label>饱和度 <output id="image-enhance-saturation-value">100%</output><input id="image-enhance-saturation" type="range" min="50" max="150" value="100"></label>
+      <label>锐化<select id="image-enhance-sharpen"><option value="0">关闭</option><option value="1" selected>轻度</option><option value="2">较强</option></select></label>
+      <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
+    </div></fieldset>
+    <p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
     <p id="image-codec-status" class="image-convert-note" role="status">正在检测 HEIC 编解码能力…</p>
     <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div>
   </section></div>`;}
@@ -27,6 +33,7 @@ export function setupImageConvert(){
  const add=q<HTMLButtonElement>('image-convert-add'),clear=q<HTMLButtonElement>('image-convert-clear'),pickDirectory=q<HTMLButtonElement>('image-convert-pick-directory');
  const directory=q<HTMLInputElement>('image-convert-directory'),format=q<HTMLSelectElement>('image-convert-format'),quality=q<HTMLInputElement>('image-convert-quality');
  const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),mode=q<HTMLSelectElement>('image-convert-mode'),metadata=q<HTMLSelectElement>('image-convert-metadata-policy'),motionStill=q<HTMLInputElement>('image-convert-motion-still');
+ const enhanceEnabled=q<HTMLInputElement>('image-enhance-enabled'),brightness=q<HTMLInputElement>('image-enhance-brightness'),saturation=q<HTMLInputElement>('image-enhance-saturation'),sharpen=q<HTMLSelectElement>('image-enhance-sharpen'),contrast=q<HTMLInputElement>('image-enhance-contrast'),denoise=q<HTMLInputElement>('image-enhance-denoise');
  const start=q<HTMLButtonElement>('image-convert-start'),cancel=q<HTMLButtonElement>('image-convert-cancel'),retry=q<HTMLButtonElement>('image-convert-retry');
  let paths:string[]=[],results=new Map<string,ImageConvertResult>(),running=false,current:string|undefined;
  const render=()=>{
@@ -35,6 +42,7 @@ export function setupImageConvert(){
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pickDirectory.disabled=running;cancel.disabled=!running;
   for(const input of [directory,format])input.disabled=running;
   const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special;mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;
+  enhanceEnabled.disabled=running||special||mode.value==='lossless';for(const input of [brightness,saturation,sharpen,contrast,denoise])input.disabled=running||!enhanceEnabled.checked||enhanceEnabled.disabled;
   quality.disabled=running||mode.value==='lossless'||!['original','jpeg','webp'].includes(format.value);
   retry.hidden=running||![...results.values()].some(result=>result.status!=='done');
   retry.disabled=running;
@@ -42,7 +50,8 @@ export function setupImageConvert(){
  const options=():ImageConvertOptions=>{
   const dimension=(value:string,label:string)=>{if(!value.trim())return undefined;const parsed=Number(value);if(!Number.isInteger(parsed)||parsed<1||parsed>16384)throw Error(`${label}需在 1 至 16384 像素之间`);return parsed;};
   if(!directory.value)throw Error('请先选择输出文件夹');
-  return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.value==='all',metadataPolicy:metadata.value as 'all'|'color'|'none',compressionMode:mode.value as 'quality'|'lossless',motionPolicy:motionStill.checked?'still':'reject'};
+  const enhance:ImageEnhanceOptions|undefined=enhanceEnabled.checked?{brightness:Number(brightness.value)/100,saturation:Number(saturation.value)/100,sharpen:Number(sharpen.value) as 0|1|2,contrast:contrast.checked,denoise:denoise.checked}:undefined;
+  return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.value==='all',metadataPolicy:metadata.value as 'all'|'color'|'none',compressionMode:mode.value as 'quality'|'lossless',motionPolicy:motionStill.checked?'still':'reject',enhance};
  };
  const progress=(value:ImageConvertProgress)=>{if(!running)return;current=value.current;if(value.result){results.set(value.result.source,value.result);current=undefined;}status.textContent=`已完成 ${value.done} / ${value.total}`;render();};
  const run=async(selected:string[])=>{
@@ -56,8 +65,9 @@ export function setupImageConvert(){
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};
  pickDirectory.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  quality.oninput=()=>{q('image-convert-quality-value').textContent=quality.value;};
- format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':format.value==='svg'?'开始优化':'开始转换';if(format.value==='ico'||format.value==='svg'){width.value='';height.value='';metadata.value='none';metadata.dispatchEvent(new Event('change',{bubbles:true}));}if(!['original','png','webp','tiff'].includes(format.value)){mode.value='quality';mode.dispatchEvent(new Event('change',{bubbles:true}));}render();};
- mode.onchange=()=>{if(mode.value==='lossless'){width.value='';height.value='';}render();};
+ format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':format.value==='svg'?'开始优化':'开始转换';if(format.value==='ico'||format.value==='svg'){width.value='';height.value='';metadata.value='none';metadata.dispatchEvent(new Event('change',{bubbles:true}));enhanceEnabled.checked=false;}if(!['original','png','webp','tiff'].includes(format.value)){mode.value='quality';mode.dispatchEvent(new Event('change',{bubbles:true}));}render();};
+ mode.onchange=()=>{if(mode.value==='lossless'){width.value='';height.value='';enhanceEnabled.checked=false;}render();};enhanceEnabled.onchange=render;
+ for(const [input,output] of [[brightness,'image-enhance-brightness-value'],[saturation,'image-enhance-saturation-value']] as const)input.oninput=()=>{q(output).textContent=`${input.value}%`;};
  start.onclick=()=>void run(paths);
  retry.onclick=()=>void run(paths.filter(path=>results.get(path)?.status!=='done'));
  cancel.onclick=()=>void api.imageConvertCancel().catch(toast);

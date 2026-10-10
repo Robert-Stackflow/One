@@ -33,8 +33,11 @@ test('image conversion tab converts a picked file and reports results',async()=>
   await expect(page.locator('#image-convert-width')).toHaveValue('');await expect(page.locator('#image-convert-width')).toBeDisabled();
   await page.locator('#image-convert-metadata-policy').click();await page.locator('#image-convert-metadata-policy-options [role="option"][aria-label="仅保留 ICC 色彩配置"]').click();
   await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
+  await page.locator('#image-convert-mode').click();await page.locator('#image-convert-mode-options [role="option"][aria-label="按质量重新编码"]').click();
+  await page.locator('#image-enhance-enabled').check();await page.locator('#image-enhance-brightness').evaluate(input=>{input.value='120';input.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');await expect(page.locator('#image-convert-files')).toContainText('已应用画质调整');
   await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="ICO 多尺寸图标"]').click();
-  await expect(page.locator('#image-convert-metadata-policy')).toBeDisabled();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
+  await expect(page.locator('#image-convert-metadata-policy')).toBeDisabled();await expect(page.locator('#image-enhance-enabled')).not.toBeChecked();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
   assert.equal((await readdir(output)).filter(name=>name.endsWith('.ico')).length,1);
   await expect(page.locator('#image-codec-status')).toContainText('HEIC',{timeout:10000});
   await app.evaluate(({dialog},chosen)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[chosen]});},svg);
