@@ -183,6 +183,7 @@
       "dist/main/maintenance-actions.ps1",
       "dist/native/One.Windows.exe",
       "dist/native/One.Theme.exe",
+      "dist/native/One.Location.dll",
       "dist/native/One.Shortcut.exe",
       "dist/native/One.HotkeyProbe.exe",
       "dist/native/One.HotkeyProbe32.exe",

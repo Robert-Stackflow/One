@@ -1,12 +1,13 @@
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const output=path.resolve('work/current/theme-app/ui');
+const output=path.resolve(process.env.ONE_THEME_UI_OUTPUT_DIR||'work/current/theme-app/ui');
 let checks=0;const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};
 async function main(){
  await fs.mkdir(output,{recursive:true});const profile=await fs.mkdtemp(path.join(output,'profile-'));
- const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+ const env={...process.env,ONE_TEST_MODE:'1',ONE_TEST_THEME_LOCATION:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const launch=()=>electron.launch({args:[path.resolve('.')],env,timeout:30000});
  let app=await launch();
+ const disableLocation=()=>app.evaluate(()=>{globalThis.oneTestThemeLocation.port=()=>({begin:()=>0,poll:()=>0,cancel:()=>{}});});await disableLocation();
  try{
   let page=await app.firstWindow();const failures=[];page.on('pageerror',error=>failures.push(error.message));
   const open=async()=>{await page.locator('[data-page=settings]').click();await page.locator('[data-settings-tab=theme]').click();await expect(page.locator('#theme-fields')).toBeEnabled();};
@@ -51,7 +52,7 @@ eq(await page.locator('#theme-enabled').isChecked(),false);eq(await page.locator
   await choose('日出日落');const narrow=await page.evaluate(()=>{const panel=document.querySelector('.settings-panels');return {width:innerWidth,overflow:panel.scrollWidth>panel.clientWidth+1};});eq(narrow.overflow,false,'Narrow layout fits its panel');
   await choose('固定时间');await settle();const persisted=await page.evaluate(()=>window.one.settings());
   // Quit normally, retaining the isolated profile for restart acceptance.
-  await app.close();app=await launch();page=await app.firstWindow();await page.waitForSelector('[data-page=settings]');await page.locator('[data-page=settings]').click();await page.locator('[data-settings-tab=theme]').click();await expect(page.locator('#theme-fields')).toBeEnabled();
+  await app.close();app=await launch();await disableLocation();page=await app.firstWindow();await page.waitForSelector('[data-page=settings]');await page.locator('[data-page=settings]').click();await page.locator('[data-settings-tab=theme]').click();await expect(page.locator('#theme-fields')).toBeEnabled();
   eq((await page.evaluate(()=>window.one.settings())).themeSchedule,persisted.themeSchedule,'All schedule preferences survive restart');await expect(page.locator('html')).toHaveAttribute('data-theme','light');eq((await page.evaluate(()=>window.one.themeStatus())).phase,'automatic','Restart re-evaluates the schedule without persisting a temporary override');
   eq(failures,[],'No renderer exceptions');
   const report={result:'PASS',checks,wide,narrow,nightPhase:night.phase,profile,scope:'Isolated Electron profile; One-only changes, automatic persistence, custom time picker keyboard/mouse, visible dividers, form validation/custom select, preview appearance, native hotkey recording, wake event and restart. Windows themes were not written.'};await fs.writeFile(path.join(output,'ui-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));

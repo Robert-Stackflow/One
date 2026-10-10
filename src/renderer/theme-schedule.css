@@ -20,3 +20,20 @@
 #theme-error{color:var(--danger);margin-top:8px}
 .settings-panels .theme-schedule .setting-row.theme-last-row{border-bottom:0}
 @media(max-width:900px){.theme-schedule .setting-row{flex-wrap:wrap}.theme-pair,.theme-targets,.theme-shortcut{max-width:100%;margin-left:auto}.theme-schedule .setting-row>[role=combobox]{max-width:100%}.theme-pair input{width:118px}}
+
+.settings-panels .theme-schedule .setting-row.theme-location-row{display:block}
+.theme-location-heading{display:flex;align-items:center;gap:20px;justify-content:space-between}
+.theme-location-heading>button{flex-shrink:0}
+#theme-location-status{color:var(--muted);font-size:12px;line-height:1.6;margin:12px 0;overflow-wrap:anywhere}
+#theme-location-status:empty{display:none}
+.theme-coordinate-grid,.theme-solar-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.theme-coordinate-grid label{display:grid;gap:6px;font-size:12px;color:var(--muted);min-width:0}
+.theme-coordinate-grid .number-control{width:100%;min-width:0}
+.theme-coordinate-grid .number-control input{flex:1;width:0;min-width:0}
+.theme-coordinate-grid .number-control>button{width:28px;flex-shrink:0}
+.theme-solar-preview{margin-top:16px;font-size:12px;color:var(--muted)}
+.theme-solar-caption{margin:0}
+.theme-solar-grid{margin-top:10px}
+.theme-solar-grid>div{display:grid;gap:6px;padding:14px 16px;border-radius:10px;background:var(--hover)}
+.theme-solar-grid strong{font-size:20px;font-weight:550;color:var(--fg)}
+@media(max-width:900px){.theme-location-heading{align-items:flex-start;flex-wrap:wrap}.theme-location-heading>button{margin-left:auto}.theme-coordinate-grid{gap:12px}}

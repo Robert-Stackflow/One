@@ -127,6 +127,8 @@ export interface OneAPI {
   selectPreview(path: string): Promise<void>; directoryOpen(path:string):Promise<import('./directory').DirectoryInfo>;directoryPage(id:string,offset:number,limit:number,query?:string):Promise<import('./directory').DirectoryPage>;directoryRelease(id:string):Promise<void>;
   previewResource(path:string):Promise<string|null>;previewImage(path:string):Promise<{url:string;width?:number;height?:number}|null>;previewDisplayImage(url:string,width:number,height:number):Promise<string|null>;previewReleaseDisplayImage(url:string):Promise<void>;previewThumbnail(url:string):Promise<string|null>;previewLinkCard(url:string):Promise<LinkCard>;previewOpenLink(url:string):Promise<void>;
   previewFlags(value?: {pinned?:boolean;held?:boolean}): Promise<{pinned:boolean;held:boolean}>;
+  themeLocate():Promise<import('./theme-location').ThemeLocationResult>;
+  themeLocationCancel():Promise<void>;
   themeStatus():Promise<import('./theme-schedule').ThemeAutomationStatus>;
   themeManual(mode:'light'|'dark'|'toggle'):Promise<import('./theme-schedule').ThemeAutomationStatus>;
   themeResume():Promise<import('./theme-schedule').ThemeAutomationStatus>;

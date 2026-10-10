@@ -52,6 +52,7 @@ import {PortService} from './port-service';
 import {ClickerService} from './clicker';
 import {elevationCommand} from './elevation-command';
 import {ThemeAutomation} from './theme-automation';
+import {ThemeLocationService} from './theme-location';
 import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme, powerMonitor } from 'electron';
 import { readFile, writeFile, mkdir, stat, readdir, rename, realpath, lstat } from 'node:fs/promises';
 import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
@@ -128,7 +129,9 @@ const fontAssets = new Map<string,{path:string;mime:string}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
-let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let themeAutomation:ThemeAutomation|undefined;let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
+let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let themeAutomation:ThemeAutomation|undefined;const themeLocation=new ThemeLocationService();
+if(testMode&&process.env.ONE_TEST_THEME_LOCATION==='1')(globalThis as typeof globalThis&{oneTestThemeLocation?:ThemeLocationService}).oneTestThemeLocation=themeLocation;
+let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
 let colorFreezeWindows:BrowserWindow[]=[],colorFreezeBusy=false,colorSession=0;
 let colorZoomActive=false,colorZoomCardBounds:Electron.Rectangle|undefined;
 const shortcutCapture=new ShortcutCapture();let activeShortcutToken='';
@@ -714,6 +717,8 @@ function registerIPC() {
   handle('color-editor-show',(_event,hex)=>{if(hex!==undefined&&(typeof hex!=='string'||!/^#[0-9a-f]{6}$/i.test(hex)))throw new Error('颜色无效');colorEditor.show(hex?.toUpperCase());});
   handle('color-state',()=>colorEditor.snapshot(),['main','color-editor']);
   handle('color-editor-size',(_event,height)=>{if(typeof height!=='number'||!Number.isFinite(height)||height<200||height>1800)throw new Error('窗口尺寸无效');colorEditor.resize(height);},['color-editor']);
+  handle('theme-locate',()=>{if(!main||main.isDestroyed()||!main.isVisible()||!main.isFocused())return {state:'unavailable',detail:'请在 One 窗口中获取当前位置，或手动填写经纬度。'};return themeLocation.locate();},['main']);
+  handle('theme-location-cancel',()=>themeLocation.cancel(),['main']);
   handle('theme-status',()=>themeAutomation!.state(),['main']);
   handle('theme-manual',(_event,mode)=>themeAutomation!.manual(mode),['main']);
   handle('theme-resume',()=>themeAutomation!.resume(),['main']);
@@ -921,5 +926,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });
