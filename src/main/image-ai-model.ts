@@ -16,6 +16,12 @@ export const superResolutionModel:AiModelDescriptor={
  bytes:4945202,
  sha256:'4ca39b3a965ecab832861860f046400bdac7727e10f40cc75ab2393104346e08'
 };
+export const repairModel:AiModelDescriptor={
+ id:'migan-pipeline-v2',
+ url:'https://huggingface.co/andraniksargsyan/migan/resolve/406830d0fa60666da0071c342ad2fbc8f30c5c64/migan_pipeline_v2.onnx',
+ bytes:28079181,
+ sha256:'6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b'
+};
 
 export function aiModelPath(dataDir:string,model=backgroundModel){return join(dataDir,'models',`${model.id}-${model.sha256.slice(0,12)}.onnx`);}
 

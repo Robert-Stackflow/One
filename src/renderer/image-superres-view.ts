@@ -5,7 +5,7 @@ import type {ImageAiProgress,ImageAiResult} from '../shared/image-ai';
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const megabytes=(bytes:number)=>`${(bytes/1048576).toFixed(1)} MB`;
 
-export function imageSuperresPage(){return `<div class="image-ai-page"><h2>AI 超分 / 修复</h2><p>在本机用 Real-ESRGAN 为静态图片生成 4× PNG 副本。细节由模型推测，适合放大小图，不能恢复原件里不存在的信息。</p>
+export function imageSuperresPage(){return `<div class="image-ai-page"><h2>AI 超分</h2><p>在本机用 Real-ESRGAN 为静态图片生成 4× PNG 副本。细节由模型推测，适合放大小图，不能恢复原件里不存在的信息。</p>
  <div class="image-ai-controls"><button id="image-superres-pick" type="button">选择图片</button><strong id="image-superres-source">尚未选择图片</strong></div>
  <div class="image-ai-controls"><label for="image-superres-directory">输出文件夹</label><input id="image-superres-directory" readonly placeholder="选择保存位置"><button id="image-superres-pick-directory" type="button">选择文件夹</button></div>
  <p id="image-superres-model" role="status">正在检查模型缓存…</p><div class="image-ai-controls"><button id="image-superres-start" type="button" disabled>开始超分</button><button id="image-superres-cancel" type="button" disabled>取消</button><span id="image-superres-status" role="status" aria-live="polite"></span></div>
