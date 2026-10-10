@@ -1,7 +1,22 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{build}=require('esbuild');
 const {fixtures,box,appleMaker,identifiedMovie,id}=require('./image-preview-fixtures.cjs');
+const JSZip=require('jszip');
 const output=path.resolve(process.env.ONE_UNIT_OUTPUT_DIR||'work/current/image-preview/unit');
 const ready=(async()=>{await fs.mkdir(output,{recursive:true});const target=path.join(output,'motion-photo.cjs');await build({entryPoints:['src/main/motion-photo.ts'],outfile:target,bundle:true,platform:'node'});return require(target);})();
+test('stored LIVP exposes validated photo and movie slices without extracting files',async()=>{
+ const {inspectLivp}=await ready,dir=path.join(output,'livp');await fs.mkdir(dir,{recursive:true});
+ const {photo:photoBytes,movie}=await fixtures(dir);
+ const make=async(name,add)=>{const zip=new JSZip();zip.file('IMG_1.JPG.jpeg',photoBytes,{compression:'STORE'});if(add)add(zip);const file=path.join(dir,name);await fs.writeFile(file,await zip.generateAsync({type:'nodebuffer',compression:'STORE'}));return file;};
+ const file=await make('pair.livp',zip=>zip.file('IMG_1.JPG.mov',movie,{compression:'STORE'}));
+ const before=await fs.readFile(file),found=await inspectLivp(file);
+ assert.equal(found.still.mime,'image/jpeg');assert.deepEqual(before.subarray(found.still.offset,found.still.offset+found.still.length),photoBytes);
+ assert.equal(found.movie.source,'LIVP 导出包');assert.deepEqual(before.subarray(found.movie.offset,found.movie.offset+found.movie.length),movie);
+ assert.deepEqual(await fs.readFile(file),before);
+ assert.equal((await inspectLivp(await make('still.livp'))).movie,null);
+ const ambiguous=await make('ambiguous.livp',zip=>{zip.file('first.mov',movie);zip.file('second.mov',movie);});
+ await assert.rejects(()=>inspectLivp(ambiguous),/不明确/);
+ const compressed=new JSZip();compressed.file('image.jpeg',photoBytes,{compression:'DEFLATE'});const compressedFile=path.join(dir,'compressed.livp');await fs.writeFile(compressedFile,await compressed.generateAsync({type:'nodebuffer'}));await assert.rejects(()=>inspectLivp(compressedFile),/暂不支持/);
+});
 test('embedded motion photo variants expose only their valid movie slice',async t=>{
  const {inspectMotionPhoto}=await ready,{movie}=await fixtures(path.join(output,'embedded'));
  for(const [name,source] of [['google-old.jpg','Google MicroVideo'],['google-container.jpg','Motion Photo'],['samsung-sef.jpg','Samsung SEF'],['samsung-mpv2.jpg','Samsung SEF'],['vendor-trailer.jpg','嵌入式动态照片'],['heic-motion.heic','Motion Photo mpvd']])await t.test(name,async()=>{

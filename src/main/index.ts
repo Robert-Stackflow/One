@@ -61,7 +61,7 @@ import {imageCodecCapabilities} from './image-codec';
 import {DeveloperHashService} from './developer-hash-service';
 import {generateQr} from './developer-qr';
 import {exportMotionPhotoVideo} from './motion-photo-export';
-import {inspectMotionPhoto} from './motion-photo';
+import {inspectMotionPhoto,inspectLivp} from './motion-photo';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
@@ -70,7 +70,10 @@ import {DisplayShortcutController} from './display-shortcuts';
 import {DisplayProfilesService} from './display-profiles';
 import {DisplayManagementService} from './display-management';
 import { app, BrowserWindow, clipboard, ClipboardItem, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme, powerMonitor } from 'electron';
-import { readFile, writeFile, mkdir, stat, readdir, rename, realpath, lstat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm, rmdir, stat, readdir, rename, realpath, lstat } from 'node:fs/promises';
+import {createReadStream,createWriteStream} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {pipeline} from 'node:stream/promises';
 import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
@@ -131,6 +134,17 @@ async function scaledPreviewImage(path:string,width:number,height:number):Promis
  const actual=image.getSize(),limit=Math.min(1280/actual.width,960/actual.height,1);
  if(limit<1)image=image.resize({width:Math.max(1,Math.round(actual.width*limit)),height:Math.max(1,Math.round(actual.height*limit)),quality:'good'});
  return image.toPNG();
+}
+async function scaledPreviewAsset(asset:{path:string;mime:string;segment?:import('./motion-photo').FileSegment},width:number,height:number):Promise<Buffer>{
+ if(!asset.segment)return scaledPreviewImage(asset.path,width,height);
+ const {offset,length}=asset.segment,size=(await stat(asset.path)).size;
+ if(!Number.isSafeInteger(offset)||!Number.isSafeInteger(length)||offset<0||length<16||length>100*1024*1024||offset+length>size)throw Error('照片文件项已变化');
+ const folder=await mkdtemp(join(tmpdir(),'one-livp-'));
+ const file=join(folder,asset.mime==='image/heif'?'photo.heif':'photo.heic');
+ try{
+  await pipeline(createReadStream(asset.path,{start:offset,end:offset+length-1}),createWriteStream(file,{flags:'wx'}));
+  return await scaledPreviewImage(file,width,height);
+ }finally{await rm(file,{force:true}).catch(()=>{});await rmdir(folder).catch(()=>{});}
 }
 function releasePreviewAssets(owner:number){
  for(const [token,asset] of assets)if(asset.owner===owner)assets.delete(token);
@@ -848,7 +862,9 @@ function registerIPC() {
    if(motionVideoExports.has(ownerId))throw Error('动态视频正在导出');
    const controller=new AbortController();motionVideoExports.set(ownerId,controller);
    try{
-    const motion=await inspectMotionPhoto(data.path);if(!motion)throw Error('动态视频已失效，请重新打开照片');
+    const source=await stat(data.path);if(source.size!==data.size||source.mtimeMs!==data.modified)throw Error('动态照片已变化，请重新打开照片');
+    const motion=extname(data.path).toLowerCase()==='.livp'?(await inspectLivp(data.path)).movie:await inspectMotionPhoto(data.path);
+    if(!motion)throw Error('动态视频已失效，请重新打开照片');
     const extension=motion.mime==='video/quicktime'?'mov':'mp4',owner=BrowserWindow.fromWebContents(event.sender);if(!owner)throw Error('预览窗口已关闭');
     const selected=await dialog.showSaveDialog(owner,{title:'导出动态照片视频',defaultPath:join(app.getPath('videos'),`${basename(data.path,extname(data.path))}-motion.${extension}`),filters:[{name:extension.toUpperCase()+' 视频',extensions:[extension]}],properties:['showOverwriteConfirmation']});
     if(selected.canceled||!selected.filePath)return null;
@@ -885,7 +901,7 @@ function registerIPC() {
     try{const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='asset')return null;
       const sourceToken=url.pathname.split('/')[1],asset=assets.get(sourceToken);
       if(!asset||asset.owner!==event.sender.id||!['image/heic','image/heif'].includes(asset.mime)||(await stat(asset.path)).size>100*1024*1024)return null;
-      const bytes=await scaledPreviewImage(asset.path,1280,960);
+      const bytes=await scaledPreviewAsset(asset,1280,960);
       if(!assets.has(sourceToken)||!roles.has(event.sender.id)||bytes.length>8*1024*1024||displayAssetBytes+bytes.length>64*1024*1024)return null;
       const token=randomUUID();displayAssets.set(token,{owner:event.sender.id,bytes});displayAssetBytes+=bytes.length;return `one-file://display/${token}/preview.png`;
     }catch{return null;}

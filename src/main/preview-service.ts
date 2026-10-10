@@ -6,7 +6,7 @@ import type {PreviewData,FileEntry} from '../shared/types';
 import {textExtensions} from '../shared/preview';
 import type {DirectoryInfo} from '../shared/directory';
 import {isArchivePath} from '../shared/archive-actions';
-import {inspectMotionPhoto,type FileSegment} from './motion-photo';
+import {inspectMotionPhoto,inspectLivp,type FileSegment} from './motion-photo';
 import {isAnimatedPng,previewImageDimensions} from './preview-resource';
 function inspect(path:string,kind:string):Promise<{entries?:FileEntry[];metadata?:Record<string,string>;photoLocation?:import('../shared/photo-metadata').PhotoLocation;cover?:string;lyrics?:import('../shared/preview').LyricLine[];workbook?:import('../shared/workbook').WorkbookData}>{return new Promise((resolve,reject)=>{
   const worker=new Worker(join(__dirname,'preview-worker.cjs'),{workerData:{path,kind},resourceLimits:{maxOldGenerationSizeMb:192}});
@@ -42,6 +42,16 @@ export async function preparePreview(path:string,register:(path:string,mime:stri
     if(info.size>50*1024*1024){data.error='文件超过预览大小上限';return data;}
     try{const result=await inspect(path,'xlsx');Object.assign(data.metadata!,result.metadata);data.type='xlsx';data.url=register(path,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');}
     catch(error){const message=(error as Error).message;data.error=/超过|过大|上限|超时/.test(message)?message:'工作簿无法读取，文件可能已损坏或加密';}
+    return data;
+  }
+  if(ext==='livp'){
+    try{
+      const contents=await inspectLivp(path);
+      data.type='image';data.url=register(path,contents.still.mime,contents.still);
+      data.metadata!['类型']='LIVP 动态照片导出包';
+      if(contents.movie){data.motionPhoto={url:register(path,contents.movie.mime,contents.movie),source:contents.movie.source};data.metadata!['动态照片']=contents.movie.source;}
+      else {data.motionPhotoNotice='导出包中没有可用的动态视频片段';data.metadata!['动态照片']=data.motionPhotoNotice;}
+    }catch(error){data.error=(error as Error).message;}
     return data;
   }
   if(isArchivePath(path)){data.type='archive';data.nativeArchive=true;return data;}

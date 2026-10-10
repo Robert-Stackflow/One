@@ -1,8 +1,10 @@
 import {open,stat,realpath,readdir} from 'node:fs/promises';
 import type {FileHandle} from 'node:fs/promises';
 import {extname,dirname,join} from 'node:path';
+import {open as openZip,type Entry,type ZipFile} from 'yauzl';
 export interface FileSegment {offset:number;length:number}
 export interface MotionPhotoSource extends FileSegment {path:string;mime:'video/mp4'|'video/quicktime';source:string;presentationTime?:number;paired?:boolean}
+export interface LivpContents {still:FileSegment&{mime:'image/jpeg'|'image/heic'|'image/heif'};movie:MotionPhotoSource|null}
 const maxPhoto=100*1024*1024,maxVideo=512*1024*1024;
 const uuid=/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 function appleIdentifier(head:Buffer){
@@ -97,4 +99,52 @@ export async function inspectMotionPhoto(path:string,notice?:(message:string)=>v
    const source={path:candidate,...found,source:matched?'Apple Live Photo（标识匹配）':'同名照片与视频配对',paired:true};if(matched||!photoIdentifier)return source;fallback=source;
   }finally{await paired.close();}}
  if(!fallback&&motionMarked)notice?.(photoIdentifier?'未找到匹配的动态视频，请将照片与视频放在同一目录':'检测到动态照片标记，但未找到可播放的视频片段');return fallback;
+}
+
+/** Locate stored LIVP members by ZIP directory and local headers; return slices without extracting user data. */
+export async function inspectLivp(path:string):Promise<LivpContents>{
+ const size=(await stat(path)).size;
+ if(size<64||size>612*1024*1024)throw Error('LIVP 导出包超过预览上限或已损坏');
+ const zip=await new Promise<ZipFile>((resolve,reject)=>openZip(path,{lazyEntries:true,autoClose:false,validateEntrySizes:true},(error,value)=>error||!value?reject(error||Error('LIVP 无法读取')):resolve(value)));
+ let entries:Entry[];
+ try{entries=await new Promise<Entry[]>((resolve,reject)=>{
+  const selected:Entry[]=[];let seen=0,done=false;
+  const fail=(error:Error)=>{if(!done){done=true;reject(error);}};
+  zip.on('error',fail);
+  zip.on('entry',entry=>{
+   if(++seen>64){fail(Error('LIVP 文件项超过预览上限'));return;}
+   if(/\.(?:jpe?g|heic|heif|mov|mp4)$/i.test(entry.fileName))selected.push(entry);
+   zip.readEntry();
+  });
+  zip.on('end',()=>{if(!done){done=true;resolve(selected);}});
+  zip.readEntry();
+ });}finally{zip.close();}
+ const photos=entries.filter(entry=>/\.(?:jpe?g|heic|heif)$/i.test(entry.fileName));
+ const videos=entries.filter(entry=>/\.(?:mov|mp4)$/i.test(entry.fileName));
+ if(photos.length!==1||videos.length>1)throw Error('LIVP 照片或视频文件项不明确');
+ const file=await open(path,'r');
+ try{
+  const segment=async(entry:Entry,limit:number):Promise<FileSegment>=>{
+   if(entry.compressionMethod!==0||entry.generalPurposeBitFlag&1)throw Error('暂不支持压缩或加密的 LIVP 文件项');
+   if(entry.uncompressedSize<16||entry.uncompressedSize>limit||entry.compressedSize!==entry.uncompressedSize)throw Error('LIVP 文件项超过预览上限或已损坏');
+   const header=await bytes(file,entry.relativeOffsetOfLocalHeader,30);
+   if(header.length!==30||header.readUInt32LE(0)!==0x04034b50)throw Error('LIVP 文件项无效');
+   const offset=entry.relativeOffsetOfLocalHeader+30+header.readUInt16LE(26)+header.readUInt16LE(28);
+   if(offset<30||offset+entry.uncompressedSize>size)throw Error('LIVP 文件项位置无效');
+   return {offset,length:entry.uncompressedSize};
+  };
+  const still=await segment(photos[0],maxPhoto);
+  const photoHeader=await bytes(file,still.offset,Math.min(still.length,1024*1024));
+  const extension=extname(photos[0].fileName).toLowerCase();
+  const jpeg=extension==='.jpg'||extension==='.jpeg';
+  if(jpeg?photoHeader[0]!==0xff||photoHeader[1]!==0xd8:photoHeader.toString('ascii',4,8)!=='ftyp')throw Error('LIVP 照片内容与文件项类型不符');
+  const mime=jpeg?'image/jpeg' as const:extension==='.heic'?'image/heic' as const:'image/heif' as const;
+  if(!videos.length)return {still:{...still,mime},movie:null};
+  const video=await segment(videos[0],maxVideo);
+  const found=await movie(file,video.offset,video.length);
+  if(!found)return {still:{...still,mime},movie:null};
+  const identifier=appleIdentifier(photoHeader);
+  if(identifier&&found.contentIdentifier&&identifier!==found.contentIdentifier)return {still:{...still,mime},movie:null};
+  return {still:{...still,mime},movie:{path,...found,source:'LIVP 导出包'}};
+ }finally{await file.close();}
 }
