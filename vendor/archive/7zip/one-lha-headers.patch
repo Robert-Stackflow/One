@@ -1,0 +1,169 @@
+--- a/CPP/7zip/Archive/LzhHandler.cpp
++++ b/CPP/7zip/Archive/LzhHandler.cpp
+@@ -188,7 +188,7 @@
+     if (index < 0
+         || Extensions[index].Data.Size() < 4)
+     {
+-      if (Level == 2)
++      if (Level >= 2)
+       {
+         value = ModifiedTime;
+         return true;
+@@ -254,6 +254,61 @@
+   for (size_t i = 0; i < size; i++)
+     sum = (Byte)(sum + data[i]);
+   return sum;
++}
++
++// One: level 3 has a bounded full header and 32-bit extension sizes.
++static HRESULT ReadLevel3(ISequentialInStream *stream, const Byte *start,
++    const Byte *basic, CItem &item)
++{
++  if (Get16(start) != 4)
++    return S_FALSE;
++  Byte extra[8];
++  RINOK(ReadStream_FALSE(stream, extra, sizeof(extra)))
++  const UInt32 size = Get32(extra);
++  if (size < 32 || size > (1u << 20))
++    return S_FALSE;
++  CByteBuffer raw;
++  raw.Alloc(size);
++  Byte *data = (Byte *)raw;
++  memcpy(data, start, 2);
++  memcpy(data + 2, basic, kBasicPartSize);
++  memcpy(data + 24, extra, 8);
++  RINOK(ReadStream_FALSE(stream, data + 32, size - 32))
++  item.CRC = Get16(data + 21);
++  item.OsId = data[23];
++  UInt32 offset = 28;
++  bool hasCrc = false;
++  UInt16 headerCrc = 0;
++  for (;;)
++  {
++    if (offset > size - 4)
++      return S_FALSE;
++    const UInt32 length = Get32(data + offset);
++    if (length == 0)
++      break;
++    if (length < 5 || length > size - offset - 4
++        || item.Extensions.Size() >= (1 << 8))
++      return S_FALSE;
++    CExtension ext;
++    ext.Type = data[offset + 4];
++    const UInt32 dataSize = length - 5;
++    ext.Data.Alloc(dataSize);
++    if (dataSize)
++      memcpy((Byte *)ext.Data, data + offset + 5, dataSize);
++    if (ext.Type == 0)
++    {
++      if (hasCrc || dataSize < 2)
++        return S_FALSE;
++      hasCrc = true;
++      headerCrc = Get16(data + offset + 5);
++      data[offset + 5] = data[offset + 6] = 0;
++    }
++    item.Extensions.Add(ext);
++    offset += length;
++  }
++  if (hasCrc && LzhCrc16Update(0, data, size) != headerCrc)
++    return S_FALSE;
++  return S_OK;
+ }
+ 
+ static HRESULT GetNextItem(ISequentialInStream *stream, bool &filled, CItem &item)
+@@ -287,8 +342,14 @@
+   item.Attributes = p[12];
+   item.Level = p[13];
+   p += 14;
+-  if (item.Level > 2)
++  if (item.Level > 3)
+     return S_FALSE;
++  if (item.Level == 3)
++  {
++    RINOK(ReadLevel3(stream, startHeader, header, item))
++    filled = true;
++    return S_OK;
++  }
+   UInt32 headerSize;
+   if (item.Level < 2)
+   {
+@@ -415,13 +476,14 @@
+ };
+ 
+ 
+-Z7_CLASS_IMP_CHandler_IInArchive_0
++Z7_CLASS_IMP_CHandler_IInArchive_1(ISetProperties)
+ 
+   CObjectVector<CItemEx> _items;
+   CMyComPtr<IInStream> _stream;
+   UInt64 _phySize;
+   UInt32 _errorFlags;
+   bool _isArc;
++  UInt32 _codePage;
+ public:
+   CHandler();
+ };
+@@ -429,7 +491,23 @@
+ IMP_IInArchive_Props
+ IMP_IInArchive_ArcProps_NO_Table
+ 
+-CHandler::CHandler() {}
++CHandler::CHandler(): _codePage(0) {}
++
++Z7_COM7F_IMF(CHandler::SetProperties(const wchar_t * const *names,
++    const PROPVARIANT *values, UInt32 numProps))
++{
++  for (UInt32 i = 0; i < numProps; i++)
++  {
++    if (!UString(names[i]).IsEqualTo_Ascii_NoCase("cp") || values[i].vt != VT_UI4)
++      return E_INVALIDARG;
++    const UInt32 cp = values[i].ulVal;
++    if (cp != 0 && cp != 437 && cp != 932 && cp != 936
++        && cp != 949 && cp != 950 && cp != 65001)
++      return E_INVALIDARG;
++    _codePage = cp;
++  }
++  return S_OK;
++}
+ 
+ Z7_COM7F_IMF(CHandler::GetNumberOfItems(UInt32 *numItems))
+ {
+@@ -463,13 +541,37 @@
+   {
+     case kpidPath:
+     {
+-      UString s = NItemName::WinPathToOsPath(MultiByteToUnicodeString(item.GetName(), CP_OEMCP));
++      UInt32 codePage = _codePage;
++      if (codePage == 0)
++      {
++        const int cpIndex = item.FindExt(0x46);
++        if (cpIndex >= 0)
++        {
++          if (item.Extensions[cpIndex].Data.Size() < 4)
++            return E_INVALIDARG;
++          codePage = Get32((const Byte *)item.Extensions[cpIndex].Data);
++          #ifdef _WIN32
++          if (codePage > 1 && !::IsValidCodePage(codePage))
++            return E_INVALIDARG;
++          #endif
++        }
++        if (codePage == 0)
++          codePage = CP_OEMCP;
++      }
++      UString s = NItemName::WinPathToOsPath(MultiByteToUnicodeString(item.GetName(), codePage));
+       if (!s.IsEmpty())
+       {
+         if (s.Back() == WCHAR_PATH_SEPARATOR)
+           s.DeleteBack();
+         prop = s;
+       }
++      break;
++    }
++    case kpidPosixAttrib:
++    {
++      const int modeIndex = item.FindExt(0x50);
++      if (modeIndex >= 0 && item.Extensions[modeIndex].Data.Size() >= 2)
++        prop = (UInt32)Get16((const Byte *)item.Extensions[modeIndex].Data);
+       break;
+     }
+     case kpidIsDir:  prop = item.IsDir(); break;

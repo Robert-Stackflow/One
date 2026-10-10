@@ -2,11 +2,14 @@ One.Archive.exe native archive dependencies
 
 7-Zip 26.04 (7z.dll, x64, altered by One)
 Current source: https://github.com/ip7z/7zip/tree/9128b80e3a471108678e2b3ec3c985861c8d7b0f
-Complete pinned source, hash, patch and rebuild instructions:
+Complete pinned source, hash, patches and rebuild instructions:
 vendor/archive/7zip/SOURCE.json and MODIFICATIONS.txt.
 scripts/build-sevenzip.mjs builds Format7zF with the independent read-password
 codepage property pwcp. One explicitly supplies UTF-8/system/legacy encodings;
-the upstream default remains CP_ACP. Other handlers are unchanged.
+the upstream ZIP password default remains CP_ACP.
+The independent LHA patch adds bounded level-3 headers, header CRC checking,
+declared/explicit filename code pages and Unix link-mode metadata. Both
+patches and corresponding source are included in the source capsule.
 The source capsule and patch are included in third-party/7zip in packaged builds.
 Current binary hashes are retained in verification/archive-zipx-password/latest.json.
 Previous unmodified binary provenance (not the currently bundled DLL):

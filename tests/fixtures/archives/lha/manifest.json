@@ -1,0 +1,88 @@
+{
+  "referenceSource": {
+    "repository": "https://github.com/fragglet/lhasa",
+    "commit": "75ed83559f23e9538e0045c62f53f77ab03d03d6",
+    "sha256": "0a960feecfe5a3ebdcf48636bc36fd564ea3455139f4b795925cbb0864ca0bba"
+  },
+  "writer": "LHA for OS/2 v2.08; lha a -arde, per upstream corpus README",
+  "independentOracle": {
+    "binary": "C:\\Windows\\System32\\tar.exe",
+    "sha256": "4e598a8cec84af779e3377442fce2b94b976f614ed4c6e5a665e19308fd1e379",
+    "version": "bsdtar 3.8.8 - libarchive 3.8.8 zlib/1.2.13.1-motley liblzma/5.8.1 bz2lib/1.0.8 libzstd/1.5.7 cng/2.0 libb2/bundled"
+  },
+  "files": [
+    {
+      "name": "h3_lh0.lzh",
+      "source": "test/archives/lha_os2_208/h3_lh0.lzh",
+      "bytes": 6903,
+      "sha256": "f5460667f6ca09704e6627ce5046932882937bcf040b0564f14fabbf8ad1481f",
+      "expected": [
+        {
+          "name": "GPL-2.gz",
+          "bytes": 6829,
+          "sha256": "5c423e9bdf915d23972369959f5a71bfbcc1d32d09fb8d7198755861d289966e",
+          "modifiedMilliseconds": 1322948122000
+        }
+      ]
+    },
+    {
+      "name": "h3_lh5.lzh",
+      "source": "test/archives/lha_os2_208/h3_lh5.lzh",
+      "bytes": 7075,
+      "sha256": "d980d1ddc47323fc860b0fb7829d72ce26afbe1f3f59f89e52f0eda54f425212",
+      "expected": [
+        {
+          "name": "GPL-2",
+          "bytes": 18092,
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "modifiedMilliseconds": 1322947746000
+        }
+      ]
+    },
+    {
+      "name": "h3_lfn.lzh",
+      "source": "test/archives/lha_os2_208/h3_lfn.lzh",
+      "bytes": 97,
+      "sha256": "3f1901b90037de2e820fbce52f96820cd2750e88bacf54068abc6db580a0bab4",
+      "expected": [
+        {
+          "name": "Long Filename.txt",
+          "bytes": 14,
+          "sha256": "13dd7774cadfb09f8732ec2cc183916c9d0304dc6e7fa6640f6cefefae4cba12",
+          "modifiedMilliseconds": 1322948330000
+        }
+      ]
+    },
+    {
+      "name": "h3_subdir.lzh",
+      "source": "test/archives/lha_os2_208/h3_subdir.lzh",
+      "bytes": 271,
+      "sha256": "201051c47213d0964c596d40f574486dbb683665b2ba2a27a81bae69e3a9b655",
+      "expected": [
+        {
+          "name": "subdir/subdir2/HELLO.TXT",
+          "bytes": 14,
+          "sha256": "13dd7774cadfb09f8732ec2cc183916c9d0304dc6e7fa6640f6cefefae4cba12",
+          "modifiedMilliseconds": 1322948330000
+        }
+      ]
+    }
+  ],
+  "cp932": {
+    "archive": "tests/fixtures/archives/test_read_format_lha_filename_cp932.lzh",
+    "encoding": 932,
+    "sha256": "c94008b2e0202872a61a48db1815fa09cb9f7f93e754d989d2e26d0e20bf699f",
+    "expected": [
+      {
+        "name": "漢字.txt",
+        "bytes": 8,
+        "sha256": "c10ea15c5a50c023e587aa64e25c1dd409adb5e2fad9c446d72288950893612e"
+      },
+      {
+        "name": "表.txt",
+        "bytes": 4,
+        "sha256": "a330395cc0a53ad1207736546afff4735940937564bbf75ce1edad40780d9139"
+      }
+    ]
+  }
+}

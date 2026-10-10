@@ -19,7 +19,7 @@ void zip_preflight(Reader &reader, const std::vector<Entry> &items);
 void zip_test(Reader &reader, const std::vector<Entry> &items, const std::string &password, bool result = true);
 size_t zip_extract(Reader &reader, const std::vector<Entry> &items, const fs::path &destination,
                  const std::set<size_t> &selected, const std::string &password, bool result = true);
-std::vector<Entry> seven_drag_entries(const fs::path &source, const std::string &password, int format);
+std::vector<Entry> seven_drag_entries(const fs::path &source, const std::string &password, int format,int encoding=0);
 void archive_drag(const fs::path &source, const fs::path &stage, int encoding,
                   const std::string &revision, const std::string &password, int format, bool testing, uintptr_t owner = 0,
                   const fs::path &lease = {}, bool folders = false);

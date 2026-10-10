@@ -65,6 +65,7 @@
     "test:archive-authentication": "node tests/archive-authentication.cjs",
     "test:archive-directories": "node tests/archive-directories.cjs",
     "test:archive-publish-access": "node tests/archive-publish-access.cjs",
+    "test:archive-lha": "node tests/archive-lha.cjs",
     "test:archive-zipx-password": "node tests/archive-zipx-password.cjs",
     "test:archive-zipx-password-ui": "node tests/archive-zipx-password-ui.cjs",
     "test:archive-egg-reference": "node tests/archive-egg-reference.cjs",
@@ -186,7 +187,7 @@
     ],
     "extraFiles": [
       {"from":"dist/native/One.Cli.exe","to":"One.Cli.exe"},
-      {"from":"vendor/archive/7zip","to":"third-party/7zip","filter":["7zip-26.04-source.tar.gz","one-password-codepage.patch","SOURCE.json","MODIFICATIONS.txt","License.txt"]},
+      {"from":"vendor/archive/7zip","to":"third-party/7zip","filter":["7zip-26.04-source.tar.gz","one-password-codepage.patch","one-lha-headers.patch","SOURCE.json","MODIFICATIONS.txt","License.txt"]},
       "README.md",
       "docs/**/*",
       "THIRD_PARTY_NOTICES.txt"

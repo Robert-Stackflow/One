@@ -96,8 +96,20 @@
       "source": "test_read_format_lha_header3.lzh.uu",
       "bytes": 548,
       "sha256": "d36f9beaf7d1aa482315e810c8cfca327975ffd31a05082004102327310e419d",
-      "expected": [],
-      "unsupported": true
+      "expected": [
+        {
+          "name": "file1",
+          "bytes": 60,
+          "sha256": "d0c504f06bbd64d183524eb35e5482ee5d966d456b905a24147165b2904d301b"
+        },
+        {
+          "name": "file2",
+          "bytes": 78,
+          "sha256": "60f47caf717b06cf21b3bbb7775e49269a1b5cd6b94bba62da29a2ecb048ccf2"
+        }
+      ],
+      "unsupported": false,
+      "expectedOracle": "Windows bsdtar/libarchive 3.8.8; exact tool hash in lha/manifest.json"
     },
     {
       "name": "test_compat_zstd_1.tar.zst",
@@ -343,16 +355,17 @@
       "sha256": "c94008b2e0202872a61a48db1815fa09cb9f7f93e754d989d2e26d0e20bf699f",
       "expected": [
         {
-          "name": "\u5a0d\u5e24.txt",
+          "name": "漢字.txt",
           "bytes": 8,
           "sha256": "c10ea15c5a50c023e587aa64e25c1dd409adb5e2fad9c446d72288950893612e"
         },
         {
-          "name": "\u661e.txt",
+          "name": "表.txt",
           "bytes": 4,
           "sha256": "a330395cc0a53ad1207736546afff4735940937564bbf75ce1edad40780d9139"
         }
-      ]
+      ],
+      "expectedOracle": "Windows bsdtar/libarchive 3.8.8 with lha:hdrcharset=CP932; exact tool hash in lha/manifest.json"
     }
   ]
 }

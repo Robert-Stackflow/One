@@ -166,7 +166,7 @@ public:
             if(format==0){Reader reader(source,encoding);zip_extract(reader,zip_entries(reader),stage,selected,password,false);}
             else if(format==alz_format)alz_extract(source,stage,selected,password,encoding,false);
             else if(format==egg_format)egg_extract(source,stage,selected,password,encoding,false);
-            else seven_extract(source,stage,selected,password,format,false);
+            else seven_extract(source,stage,selected,password,format,false,{},encoding);
             origin->apply(stage);
             archive_scan(stage);
         }).share();
@@ -377,7 +377,7 @@ void archive_drag(const fs::path &source,const fs::path &stage,int encoding,cons
     const auto folders=has_folders?read_selected_folders():std::vector<std::string>{};
     if(count+folders.size()==0||count+folders.size()>10000)fail("Select 1–10000 entries to drag");
     SourceLock lock(source);lock_archive_source(source);expect_archive_revision(source,revision);
-    auto entries= [&]{if(format==alz_format)return alz_entries(source,encoding);if(format==egg_format)return egg_entries(source,encoding);if(format!=0)return seven_drag_entries(source,password,format);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
+    auto entries= [&]{if(format==alz_format)return alz_entries(source,encoding);if(format==egg_format)return egg_entries(source,encoding);if(format!=0)return seven_drag_entries(source,password,format,encoding);Reader reader(source,encoding);auto items=zip_entries(reader);zip_preflight(reader,items);return items;}();
     auto selection=select(entries,selected,folders);
     for(auto index:selection.indexes)if(!entries[index].directory&&!entries[index].size_known)fail("Unknown-size streams must be extracted before dragging");
     ExtractionRisk risk;for(auto index:selection.indexes){const auto &item=entries[index];risk.add(item.name,item.directory,item.size,item.compressed);}risk.check();

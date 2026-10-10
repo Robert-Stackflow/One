@@ -9,13 +9,13 @@ import {pathToFileURL} from 'node:url';
 const run=promisify(execFile),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 export async function buildSevenzip(installation){
  const root=resolve('.'),vendor=join(root,'vendor/archive/7zip'),metadata=JSON.parse(await readFile(join(vendor,'SOURCE.json'),'utf8'));
- const archive=join(vendor,metadata.archive),patch=join(vendor,metadata.patch),bytes=await readFile(archive);
+ const archive=join(vendor,metadata.archive),patches=(metadata.patches||[metadata.patch]).map(name=>join(vendor,name)),bytes=await readFile(archive);
  if(hash(bytes)!==metadata.sha256)throw Error('7-Zip source archive checksum mismatch');
- const revision=hash(Buffer.concat([bytes,await readFile(patch)])),source=join(root,'work/archive-source','7zip-'+revision.slice(0,16)),stamp=join(source,'.one-source-ready');
+ const revision=hash(Buffer.concat([bytes,...await Promise.all(patches.map(patch=>readFile(patch)))])),source=join(root,'work/archive-source','7zip-'+revision.slice(0,16)),stamp=join(source,'.one-source-ready');
  await mkdir(source,{recursive:true});await mkdir('work/archive-build',{recursive:true});
  if(!existsSync(stamp)){
   await run('tar.exe',['-xzf',archive,'-C',source,'--strip-components=1'],{windowsHide:true,maxBuffer:1024*1024});
-  await run('git',['apply','--whitespace=nowarn','--directory='+relative(root,source).replaceAll('\\','/'),patch],{cwd:root,windowsHide:true,maxBuffer:1024*1024});
+  for(const patch of patches)await run('git',['apply','--whitespace=nowarn','--directory='+relative(root,source).replaceAll('\\','/'),patch],{cwd:root,windowsHide:true,maxBuffer:1024*1024});
   await writeFile(stamp,revision+'\n');
  }
  if(!installation){
@@ -29,6 +29,6 @@ export async function buildSevenzip(installation){
  catch(error){await writeFile(log,(error.stdout||'')+(error.stderr||''));throw Error('7-Zip build failed; '+log+'\n'+((error.stdout||'')+(error.stderr||'')).slice(-3000));}
  const built=join(bundle,'x64/7z.dll'),target=join(vendor,'7z.dll');
  if(!existsSync(target)||hash(await readFile(target))!==hash(await readFile(built)))await copyFile(built,target);
- console.log('7-Zip 26.04 x64 built with explicit ZIP password code page');
+ console.log('7-Zip 26.04 x64 built with ZIP password encoding and LHA level-3/filename encoding');
 }
 if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url)await buildSevenzip();

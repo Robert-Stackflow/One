@@ -33,4 +33,4 @@ public:
     void add(Entry entry);
     void emit_page(size_t total,const std::string &comment,const std::string &revision,bool editable,size_t offset,size_t limit);
 };
-void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query);
+void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query,int encoding=0);

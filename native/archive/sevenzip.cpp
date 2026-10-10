@@ -217,7 +217,7 @@ class OpenArchive final {
         }
     }
 public:
-    OpenArchive(const fs::path &source,const std::string &password,int format):source(source),format(format){try{
+    OpenArchive(const fs::path &source,const std::string &password,int format,int encoding=0):source(source),format(format){try{
         wchar_t exe[32768]{};
         if(!GetModuleFileNameW(nullptr,exe,32768))fail("Cannot find archive helper path");
         const auto dll=fs::path(exe).parent_path()/L"7z.dll";
@@ -241,6 +241,14 @@ public:
                 const wchar_t *key=L"pwcp";PROPVARIANT value{};value.vt=VT_UI4;value.ulVal=zip_password_encoding();
                 const auto configured=properties->SetProperties(&key,&value,1);properties->Release();
                 if(configured!=S_OK)fail("ZIPX engine is incompatible with password encoding; rebuild the archive engine");
+            }
+            if(candidate==6){
+                Properties7 *properties=nullptr;
+                if(archive->QueryInterface(iid(6,3),reinterpret_cast<void**>(&properties))!=S_OK||!properties)
+                    fail("LHA engine does not support filename encoding; rebuild the archive engine");
+                const wchar_t *key=L"cp";PROPVARIANT value{};value.vt=VT_UI4;value.ulVal=(ULONG)encoding;
+                const auto configured=properties->SetProperties(&key,&value,1);properties->Release();
+                if(configured!=S_OK)fail("LHA filename encoding is unsupported");
             }
             const auto opened=archive->Open(input,&scan,callback);if(opened==S_OK){
                 openedFormat=candidate;
@@ -408,8 +416,8 @@ std::vector<U32> selected_indices(const std::vector<Item> &items,const std::set<
 }
 }
 
-void seven_list(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format){
-    OpenArchive reader(source,password,format);
+void seven_list(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,int encoding){
+    OpenArchive reader(source,password,format,encoding);
     const auto revision=zip_revision(source);
     U32 total=reader.count();
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
@@ -423,8 +431,8 @@ void seven_list(const fs::path &source,size_t offset,size_t limit,const std::str
     if(zip_revision(source)!=revision)fail("Archive changed during listing; reopen it");
 }
 
-void seven_details(const fs::path &source,size_t index,const std::string &password,int format){
-    OpenArchive reader(source,password,format);if(index>=reader.count())fail("Entry index is out of range");
+void seven_details(const fs::path &source,size_t index,const std::string &password,int format,int encoding){
+    OpenArchive reader(source,password,format,encoding);if(index>=reader.count())fail("Entry index is out of range");
     const auto item=reader.item((U32)index);
     auto packed=reader.property((U32)index,packed_prop);const bool known=packed.vt==VT_UI8||packed.vt==VT_UI4;PropVariantClear(&packed);
     // Property ids follow 7-Zip's PropID.h: MTime=12, Solid=13, CRC=19, Method=22.
@@ -449,23 +457,23 @@ void seven_details(const fs::path &source,size_t index,const std::string &passwo
     emit_details({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted,item.size_known},known,modified,crc,method,shared);
 }
 
-void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query){
-    OpenArchive reader(source,password,format);const auto revision=zip_revision(source);BrowseRows rows(query);
+void seven_browse(const fs::path &source,size_t offset,size_t limit,const std::string &password,int format,const BrowseQuery &query,int encoding){
+    OpenArchive reader(source,password,format,encoding);const auto revision=zip_revision(source);BrowseRows rows(query);
     const auto total=reader.count();for(U32 i=0;i<total;i++){const auto item=reader.item(i);rows.add({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted,item.size_known});}
     auto extension=source.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),[](wchar_t c){return std::towlower(c);});
     rows.emit_page(total,reader.comment(),revision,format==7&&(extension==L".7z"||extension==L".001"),offset,limit);
     if(zip_revision(source)!=revision)fail("Archive changed during browsing; reopen it");
 }
 
-std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &password,int format){
-    OpenArchive reader(source,password,format);auto items=reader.items();preflight(reader,items);
+std::vector<Entry> seven_drag_entries(const fs::path &source,const std::string &password,int format,int encoding){
+    OpenArchive reader(source,password,format,encoding);auto items=reader.items();preflight(reader,items);
     std::vector<Entry> result;result.reserve(items.size());
     for(const auto &item:items)result.push_back({item.index,item.name,item.directory,item.size,item.compressed,item.encrypted,item.size_known});
     return result;
 }
 
-void seven_test(const fs::path &source,const std::string &password,int format,bool result){
-    OpenArchive reader(source,password,format);auto items=reader.items();
+void seven_test(const fs::path &source,const std::string &password,int format,bool result,int encoding){
+    OpenArchive reader(source,password,format,encoding);auto items=reader.items();
     if(format==3)reader.comment(); // Include CMT integrity, which the RAR4 handler omits.
     auto callback=new ExtractRequest(items,{},password,(U32)items.size(),true);
     HRESULT code=reader.get()->Extract(nullptr,U32(-1),1,callback);
@@ -474,8 +482,8 @@ void seven_test(const fs::path &source,const std::string &password,int format,bo
 }
 
 size_t seven_extract(const fs::path &source,const fs::path &destination,
-                   const std::set<size_t> &selected,const std::string &password,int format,bool result,const std::vector<std::string> &folders){
-    OpenArchive reader(source,password,format);auto items=reader.items();
+                   const std::set<size_t> &selected,const std::string &password,int format,bool result,const std::vector<std::string> &folders,int encoding){
+    OpenArchive reader(source,password,format,encoding);auto items=reader.items();
     auto effective=selected;expand_folders(items,effective,folders);
     if(!effective.empty()&&*effective.rbegin()>=items.size())fail("Selected entry index is out of range");
     preflight(reader,items);

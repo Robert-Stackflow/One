@@ -45,6 +45,12 @@ async function main(){
    if(name==='payload.txt.bz2'){assert.equal(listed.records.find(record=>record.type==='entry').sizeKnown,false);assert((await run(['list',source])).out.includes('\tUNKNOWN\t'));}
    await run(['test','--json',source]);const output=path.join(root,name+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--output',output,'--destination','here',source]);assert((await fs.readdir(output)).length>0);
   }
+  const lha=JSON.parse(await fs.readFile('tests/fixtures/archives/lha/manifest.json','utf8'));
+  for(const fixture of [lha.files.find(file=>file.name==='h3_subdir.lzh'),{...lha.cp932,name:'cp932.lzh',file:lha.cp932.archive}]){
+   const source=path.resolve(fixture.file||path.join('tests/fixtures/archives/lha',fixture.name)),options=fixture.encoding?['--encoding',String(fixture.encoding)]:[],listed=await run(['list','--json',...options,source]);
+   assert.deepEqual(listed.records.filter(record=>record.type==='entry'&&!record.directory).map(record=>record.name.replace(/\\/g,'/')).sort(),fixture.expected.map(entry=>entry.name).sort());await run(['test','--json',...options,source]);
+   const output=path.join(root,fixture.name+'.cli-output');await fs.mkdir(output);await run(['extract','--json',...options,'--output',output,'--destination','here',source]);for(const entry of fixture.expected){const data=await fs.readFile(path.join(output,entry.name));assert.equal(data.length,entry.bytes);assert.equal(require('node:crypto').createHash('sha256').update(data).digest('hex'),entry.sha256);}
+  }
   for(const [name,encoding,password] of [['methods.alz','949',''],['korean-password.alz','949','비밀'],['utf8.alz','65001','']]){
    const source=path.resolve('tests/fixtures/archives/alz',name),options=['--encoding',encoding,...(password?['--password-stdin']:[])];
    const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));

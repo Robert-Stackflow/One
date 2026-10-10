@@ -2,7 +2,8 @@ One changes to 7-Zip 26.04, 2026-10-10
 
 This is an altered build, based on the exact source and commit in SOURCE.json.
 The complete upstream source is provided in 7zip-26.04-source.tar.gz; the
-corresponding One changes are provided in one-password-codepage.patch.
+corresponding One changes are provided in one-password-codepage.patch and
+one-lha-headers.patch, applied in the order recorded in SOURCE.json.
 Original copyright and licenses are retained in License.txt and DOC/ in the
 source archive (GNU LGPL, unRAR restriction and the other stated licenses).
 
@@ -15,10 +16,22 @@ No Unicode-to-ACP roundtrip trick, lossy substitution or process-wide locale
 change is used. RAR/7Z and other handlers retain their original password logic.
 ZIP output handling is unchanged; One's ZIP writer uses minizip-ng.
 
+The LHA handler reads level-3 headers with 32-bit extension sizes. Each full
+header is limited to 1 MiB and 256 extensions; lengths and a present common
+header CRC are validated before exposing entries. Level-3 modification times
+are Unix times. Unix permissions extensions are exposed as PosixAttrib so
+One's extraction and drag preflight can reject symbolic links.
+The LHA ISetProperties "cp" property selects filename encoding independently
+of ZIP password encoding. Values: 0 (use a declared 0x46 code page, otherwise
+OEM default), 437, 932, 936, 949, 950, 65001. An explicit setting overrides
+the header. Invalid declared Windows code pages are refused in auto mode.
+Other LHA codecs, level-0/1/2 binary header reading and output handling
+remain upstream; no LHA writer is added.
+
 Rebuild: node scripts/build-sevenzip.mjs
 Requires the repository's existing Visual Studio C++ x64 toolchain, Windows
 tar and Git. The script verifies the pinned archive hash, extracts into work,
-applies the patch and builds Format7zF with nmake PLATFORM=x64 MP_NPROC=8.
+applies both patches and builds Format7zF with nmake PLATFORM=x64 MP_NPROC=8.
 node scripts/build-archive.mjs includes this step and copies the DLL to dist.
 Applications dynamically load this replaceable DLL from the helper directory.
 
@@ -26,6 +39,7 @@ Standalone rebuild of the provided corresponding source:
   tar -xzf 7zip-26.04-source.tar.gz --strip-components=1 -C <empty-source-dir>
   cd <empty-source-dir>
   git apply <path-to-one-password-codepage.patch>
+  git apply <path-to-one-lha-headers.patch>
   call <Visual-Studio>/VC/Auxiliary/Build/vcvars64.bat
   cd CPP/7zip/Bundles/Format7zF
   nmake PLATFORM=x64 MP_NPROC=8

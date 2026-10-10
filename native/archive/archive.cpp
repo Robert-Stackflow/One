@@ -572,7 +572,7 @@ int wmain(int argc, wchar_t **argv) {
             if(format==0){Reader reader(argv[2],_wtoi(argv[4]));details(reader,index);}
             else if(format==alz_format)alz_details(argv[2],index,_wtoi(argv[4]));
                 else if(format==egg_format)egg_details(argv[2],index,_wtoi(argv[4]));
-            else seven_details(argv[2],index,password,format);
+            else seven_details(argv[2],index,password,format,_wtoi(argv[4]));
             if(zip_revision(argv[2])!=revision)fail("Archive changed during reading; reopen it");
         } else if (mode == L"list" || mode == L"browse" || mode == L"extract" || mode == L"test") {
             int encoding = 0;
@@ -598,7 +598,7 @@ int wmain(int argc, wchar_t **argv) {
                 if(format==0){Reader reader(argv[2],encoding);const auto revision=zip_revision(argv[2]);BrowseRows rows(query);const auto total=visit_zip_entries(reader,[&](Entry entry){rows.add(std::move(entry));});const char *comment=nullptr;mz_zip_reader_get_comment(reader.value,&comment);void *handle=nullptr;mz_zip_reader_get_zip_handle(reader.value,&handle);uint32_t disk=0;if(mz_zip_get_disk_number_with_cd(handle,&disk)!=MZ_OK)fail("Cannot read ZIP volumes");rows.emit_page(total,zip_comment(reader,comment),revision,true,offset,limit);if(zip_revision(argv[2])!=revision)fail("ZIP changed during browsing; reopen it");}
                 else if(format==alz_format)alz_list(argv[2],offset,limit,encoding,&query);
                 else if(format==egg_format)egg_list(argv[2],offset,limit,encoding,&query);
-                else seven_browse(argv[2],offset,limit,password,format,query);
+                else seven_browse(argv[2],offset,limit,password,format,query,encoding);
             } else if (mode == L"list") {
                 size_t offset = std::stoull(argv[3]), limit = std::min<size_t>(500, std::stoull(argv[4]));
                 if (format == 0) {
@@ -607,12 +607,12 @@ int wmain(int argc, wchar_t **argv) {
                 }
                 else if(format==alz_format)alz_list(argv[2],offset,limit,encoding);
                 else if(format==egg_format)egg_list(argv[2],offset,limit,encoding);
-                else seven_list(argv[2], offset, limit, password, format);
+                else seven_list(argv[2], offset, limit, password, format,encoding);
             } else if (mode == L"test") {
                 if (format == 0) { Reader reader(argv[2], encoding); zip_test(reader, zip_entries(reader), password); }
                 else if(format==alz_format)alz_test(argv[2],password,encoding);
                 else if(format==egg_format)egg_test(argv[2],password,encoding);
-                else seven_test(argv[2], password, format);
+                else seven_test(argv[2], password, format,true,encoding);
             } else {
                 std::set<size_t> selected;
                 std::wstring text = argv[4], part;
@@ -630,7 +630,7 @@ int wmain(int argc, wchar_t **argv) {
                     extracted=zip_extract(reader, items, argv[3], selected, password,false);
                 } else if(format==alz_format)extracted=alz_extract(argv[2],argv[3],selected,password,encoding,false,folders);
                 else if(format==egg_format)extracted=egg_extract(argv[2],argv[3],selected,password,encoding,false,folders);
-                else extracted=seven_extract(argv[2], argv[3], selected, password, format,false,folders);
+                else extracted=seven_extract(argv[2], argv[3], selected, password, format,false,folders,encoding);
                 if(!expected_revision.empty()&&zip_revision(argv[2])!=expected_revision)fail("Archive changed during extraction; reopen it");
                 origin.apply(argv[3]);
                 archive_scan(argv[3]);
