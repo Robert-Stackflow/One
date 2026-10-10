@@ -7,7 +7,9 @@ const {snapshot}=require('./app-memory-benchmark.cjs');
 
 async function main(){
  const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/workbook-dense');
- const format=process.env.ONE_WORKBOOK_FORMAT==='ods'?'ods':'xlsx',file=path.join(output,`dense.${format}`);assert.ok((await fs.stat(file)).isFile(),'Run workbook-dense-performance.cjs first');
+ const format=process.env.ONE_WORKBOOK_FORMAT==='ods'?'ods':'xlsm',file=path.join(output,`dense.${format}`);/* XLSX uses native-preview.cjs; grid benchmarks cover XLSM/ODS. */
+ if(format==='xlsm')await fs.copyFile(path.join(output,'dense.xlsx'),file);
+ assert.ok((await fs.stat(file)).isFile(),'Run workbook-dense-performance.cjs first');
  const profile=await fs.mkdtemp(path.join(output,'preview-profile-'));
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.ONE_PACKAGED_EXE?{executablePath:path.resolve(process.env.ONE_PACKAGED_EXE),args:[],env}:{args:[path.resolve('.')],env});

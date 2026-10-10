@@ -59,11 +59,12 @@ ZIP/7Z 外部编辑针对单个普通文件，大小不超过 256 MiB。RAR 及�
 
 - [x] 将 SQLite/SQLCipher 数据库预览整体迁入 [Roadmap](Roadmap.md#快速预览-sqlite-与-sqlcipher-数据库)，暂停当前实施。
 - [x] 调研现有预览格式，重点核验 XLSX、DOCX 和 PPT/PPTX；已完成源码巡检与自有样本复现，结论见 [预览格式支持与体验调研](../research/预览格式支持与体验调研.md)。
-- [ ] 优先接入 XLSX 原生展示，不继续扩展自绘表格；按 Windows Excel/WPS 预览处理器方案核验组件发现、嵌入、位数兼容、取消/释放和失败提示。缺组件时保留默认程序打开，不静默退回自绘表格。
+- [x] XLSX 已改走 Windows 原生预览，停止自绘表格；接入 64/32 位宿主、只读初始化、区域/DPI、菜单避让、取消/超时/退出、关闭释放、缺组件提示和重试/默认打开。详见 [原生表格预览](features/原生表格预览.md)。
+- [ ] 在具有真实 Excel/WPS 预览组件的环境验收日常 XLSX：合并表头、样式/金额/日期、中文字体、图表、工作表切换、密码文件、组件焦点及多显示器 DPI。本机组件缺失，测试宿主通过不代表真实 Office 保真通过。
 - [ ] 随后改善 DOCX 分页/字体和 PPTX 组合内容遗漏、布局继承；以日常样本确认范围，尚未开始实现。
 - [ ] Office 体验稳定后按日常需求评估 CSV 大文件表格、EPUB 导航等短板；不扩大为全部格式变体实现。
 
-2026-10-10：本轮为调研阶段，XLSX 5 个格式语义问题已复现；DOCX 长文呈单张超长纸页，PPTX 组合形状内容遗漏已在 Electron 核验。当前机器 Office 预览关联存在，但对应 COM 类在 32/64 位视图均未注册；原生展示尚未接入，也未安装或修复 Office。证据见 verification/preview-research/latest.json。
+2026-10-10：调研已复现 XLSX 格式错误、DOCX 超长纸页和 PPTX 组合内容遗漏。XLSX 原生接入已实现，宿主 36 项及正式宿主缺组件 6 项检查通过；XLSM/ODS 等原有预览回归通过。真实 Office 组件缺失，未安装或修复。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
 
 ## 深浅色模式自动切换
 

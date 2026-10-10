@@ -7,8 +7,8 @@ const {_electron:electron,expect}=require('@playwright/test');
 
 async function main(){
  const output=path.resolve('work/current/workbook-dense');
- const ods=path.join(output,'dense.ods'),xlsx=path.join(output,'dense.xlsx');
- await fs.stat(ods);await fs.stat(xlsx);
+ const ods=path.join(output,'dense.ods'),xlsx=path.join(output,'dense.xlsm');
+ await fs.stat(ods);await fs.copyFile(path.join(output,'dense.xlsx'),xlsx);
  const profile=await fs.mkdtemp(path.join(os.tmpdir(),'one-workbook-release-'));
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch(process.env.ONE_PACKAGED_EXE?{executablePath:path.resolve(process.env.ONE_PACKAGED_EXE),args:[],env}:{args:[path.resolve('.')],env});
@@ -27,7 +27,7 @@ async function main(){
   const reloadMs=performance.now()-reloadAt;
   await expect(preview.locator('#sheet-count')).toContainText('15,000 行');
   const switchAt=performance.now();await preview.evaluate(file=>window.one.selectPreview(file),xlsx);
-  await expect(preview.locator('#preview-name')).toHaveText('dense.xlsx');
+  await expect(preview.locator('#preview-name')).toHaveText('dense.xlsm');
   await expect(preview.locator('.sheet-table tbody tr')).toHaveCount(100,{timeout:30000});
   const switchMs=performance.now()-switchAt;
   const current=await preview.evaluate(()=>window.one.previewData());

@@ -36,6 +36,7 @@
 - [原生文件索引模块](development/原生文件索引.md)
 - [压缩与解压实现与验收设计](development/压缩与解压实现计划.md)
 - [条码识别设计与验收](development/features/条码识别.md)
+- [原生表格预览](development/features/原生表格预览.md)
 
 ## 调研与历史
 

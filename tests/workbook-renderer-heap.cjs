@@ -7,7 +7,9 @@ const {snapshot}=require('./app-memory-benchmark.cjs');
 
 async function main(){
  const output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/workbook-dense');
- const format=process.env.ONE_WORKBOOK_FORMAT==='xlsx'?'xlsx':'ods',file=path.join(output,`dense.${format}`);
+ const format=['xlsx','xlsm'].includes(process.env.ONE_WORKBOOK_FORMAT)?'xlsm':'ods',file=path.join(output,`dense.${format}`);
+ /* XLSX uses native-preview.cjs; grid benchmarks cover XLSM/ODS. */
+ if(format==='xlsm')await fs.copyFile(path.join(output,'dense.xlsx'),file);
  assert.ok((await fs.stat(file)).isFile());
  const profile=await fs.mkdtemp(path.join(os.tmpdir(),'one-workbook-heap-'));
  const plain=path.join(profile,'baseline.txt');await fs.writeFile(plain,'A small preview');

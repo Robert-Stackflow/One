@@ -233,3 +233,5 @@
 .preview-window #preview-path{font-size:12px;line-height:1.7;margin:8px 0 0}
 .preview-more-popover{width:184px}
 @media(max-width:800px){.font-reader #font-sample{padding:20px}.font-reader .font-alphabet{padding:20px}}
+
+.native-office-preview{position:relative;overflow:hidden;padding:0!important}.native-preview-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.native-office-preview .preview-error-detail{max-width:540px;line-height:1.7}

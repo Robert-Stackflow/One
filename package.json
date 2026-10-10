@@ -12,6 +12,7 @@
     "build": "node scripts/build.mjs",
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit",
+    "test:native-preview": "node tests/native-preview.cjs",
     "check:docs": "node scripts/check-docs.mjs",
     "test": "node scripts/test.mjs",
     "test:ui": "npm run build && node tests/electron-smoke.cjs",
@@ -198,6 +199,8 @@
       "dist/native/One.Monitor.exe",
       "dist/native/One.Levels.exe",
       "dist/native/One.Display.exe",
+      "dist/native/One.Preview.exe",
+      "dist/native/One.Preview32.exe",
       "dist/native/One.Archive.exe",
       "dist/native/One.ArchiveBudget.dll",
       "dist/native/7z.dll"

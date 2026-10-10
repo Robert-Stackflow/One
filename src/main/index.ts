@@ -77,6 +77,9 @@ import {ColorEditor} from './color-editor';
 import {fileResponse} from './file-response';
 import type {ScreenCapture} from '../shared/types';
 import {preparePreview as loadPreview,reloadWorkbook} from './preview-service';
+import {NativePreviewService} from './native-preview';
+import {nativePreviewBounds} from '../shared/native-preview';
+const nativeOfficePreview=new NativePreviewService(process.env.ONE_TEST_MODE==='1'&&process.env.ONE_TEST_NATIVE_PREVIEW_HOST?()=>[process.env.ONE_TEST_NATIVE_PREVIEW_HOST!]:undefined);
 import {previewImageDimensions,previewResourcePath} from './preview-resource';
 import {externalURL,linkCard} from './link-card';
 import {DirectoryService} from './directory-service';
@@ -256,8 +259,9 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('unresponsive',()=>runtimeWarning(app.getPath('userData'),`renderer-unresponsive:${view}`));
   window.webContents.on('responsive',()=>runtimeLog(app.getPath('userData'),`renderer-responsive:${view}`));
   window.webContents.on('will-navigate', event => event.preventDefault());
-  window.on('close',()=>{if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);if(view==='preview')archiveService?.cancelOwner(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  if(view==='preview'){window.webContents.on('did-start-loading',()=>nativeOfficePreview.stop(windowId));window.webContents.on('render-process-gone',()=>nativeOfficePreview.stop(windowId));}
+  window.on('close',()=>{if(view==='preview')nativeOfficePreview.stop(windowId);if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
+  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -370,8 +374,9 @@ async function runMaintenance(mode: 'startup' | 'registry') {
   const rows=JSON.parse(result.stdout.trim() || '[]');return [...await nativeMaintenance('startup'),...rows];
 }
 async function preparePreview(path: string, owner: number): Promise<PreviewData> {
+  nativeOfficePreview.stop(owner);
   releasePreviewAssets(owner);
-  const held:string[]=[];try{const next=await loadPreview(path,(path,mime)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){for(const id of held)directories.release(owner,id);throw error;}
+  const held:string[]=[];try{const next=await loadPreview(path,(path,mime)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){for(const id of held)directories.release(owner,id);throw error;}
 }
 function foregroundPreview(window:BrowserWindow){
  if(window.isDestroyed())return;if(window.isMinimized())window.restore();
@@ -848,6 +853,9 @@ function registerIPC() {
     catch(error){if(previews.get(event.sender.id)!==data)throw error;return {...data,type:'unsupported',error:(error as Error).message};}
     finally{if(workbookReloads.get(data)===pending)workbookReloads.delete(data);}
   },['preview']);
+  handle('native-preview-start',(event,token,value)=>{const owner=event.sender.id,data=previews.get(owner),window=BrowserWindow.fromWebContents(event.sender);if(!window||data?.type!=='native-office'||typeof token!=='string'||token!==data.nativeOfficeToken)throw Error('预览文件已切换');return nativeOfficePreview.start(owner,token,window,data.path,nativePreviewBounds(value),state=>{if(!event.sender.isDestroyed()&&previews.get(owner)?.nativeOfficeToken===token)event.sender.send('one:native-preview-state',state);},()=>{if(!window.isDestroyed()&&previews.get(owner)?.nativeOfficeToken===token)window.close();});},['preview']);
+  handle('native-preview-bounds',(event,token,value)=>{const window=BrowserWindow.fromWebContents(event.sender);if(window&&typeof token==='string')nativeOfficePreview.resize(event.sender.id,token,nativePreviewBounds(value),window);},['preview']);
+  handle('native-preview-stop',(event,token)=>{if(typeof token!=='string')throw Error('预览会话无效');nativeOfficePreview.stop(event.sender.id,token);},['preview']);
   handle('preview-workbook-ready',(event,token)=>{const data=previews.get(event.sender.id);if(data?.type==='workbook'&&typeof token==='string'&&token===data.workbookToken)delete data.workbook;},['preview']);
   handle('navigate-preview', (event, step) => {
     if (step !== -1 && step !== 1) throw new Error('方向无效'); const id = event.sender.id;
@@ -966,5 +974,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;nativeOfficePreview.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });
