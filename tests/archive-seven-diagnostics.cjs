@@ -144,7 +144,14 @@ async function main() {
           const wrong = invoke(encryption === 'header' ? 'list' : 'test', source, 'wrong-password');
           assert.equal(wrong.status, 2);
           assert.doesNotMatch(wrong.error.message, /incomplete|Cannot read 7Z volume/i);
-          if (encryption === 'header') assert.equal(invoke('list', source).error.code, 'password');
+          if (encryption === 'header') {
+            assert.equal(invoke('list', source).error.code, 'password');
+            if (!baseline) {
+              await assert.rejects(service.run(1, {operation: 'list', path: source}), /此压缩包需要密码.*密码与编码/);
+              await assert.rejects(service.run(1, {operation: 'list', path: source, password: 'wrong-password'}),
+                /无法打开压缩包.*文件格式.*分卷.*密码/);
+            }
+          }
         }
       }
       const corrupt = Buffer.from(intact); corrupt[12] ^= 0x80;
@@ -156,6 +163,12 @@ async function main() {
       assert.equal(invoke('test', target, password).status, 0);
       records.push({encryption, name: 'valid-hashes-password-and-header-controls', hashes: 2});
     }
+    const encryptedZip = path.join(root, 'encrypted.zip');
+    assert.equal(external(['a', '-tzip', '-mem=AES256', '-pdiagnostics-password', '-bso0', '-bsp0', encryptedZip, 'payload.bin']).status, 0);
+    assert.equal(invoke('test', encryptedZip).error.code, 'password');
+    assert.equal(invoke('test', encryptedZip, 'diagnostics-password').status, 0);
+    if (!baseline) await assert.rejects(service.run(1, {operation: 'test', path: encryptedZip}), /此压缩包需要密码.*密码与编码/);
+    records.push({name: 'zip-password-required-control'});
     // Empty archives and trailing bytes are legal; neither implies a missing volume.
     const empty = path.join(root, 'empty.7z');
     await fs.mkdir(path.join(root, 'empty-input'));
