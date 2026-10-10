@@ -159,6 +159,9 @@ export interface OneAPI {
   imageConvertStart(paths:string[],directory:string,options:import('./image-convert').ImageConvertOptions):Promise<import('./image-convert').ImageConvertSummary>;
   imageConvertCancel():Promise<boolean>;
   onImageConvertProgress(callback:(progress:import('./image-convert').ImageConvertProgress)=>void):()=>void;
+  imageMetadataStart(paths:string[],directory:string,options:import('./image-metadata').ImageMetadataOptions):Promise<import('./image-metadata').ImageMetadataSummary>;
+  imageMetadataCancel():Promise<boolean>;
+  onImageMetadataProgress(callback:(progress:import('./image-metadata').ImageMetadataProgress)=>void):()=>void;
   imageCropPreview(path:string):Promise<import('./image-convert').ImageCropPreview>;
   imageColorPreview(path:string):Promise<import('./image-color').ImageColorPreview>;
   imageColorSample(path:string,x:number,y:number):Promise<import('./image-color').ImagePixelSample>;
