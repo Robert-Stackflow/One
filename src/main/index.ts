@@ -936,7 +936,12 @@ async function start() {
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); return net.fetch(pathToFileURL(path).toString()); });
   protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request,'segment' in asset?asset.segment:undefined); });
-  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false)); session.defaultSession.setPermissionCheckHandler(() => false);
+  const canFullscreen=(contents:Electron.WebContents|null,permission:string,details:{isMainFrame:boolean;requestingUrl?:string})=>{
+    if(permission!=='fullscreen'||!contents||contents.isDestroyed()||roles.get(contents.id)!=='preview'||!details.isMainFrame)return false;
+    return contents.getURL()==='one://app/index.html?view=preview'&&details.requestingUrl===contents.getURL();
+  };
+  session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>callback(canFullscreen(contents,permission,details)));
+  session.defaultSession.setPermissionCheckHandler((contents,permission,_origin,details)=>canFullscreen(contents,permission,details));
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*','https://*/*'] }, (_details, callback) => callback({ cancel: true }));
   diskService=new DiskService(p=>{if(main&&!main.isDestroyed())main.webContents.send('one:progress',p);});maintenance=new MaintenanceClient(join(app.getPath('userData'),'maintenance-backups'),value=>{if(main&&!main.isDestroyed())main.webContents.send('one:maintenance-progress',value);});
   systemInformation=new SystemInformationService(value=>{if(main&&!main.isDestroyed())main.webContents.send('one:system-information-progress',value);},value=>{if(main&&!main.isDestroyed())main.webContents.send('one:system-information-group',value);});

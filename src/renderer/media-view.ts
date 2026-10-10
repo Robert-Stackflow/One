@@ -25,8 +25,18 @@ export function renderMedia(host:HTMLElement,data:PreviewData,metadata:(values:R
   on(volume,'input',()=>{media.volume=Number(volume.value)/100;media.muted=false;fill(volume);get('media-mute').innerHTML=icon(media.volume?'volume':'volume-off');});
   on(get('media-play'),'click',toggle);on(get('media-mute'),'click',()=>{media.muted=!media.muted;get('media-mute').innerHTML=icon(media.muted?'volume-off':'volume');get('media-mute').setAttribute('aria-label',media.muted?'取消静音':'静音');});
   on(get('media-back'),'click',()=>{media.currentTime=Math.max(0,media.currentTime-10);});on(get('media-forward'),'click',()=>{if(Number.isFinite(media.duration))media.currentTime=Math.min(media.duration,media.currentTime+10);});
-  if(!audio)on(get('media-fullscreen'),'click',()=>{if(document.fullscreenElement)void document.exitFullscreen();else void host.requestFullscreen().catch(toast);});
+  if(!audio){
+    const button=get('media-fullscreen');
+    const fullscreenState=()=>{const active=document.fullscreenElement===host;button.setAttribute('aria-label',active?'退出全屏':'全屏');button.title=active?'退出全屏':'全屏';button.setAttribute('aria-pressed',String(active));};
+    on(document,'fullscreenchange',fullscreenState);fullscreenState();
+    on(button,'click',()=>{void (async()=>{
+      try{
+        if(document.fullscreenElement===host)await document.exitFullscreen();
+        else {await host.requestFullscreen();if(disposed&&document.fullscreenElement===host)await document.exitFullscreen();}
+      }catch(error){if(!disposed)toast(error);}
+    })();});
+  }
   fill(volume);update();void media.play().catch(()=>{if(!disposed)state();});
-  const dispose=()=>{if(disposed)return;disposed=true;events.abort();media.pause();media.removeAttribute('src');media.load();};
+  const dispose=()=>{if(disposed)return;disposed=true;events.abort();if(document.fullscreenElement===host)void document.exitFullscreen().catch(()=>{});media.pause();media.removeAttribute('src');media.load();};
   return {media,toggle,dispose};
 }
