@@ -17,6 +17,7 @@
 - [桌面工具与搜索](user-guide/桌面工具与搜索.md)
 - [压缩与解压](user-guide/压缩与解压.md)
 - [文本处理](user-guide/文本处理.md)
+- [条码识别](user-guide/条码识别.md)
 - [预览与外观](user-guide/预览与外观.md)
 - [系统信息与磁盘告警](user-guide/系统信息与磁盘告警.md)
 
@@ -34,6 +35,7 @@
 - [优化与测量](development/优化进度.md)
 - [原生文件索引模块](development/原生文件索引.md)
 - [压缩与解压实现与验收设计](development/压缩与解压实现计划.md)
+- [条码识别设计与验收](development/features/条码识别.md)
 
 ## 调研与历史
 

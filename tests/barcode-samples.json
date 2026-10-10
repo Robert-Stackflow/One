@@ -1,0 +1,296 @@
+{
+  "repository": "https://github.com/zxing-cpp/zxing-cpp",
+  "commit": "2c3dcfeffa7878950a58c1703c86774a428b0c91",
+  "license": "Apache-2.0",
+  "samples": [
+    {
+      "family": "qrcode-1",
+      "image": "qrcode-1.png",
+      "expected": "qrcode-1.txt",
+      "files": {
+        "qrcode-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/qrcode-1/9.png",
+          "gitBlob": "ebf66bf11a172e1973f5279a37571c46f3f46e4d",
+          "sha256": "a39f4a8d7e236b4f4ddd5d975b75afeaf8287e1300dea8c46af7b7c0db4f2c5e"
+        },
+        "qrcode-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/qrcode-1/9.txt",
+          "gitBlob": "292aea1d24ee6929283a6ba7badf1f35735de6e2",
+          "sha256": "2bbfde08fcd758e12995f1b57b5ba1e66181fcc081e26c0753643b0d52d7f31b"
+        }
+      }
+    },
+    {
+      "family": "microqrcode-1",
+      "image": "microqrcode-1.png",
+      "expected": "microqrcode-1.txt",
+      "files": {
+        "microqrcode-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/microqrcode-1/NoQuietZone.png",
+          "gitBlob": "f7a917df87544f92e8df693a4db88545e5f77839",
+          "sha256": "b143efff26e50d1b04b4cd1240d82610247697a4121159fad388362dddd1fc1d"
+        },
+        "microqrcode-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/microqrcode-1/NoQuietZone.txt",
+          "gitBlob": "bd41cba781d8349272bf3eb92568285b411c027c",
+          "sha256": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5"
+        }
+      }
+    },
+    {
+      "family": "datamatrix-1",
+      "image": "datamatrix-1.png",
+      "expected": "datamatrix-1.txt",
+      "files": {
+        "datamatrix-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/datamatrix-1/eci.png",
+          "gitBlob": "4fcf222e34ad10b9335e3540de9154583199e1b7",
+          "sha256": "baded4c211e16d6139dbb8a0f85e84890d2195a9a24fb47561faec8c19fbd048"
+        },
+        "datamatrix-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/datamatrix-1/eci.txt",
+          "gitBlob": "63ad644c33f3c93b3aaf5048aee01c0aab9cf54a",
+          "sha256": "4086af42440314bf104b23b356fdad36046d8bbf7994fef464c5aad3210c9cd1"
+        }
+      }
+    },
+    {
+      "family": "aztec-1",
+      "image": "aztec-1.webp",
+      "expected": "aztec-1.txt",
+      "files": {
+        "aztec-1.webp": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/aztec-1/%23128.webp",
+          "gitBlob": "bd51cbae613f96e0d153507e914f2ae690c77480",
+          "sha256": "5a63bfceb198b5b49534b88aaf622075d59066638db87cae6f2ad88417741217"
+        },
+        "aztec-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/aztec-1/%23128.txt",
+          "gitBlob": "1a70089a636435c349443d2bb73ed8e804f6583c",
+          "sha256": "f9a6acbcf577466ccb7291b471e30d2bcd978913b601a2794171279804071167"
+        }
+      }
+    },
+    {
+      "family": "pdf417-1",
+      "image": "pdf417-1.png",
+      "expected": "pdf417-1.txt",
+      "files": {
+        "pdf417-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/pdf417-1/01.png",
+          "gitBlob": "a1b2b4efeaf84d3d08cf219a751e84667fd2a509",
+          "sha256": "b7d2f803a991855c529f62b1894898796a0b93252feb89c0d5453d2bc403ae23"
+        },
+        "pdf417-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/pdf417-1/01.txt",
+          "gitBlob": "8c84eae5ab226f96fada6b5b8a359737bcedd630",
+          "sha256": "0d23f6541b65e5fa22480b208c7fd25c37deead6ad41b07ea58520822de48c1e"
+        }
+      }
+    },
+    {
+      "family": "code128-1",
+      "image": "code128-1.png",
+      "expected": "code128-1.txt",
+      "files": {
+        "code128-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/code128-1/6.png",
+          "gitBlob": "b5388e34c250a35337d5564032477270ae415e58",
+          "sha256": "dfbe544fce9de2634d580da6b73ffd5ccbe46e438ddc83d87e1ca9ac5af85905"
+        },
+        "code128-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/code128-1/6.txt",
+          "gitBlob": "ba093542095a01eef67a155e70e5a250993457c5",
+          "sha256": "b654ab9fb5fbed7d682d0558bb91e1a0db5707097f9363e2cc42f495486bb2ca"
+        }
+      }
+    },
+    {
+      "family": "code39-1",
+      "image": "code39-1.webp",
+      "expected": "code39-1.txt",
+      "files": {
+        "code39-1.webp": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/code39-1/2.webp",
+          "gitBlob": "a44b738f3cb75b8142416c77171ded30ffd6da00",
+          "sha256": "8563aef107e139510f9341ba2b9caf7927ccffeb09797cbb49a105ff01d02b7b"
+        },
+        "code39-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/code39-1/2.txt",
+          "gitBlob": "4ed0aa939abab94ae8ff7594602e4a8941a56ace",
+          "sha256": "369ed648afe7074651db7f5074d13412d7081269544f85da42a33e96095a2a7a"
+        }
+      }
+    },
+    {
+      "family": "code93-1",
+      "image": "code93-1.png",
+      "expected": "code93-1.txt",
+      "files": {
+        "code93-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/code93-1/2.png",
+          "gitBlob": "0241c497c8c0ff80c19826d1041d50d169920c89",
+          "sha256": "1b631c3b46f6ef03e81f24b420b4fa7454c7d4204ae55bb02e867fefea32ec9b"
+        },
+        "code93-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/code93-1/2.txt",
+          "gitBlob": "f6df9d713c16d6c9a584b2a1dd3c8f79412d0ccd",
+          "sha256": "68bcf7cee209e4d3f75c33a640fd79065ac5ca825f4ae5e3cbb2961b3a86f211"
+        }
+      }
+    },
+    {
+      "family": "ean8-1",
+      "image": "ean8-1.png",
+      "expected": "ean8-1.txt",
+      "files": {
+        "ean8-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/ean8-1/single-line.png",
+          "gitBlob": "275c5bcbd0e155835aa832eec8605737313e75dc",
+          "sha256": "d12e75302f8dc04de97986519f0bfc930a9c69de35dfe9c4e7bc2857ff626bf2"
+        },
+        "ean8-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/ean8-1/single-line.txt",
+          "gitBlob": "c1c11781676b70cd99e90394918f9de9bee52845",
+          "sha256": "8f1fb535b2ae50ec4308f515a5557b25e98a7cdfd96191fac64cde2ce633f8d0"
+        }
+      }
+    },
+    {
+      "family": "ean13-1",
+      "image": "ean13-1.webp",
+      "expected": "ean13-1.txt",
+      "files": {
+        "ean13-1.webp": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/ean13-1/%23526.webp",
+          "gitBlob": "6ccc21dc94ec601a39a7f5cbb786ece0f20332ea",
+          "sha256": "f08ff0eb4ff53d87c84db056d7cd8cd48992a9850f4590e5acbe7c8ba2d578fc"
+        },
+        "ean13-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/ean13-1/%23526.txt",
+          "gitBlob": "0101635f8b0b1abac5d532a14e6f14b9f408d351",
+          "sha256": "71ccd5e363e553a57caaf8ecc7e190c4483555b7fbb16568f8b9a5ae72fe4145"
+        }
+      }
+    },
+    {
+      "family": "upca-1",
+      "image": "upca-1.webp",
+      "expected": "upca-1.txt",
+      "files": {
+        "upca-1.webp": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/upca-1/8.webp",
+          "gitBlob": "73e97f88754f35c5947a461b60d9477339b45545",
+          "sha256": "152728bd43dcda9fe4840575827d7f0e8691ce9add84f813245e7a4fe8d72c0e"
+        },
+        "upca-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/upca-1/8.txt",
+          "gitBlob": "7ca6f67b70fb85b0c01fd247e73e8bae19783316",
+          "sha256": "c57ae1747394573fc4233b9dbb18002d203984c4fd77c7859e44dc024dabc9c9"
+        }
+      }
+    },
+    {
+      "family": "upce-1",
+      "image": "upce-1.png",
+      "expected": "upce-1.txt",
+      "files": {
+        "upce-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/upce-1/4.png",
+          "gitBlob": "bb4c65ef3a01287e0fe9c3057efb7f048deab2c5",
+          "sha256": "eef2a3f54743d6e2d0c9d9cb4cc4d44a412d54297a449a0226fb3b27818f7c9c"
+        },
+        "upce-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/upce-1/4.txt",
+          "gitBlob": "c57cc8b485ae65d06d9556547689c13a5b7eff54",
+          "sha256": "0853012a5eba2fdd244ef685372f85f24885cb5f34b6a21725481b485a3a323b"
+        }
+      }
+    },
+    {
+      "family": "itf-1",
+      "image": "itf-1.png",
+      "expected": "itf-1.txt",
+      "files": {
+        "itf-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/itf-1/%23853.png",
+          "gitBlob": "50342a035a408a76f192c39a00adea278a5cf4d1",
+          "sha256": "dda9408baab754955a6e3033211384b88cd473f00aa82d744af0f69e086e0964"
+        },
+        "itf-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/itf-1/%23853.txt",
+          "gitBlob": "fc0a24477ed03e1c588a57e4ed70cea406d865ef",
+          "sha256": "f1ee529ef49111208f1c1646c53c8c311c9f093fd7891c1b46d77e98210b018d"
+        }
+      }
+    },
+    {
+      "family": "codabar-1",
+      "image": "codabar-1.png",
+      "expected": "codabar-1.txt",
+      "files": {
+        "codabar-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/codabar-1/13.png",
+          "gitBlob": "e9610422680ef4e6e6d76b3ac6537f6ca890972a",
+          "sha256": "7fbb9408bf4fd7197b1cd2ca701c01be40c53487f60855decaf14e8d69df6c3c"
+        },
+        "codabar-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/codabar-1/13.txt",
+          "gitBlob": "872b3c4b62fd241d5191e720245e696d4fc787cc",
+          "sha256": "7c580c56fa444cc3132c5c79238331e71ee54afbaac91f1281d4ed1b993e3a68"
+        }
+      }
+    },
+    {
+      "family": "databarOmni-1",
+      "image": "databarOmni-1.webp",
+      "expected": "databarOmni-1.txt",
+      "files": {
+        "databarOmni-1.webp": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/databarOmni-1/0120358468019312.webp",
+          "gitBlob": "75c9ff12d5a6547070b66552312fabe0b8d1730b",
+          "sha256": "df7bb2ee3f9de3d2e8418f9af2a2d62e78ed6728380f6a4064de3896ab185b1b"
+        },
+        "databarOmni-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/databarOmni-1/0120358468019312.txt",
+          "gitBlob": "c52ff03653dbec3b8c5f2c5e5607e6c36a9b1df6",
+          "sha256": "4d0d6bec4ea6845e95b490633222bf67f404a51645f3b25c9dc6dc51259ca7dc"
+        }
+      }
+    },
+    {
+      "family": "databarltd-1",
+      "image": "databarltd-1.png",
+      "expected": "databarltd-1.txt",
+      "files": {
+        "databarltd-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/databarltd-1/00.png",
+          "gitBlob": "4247d7f7cba0fe6aeb6b1bdf5383aa744347cda8",
+          "sha256": "1905c1633d5ec5707395be0b465b78be88042420d0e9ca8d60a6fe034701a654"
+        },
+        "databarltd-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/databarltd-1/00.txt",
+          "gitBlob": "1879fa375cc1772d74075853595e3c595f2430c4",
+          "sha256": "9fdb5e266bb53f2e64c3d02723fcf8ff0e838d71082597796049cbd8c2a5154d"
+        }
+      }
+    },
+    {
+      "family": "databarExp-1",
+      "image": "databarExp-1.png",
+      "expected": "databarExp-1.txt",
+      "files": {
+        "databarExp-1.png": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/databarExp-1/25.png",
+          "gitBlob": "e56fa4a07f997d4d5961165979629ace77f9f030",
+          "sha256": "a4595771184b1bad67f4c0c1d9aa52dca21df0a2b01ad31139b3ebba56fabdaa"
+        },
+        "databarExp-1.txt": {
+          "source": "https://raw.githubusercontent.com/zxing-cpp/zxing-cpp/2c3dcfeffa7878950a58c1703c86774a428b0c91/test/samples/databarExp-1/25.txt",
+          "gitBlob": "3bbd5e512215c56ad1a1808a49cd675a3030b693",
+          "sha256": "e37bb12ed96a158b0a1050ba31f1b9c1fad4b32772f7ba057b96a6df90c2205c"
+        }
+      }
+    }
+  ]
+}

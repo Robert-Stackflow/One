@@ -19,6 +19,7 @@ const render=async()=>{
  if(view==='echo')(await import('./hud')).renderHUD();
  else if(view==='color-picker')await (await import('./color-view')).renderColorPicker();
  else if(view==='color-zoom')await (await import('./color-zoom-view')).renderColorZoom();
+ else if(view==='barcode-capture')await (await import('./barcode-capture-view')).renderBarcodeCapture();
  else if(view==='color-freeze')await (await import('./color-freeze-view')).renderColorFreeze();
  else if(view==='screen-ruler')(await import('./screen-ruler-view')).renderScreenRuler();
  else if(view==='color-editor')(await import('./color-editor-view')).renderColorEditor();

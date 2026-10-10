@@ -34,19 +34,20 @@ const settingRow = (title: string, description: string, control: string) => `<di
 export function renderMain() {
   const groups = [
     {name:'文件',items:[['tools','文件工具'],['text','文本处理'],['search','文件搜索'],['disk','空间分析'],['archive','压缩与解压']]},
-    {name:'工具',items:[['input','操作增强'],['preview','快速预览'],['color','屏幕取色']]},
+    {name:'工具',items:[['input','操作增强'],['preview','快速预览'],['color','屏幕取色'],['barcode','条码识别']]},
     {name:'系统',items:[['system','系统维护'],['hardware','系统信息'],['ports','端口与服务']]}
   ];
   const modules = [['home','概览'],...groups.flatMap(group=>group.items),['settings','设置']];
   const nav = ([id,name]:string[]) => `<button class="nav ${id==='home'?'active':''}" data-page="${id}" title="${name}" aria-label="${name}" ${id==='home'?'aria-current="page"':''}>${icon(id)}<span class="nav-label">${name}</span></button>`;
   const navigation = `<nav class="sidebar-navigation" aria-label="功能导航">${nav(['home','概览'])}${groups.map(group=>`<section class="sidebar-group" aria-label="${group.name}"><h2 class="sidebar-group-caption" aria-hidden="true">${group.name}</h2>${group.items.map(nav).join('')}</section>`).join('')}</nav>${nav(['settings','设置'])}`;
-  app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="color" hidden></div></div>
-  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-color" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
+  app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="color" hidden></div><div id="barcode-heading-actions" data-heading-for="barcode" hidden></div></div>
+  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-color" hidden></section><section class="page" id="page-barcode" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
   </div><div class="toast-layer"><div class="toast" id="toast" hidden role="status"></div></div></main></div>${dialogMarkup({id:"issues-dialog",title:"未完成的扫描项目",closeId:"issues-dismiss",className:"dialog-wide",body:`<pre id="issues-text"></pre>`,actions:`${button('close-issues','关闭')}`})}`;
   setupChrome(); customControls(app);
   const content=document.querySelector<HTMLElement>('.content')!;
   let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,archiveController:ReturnType<typeof import('./archive-view').setupArchiveView>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
   let maintenanceController:ReturnType<typeof import('./maintenance-view').setupMaintenance>|undefined,informationController:ReturnType<typeof import('./system-info-view').setupSystemInformation>|undefined,portsController:ReturnType<typeof import('./ports-view').setupPorts>|undefined;
+  let barcodeController:ReturnType<typeof import('./barcode-view').setupBarcode>|undefined;
   let inputController:ReturnType<typeof import('./enhancement-view').setupInput>|undefined;
   let settingsController:ReturnType<typeof import('./settings-view').setupSettingsPage>|undefined;
   const mounted=new Set(['home']),mounting=new Map<string,Promise<void>>();
@@ -63,6 +64,7 @@ export function renderMain() {
     else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='ports'){const {portsPage,setupPorts}=await import('./ports-view');page.innerHTML=portsPage();portsController=setupPorts();}
     else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);inputController=setupInput();}
+    else if(id==='barcode'){const {barcodePage,setupBarcode}=await import('./barcode-view');page.innerHTML=barcodePage();q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
     else if(id==='color'){const {colorPage,setupColorPage}=await import('./color-view');page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
     else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
@@ -84,6 +86,7 @@ export function renderMain() {
     else if(id==='ports')portsController?.activate(value);
     else if(id==='settings')settingsController?.activate(value);
     else if(id==='input')inputController?.activate(value);
+    else if(id==='barcode')barcodeController?.activate(value);
   };
   const navigate=async(id:string)=>{
     const revision=++navigationRevision,current=content.dataset.currentPage||'home';
@@ -108,7 +111,8 @@ export function renderMain() {
   api.onNavigatePage(target=>{const work=async()=>{
     const page=target.page==='locksmith'?'tools':target.page;
     if(!modules.some(item=>item[0]===page)||!await navigate(page))return;
-    if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
+    if(target.page==='barcode'&&target.path)await barcodeController!.openPath(target.path);
+    else if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
     else if(target.page==='tools'&&target.tool==='rename')await toolsController!.openSelection(target.paths||[]);
     else if(target.page==='tools'&&target.tool==='diff')await toolsController!.openComparison(target.paths||[]);
     else if(target.page==='tools'&&target.tool==='integrity')await toolsController!.openIntegrity(target.folder);

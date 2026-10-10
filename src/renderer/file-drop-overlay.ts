@@ -8,6 +8,7 @@ interface FileDropOptions {
   placement?: 'window' | 'host';
   spacious?: boolean;
   enabled?: () => boolean;
+  acceptVirtualFiles?: boolean;
 }
 
 export function installFileDropOverlay(host: HTMLElement, options: FileDropOptions) {
@@ -46,7 +47,7 @@ export function installFileDropOverlay(host: HTMLElement, options: FileDropOptio
     event.stopPropagation();
     hide();
     const paths = Array.from(event.dataTransfer?.files || [], file => api.droppedFile(file)).filter(Boolean);
-    if (paths.length) try { void Promise.resolve(options.onDrop(paths,event)).catch(toast); } catch (error) { toast(error); }
+    if (paths.length || options.acceptVirtualFiles && event.dataTransfer?.files.length) try { void Promise.resolve(options.onDrop(paths,event)).catch(toast); } catch (error) { toast(error); }
   }, true);
   window.addEventListener('blur', hide);
   window.addEventListener('dragend', hide);
