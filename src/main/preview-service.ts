@@ -6,7 +6,7 @@ import type {PreviewData,FileEntry} from '../shared/types';
 import {textExtensions} from '../shared/preview';
 import type {DirectoryInfo} from '../shared/directory';
 import {isArchivePath} from '../shared/archive-actions';
-import {inspectMotionPhoto,inspectLivp,type FileSegment} from './motion-photo';
+import {inspectMotionPhoto,inspectLivp,releaseLivpTemporary,type FileSegment,type LivpContents,type LivpTemporary} from './motion-photo';
 import {isAnimatedPng,previewImageDimensions} from './preview-resource';
 function inspect(path:string,kind:string):Promise<{entries?:FileEntry[];metadata?:Record<string,string>;photoLocation?:import('../shared/photo-metadata').PhotoLocation;cover?:string;lyrics?:import('../shared/preview').LyricLine[];workbook?:import('../shared/workbook').WorkbookData}>{return new Promise((resolve,reject)=>{
   const worker=new Worker(join(__dirname,'preview-worker.cjs'),{workerData:{path,kind},resourceLimits:{maxOldGenerationSizeMb:192}});
@@ -20,7 +20,7 @@ export async function reloadWorkbook(path:string):Promise<import('../shared/work
 }
 const images:Record<string,string>={png:'image/png',apng:'image/png',heic:'image/heic',heif:'image/heif',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon',svg:'image/svg+xml',avif:'image/avif'};
 const media:Record<string,string>={mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',flac:'audio/flac',opus:'audio/ogg',aac:'audio/aac',m4a:'audio/mp4',mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',webm:'video/webm',mkv:'video/x-matroska'};
-export async function preparePreview(path:string,register:(path:string,mime:string,segment?:FileSegment)=>string,directory:(path:string,target?:string)=>Promise<DirectoryInfo>):Promise<PreviewData>{
+export async function preparePreview(path:string,register:(path:string,mime:string,segment?:FileSegment,temporary?:LivpTemporary)=>string,directory:(path:string,target?:string)=>Promise<DirectoryInfo>):Promise<PreviewData>{
   const info=await stat(path),ext=extname(path).slice(1).toLowerCase();
   const navigation=await directory(dirname(path),path).catch(()=>undefined);
   const data:PreviewData={name:basename(path)||path,path,size:info.size,type:'unsupported',siblings:[],navigation,modified:info.mtimeMs,created:info.birthtimeMs,metadata:{'类型':info.isDirectory()?'文件夹':(ext.toUpperCase()||'文件')}};
@@ -45,13 +45,14 @@ export async function preparePreview(path:string,register:(path:string,mime:stri
     return data;
   }
   if(ext==='livp'){
+    let contents:LivpContents|undefined;
     try{
-      const contents=await inspectLivp(path);
-      data.type='image';data.url=register(path,contents.still.mime,contents.still);
+      contents=await inspectLivp(path);
+      data.type='image';data.url=register(contents.still.path,contents.still.mime,contents.still,contents.temporary);
       data.metadata!['类型']='LIVP 动态照片导出包';
-      if(contents.movie){data.motionPhoto={url:register(path,contents.movie.mime,contents.movie),source:contents.movie.source};data.metadata!['动态照片']=contents.movie.source;}
+      if(contents.movie){data.motionPhoto={url:register(contents.movie.path,contents.movie.mime,contents.movie,contents.temporary),source:contents.movie.source};data.metadata!['动态照片']=contents.movie.source;}
       else {data.motionPhotoNotice='导出包中没有可用的动态视频片段';data.metadata!['动态照片']=data.motionPhotoNotice;}
-    }catch(error){data.error=(error as Error).message;}
+    }catch(error){if(contents?.temporary)void releaseLivpTemporary(contents.temporary).catch(()=>{});data.error=(error as Error).message;}
     return data;
   }
   if(isArchivePath(path)){data.type='archive';data.nativeArchive=true;return data;}

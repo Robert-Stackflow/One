@@ -1,10 +1,14 @@
-import {open,stat,realpath,readdir} from 'node:fs/promises';
+import {open,stat,realpath,readdir,mkdtemp,rm,rmdir} from 'node:fs/promises';
+import {createWriteStream} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {pipeline} from 'node:stream/promises';
 import type {FileHandle} from 'node:fs/promises';
 import {extname,dirname,join} from 'node:path';
 import {open as openZip,type Entry,type ZipFile} from 'yauzl';
 export interface FileSegment {offset:number;length:number}
 export interface MotionPhotoSource extends FileSegment {path:string;mime:'video/mp4'|'video/quicktime';source:string;presentationTime?:number;paired?:boolean}
-export interface LivpContents {still:FileSegment&{mime:'image/jpeg'|'image/heic'|'image/heif'};movie:MotionPhotoSource|null}
+export interface LivpTemporary {directory:string;paths:string[]}
+export interface LivpContents {still:FileSegment&{path:string;mime:'image/jpeg'|'image/heic'|'image/heif'};movie:MotionPhotoSource|null;temporary?:LivpTemporary}
 const maxPhoto=100*1024*1024,maxVideo=512*1024*1024;
 const uuid=/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 function appleIdentifier(head:Buffer){
@@ -101,12 +105,47 @@ export async function inspectMotionPhoto(path:string,notice?:(message:string)=>v
  if(!fallback&&motionMarked)notice?.(photoIdentifier?'未找到匹配的动态视频，请将照片与视频放在同一目录':'检测到动态照片标记，但未找到可播放的视频片段');return fallback;
 }
 
-/** Locate stored LIVP members by ZIP directory and local headers; return slices without extracting user data. */
+export async function releaseLivpTemporary(value:LivpTemporary){
+ for(const path of value.paths)await rm(path,{force:true});
+ await rmdir(value.directory).catch(error=>{if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;});
+}
+async function extractLivp(zip:ZipFile,photo:Entry,video:Entry|undefined):Promise<LivpContents>{
+ const temporary:LivpTemporary={directory:await mkdtemp(join(tmpdir(),'one-livp-')),paths:[]};
+ const extract=async(entry:Entry,name:string,limit:number)=>{
+  if(![0,8].includes(entry.compressionMethod)||entry.generalPurposeBitFlag&1)throw Error('不支持此 LIVP 压缩方式或加密文件项');
+  if(entry.uncompressedSize<16||entry.uncompressedSize>limit)throw Error('LIVP 文件项超过预览上限或已损坏');
+  const target=join(temporary.directory,name);temporary.paths.push(target);
+  const stream=await new Promise<import('node:stream').Readable>((resolve,reject)=>zip.openReadStream(entry,(error,value)=>error||!value?reject(error||Error('LIVP 文件项无法提取')):resolve(value)));
+  let received=0;stream.on('data',(chunk:Buffer)=>{received+=chunk.length;if(received>limit)stream.destroy(Error('LIVP 文件项超过预览上限'));});
+  await pipeline(stream,createWriteStream(target,{flags:'wx'}));
+  if((await stat(target)).size!==entry.uncompressedSize)throw Error('LIVP 文件项长度无效');
+  return target;
+ };
+ try{
+  const extension=extname(photo.fileName).toLowerCase(),jpeg=extension==='.jpg'||extension==='.jpeg';
+  const mime=jpeg?'image/jpeg' as const:extension==='.heic'?'image/heic' as const:'image/heif' as const;
+  const photoPath=await extract(photo,'photo'+extension,maxPhoto);
+  const stillFile=await open(photoPath,'r');let photoHeader:Buffer;
+  try{photoHeader=await bytes(stillFile,0,Math.min(photo.uncompressedSize,1024*1024));}finally{await stillFile.close();}
+  if(jpeg?photoHeader[0]!==0xff||photoHeader[1]!==0xd8:photoHeader.toString('ascii',4,8)!=='ftyp')throw Error('LIVP 照片内容与文件项类型不符');
+  let motion:MotionPhotoSource|null=null;
+  if(video){
+   const videoPath=await extract(video,'photo'+extname(video.fileName).toLowerCase(),maxVideo);
+   const movieFile=await open(videoPath,'r');
+   try{const found=await movie(movieFile,0,video.uncompressedSize);
+    const identifier=appleIdentifier(photoHeader);
+    if(found&&(!identifier||!found.contentIdentifier||identifier===found.contentIdentifier))motion={path:videoPath,...found,source:'LIVP 导出包'};
+   }finally{await movieFile.close();}
+  }
+  return {still:{path:photoPath,offset:0,length:photo.uncompressedSize,mime},movie:motion,temporary};
+ }catch(error){await releaseLivpTemporary(temporary).catch(()=>{});throw error;}
+}
+/** Locate LIVP resources; stored members stay zero-copy, while DEFLATE members use bounded temporary files. */
 export async function inspectLivp(path:string):Promise<LivpContents>{
  const size=(await stat(path)).size;
  if(size<64||size>612*1024*1024)throw Error('LIVP 导出包超过预览上限或已损坏');
  const zip=await new Promise<ZipFile>((resolve,reject)=>openZip(path,{lazyEntries:true,autoClose:false,validateEntrySizes:true},(error,value)=>error||!value?reject(error||Error('LIVP 无法读取')):resolve(value)));
- let entries:Entry[];
+ let entries:Entry[],extracted:LivpContents|undefined;
  try{entries=await new Promise<Entry[]>((resolve,reject)=>{
   const selected:Entry[]=[];let seen=0,done=false;
   const fail=(error:Error)=>{if(!done){done=true;reject(error);}};
@@ -118,14 +157,20 @@ export async function inspectLivp(path:string):Promise<LivpContents>{
   });
   zip.on('end',()=>{if(!done){done=true;resolve(selected);}});
   zip.readEntry();
- });}finally{zip.close();}
+ });
+  const photos=entries.filter(entry=>/\.(?:jpe?g|heic|heif)$/i.test(entry.fileName));
+  const videos=entries.filter(entry=>/\.(?:mov|mp4)$/i.test(entry.fileName));
+  if(photos.length!==1||videos.length>1)throw Error('LIVP 照片或视频文件项不明确');
+  if([photos[0],...videos].some(entry=>entry.generalPurposeBitFlag&1))throw Error('不支持加密的 LIVP 文件项');
+  if([photos[0],...videos].some(entry=>entry.compressionMethod!==0))extracted=await extractLivp(zip,photos[0],videos[0]);
+ }finally{zip.close();}
+ if(extracted)return extracted;
  const photos=entries.filter(entry=>/\.(?:jpe?g|heic|heif)$/i.test(entry.fileName));
  const videos=entries.filter(entry=>/\.(?:mov|mp4)$/i.test(entry.fileName));
- if(photos.length!==1||videos.length>1)throw Error('LIVP 照片或视频文件项不明确');
  const file=await open(path,'r');
  try{
   const segment=async(entry:Entry,limit:number):Promise<FileSegment>=>{
-   if(entry.compressionMethod!==0||entry.generalPurposeBitFlag&1)throw Error('暂不支持压缩或加密的 LIVP 文件项');
+   if(entry.compressionMethod!==0||entry.generalPurposeBitFlag&1)throw Error('LIVP 文件项编码无效');
    if(entry.uncompressedSize<16||entry.uncompressedSize>limit||entry.compressedSize!==entry.uncompressedSize)throw Error('LIVP 文件项超过预览上限或已损坏');
    const header=await bytes(file,entry.relativeOffsetOfLocalHeader,30);
    if(header.length!==30||header.readUInt32LE(0)!==0x04034b50)throw Error('LIVP 文件项无效');
@@ -139,12 +184,12 @@ export async function inspectLivp(path:string):Promise<LivpContents>{
   const jpeg=extension==='.jpg'||extension==='.jpeg';
   if(jpeg?photoHeader[0]!==0xff||photoHeader[1]!==0xd8:photoHeader.toString('ascii',4,8)!=='ftyp')throw Error('LIVP 照片内容与文件项类型不符');
   const mime=jpeg?'image/jpeg' as const:extension==='.heic'?'image/heic' as const:'image/heif' as const;
-  if(!videos.length)return {still:{...still,mime},movie:null};
+  if(!videos.length)return {still:{path,...still,mime},movie:null};
   const video=await segment(videos[0],maxVideo);
   const found=await movie(file,video.offset,video.length);
-  if(!found)return {still:{...still,mime},movie:null};
+  if(!found)return {still:{path,...still,mime},movie:null};
   const identifier=appleIdentifier(photoHeader);
-  if(identifier&&found.contentIdentifier&&identifier!==found.contentIdentifier)return {still:{...still,mime},movie:null};
-  return {still:{...still,mime},movie:{path,...found,source:'LIVP 导出包'}};
+  if(identifier&&found.contentIdentifier&&identifier!==found.contentIdentifier)return {still:{path,...still,mime},movie:null};
+  return {still:{path,...still,mime},movie:{path,...found,source:'LIVP 导出包'}};
  }finally{await file.close();}
 }

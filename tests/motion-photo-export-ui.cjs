@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {mkdtemp,readFile,rm}=require('node:fs/promises');
+const {mkdtemp,readFile,readdir,rm}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 const {_electron:electron,expect}=require('@playwright/test');
@@ -39,6 +39,20 @@ test('preview exports the exact motion photo movie in the Windows app',async()=>
   await expect(page.locator('#preview-status-kind')).toHaveText('动态照片');
   await expect(page.locator('#image-motion')).toBeVisible();
   await expect(page.locator('.photo-visual canvas')).toBeVisible();
+  const beforeTemp=new Set((await readdir(tmpdir())).filter(name=>name.startsWith('one-livp-')));
+  const packed=new JSZip();packed.file('image.jpeg',photo,{compression:'DEFLATE'});packed.file('image.mp4',movie,{compression:'DEFLATE'});
+  const packedLivp=join(files,'packed.livp');await require('node:fs/promises').writeFile(packedLivp,await packed.generateAsync({type:'nodebuffer'}));
+  await page.evaluate(path=>window.one.selectPreview(path),packedLivp);
+  await expect(page.locator('#preview-status-kind')).toHaveText('动态照片');
+  await expect.poll(()=>page.locator('.photo-visual img').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator('#image-motion')).toBeVisible();
+  const compressedOutput=join(root,'packed-video.mp4');await app.evaluate(({dialog},path)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},compressedOutput);
+  await page.locator('#image-export-motion').click();
+  await expect(page.locator('#preview-details-list')).toContainText('已导出 packed-video.mp4');
+  assert.deepEqual(await readFile(compressedOutput),movie);
+  const created=(await readdir(tmpdir())).filter(name=>name.startsWith('one-livp-')&&!beforeTemp.has(name));assert.equal(created.length,1);
+  await page.evaluate(path=>window.one.selectPreview(path),join(files,'still.png'));
+  await expect.poll(async()=>{const existing=await readdir(tmpdir());return created.every(name=>!existing.includes(name));},{timeout:7000}).toBe(true);
   assert.deepEqual(errors,[]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });

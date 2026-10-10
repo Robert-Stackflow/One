@@ -61,7 +61,7 @@ import {imageCodecCapabilities} from './image-codec';
 import {DeveloperHashService} from './developer-hash-service';
 import {generateQr} from './developer-qr';
 import {exportMotionPhotoVideo} from './motion-photo-export';
-import {inspectMotionPhoto,inspectLivp} from './motion-photo';
+import {inspectMotionPhoto,inspectLivp,releaseLivpTemporary,type LivpTemporary} from './motion-photo';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
@@ -118,7 +118,7 @@ process.on('unhandledRejection',reason=>runtimeError(app.getPath('userData'),'ma
 app.on('child-process-gone',(_event,details)=>runtimeError(app.getPath('userData'),'child-process-gone',JSON.stringify(details)));
 if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
-const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string; segment?:import('./motion-photo').FileSegment }>();
+const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string; segment?:import('./motion-photo').FileSegment; temporary?:LivpTemporary }>();
 const motionVideoExports=new Map<number,AbortController>();
 const workbookReloads=new WeakMap<PreviewData,Promise<import('../shared/workbook').WorkbookData>>();
 const displayAssets=new Map<string,{owner:number;bytes:Buffer}>();let displayAssetBytes=0;
@@ -147,8 +147,10 @@ async function scaledPreviewAsset(asset:{path:string;mime:string;segment?:import
  }finally{await rm(file,{force:true}).catch(()=>{});await rmdir(folder).catch(()=>{});}
 }
 function releasePreviewAssets(owner:number){
- for(const [token,asset] of assets)if(asset.owner===owner)assets.delete(token);
+ const temporary=new Set<LivpTemporary>();
+ for(const [token,asset] of assets)if(asset.owner===owner){assets.delete(token);if(asset.temporary)temporary.add(asset.temporary);}
  for(const [token,asset] of displayAssets)if(asset.owner===owner){displayAssetBytes-=asset.bytes.length;displayAssets.delete(token);}
+ for(const item of temporary)setTimeout(()=>{void releaseLivpTemporary(item).catch(()=>{setTimeout(()=>{void releaseLivpTemporary(item).catch(()=>{});},2000);});},1000);
 }
 if(developmentMode)process.on('message',(message:any)=>{
  if(message?.type==='one:dev-reload'){for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed())window.webContents.reload();}
@@ -410,7 +412,7 @@ async function runMaintenance(mode: 'startup' | 'registry') {
 async function preparePreview(path: string, owner: number): Promise<PreviewData> {
   nativeOfficePreview.stop(owner);
   releasePreviewAssets(owner);
-  const held:string[]=[];try{const next=await loadPreview(path,(path,mime,segment)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime,segment});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){for(const id of held)directories.release(owner,id);throw error;}
+  const held:string[]=[];try{const next=await loadPreview(path,(path,mime,segment,temporary)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime,segment,temporary});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){releasePreviewAssets(owner);for(const id of held)directories.release(owner,id);throw error;}
 }
 function foregroundPreview(window:BrowserWindow){
  if(window.isDestroyed())return;if(window.isMinimized())window.restore();
@@ -860,10 +862,12 @@ function registerIPC() {
   handle('preview-motion-export',async event=>{
    const ownerId=event.sender.id,data=previews.get(ownerId);if(data?.type!=='image'||!data.motionPhoto)throw Error('当前预览没有可导出的动态视频');
    if(motionVideoExports.has(ownerId))throw Error('动态视频正在导出');
-   const controller=new AbortController();motionVideoExports.set(ownerId,controller);
+   const controller=new AbortController();motionVideoExports.set(ownerId,controller);let temporary:LivpTemporary|undefined;
    try{
     const source=await stat(data.path);if(source.size!==data.size||source.mtimeMs!==data.modified)throw Error('动态照片已变化，请重新打开照片');
-    const motion=extname(data.path).toLowerCase()==='.livp'?(await inspectLivp(data.path)).movie:await inspectMotionPhoto(data.path);
+    const contents=extname(data.path).toLowerCase()==='.livp'?await inspectLivp(data.path):undefined;
+    temporary=contents?.temporary;
+    const motion=contents?contents.movie:await inspectMotionPhoto(data.path);
     if(!motion)throw Error('动态视频已失效，请重新打开照片');
     const extension=motion.mime==='video/quicktime'?'mov':'mp4',owner=BrowserWindow.fromWebContents(event.sender);if(!owner)throw Error('预览窗口已关闭');
     const selected=await dialog.showSaveDialog(owner,{title:'导出动态照片视频',defaultPath:join(app.getPath('videos'),`${basename(data.path,extname(data.path))}-motion.${extension}`),filters:[{name:extension.toUpperCase()+' 视频',extensions:[extension]}],properties:['showOverwriteConfirmation']});
@@ -871,7 +875,7 @@ function registerIPC() {
     if(controller.signal.aborted||previews.get(ownerId)?.path!==data.path)throw Error('已取消动态视频导出');
     const target=selected.filePath.toLowerCase().endsWith(`.${extension}`)?selected.filePath:`${selected.filePath}.${extension}`;
     await exportMotionPhotoVideo(motion,target,controller.signal);return target;
-   }finally{motionVideoExports.delete(ownerId);}
+   }finally{motionVideoExports.delete(ownerId);if(temporary)await releaseLivpTemporary(temporary).catch(()=>{});}
   },['preview']);
   handle('preview-motion-export-cancel',event=>{const controller=motionVideoExports.get(event.sender.id);if(!controller)return false;controller.abort();return true;},['preview']);
   handle('preview-flags',async(event,value)=>{const state=flags.get(event.sender.id);if(!state)throw new Error('预览已关闭');if(value){for(const key of ['pinned','held'] as const)if(value[key]!==undefined){if(typeof value[key]!=='boolean')throw new Error('参数无效');state[key]=value[key];}BrowserWindow.fromWebContents(event.sender)?.setAlwaysOnTop(state.pinned,'pop-up-menu');await saveSettings(current=>mergeSettings(current,{preview:{pinned:state.pinned,held:state.held}}));}return state;},['preview']);
