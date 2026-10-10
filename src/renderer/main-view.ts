@@ -18,6 +18,7 @@ import './color.css';
 import './maintenance-list.css';
 import './system-information.css';
 import './ports.css';
+import './display-management.css';
 import {setupTooltips} from './tooltip';
 import {setupTextSelection} from './selection';
 import {setupAppearance} from './appearance';
@@ -46,6 +47,7 @@ export function renderMain() {
   const content=document.querySelector<HTMLElement>('.content')!;
   let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,archiveController:ReturnType<typeof import('./archive-view').setupArchiveView>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
   let maintenanceController:ReturnType<typeof import('./maintenance-view').setupMaintenance>|undefined,informationController:ReturnType<typeof import('./system-info-view').setupSystemInformation>|undefined,portsController:ReturnType<typeof import('./ports-view').setupPorts>|undefined;
+  let inputController:ReturnType<typeof import('./enhancement-view').setupInput>|undefined;
   let settingsController:ReturnType<typeof import('./settings-view').setupSettingsPage>|undefined;
   const mounted=new Set(['home']),mounting=new Map<string,Promise<void>>();
   const mount=(id:string):Promise<void>=>{
@@ -60,7 +62,7 @@ export function renderMain() {
     else if(id==='system'){const {maintenancePage,setupMaintenance}=await import('./maintenance-view');page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
     else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='ports'){const {portsPage,setupPorts}=await import('./ports-view');page.innerHTML=portsPage();portsController=setupPorts();}
-    else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);setupInput();}
+    else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);inputController=setupInput();}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
     else if(id==='color'){const {colorPage,setupColorPage}=await import('./color-view');page.innerHTML=colorPage();customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();}
     else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
@@ -81,6 +83,7 @@ export function renderMain() {
     else if(id==='hardware')informationController?.activate(value);
     else if(id==='ports')portsController?.activate(value);
     else if(id==='settings')settingsController?.activate(value);
+    else if(id==='input')inputController?.activate(value);
   };
   const navigate=async(id:string)=>{
     const revision=++navigationRevision,current=content.dataset.currentPage||'home';

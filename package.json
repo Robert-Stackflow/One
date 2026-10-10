@@ -194,6 +194,7 @@
       "dist/main/proxy-info.ps1",
       "dist/native/One.Monitor.exe",
       "dist/native/One.Levels.exe",
+      "dist/native/One.Display.exe",
       "dist/native/One.Archive.exe",
       "dist/native/One.ArchiveBudget.dll",
       "dist/native/7z.dll"

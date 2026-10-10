@@ -1,6 +1,6 @@
 # Power Display 显示器管理调研
 
-2026-10-10 查阅 Microsoft Learn 和 PowerToys 官方源码目录，并核对 One 现有亮度实现。本文记录参考能力与接入建议；功能尚未实现，任务统一见 [TODO](../development/TODO.md)。不因加入待办而启动硬件探测或修改屏幕设置。
+2026-10-10 查阅 Microsoft Learn 和 PowerToys 官方源码目录，并核对 One 现有亮度实现。本文保留调研依据；开发版已实现「操作增强 → 显示器管理」首阶段，后续任务统一见 [TODO](../development/TODO.md)。调研阶段未修改屏幕设置；首阶段验证仅读取真实设备清单与控制能力。
 
 ## 官方能力与限制
 
@@ -31,13 +31,23 @@ One 的 [native/levels.cpp](../../native/levels.cpp) 已按光标所在屏幕调
 
 以下为 One 的实施建议，不是已验证的上游或 One 行为：
 
-- 在系统工具中评估独立显示器管理入口，并复用现有亮度与快捷操作；先提供逐屏状态、支持能力和手动控制，再扩展方案、联动和脚本。
+- 按用户最新要求，显示器管理位于「操作增强」的独立 tab，采用左列表/右参数布局；进入及刷新自动检测常用接口，后续扩展方案、联动和脚本。
 - 用稳定设备身份关联设置；显示序号只用于展示，不能在热插拔或重排后把旧参数套给另一块屏幕。区分内置、外接、镜像及暂时离线设备。
 - 原生辅助进程承担发现、查询和写入；按设备排队、合并滑块更新、限制并发及重试，设置超时，及时释放句柄。探测与写入不能阻塞窗口。
 - 旋转走 Windows 显示配置接口单独评估；显示器音量、输入源、色温和电源按硬件能力启用。不能用遮罩冒充硬件亮度，也不能把系统音量当显示器音量。
 - 高影响控制和强兼容探测默认关闭；启用时说明实际影响。准备设备排除、失败熔断与明确的恢复方法，异常后不在每次启动无限探测。
 - 配置方案初步覆盖亮度、对比度、显示器音量和色温；输入源、电源与旋转是否纳入单独评估。默认不在启动或主题切换时自动套用，用户显式开启后才生效。
 - 与主题自动切换共用触发入口；明确手动改值、联动亮度、方案应用和主题触发的先后规则。CLI 可复用 One 现有进程通信思路，固定目标与参数校验，返回逐屏结果。
+
+## 开发版首阶段
+
+入口遵循用户最新要求放在「操作增强 → 显示器管理」tab，左侧选屏、右侧参数；左栏 header 放刷新及读取状态，右栏 header 放检测状态。进入、刷新和设备拓扑变化后自动检测亮度、对比度和显示器音量，串行检测当前选择屏优先，其余在后台依次完成。
+
+实现使用 [QueryDisplayConfig](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig) 获取活动目标、GDI 来源、内置/虚拟类型、分辨率、刷新率及旋转。优先采用经过 EDID 头、校验和及重复检查的厂商/产品/序列标识，否则退回连接路径与 EDID 摘要。ID 不依赖显示序号；镜像目标和重复序列不会被当作唯一物理屏。每次控制重新发现并核对路径与身份，拓扑变化和唤醒清空旧映射。弱连接标识仍需真实扩展坞和相同型号替换验收；本阶段不提供自动应用方案。
+
+外接屏按 [GetMonitorBrightness](https://learn.microsoft.com/en-us/windows/win32/api/highlevelmonitorconfigurationapi/nf-highlevelmonitorconfigurationapi-getmonitorbrightness)、[GetMonitorContrast](https://learn.microsoft.com/en-us/windows/win32/api/highlevelmonitorconfigurationapi/nf-highlevelmonitorconfigurationapi-getmonitorcontrast) 及 VCP 0x10/0x12/0x62 的有效读值开放控制；内置屏亮度使用与原有边缘操作共用的 WMI 实现。百分比按实际硬件最小/最大值换算，写入后读回当前值；显示器音量不调用系统音频端点。原生辅助进程一次一项操作、8 秒超时、无自动重试，使用 RAII 释放物理句柄；主进程串行、有界队列和拖动合并，失败后暂停控制直到重新检测。离开 tab 取消未完成任务。
+
+代码入口为 [原生辅助程序](../../native/display.cpp)、[主进程服务](../../src/main/display-management.ts)和[界面](../../src/renderer/display-management-view.ts)。原生/服务 72 项、Electron 桌面 25 项及共用 WMI 后的旧亮度服务回归通过；实际两屏仅作清单与控制接口读取，不测试改值。证据在 verification/display-management/latest.json；输入源、色温、电源、旋转写入、联动、方案及 CLI 继续在 TODO 中保留，完整硬件验收尚未完成。
 
 ## 验收条件
 

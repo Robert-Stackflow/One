@@ -1,0 +1,44 @@
+import {api,esc,q,errorMessage,icon} from './ui';
+import {displayParameters,type DisplayParameter,type ManagedDisplay} from '../shared/display-management';
+import './display-management.css';
+const names={brightness:'亮度',contrast:'对比度',volume:'显示器音量'};
+export function displayManagementPage(){return `<div data-enhancement-panel="displays" hidden class="display-management"><aside class="display-sidebar"><div class="display-sidebar-heading"><h2>显示器</h2><span id="display-inventory-state" class="display-heading-state" role="status" aria-label="正在读取显示器" hidden></span><button id="display-refresh" class="quiet icon-button" type="button" title="刷新显示器" aria-label="刷新显示器">${icon('refresh')}</button></div><div id="display-list" role="listbox" aria-label="显示器列表"></div><p id="display-notice" role="status" aria-live="polite"></p></aside><div id="display-detail" class="display-detail" aria-live="polite"></div></div>`;}
+export function setupDisplayManagement(){
+ const list=q('display-list'),detail=q('display-detail'),notice=q('display-notice'),refreshButton=q<HTMLButtonElement>('display-refresh'),inventoryState=q('display-inventory-state');
+ let active=false,generation=0,selected='',detecting=-1,reloadTimer:ReturnType<typeof setTimeout>|undefined;
+ const rows=new Map<string,ManagedDisplay>(),states=new Map<string,'pending'|'running'|'ready'|'error'>(),errors=new Map<string,string>(),timers=new Map<string,ReturnType<typeof setTimeout>>(),versions=new Map<string,number>();
+ const clear=()=>{for(const timer of timers.values())clearTimeout(timer);timers.clear();versions.clear();clearTimeout(reloadTimer);};
+ const renderList=()=>{list.innerHTML=[...rows.values()].map(row=>`<button type="button" role="option" aria-selected="${row.id===selected}" aria-controls="display-detail" data-display-select="${row.id}"><span class="display-device-icon" aria-hidden="true">${icon('monitor')}</span><span><strong>${esc(row.name)}</strong><small>${esc(row.source.split('\\').at(-1))} · ${row.internal?'内置屏':row.virtual?'虚拟屏':row.cloned?'镜像屏':'外接屏'}${row.primary?' · 主屏':''}</small></span></button>`).join('');};
+ const renderDetail=()=>{
+  const row=rows.get(selected);if(!row){detail.innerHTML='<p class="display-empty">选择显示器以查看参数</p>';return;}
+  const state=states.get(row.id),error=errors.get(row.id);detail.innerHTML=`<article class="settings-card display-card" data-display="${row.id}"><header><div><h3>${esc(row.name)}</h3><p class="display-description">${row.width} × ${row.height}${row.refreshRate?` · ${Math.round(row.refreshRate*100)/100} Hz`:''} · ${row.rotation}°</p></div><div class="display-header-status">${row.primary?'<span class="display-badge">主屏</span>':''}${state==='pending'||state==='running'?'<span class="display-state-chip" role="status"><i class="display-spinner" aria-hidden="true"></i>检测中</span>':''}${state==='error'&&!row.cloned?'<button type="button" class="display-retry">重新检测</button>':''}</div></header>${error?`<p class="display-error" role="alert">${esc(error)}</p>`:''}${displayParameters.map(parameter=>{const c=row.controls?.[parameter],enabled=!!c?.supported&&state==='ready';return `<div class="display-control" data-parameter="${parameter}"><div><label for="display-${row.id}-${parameter}">${names[parameter]}</label>${state==='ready'&&!c?.supported?`<p title="${esc(c?.error||'此设备未提供接口')}">接口不可用</p>`:''}</div><div class="display-slider"><input id="display-${row.id}-${parameter}" type="range" min="0" max="100" step="1" value="${c?.value??50}" data-display-value="${row.id}" data-parameter="${parameter}" ${enabled?'':'disabled'} aria-label="${esc(row.name)} ${names[parameter]}"><output for="display-${row.id}-${parameter}">${c?.supported?`${c.value}%`:'—'}</output></div></div>`;}).join('')}</article>`;
+ };
+ const autoDetect=async(request:number)=>{
+  if(detecting===request)return;detecting=request;
+  try{while(active&&request===generation){
+   const id=states.get(selected)==='pending'?selected:[...states].find(([,state])=>state==='pending')?.[0];if(!id)return;
+   states.set(id,'running');if(id===selected)renderDetail();
+   try{const row=await api.displayProbe(id);if(!active||request!==generation)return;rows.set(id,row);states.set(id,'ready');errors.delete(id);}
+   catch(error){if(!active||request!==generation)return;states.set(id,'error');errors.set(id,errorMessage(error));}
+   if(id===selected)renderDetail();
+  }}finally{if(detecting===request)detecting=-1;}
+ };
+ const refresh=async()=>{
+  if(!active)return;const request=++generation;clear();refreshButton.disabled=true;inventoryState.hidden=false;notice.textContent='';rows.clear();states.clear();renderList();renderDetail();
+  try{await api.displayCancel();const found=await api.displayList();if(!active||request!==generation)return;rows.clear();states.clear();errors.clear();found.forEach(row=>{rows.set(row.id,row);states.set(row.id,row.cloned?'error':'pending');if(row.cloned)errors.set(row.id,'镜像模式无法单独控制');});if(!rows.has(selected))selected=found[0]?.id||'';renderList();renderDetail();notice.textContent=found.length?'':'未发现显示器';void autoDetect(request);}
+  catch(error){if(active&&request===generation){rows.clear();renderList();renderDetail();notice.textContent=errorMessage(error);}}
+  finally{if(request===generation){refreshButton.disabled=false;inventoryState.hidden=true;}}
+ };
+ const send=async(input:HTMLInputElement)=>{
+  if(!active||!input.isConnected||input.disabled)return;const id=input.dataset.displayValue!,parameter=input.dataset.parameter as DisplayParameter,key=id+':'+parameter,version=(versions.get(key)||0)+1,request=generation;versions.set(key,version);clearTimeout(timers.get(key));timers.delete(key);
+  try{const c=await api.displaySet(id,parameter,Number(input.value));if(!active||request!==generation||versions.get(key)!==version)return;const row=rows.get(id);if(row?.controls)row.controls[parameter]=c;if(input.isConnected){input.value=String(c.value);input.parentElement!.querySelector('output')!.textContent=c.value+'%';}}
+  catch(error){if(active&&request===generation&&versions.get(key)===version){states.set(id,'error');errors.set(id,errorMessage(error));if(id===selected)renderDetail();}}
+ };
+ list.addEventListener('click',event=>{const target=(event.target as HTMLElement).closest<HTMLElement>('[data-display-select]');if(!target)return;selected=target.dataset.displaySelect!;renderList();renderDetail();list.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();});
+ list.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();const ids=[...rows.keys()],index=ids.indexOf(selected);selected=ids[event.key==='Home'?0:event.key==='End'?ids.length-1:Math.max(0,Math.min(ids.length-1,index+(event.key==='ArrowDown'?1:-1)))]||'';renderList();renderDetail();list.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();});
+ detail.addEventListener('click',event=>{if(!(event.target as HTMLElement).closest('.display-retry'))return;states.set(selected,'pending');errors.delete(selected);renderDetail();void autoDetect(generation);});
+ detail.addEventListener('input',event=>{const input=event.target as HTMLInputElement;if(!input.matches('[data-display-value]'))return;const key=input.dataset.displayValue+':'+input.dataset.parameter;versions.set(key,(versions.get(key)||0)+1);input.parentElement!.querySelector('output')!.textContent=input.value+'%';clearTimeout(timers.get(key));timers.set(key,setTimeout(()=>void send(input),250));});
+ detail.addEventListener('change',event=>{const input=event.target as HTMLInputElement;if(input.matches('[data-display-value]'))void send(input);});
+ refreshButton.onclick=()=>void refresh();api.onDisplayChanged(()=>{generation++;clear();rows.clear();states.clear();renderList();renderDetail();if(active){notice.textContent='';inventoryState.hidden=false;reloadTimer=setTimeout(()=>void refresh(),350);}});
+ return{activate(value:boolean){if(active===value)return;active=value;if(value)void refresh();else{generation++;clear();refreshButton.disabled=false;inventoryState.hidden=true;void api.displayCancel().catch(()=>{});}}};
+}

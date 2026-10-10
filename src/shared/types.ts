@@ -152,6 +152,11 @@ export interface OneAPI {
   pickerClearRecent(): Promise<void>;
   pickerPreferences(value: import('./picker').PickerPreferences): Promise<import('./picker').PickerPreferences>;
   pickDirectory(initialPath?: string): Promise<string | null>; scan(path: string): Promise<ScanSummary>; cancelScan(): Promise<void>;
+  displayList():Promise<import('./display-management').ManagedDisplay[]>;
+  displayProbe(id:string):Promise<import('./display-management').ManagedDisplay>;
+  displaySet(id:string,parameter:import('./display-management').DisplayParameter,value:number):Promise<import('./display-management').DisplayControl>;
+  displayCancel():Promise<void>;
+  onDisplayChanged(callback:()=>void):()=>void;
   brightnessStatus(): Promise<DisplayBrightness[]>;
   windowAction(action: 'minimize' | 'maximize' | 'close'): Promise<void>;
   windowState(): Promise<{ maximized: boolean; visible: boolean }>;
