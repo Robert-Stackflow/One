@@ -19,7 +19,7 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
  const paths=new Map(elements(rels,packageRelations,'Relationship').filter(node=>node.getAttribute('TargetMode')!=='External').map(node=>[node.getAttribute('Id'),node.getAttribute('Target')||'']));
  const slides=elements(root,presentation,'sldId');if(!slides.length)throw new Error('演示文稿没有页面');if(slides.length>5000)throw new Error('演示文稿页数超过预览上限');
  const headings:PptxHeading[]=[];
- const notesMasterCache=new Map<string,Map<number,Element>>();
+ const notesMasterCache=new Map<string,{levels:Map<number,Element>;colorMap:Map<string,string>;theme:Map<string,string>}>();
  for(const slide of slides){
   const target=paths.get(slide.getAttributeNS(relations,'id'))||'';
   const segments=(target.startsWith('/')?target.slice(1):'ppt/'+target).split('/'),normalized:string[]=[];
@@ -42,6 +42,7 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
     const child=(node:Element|undefined,namespace:string,name:string)=>node&&children(node).find(item=>item.namespaceURI===namespace&&item.localName===name);
     const levels=(node:Element|undefined)=>new Map(Array.from({length:9},(_,index)=>[index,child(node,drawing,`lvl${index+1}pPr`)] as const).filter((pair):pair is readonly [number,Element]=>!!pair[1]));
     let masterLevels=new Map<number,Element>();
+    let colorMap=new Map<string,string>(),theme=new Map<string,string>();
     const masterRels=archive.file(`ppt/notesSlides/_rels/${notePath.split('/').pop()}.rels`);
     if(masterRels){
      const masterRelation=elements(parse(await masterRels.async('string')),packageRelations,'Relationship').find(item=>item.getAttribute('Type')===relations+'/notesMaster'&&item.getAttribute('TargetMode')!=='External');
@@ -51,19 +52,42 @@ export async function preparePptxOutline(bytes:ArrayBuffer):Promise<{bytes:Array
       const masterPath=resolved.join('/');if(!/^ppt\/notesMasters\/[^/]+\.xml$/.test(masterPath))throw new Error('演示文稿备注母版引用无效');
       if(!notesMasterCache.has(masterPath)){
        const master=await part(masterPath);
-       notesMasterCache.set(masterPath,levels(child(master,presentation,'notesStyle')));
+       const mapping=child(master,presentation,'clrMap');
+       const mapped=new Map<string,string>();
+       if(mapping)for(const name of ['bg1','tx1','bg2','tx2','accent1','accent2','accent3','accent4','accent5','accent6','hlink','folHlink']){
+        const value=mapping.getAttribute(name);if(value)mapped.set(name,value);
+       }
+       const colors=new Map<string,string>();
+       const themeRels=archive.file(`ppt/notesMasters/_rels/${masterPath.split('/').pop()}.rels`);
+       if(themeRels){
+        const themeRelation=elements(parse(await themeRels.async('string')),packageRelations,'Relationship').find(item=>item.getAttribute('Type')===relations+'/theme'&&item.getAttribute('TargetMode')!=='External');
+        if(themeRelation){
+         const target=themeRelation.getAttribute('Target')||'',parts=(target.startsWith('/')?target.slice(1):'ppt/notesMasters/'+target).split('/'),resolved:string[]=[];
+         for(const segment of parts){if(segment==='..')resolved.pop();else if(segment&&segment!=='.')resolved.push(segment);}
+         const themePath=resolved.join('/');if(!/^ppt\/theme\/[^/]+\.xml$/.test(themePath))throw new Error('演示文稿主题引用无效');
+         const scheme=elements(await part(themePath),drawing,'clrScheme')[0];
+         if(scheme)for(const entry of children(scheme)){
+          const value=child(entry,drawing,'srgbClr')?.getAttribute('val')||child(entry,drawing,'sysClr')?.getAttribute('lastClr');
+           if(entry.localName&&value&&/^[0-9a-fA-F]{6}$/.test(value))colors.set(entry.localName,'#'+value);
+         }
+        }
+       }
+       notesMasterCache.set(masterPath,{levels:levels(child(master,presentation,'notesStyle')),colorMap:mapped,theme:colors});
       }
-      masterLevels=notesMasterCache.get(masterPath)!;
+      const cached=notesMasterCache.get(masterPath)!;
+      masterLevels=cached.levels;colorMap=cached.colorMap;theme=cached.theme;
      }
     }
     const style=(props:Element|undefined):Omit<PptxNoteRun,'text'>=>{
      if(!props)return {};
      const color=children(props).find(child=>child.namespaceURI===drawing&&child.localName==='solidFill');
-     const rgb=color&&elements(color,drawing,'srgbClr')[0]?.getAttribute('val');
+     const rgb=color&&child(color,drawing,'srgbClr')?.getAttribute('val');
+     const scheme=color&&child(color,drawing,'schemeClr')?.getAttribute('val');
+     const resolved=scheme&&theme.get(colorMap.get(scheme)||scheme);
      const size=Number(props.getAttribute('sz'))/100;
      const bold=props.getAttribute('b'),italic=props.getAttribute('i'),underline=props.getAttribute('u');
      return {...(bold!==null?{bold:['1','true'].includes(bold)}:{}),...(italic!==null?{italic:['1','true'].includes(italic)}:{}),...(underline!==null?{underline:underline!=='none'}:{}),
-      ...(rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?{color:'#'+rgb}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
+      ...(rgb&&/^[0-9a-fA-F]{6}$/.test(rgb)?{color:'#'+rgb}:resolved?{color:resolved}:{}),...(Number.isFinite(size)&&size>=6&&size<=48?{sizePt:size}:{})};
     };
     const paragraph=(node:Element,counters:Map<number,number>,localLevels:Map<number,Element>):PptxNoteParagraph=>{
      const props=children(node).find(child=>child.namespaceURI===drawing&&child.localName==='pPr');
