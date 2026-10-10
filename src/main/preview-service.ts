@@ -32,6 +32,12 @@ export async function preparePreview(path:string,register:(path:string,mime:stri
     catch(error){const message=(error as Error).message;data.error=/超过|过大|上限|超时/.test(message)?message:'文档无法读取，文件可能已损坏或加密';}
     return data;
   }
+  if(ext==='pptx'){
+    if(info.size>50*1024*1024){data.error='文件超过预览大小上限';return data;}
+    try{const result=await inspect(path,'pptx');Object.assign(data.metadata!,result.metadata);data.type='pptx';data.url=register(path,'application/vnd.openxmlformats-officedocument.presentationml.presentation');}
+    catch(error){const message=(error as Error).message;data.error=/超过|过大|上限|超时/.test(message)?message:'演示文稿无法读取，文件可能已损坏或加密';}
+    return data;
+  }
   if(ext==='xlsx'){
     if(info.size>50*1024*1024){data.error='文件超过预览大小上限';return data;}
     try{const result=await inspect(path,'xlsx');Object.assign(data.metadata!,result.metadata);data.type='xlsx';data.url=register(path,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');}

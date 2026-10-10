@@ -39,6 +39,7 @@
 - [原生表格预览](development/features/原生表格预览.md)
 - [XLSX 网页预览](development/features/XLSX网页预览.md)
 - [Word 网页预览](development/features/Word网页预览.md)
+- [PPTX 网页预览](development/features/PPTX网页预览.md)
 
 ## 调研与历史
 

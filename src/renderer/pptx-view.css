@@ -1,0 +1,22 @@
+.preview-body.type-pptx{display:flex;overflow:hidden;padding:0}
+.pptx-preview{position:relative;display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;background:var(--soft)}
+.pptx-preview-toolbar{display:flex;align-items:center;justify-content:center;gap:12px;flex:none;min-height:48px;border-bottom:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.pptx-preview-toolbar button{padding:4px 10px;min-height:30px}
+.pptx-preview-scroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable;padding:24px;overscroll-behavior:contain}
+.pptx-preview[data-state=loading] .pptx-preview-scroll{visibility:hidden}
+.pptx-preview-mount{width:100%;min-width:0;color:#222}
+.pptx-preview-status{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;color:var(--muted);background:var(--soft)}
+.pptx-preview-status p{margin:0;max-width:440px}
+.pptx-preview-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.pptx-preview-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 24px;background:var(--surface);color:var(--muted)}
+.pptx-preview-notice[hidden]{display:none}
+.pptx-page-thumbnail{display:block;width:100%;overflow:hidden;pointer-events:none;color:#222}
+.pptx-preview-notes{flex:none;max-height:35%;min-height:100px;overflow:auto;border-top:1px solid var(--line);background:var(--surface);padding:12px 24px;color:var(--fg)}
+.pptx-preview-notes[hidden]{display:none}
+.pptx-preview-notes-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pptx-preview-notes-header strong{flex:1;font-size:13px}
+.pptx-preview-notes-header button{min-height:28px;padding:3px 10px}
+.pptx-preview-notes-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.65;user-select:text}
+
+/* Remove only the viewer paper shadow, preserving effects authored in slides. */
+.pptx-preview-mount > [data-slide-index] > div:first-child{box-shadow:none!important}

@@ -39,7 +39,7 @@ export function renderDocx(host:HTMLElement,url:string,metadata:(value:Record<st
    const mount=(page?:number,scale?:number)=>{
     session.viewer?.destroy();surface.replaceChildren();
     const dpr=Math.max(2,window.devicePixelRatio||1);
-    session.viewer=DocxScrollViewer.fromDocument(surface,document,{dpr,paddingTop:24,paddingBottom:24,paddingLeft:24,paddingRight:24,gap:24,overscan:1,refitOnResize:true,background:'transparent',enableTextSelection:true,enableHyperlinks:false,onError:error=>fail(session,error)});
+    session.viewer=DocxScrollViewer.fromDocument(surface,document,{dpr,paddingTop:24,paddingBottom:24,paddingLeft:24,paddingRight:24,gap:24,overscan:1,refitOnResize:true,background:'transparent',pageShadow:false,enableTextSelection:true,enableHyperlinks:false,onVisiblePageChange:index=>{if(!session.closed)host.dispatchEvent(new CustomEvent('preview-page',{detail:{page:index+1}}));},onError:error=>fail(session,error)});
     if(scale!==undefined)session.viewer.setScale(scale);if(page!==undefined)session.viewer.scrollToPage(page,{behavior:'auto'});
    };
    mount();
