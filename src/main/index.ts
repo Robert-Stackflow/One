@@ -58,6 +58,7 @@ import {ImageConvertService} from './image-convert-service';
 import {ImageMetadataService} from './image-metadata-service';
 import {imageCodecCapabilities} from './image-codec';
 import {DeveloperHashService} from './developer-hash-service';
+import {generateQr} from './developer-qr';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
@@ -65,7 +66,7 @@ import {barcodeURL} from '../shared/barcode';
 import {DisplayShortcutController} from './display-shortcuts';
 import {DisplayProfilesService} from './display-profiles';
 import {DisplayManagementService} from './display-management';
-import { app, BrowserWindow, clipboard, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme, powerMonitor } from 'electron';
+import { app, BrowserWindow, clipboard, ClipboardItem, crashReporter, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray, Notification, nativeTheme, powerMonitor } from 'electron';
 import { readFile, writeFile, mkdir, stat, readdir, rename, realpath, lstat } from 'node:fs/promises';
 import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -153,6 +154,7 @@ const barcodeCapture=new BarcodeCapture(bounds=>windowFor('barcode-capture',{...
 const imageConvert=new ImageConvertService();
 const imageMetadata=new ImageMetadataService();
 const developerHash=new DeveloperHashService();
+const qrImages=new Map<number,Buffer>();
 if(testMode&&process.env.ONE_TEST_BARCODE==='1')(globalThis as typeof globalThis&{oneTestBarcodeCapture?:BarcodeCapture}).oneTestBarcodeCapture=barcodeCapture;
 let displayShortcuts:DisplayShortcutController|undefined;let displayShortcutRefresh=false,lastDisplayShortcutError='';
 const displayProfiles=new DisplayProfilesService(displayManagement,()=>settings.displays.profiles,async change=>(await saveSettings(current=>mergeSettings(current,{displays:{profiles:change(current.displays.profiles)}}))).displays.profiles);
@@ -274,7 +276,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('will-navigate', event => event.preventDefault());
   if(view==='preview'){const stop=()=>{nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);};window.webContents.on('did-start-loading',stop);window.webContents.on('render-process-gone',stop);}
   window.on('close',()=>{if(view==='preview'){nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);}if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -770,6 +772,9 @@ function registerIPC() {
   handle('base64-export-file',async(_event,value)=>{const source=normalizeBase64(textValue(value,10_000_000)),bytes=Buffer.from(source,'base64');if(!bytes.length||bytes.length>maxBase64FileBytes)throw Error('解码后的文件不能超过 6 MB');const path=await pickPath('save','保存解码文件','解码文件.bin');if(!path)return null;await writeFile(path,bytes);return path;},['main']);
   handle('developer-hash-start',(event,request)=>developerHash.start(event.sender.id,request,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:developer-hash-progress',progress);}),['main']);
   handle('developer-hash-cancel',event=>developerHash.cancel(event.sender.id),['main']);
+  handle('developer-qr-generate',async(event,request)=>{qrImages.delete(event.sender.id);const png=await generateQr(request);qrImages.set(event.sender.id,png);return {url:`data:image/png;base64,${png.toString('base64')}`,size:(request as {size:number}).size,bytes:png.length};},['main']);
+  handle('developer-qr-copy',event=>{const png=qrImages.get(event.sender.id);if(!png)throw Error('请先生成二维码');return clipboard.write([new ClipboardItem({'image/png':new Blob([new Uint8Array(png)],{type:'image/png'})})]);},['main']);
+  handle('developer-qr-export',async event=>{const png=qrImages.get(event.sender.id);if(!png)throw Error('请先生成二维码');const owner=BrowserWindow.fromWebContents(event.sender)||main;const selected=await dialog.showSaveDialog(owner,{title:'导出二维码 PNG',defaultPath:join(app.getPath('pictures'),'One-QR.png'),filters:[{name:'PNG 图片',extensions:['png']}],properties:['showOverwriteConfirmation']});if(selected.canceled||!selected.filePath)return null;const target=selected.filePath.toLowerCase().endsWith('.png')?selected.filePath:`${selected.filePath}.png`;await writeFile(target,png);return target;},['main']);
   handle('barcode-clipboard',()=>barcodeClipboard());
   handle('barcode-capture',()=>barcodeCapture.start(main));
   handle('barcode-cancel-capture',event=>barcodeCapture.cancel(event.sender.id));

@@ -65,6 +65,7 @@ const api: OneAPI = {
   imageColorPreview:path=>invoke('image-color-preview',path),imageColorSample:(path,x,y)=>invoke('image-color-sample',path,x,y),
   base64ExportFile:value=>invoke('base64-export-file',value),
   developerHashStart:request=>invoke('developer-hash-start',request),developerHashCancel:()=>invoke('developer-hash-cancel'),onDeveloperHashProgress:callback=>listen('developer-hash-progress',callback),
+  developerQrGenerate:request=>invoke('developer-qr-generate',request),developerQrCopy:()=>invoke('developer-qr-copy'),developerQrExport:()=>invoke('developer-qr-export'),
   quit: () => invoke('quit'), closeWindow: () => invoke('close-window'), onProgress: callback => listen('progress', callback), onReceiveText: callback => listen('receive-text', callback), onEcho: callback => listen('echo', callback),onEchoHide:callback=>listen('echo-hide',callback), onCopyText: callback => listen('copy-text', callback), onPreviewChanged: callback => listen('preview-changed', callback)
 };
 contextBridge.exposeInMainWorld('one', api);
