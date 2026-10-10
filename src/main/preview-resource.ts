@@ -3,6 +3,20 @@ import {dirname,resolve,relative,isAbsolute,parse} from 'node:path';
 
 function inside(root:string,path:string){const rel=relative(root,path);return rel!==''&&!rel.startsWith('..')&&!isAbsolute(rel);}
 
+/** Walk chunk headers only: large color profiles must not hide acTL or force a full-file read. */
+export async function isAnimatedPng(path:string){
+ const file=await open(path,'r');
+ try{const signature=Buffer.alloc(8);if((await file.read(signature,0,8,0)).bytesRead!==8||!signature.equals(Buffer.from([137,80,78,71,13,10,26,10])))return false;
+  const size=(await file.stat()).size,header=Buffer.alloc(8);
+  for(let at=8,count=0;at+12<=size&&count<4096;count++){
+   if((await file.read(header,0,8,at)).bytesRead!==8)return false;
+   const length=header.readUInt32BE(0),type=header.toString('ascii',4,8);if(at+length+12>size)return false;
+   if(type==='acTL'){if(length!==8)return false;const frames=Buffer.alloc(4);return (await file.read(frames,0,4,at+8)).bytesRead===4&&frames.readUInt32BE(0)>1;}
+   if(type==='IDAT'||type==='IEND')return false;at+=length+12;
+  }return false;
+ }finally{await file.close();}
+}
+
 export async function previewResourcePath(documentPath:string,value:string){
   if(value.length>4096||/^[a-z][a-z\d+.-]*:/i.test(value)||value.startsWith('\\'))return null;
   let decoded:string;try{decoded=decodeURIComponent(value.split(/[?#]/,1)[0]);}catch{return null;}

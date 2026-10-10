@@ -3,8 +3,10 @@ import {createReadStream} from 'node:fs';
 import {Readable} from 'node:stream';
 
 /** Media decoders require byte ranges and a definite length to seek reliably. */
-export async function fileResponse(path:string,mime:string,request:Request){
-  const size=(await stat(path)).size;let start=0,end=size-1,status=200;
+export async function fileResponse(path:string,mime:string,request:Request,segment?:import('./motion-photo').FileSegment){
+  const actual=(await stat(path)).size,offset=segment?.offset??0,size=segment?.length??actual;
+  if(!Number.isSafeInteger(offset)||!Number.isSafeInteger(size)||offset<0||size<0||offset+size>actual)return new Response(null,{status:404});
+  let start=0,end=size-1,status=200;
   const headers=new Headers({'Content-Type':mime,'Accept-Ranges':'bytes','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'});
   const range=request.headers.get('range');
   if(range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match||(!match[1]&&!match[2]))return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});
@@ -14,6 +16,6 @@ export async function fileResponse(path:string,mime:string,request:Request){
   }
   headers.set('Content-Length',String(Math.max(0,end-start+1)));
   if(request.method==='HEAD'||!size)return new Response(null,{status,headers});
-  const stream=createReadStream(path,{start,end});const abort=()=>stream.destroy();request.signal.addEventListener('abort',abort,{once:true});stream.once('close',()=>request.signal.removeEventListener('abort',abort));
+  const stream=createReadStream(path,{start:offset+start,end:offset+end});const abort=()=>stream.destroy();request.signal.addEventListener('abort',abort,{once:true});stream.once('close',()=>request.signal.removeEventListener('abort',abort));
   return new Response(Readable.toWeb(stream) as ReadableStream,{status,headers});
 }

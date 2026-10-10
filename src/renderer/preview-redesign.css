@@ -235,3 +235,12 @@
 @media(max-width:800px){.font-reader #font-sample{padding:20px}.font-reader .font-alphabet{padding:20px}}
 
 .native-office-preview{position:relative;overflow:hidden;padding:0!important}.native-preview-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.native-office-preview .preview-error-detail{max-width:540px;line-height:1.7}
+
+/* Shared image/animation surface retains the existing zoom and pan behavior. */
+.photo-visual{display:inline-block;position:relative;flex:none;line-height:0}
+.photo-visual>img,.photo-visual>canvas{display:block;max-width:none;max-height:none;box-shadow:0 8px 32px #0003}
+.photo-visual>.motion-photo-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#111}
+.preview-image-controls{display:inline-flex;align-items:center;gap:2px;flex-shrink:0}
+.preview-image-controls:empty{display:none}
+.image-preview-hint{line-height:1.6;color:var(--muted);text-align:center;margin:16px;max-width:360px}
+.image-unavailable{flex-direction:column}

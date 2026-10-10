@@ -83,7 +83,7 @@ import {NativeTooltipService} from './native-tooltip';
 import {nativeTooltipData} from '../shared/native-tooltip';
 const nativeOfficePreview=new NativePreviewService(process.env.ONE_TEST_MODE==='1'&&process.env.ONE_TEST_NATIVE_PREVIEW_HOST?()=>[process.env.ONE_TEST_NATIVE_PREVIEW_HOST!]:undefined);
 const nativeTooltips=new NativeTooltipService(parent=>windowFor('native-tooltip',{parent,width:1,height:1,minWidth:1,minHeight:1,frame:false,thickFrame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,roundedCorners:false,focusable:false,skipTaskbar:true,resizable:false,movable:false,minimizable:false,maximizable:false,fullscreenable:false}));
-import {previewImageDimensions,previewResourcePath} from './preview-resource';
+import {isAnimatedPng,previewImageDimensions,previewResourcePath} from './preview-resource';
 import {externalURL,linkCard} from './link-card';
 import {DirectoryService} from './directory-service';
 const directories=new DirectoryService();
@@ -104,7 +104,7 @@ process.on('unhandledRejection',reason=>runtimeError(app.getPath('userData'),'ma
 app.on('child-process-gone',(_event,details)=>runtimeError(app.getPath('userData'),'child-process-gone',JSON.stringify(details)));
 if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
-const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string }>();
+const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string; segment?:import('./motion-photo').FileSegment }>();
 const workbookReloads=new WeakMap<PreviewData,Promise<import('../shared/workbook').WorkbookData>>();
 const displayAssets=new Map<string,{owner:number;bytes:Buffer}>();let displayAssetBytes=0;
 async function scaledPreviewImage(path:string,width:number,height:number):Promise<Buffer>{
@@ -136,7 +136,7 @@ if(developmentMode)process.on('message',(message:any)=>{
 // The development IPC listener keeps Node's event loop alive after Chromium quits.
 // Disconnect only after normal shutdown has flushed application state.
 if(developmentMode)app.once('will-quit',()=>{if(process.connected)process.disconnect();});
-const fontAssets = new Map<string,{path:string;mime:string}>();
+const fontAssets = new Map<string,{path:string;mime:string;segment?:undefined}>();
 const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSource|null>>();
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
@@ -379,7 +379,7 @@ async function runMaintenance(mode: 'startup' | 'registry') {
 async function preparePreview(path: string, owner: number): Promise<PreviewData> {
   nativeOfficePreview.stop(owner);
   releasePreviewAssets(owner);
-  const held:string[]=[];try{const next=await loadPreview(path,(path,mime)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){for(const id of held)directories.release(owner,id);throw error;}
+  const held:string[]=[];try{const next=await loadPreview(path,(path,mime,segment)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime,segment});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){for(const id of held)directories.release(owner,id);throw error;}
 }
 function foregroundPreview(window:BrowserWindow){
  if(window.isDestroyed())return;if(window.isMinimized())window.restore();
@@ -807,8 +807,8 @@ function registerIPC() {
   handle('directory-open',(event,path)=>directories.open(event.sender.id,filePath(path)),['preview']);
   handle('directory-page',(event,id,offset,limit,query='')=>directories.page(event.sender.id,textValue(id,100),offset,limit,textValue(query,1000)),['preview']);
   handle('directory-release',(event,id)=>directories.release(event.sender.id,textValue(id,100)),['preview']);
-  handle('preview-resource',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const extension=extname(path).toLowerCase(),mime:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.css':'text/css'};if(!mime[extension]||(await stat(path)).size>10*1024*1024)return null;const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:mime[extension]});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;}catch{return null;}},['preview']);
-  handle('preview-image',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const mime:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'},kind=mime[extname(path).toLowerCase()];if(!kind||(await stat(path)).size>10*1024*1024)return null;const dimensions=await previewImageDimensions(path);const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:kind});return {url:`one-file://asset/${token}/${encodeURIComponent(basename(path))}`,...(dimensions||{})};}catch{return null;}},['preview']);
+  handle('preview-resource',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const extension=extname(path).toLowerCase(),mime:Record<string,string>={'.png':'image/png','.apng':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.css':'text/css'};if(!mime[extension]||(await stat(path)).size>10*1024*1024)return null;const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:mime[extension]});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;}catch{return null;}},['preview']);
+  handle('preview-image',async(event,value)=>{const data=previews.get(event.sender.id);if(!data||typeof value!=='string')return null;try{const path=await previewResourcePath(data.path,value);if(!path)return null;const mime:Record<string,string>={'.png':'image/png','.apng':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'},kind=mime[extname(path).toLowerCase()];if(!kind||(await stat(path)).size>10*1024*1024)return null;const dimensions=await previewImageDimensions(path);const token=randomUUID();assets.set(token,{path,owner:event.sender.id,mime:kind});return {url:`one-file://asset/${token}/${encodeURIComponent(basename(path))}`,...(dimensions||{})};}catch{return null;}},['preview']);
   handle('preview-display-image',async(event,value,targetWidth,targetHeight)=>{
     if(typeof value!=='string'||value.length>4096||!Number.isInteger(targetWidth)||targetWidth<128||targetWidth>1280||!Number.isInteger(targetHeight)||targetHeight<128||targetHeight>960)return null;
     try{
@@ -816,13 +816,23 @@ function registerIPC() {
       const sourceToken=url.pathname.split('/')[1],asset=assets.get(sourceToken);
       if(!asset||asset.owner!==event.sender.id||!asset.mime.startsWith('image/')||(await stat(asset.path)).size>10*1024*1024)return null;
       // Leave GIF/WebP animation and SVG vectors at their original resolution.
-      if(!['image/png','image/jpeg'].includes(asset.mime))return value;
+      if(!['image/png','image/jpeg'].includes(asset.mime)||asset.mime==='image/png'&&await isAnimatedPng(asset.path))return value;
       const dimensions=await previewImageDimensions(asset.path);if(!dimensions)return null;
       const scale=Math.min(targetWidth/dimensions.width,targetHeight/dimensions.height,1);if(scale>=1)return value;
       const width=Math.max(1,Math.round(dimensions.width*scale)),height=Math.max(1,Math.round(dimensions.height*scale));
       const bytes=await scaledPreviewImage(asset.path,width,height);if(!assets.has(sourceToken)||bytes.length>8*1024*1024||displayAssetBytes+bytes.length>64*1024*1024||!roles.has(event.sender.id))return null;
       const token=randomUUID();displayAssets.set(token,{owner:event.sender.id,bytes});displayAssetBytes+=bytes.length;
       return `one-file://display/${token}/preview.png`;
+    }catch{return null;}
+  },['preview']);
+  handle('preview-still-image',async(event,value)=>{
+    if(typeof value!=='string'||value.length>4096)return null;
+    try{const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='asset')return null;
+      const sourceToken=url.pathname.split('/')[1],asset=assets.get(sourceToken);
+      if(!asset||asset.owner!==event.sender.id||!['image/heic','image/heif'].includes(asset.mime)||(await stat(asset.path)).size>100*1024*1024)return null;
+      const bytes=await scaledPreviewImage(asset.path,1280,960);
+      if(!assets.has(sourceToken)||!roles.has(event.sender.id)||bytes.length>8*1024*1024||displayAssetBytes+bytes.length>64*1024*1024)return null;
+      const token=randomUUID();displayAssets.set(token,{owner:event.sender.id,bytes});displayAssetBytes+=bytes.length;return `one-file://display/${token}/preview.png`;
     }catch{return null;}
   },['preview']);
   handle('preview-release-display-image',(event,value)=>{if(typeof value!=='string'||value.length>4096)return;try{const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='display')return;const token=url.pathname.split('/')[1],asset=displayAssets.get(token);if(asset?.owner===event.sender.id){displayAssetBytes-=asset.bytes.length;displayAssets.delete(token);}}catch{/* Ignore stale image URLs. */}},['preview']);
@@ -925,7 +935,7 @@ async function start() {
   powerMonitor.on('resume',()=>displayManagement.invalidate());
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); return net.fetch(pathToFileURL(path).toString()); });
-  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request); });
+  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request,'segment' in asset?asset.segment:undefined); });
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false)); session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*','https://*/*'] }, (_details, callback) => callback({ cancel: true }));
   diskService=new DiskService(p=>{if(main&&!main.isDestroyed())main.webContents.send('one:progress',p);});maintenance=new MaintenanceClient(join(app.getPath('userData'),'maintenance-backups'),value=>{if(main&&!main.isDestroyed())main.webContents.send('one:maintenance-progress',value);});

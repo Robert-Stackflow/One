@@ -1,0 +1,9 @@
+These small fixtures are generated test content, not photographs from real phones.
+
+- GIF/APNG/WebP: three 96 × 64 solid-color frames generated with Pillow 10.4, with distinct delays and transparency/disposal settings. `once.gif` has no loop extension.
+- PNG/JPEG: a solid-color still generated with Pillow.
+- MP4: two seconds of FFmpeg `testsrc2`, 96 × 64 at 6 fps, H.264/yuv420p, faststart. No audio.
+- `tests/image-preview-fixtures.cjs` wraps the JPEG/video into synthetic Google XMP, Samsung SEF/mpv2, generic vendor trailer, HEIC mpvd and same-name export layouts. Its HEIC container tests video fallback, not HEIC still decoding.
+- Apple identifier unit fixtures contain synthetic MakerNote/QuickTime keys metadata and structurally valid video boxes. Playback uses the separate real H.264 test clip.
+
+These establish parser and playback behavior; they do not certify individual phone models, HEVC codecs or private vendor variants.
