@@ -57,6 +57,7 @@ import {BarcodeCapture,barcodeFile,barcodeClipboard} from './barcode';
 import {ImageConvertService} from './image-convert-service';
 import {ImageMetadataService} from './image-metadata-service';
 import {imageCodecCapabilities} from './image-codec';
+import {DeveloperHashService} from './developer-hash-service';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
@@ -151,6 +152,7 @@ const displayManagement=new DisplayManagementService(()=>{if(main&&!main.isDestr
 const barcodeCapture=new BarcodeCapture(bounds=>windowFor('barcode-capture',{...bounds,minWidth:1,minHeight:1,frame:false,hasShadow:false,roundedCorners:false,resizable:false,movable:false,skipTaskbar:true,alwaysOnTop:true,title:'屏幕框选 · One'}));
 const imageConvert=new ImageConvertService();
 const imageMetadata=new ImageMetadataService();
+const developerHash=new DeveloperHashService();
 if(testMode&&process.env.ONE_TEST_BARCODE==='1')(globalThis as typeof globalThis&{oneTestBarcodeCapture?:BarcodeCapture}).oneTestBarcodeCapture=barcodeCapture;
 let displayShortcuts:DisplayShortcutController|undefined;let displayShortcutRefresh=false,lastDisplayShortcutError='';
 const displayProfiles=new DisplayProfilesService(displayManagement,()=>settings.displays.profiles,async change=>(await saveSettings(current=>mergeSettings(current,{displays:{profiles:change(current.displays.profiles)}}))).displays.profiles);
@@ -272,7 +274,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('will-navigate', event => event.preventDefault());
   if(view==='preview'){const stop=()=>{nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);};window.webContents.on('did-start-loading',stop);window.webContents.on('render-process-gone',stop);}
   window.on('close',()=>{if(view==='preview'){nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);}if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageMetadata.cancel(windowId);if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -766,6 +768,8 @@ function registerIPC() {
   handle('image-color-preview',(_event,path)=>imageColorPreview(filePath(path)),['main']);
   handle('image-color-sample',(_event,path,x,y)=>imageColorSample(filePath(path),x,y),['main']);
   handle('base64-export-file',async(_event,value)=>{const source=normalizeBase64(textValue(value,10_000_000)),bytes=Buffer.from(source,'base64');if(!bytes.length||bytes.length>maxBase64FileBytes)throw Error('解码后的文件不能超过 6 MB');const path=await pickPath('save','保存解码文件','解码文件.bin');if(!path)return null;await writeFile(path,bytes);return path;},['main']);
+  handle('developer-hash-start',(event,request)=>developerHash.start(event.sender.id,request,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:developer-hash-progress',progress);}),['main']);
+  handle('developer-hash-cancel',event=>developerHash.cancel(event.sender.id),['main']);
   handle('barcode-clipboard',()=>barcodeClipboard());
   handle('barcode-capture',()=>barcodeCapture.start(main));
   handle('barcode-cancel-capture',event=>barcodeCapture.cancel(event.sender.id));
@@ -1014,5 +1018,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   await shellInbox.start();
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageMetadata.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageMetadata.stopAll(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

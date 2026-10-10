@@ -168,6 +168,9 @@ export interface OneAPI {
   imageColorPreview(path:string):Promise<import('./image-color').ImageColorPreview>;
   imageColorSample(path:string,x:number,y:number):Promise<import('./image-color').ImagePixelSample>;
   base64ExportFile(value:string):Promise<string|null>;
+  developerHashStart(request:import('./developer-hash').HashRequest):Promise<import('./developer-hash').HashResult>;
+  developerHashCancel():Promise<boolean>;
+  onDeveloperHashProgress(callback:(progress:import('./developer-hash').HashProgress)=>void):()=>void;
   displayList():Promise<import('./display-management').ManagedDisplay[]>;
   displayProbe(id:string):Promise<import('./display-management').ManagedDisplay>;
   barcodeFile(path:string):Promise<import('./barcode').BarcodeImage>;barcodeClipboard():Promise<import('./barcode').BarcodeImage>;barcodeCapture():Promise<import('./barcode').BarcodeImage|null>;barcodeCancelCapture():Promise<void>;barcodeCaptureData():Promise<import('./barcode').BarcodeCaptureImage>;barcodeCaptureChoose(crop:import('./barcode').BarcodeCrop|null):Promise<void>;barcodeOpenLink(text:string):Promise<void>;barcodePreview():Promise<void>;
