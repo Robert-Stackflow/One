@@ -1,5 +1,5 @@
 import type {PreviewData} from '../shared/types';
-import {api,icon,iconButton} from './ui';
+import {api,icon,iconButton,toast,errorMessage} from './ui';
 
 type Surface=HTMLImageElement|HTMLCanvasElement;
 /** All asynchronous work belongs to this file selection, including the decoder and video track. */
@@ -9,6 +9,7 @@ export function renderImage(body:HTMLElement,data:PreviewData,controls:HTMLEleme
  let alive=true,stillURL:string|undefined,decoder:ImageDecoder|undefined,timer:ReturnType<typeof setTimeout>|undefined;
  const abort=new AbortController();let epoch=0,pending:{index:number;epoch:number}|undefined,decoding=false,playing=true,index=0,loops=0,frameCount=0,repetitions=0;
  let canvas:HTMLCanvasElement|undefined,video:HTMLVideoElement|undefined,motionPlaying=false,stillFailed=false;
+ let cancelMotionExport=()=>{};
  let makePoster=()=>{};
  const clearTimer=()=>{clearTimeout(timer);timer=undefined;};
  const button=(name:string,title:string,glyph:string,run:()=>void)=>{const holder=document.createElement('span');holder.innerHTML=iconButton('image-'+name,title,glyph);const b=holder.firstElementChild as HTMLButtonElement;b.onclick=run;controls.append(b);return b;};
@@ -68,6 +69,13 @@ export function renderImage(body:HTMLElement,data:PreviewData,controls:HTMLEleme
   const stopMotion=()=>{motionPlaying=false;movie.pause();movie.hidden=true;if(movie.readyState)movie.currentTime=0;label(motionButton,'播放动态照片','play');};
   const motionButton=button('motion','播放动态照片','play',()=>{if(motionPlaying){stopMotion();return;}motionPlaying=true;movie.hidden=false;label(motionButton,'停止动态照片','pause');void movie.play().catch(()=>{stopMotion();metadata({'动态播放':'视频编码不可用，请用默认程序打开'});});});
   const soundButton=button('sound','开启声音','volume-off',()=>{movie.muted=!movie.muted;label(soundButton,movie.muted?'开启声音':'静音',movie.muted?'volume-off':'volume');});
+  let exporting=false;
+  cancelMotionExport=()=>{if(exporting)void api.previewMotionExportCancel();};
+  const exportButton=button('export-motion','导出原始视频','disk',()=>{
+   if(exporting){void api.previewMotionExportCancel();return;}
+   exporting=true;label(exportButton,'取消视频导出','stop');metadata({'动态视频导出':'正在导出原始视频…'});
+   void api.previewMotionExport().then(path=>{if(alive)metadata({'动态视频导出':path?`已导出 ${path.split(/[\\/]/).pop()}`:'已取消选择'});}).catch(error=>{if(alive){const message=errorMessage(error);metadata({'动态视频导出':message});toast(message);}}).finally(()=>{exporting=false;if(alive)label(exportButton,'导出原始视频','disk');});
+  });
   movie.onended=stopMotion;
   makePoster=()=>{if(!alive||posterMade||!stillFailed)return;if(movie.error){unsupported('此照片和视频需要系统解码支持，请用默认程序打开');return;}if(movie.readyState<2){movie.preload='auto';movie.load();return;}
    // HEIC may require an optional system codec. A decoded movie frame is an explicit fallback.
@@ -78,5 +86,5 @@ export function renderImage(body:HTMLElement,data:PreviewData,controls:HTMLEleme
   movie.onerror=()=>{if(!alive)return;stopMotion();motionButton.disabled=true;soundButton.disabled=true;metadata({'动态播放':'视频编码不可用，请用默认程序打开'});if(stillFailed&&!posterMade)unsupported('此照片和视频需要系统解码支持，请用默认程序打开');};
   movie.src=data.motionPhoto.url;
  }
- return ()=>{alive=false;epoch++;pending=undefined;clearTimer();abort.abort();decoder?.close();document.removeEventListener('visibilitychange',visibility);controls.replaceChildren();photo.onload=photo.onerror=null;photo.removeAttribute('src');if(video){video.onended=video.onerror=video.onloadeddata=null;video.pause();video.removeAttribute('src');video.load();}if(stillURL)void api.previewReleaseDisplayImage(stillURL).catch(()=>{});};
+ return ()=>{alive=false;cancelMotionExport();epoch++;pending=undefined;clearTimer();abort.abort();decoder?.close();document.removeEventListener('visibilitychange',visibility);controls.replaceChildren();photo.onload=photo.onerror=null;photo.removeAttribute('src');if(video){video.onended=video.onerror=video.onloadeddata=null;video.pause();video.removeAttribute('src');video.load();}if(stillURL)void api.previewReleaseDisplayImage(stillURL).catch(()=>{});};
 }

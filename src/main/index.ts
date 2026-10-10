@@ -59,6 +59,8 @@ import {ImageMetadataService} from './image-metadata-service';
 import {imageCodecCapabilities} from './image-codec';
 import {DeveloperHashService} from './developer-hash-service';
 import {generateQr} from './developer-qr';
+import {exportMotionPhotoVideo} from './motion-photo-export';
+import {inspectMotionPhoto} from './motion-photo';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
@@ -113,6 +115,7 @@ app.on('child-process-gone',(_event,details)=>runtimeError(app.getPath('userData
 if (developmentMode) app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 ** 2));
 protocol.registerSchemesAsPrivileged([{ scheme: 'one', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'one-file', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const roles = new Map<number, string>(); const previews = new Map<number, PreviewData>(); const assets = new Map<string, { path: string; owner: number; mime: string; segment?:import('./motion-photo').FileSegment }>();
+const motionVideoExports=new Map<number,AbortController>();
 const workbookReloads=new WeakMap<PreviewData,Promise<import('../shared/workbook').WorkbookData>>();
 const displayAssets=new Map<string,{owner:number;bytes:Buffer}>();let displayAssetBytes=0;
 async function scaledPreviewImage(path:string,width:number,height:number):Promise<Buffer>{
@@ -276,7 +279,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('will-navigate', event => event.preventDefault());
   if(view==='preview'){const stop=()=>{nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);};window.webContents.on('did-start-loading',stop);window.webContents.on('render-process-gone',stop);}
   window.on('close',()=>{if(view==='preview'){nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);}if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);motionVideoExports.get(windowId)?.abort();if(view==='preview'){archiveService?.cancelOwner(windowId);nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -831,6 +834,21 @@ function registerIPC() {
   handle('preview-preferences',async(_event,value)=>{if(value===undefined)return settings.preview;return (await saveSettings(current=>mergeSettings(current,{preview:value}))).preview;},['preview']);
   handle('preview-open-with',event=>{const data=previews.get(event.sender.id);if(!data)throw new Error('预览尚未准备');return openWithApplications(data.path);},['preview']);
   handle('preview-open-in',async(event,id)=>{const data=previews.get(event.sender.id);if(!data)throw new Error('预览尚未准备');await openInApplication(data.path,id);},['preview']);
+  handle('preview-motion-export',async event=>{
+   const ownerId=event.sender.id,data=previews.get(ownerId);if(data?.type!=='image'||!data.motionPhoto)throw Error('当前预览没有可导出的动态视频');
+   if(motionVideoExports.has(ownerId))throw Error('动态视频正在导出');
+   const controller=new AbortController();motionVideoExports.set(ownerId,controller);
+   try{
+    const motion=await inspectMotionPhoto(data.path);if(!motion)throw Error('动态视频已失效，请重新打开照片');
+    const extension=motion.mime==='video/quicktime'?'mov':'mp4',owner=BrowserWindow.fromWebContents(event.sender);if(!owner)throw Error('预览窗口已关闭');
+    const selected=await dialog.showSaveDialog(owner,{title:'导出动态照片视频',defaultPath:join(app.getPath('videos'),`${basename(data.path,extname(data.path))}-motion.${extension}`),filters:[{name:extension.toUpperCase()+' 视频',extensions:[extension]}],properties:['showOverwriteConfirmation']});
+    if(selected.canceled||!selected.filePath)return null;
+    if(controller.signal.aborted||previews.get(ownerId)?.path!==data.path)throw Error('已取消动态视频导出');
+    const target=selected.filePath.toLowerCase().endsWith(`.${extension}`)?selected.filePath:`${selected.filePath}.${extension}`;
+    await exportMotionPhotoVideo(motion,target,controller.signal);return target;
+   }finally{motionVideoExports.delete(ownerId);}
+  },['preview']);
+  handle('preview-motion-export-cancel',event=>{const controller=motionVideoExports.get(event.sender.id);if(!controller)return false;controller.abort();return true;},['preview']);
   handle('preview-flags',async(event,value)=>{const state=flags.get(event.sender.id);if(!state)throw new Error('预览已关闭');if(value){for(const key of ['pinned','held'] as const)if(value[key]!==undefined){if(typeof value[key]!=='boolean')throw new Error('参数无效');state[key]=value[key];}BrowserWindow.fromWebContents(event.sender)?.setAlwaysOnTop(state.pinned,'pop-up-menu');await saveSettings(current=>mergeSettings(current,{preview:{pinned:state.pinned,held:state.held}}));}return state;},['preview']);
   handle('directory-open',(event,path)=>directories.open(event.sender.id,filePath(path)),['preview']);
   handle('directory-page',(event,id,offset,limit,query='')=>directories.page(event.sender.id,textValue(id,100),offset,limit,textValue(query,1000)),['preview']);
@@ -867,7 +885,7 @@ function registerIPC() {
   handle('preview-thumbnail',async(event,value)=>{if(typeof value!=='string'||value.length>4096)return null;try{const url=new URL(value);if(url.protocol!=='one-file:'||url.host!=='asset')return null;const token=url.pathname.split('/')[1],asset=assets.get(token);if(!asset||asset.owner!==event.sender.id||!asset.mime.startsWith('image/')||(await stat(asset.path)).size>10*1024*1024)return null;let image=await nativeImage.createThumbnailFromPath(asset.path,{width:96,height:84});if(image.isEmpty()||!assets.has(token)||event.sender.isDestroyed())return null;const {width,height}=image.getSize();if(!width||!height)return null;const scale=Math.min(96/width,84/height,1);if(scale<1)image=image.resize({width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale)),quality:'good'});return image.toDataURL();}catch{return null;}},['preview']);
   handle('preview-link-card',(_event,value)=>linkCard(value),['preview']);
   handle('preview-open-link',async(_event,value)=>{await shell.openExternal(externalURL(value).href);},['preview']);
-  handle('select-preview',(event,path)=>{const id=event.sender.id,target=filePath(path);const task=(previewQueues.get(id)||Promise.resolve()).catch(()=>{}).then(async()=>{if(event.sender.isDestroyed())return;event.sender.send('one:preview-loading');const data=await preparePreview(target,id);if(event.sender.isDestroyed())return;previews.set(id,data);event.sender.send('one:preview-changed');});previewQueues.set(id,task);return task;},['preview']);
+  handle('select-preview',(event,path)=>{const id=event.sender.id,target=filePath(path);motionVideoExports.get(id)?.abort();const task=(previewQueues.get(id)||Promise.resolve()).catch(()=>{}).then(async()=>{if(event.sender.isDestroyed())return;event.sender.send('one:preview-loading');const data=await preparePreview(target,id);if(event.sender.isDestroyed())return;previews.set(id,data);event.sender.send('one:preview-changed');});previewQueues.set(id,task);return task;},['preview']);
   handle('input-status', () => input.status());
   handle('transform', (event, request) => {textValue(request?.text);return textService.run<string>(event.sender.id,{kind:'pipeline',text:request.text,steps:validateSteps([request])});}, ['main', 'copy']);
   handle('text-pipeline',(event,text,steps)=>textService.run<string>(event.sender.id,{kind:'pipeline',text:textValue(text),steps:validateSteps(steps)}));handle('text-cancel',event=>textService.cancel(event.sender.id));handle('text-compare',(event,left,right,ignoreWhitespace)=>{if(typeof ignoreWhitespace!=='boolean')throw new Error('比较参数无效');return textService.run(event.sender.id,{kind:'compare',left:textValue(left),right:textValue(right),ignoreWhitespace});});handle('text-difference-page',(event,id,page)=>textService.page(event.sender.id,id,page));handle('text-comparison-clear',(event,id)=>textService.clear(event.sender.id,id));handle('text-batch',(event,request)=>{if(!request||typeof request.recursive!=='boolean'||typeof request.merge!=='boolean')throw new Error('批处理参数无效');return textService.run(event.sender.id,{kind:'batch',request:{...request,output:filePath(request.output),steps:validateSteps(request.steps)}});});
@@ -906,7 +924,7 @@ function registerIPC() {
     const task = (previewQueues.get(id) || Promise.resolve()).catch(() => {}).then(async () => {
       if (event.sender.isDestroyed()) return; const previous = previews.get(id); if (!previous) return;
       const directory=previous.navigation;if(!directory)return;const next=directory.position+step;if(next<0||next>=directory.count)return;const target=(await directories.page(id,directory.id,next,1)).entries[0];if(!target||event.sender.isDestroyed())return;
-      event.sender.send('one:preview-loading');const data = await preparePreview(target.path,id);
+      motionVideoExports.get(id)?.abort();event.sender.send('one:preview-loading');const data = await preparePreview(target.path,id);
       if (event.sender.isDestroyed()) { releasePreviewAssets(id); return; }
       previews.set(id,data); event.sender.send('one:preview-changed');
     });
