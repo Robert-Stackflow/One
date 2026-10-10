@@ -57,6 +57,7 @@ export function renderMain() {
   let barcodeController:ReturnType<typeof import('./barcode-view').setupBarcode>|undefined;
   let developerDataController:ReturnType<typeof import('./developer-data-view').setupDeveloperData>|undefined;
   let base64Controller:ReturnType<typeof import('./base64-view').setupBase64>|undefined;
+  let urlCodecController:ReturnType<typeof import('./url-codec-view').setupURLCodec>|undefined;
   let developerTabSelect:((id:string)=>void)|undefined;
   let inputController:ReturnType<typeof import('./enhancement-view').setupInput>|undefined;
   let settingsController:ReturnType<typeof import('./settings-view').setupSettingsPage>|undefined;
@@ -74,7 +75,7 @@ export function renderMain() {
     else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='ports'){const {portsPage,setupPorts}=await import('./ports-view');page.innerHTML=portsPage();portsController=setupPorts();}
     else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);inputController=setupInput();}
-    else if(id==='developer'){const [{barcodePage,setupBarcode},{developerDataPage,setupDeveloperData},{base64Page,setupBase64}]=await Promise.all([import('./barcode-view'),import('./developer-data-view'),import('./base64-view')]);page.innerHTML=toolGroupPage('开发工具',[{id:'barcode',label:'条码识别',body:barcodePage()},{id:'developer-data',label:'JSON / YAML',body:developerDataPage()},{id:'base64',label:'Base64',body:base64Page()}]);q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();developerDataController=setupDeveloperData();base64Controller=setupBase64();developerTabSelect=setupToolGroupTabs(page,tab=>{const visible=content.dataset.currentPage==='developer';barcodeController?.activate(visible&&tab==='barcode');developerDataController?.activate(visible&&tab==='developer-data');base64Controller?.activate(visible&&tab==='base64');if(visible)updateHeadingActions('developer');});}
+    else if(id==='developer'){const [{barcodePage,setupBarcode},{developerDataPage,setupDeveloperData},{base64Page,setupBase64},{urlCodecPage,setupURLCodec}]=await Promise.all([import('./barcode-view'),import('./developer-data-view'),import('./base64-view'),import('./url-codec-view')]);page.innerHTML=toolGroupPage('开发工具',[{id:'barcode',label:'条码识别',body:barcodePage()},{id:'developer-data',label:'JSON / YAML',body:developerDataPage()},{id:'base64',label:'Base64',body:base64Page()},{id:'url-codec',label:'URL 编解码',body:urlCodecPage()}]);q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();developerDataController=setupDeveloperData();base64Controller=setupBase64();urlCodecController=setupURLCodec();developerTabSelect=setupToolGroupTabs(page,tab=>{const visible=content.dataset.currentPage==='developer';barcodeController?.activate(visible&&tab==='barcode');developerDataController?.activate(visible&&tab==='developer-data');base64Controller?.activate(visible&&tab==='base64');urlCodecController?.activate(visible&&tab==='url-codec');if(visible)updateHeadingActions('developer');});}
     else if(id==='preview'){page.innerHTML=previewPage();setupPreviewPage();}
     else if(id==='images'){const [{colorPage,setupColorPage},{imageConvertPage,setupImageConvert}]=await Promise.all([import('./color-view'),import('./image-convert-view')]);page.innerHTML=toolGroupPage('图片工具',[{id:'color',label:'屏幕取色',body:colorPage()},{id:'image-convert',label:'转换与压缩',body:imageConvertPage()}]);customControls(page);q('color-heading-actions').append(q('color-actions'));setupColorPage();setupImageConvert();setupToolGroupTabs(page,()=>{if(content.dataset.currentPage==='images')updateHeadingActions('images');});}
     else if(id==='search'){const {searchPage,setupSearchPage}=await import('./search-view');page.innerHTML=searchPage();customControls(page);setupSearchPage();}
@@ -97,7 +98,7 @@ export function renderMain() {
     else if(id==='ports')portsController?.activate(value);
     else if(id==='settings')settingsController?.activate(value);
     else if(id==='input')inputController?.activate(value);
-    else if(id==='developer'){const tab=q('page-developer').querySelector('[role=tab][aria-selected="true"]')?.id;barcodeController?.activate(value&&tab==='tool-tab-barcode');developerDataController?.activate(value&&tab==='tool-tab-developer-data');base64Controller?.activate(value&&tab==='tool-tab-base64');}
+    else if(id==='developer'){const tab=q('page-developer').querySelector('[role=tab][aria-selected="true"]')?.id;barcodeController?.activate(value&&tab==='tool-tab-barcode');developerDataController?.activate(value&&tab==='tool-tab-developer-data');base64Controller?.activate(value&&tab==='tool-tab-base64');urlCodecController?.activate(value&&tab==='tool-tab-url-codec');}
   };
   const canonicalPage=(id:string)=>id==='barcode'?'developer':id==='color'?'images':id;
   const navigate=async(id:string)=>{
