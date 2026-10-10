@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{execFile}=require('node:child_process'),{promisify}=require('node:util'),{buildSync}=require('esbuild');
-const run=promisify(execFile),output=path.resolve('work/current/display-management'),exe=path.join(output,'native-build/One.Display.Test.exe');
+const run=promisify(execFile),output=path.resolve(process.env.ONE_TEST_OUTPUT_DIR||'work/current/display-management'),exe=path.resolve('work/current/display-management/native-build/One.Display.Test.exe');
+fs.mkdirSync(output,{recursive:true});
 buildSync({entryPoints:['src/main/display-management.ts'],bundle:true,platform:'node',format:'cjs',outfile:path.join(output,'service.cjs')});const {DisplayManagementService}=require(path.join(output,'service.cjs'));
 let checks=0;const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};const rejects=async(p,m)=>{await assert.rejects(p,m);checks++;};const native=async(args,signal)=>JSON.parse((await run(exe,args,{windowsHide:true,timeout:8000,maxBuffer:128*1024,signal})).stdout);
 async function main(){

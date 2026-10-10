@@ -2,7 +2,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {displayParameters,type DisplayParameter,type DisplayControl,type ManagedDisplay} from '../shared/display-management';
+import {displayParameters,defaultDisplayPreferences,type DisplayPreferences,type DisplayWriteResult,type DisplayParameter,type DisplayControl,type ManagedDisplay} from '../shared/display-management';
 type NativeDisplay=Omit<ManagedDisplay,'id'|'controls'|'error'>&{path:string;key:string};
 type Invoke=(args:string[],signal:AbortSignal)=>Promise<unknown>;
 type Job={key:string;run:()=>Promise<unknown>;resolve:((value:any)=>void)[];reject:((error:Error)=>void)[];epoch:number};
@@ -20,7 +20,7 @@ export class DisplayManagementService {
  constructor(private changed:()=>void=()=>{},private invoke:Invoke=async(args,signal)=>{
   try{const {stdout}=await execute(this.helper,args,{windowsHide:true,timeout:8000,maxBuffer:128*1024,encoding:'utf8',signal});return JSON.parse(stdout);}
   catch(error){signal.throwIfAborted();throw Error((error as {killed?:boolean}).killed?'显示器操作超时；设置可能已发送，请重新检测。':'显示器服务暂时不可用，请重新检测。');}
- }){}
+ },private preferences:()=>DisplayPreferences=defaultDisplayPreferences){}
  private async call(args:string[]){
   const raw=await this.invoke(args,this.controller!.signal) as any;
   if(raw?.error)throw Error(typeof raw.error==='string'?raw.error.slice(0,512):'显示器接口不可用');return raw;
@@ -68,10 +68,28 @@ export class DisplayManagementService {
  });}
  set(id:string,parameter:DisplayParameter,value:number):Promise<DisplayControl>{
   if(!displayParameters.includes(parameter)||!Number.isInteger(value)||value<0||value>100)return Promise.reject(Error('显示器参数需为 0 至 100 的整数'));
-  return this.enqueue(`set:${id}:${parameter}`,async()=>{
+  return this.enqueue(`set:${id}:${parameter}`,()=>this.write(id,parameter,value));
+ }
+ private async write(id:string,parameter:DisplayParameter,value:number):Promise<DisplayControl>{
    const row=this.target(id);if(!row.controls?.[parameter].supported)throw Error('请先检测此显示器的控制能力');
    try{const raw=await this.call(['set',row.path,row.key,parameter,String(value)]),next=control(raw?.control);if(!next.supported)throw Error(next.error||'显示器未接受设置');this.controller!.signal.throwIfAborted();row.controls[parameter]=next;return next;}
    catch(error){if(row.controls)row.controls[parameter]={supported:false,method:'',error:'设置失败，请重新检测'};throw error;}
+ }
+ setBrightness(id:string,value:number):Promise<DisplayWriteResult[]>{
+  if(!Number.isInteger(value)||value<0||value>100)return Promise.reject(Error('显示器参数需为 0 至 100 的整数'));
+  return this.enqueue(`set:${id}:linked-brightness`,async()=>{
+   const source=this.target(id);if(!source.controls?.brightness.supported)throw Error('请先检测此显示器的控制能力');
+   const p=this.preferences(),linked=p.linkedBrightness&&!p.excluded.includes(id);
+   const targets=[id,...(linked?[...this.rows].filter(([other,row])=>other!==id&&!row.cloned&&row.controls?.brightness.supported&&!p.excluded.includes(other)).map(([other])=>other):[])];
+   const results:DisplayWriteResult[]=[];
+   for(const target of targets){
+    // Re-read preferences between devices so disabling/excluding stops remaining linked writes.
+    const current=this.preferences();if(target!==id&&(!current.linkedBrightness||current.excluded.includes(id)||current.excluded.includes(target)))continue;
+    this.controller!.signal.throwIfAborted();
+    try{results.push({id:target,control:await this.write(target,'brightness',value)});}
+    catch(error){this.controller!.signal.throwIfAborted();results.push({id:target,error:error instanceof Error?error.message:'显示器设置失败'});}
+   }
+   return results;
   });
  }
 }

@@ -131,7 +131,7 @@ const fontSources = new Map<string,Promise<import('../shared/fonts').UIFontSourc
 const previewQueues = new Map<number,Promise<void>>();
 const flags = new Map<number,{pinned:boolean;held:boolean}>();
 let colorWindow:BrowserWindow|null=null,colorZoomWindow:BrowserWindow|null=null,colorWorker:Worker|null=null,colorFollower:Worker|null=null,colorSample:ScreenCapture|undefined,colorSentSample:ScreenCapture|undefined,colorFramePending=false,recordingShortcut=false,hotkeyProbeRunning=false;let themeAutomation:ThemeAutomation|undefined;const themeLocation=new ThemeLocationService();
-const displayManagement=new DisplayManagementService(()=>{if(main&&!main.isDestroyed())main.webContents.send('one:display-changed');});
+const displayManagement=new DisplayManagementService(()=>{if(main&&!main.isDestroyed())main.webContents.send('one:display-changed');},undefined,()=>settings.displays);
 if(testMode&&process.env.ONE_TEST_DISPLAY_MANAGEMENT==='1')(globalThis as typeof globalThis&{oneTestDisplayManagement?:DisplayManagementService}).oneTestDisplayManagement=displayManagement;
 if(testMode&&process.env.ONE_TEST_THEME_LOCATION==='1')(globalThis as typeof globalThis&{oneTestThemeLocation?:ThemeLocationService}).oneTestThemeLocation=themeLocation;
 let registeredColorShortcut='',colorShortcutError='';let colorEditor:ColorEditor;
@@ -723,6 +723,7 @@ function registerIPC() {
   handle('display-list',()=>displayManagement.list(),['main']);
   handle('display-probe',(_event,id)=>displayManagement.probe(id),['main']);
   handle('display-set',(_event,id,parameter,value)=>displayManagement.set(id,parameter,value),['main']);
+  handle('display-set-brightness',(_event,id,value)=>displayManagement.setBrightness(id,value),['main']);
   handle('display-cancel',()=>displayManagement.cancel(),['main']);
   handle('theme-locate',()=>{if(!main||main.isDestroyed()||!main.isVisible()||!main.isFocused())return {state:'unavailable',detail:'请在 One 窗口中获取当前位置，或手动填写经纬度。'};return themeLocation.locate();},['main']);
   handle('theme-location-cancel',()=>themeLocation.cancel(),['main']);
