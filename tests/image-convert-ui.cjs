@@ -24,6 +24,11 @@ test('image conversion tab converts a picked file and reports results',async()=>
   await expect(page.locator('.image-convert-file-state')).toHaveText('已完成');
   const names=await readdir(output);assert.equal(names.filter(name=>name.endsWith('.jpg')).length,1);
   assert.equal((await sharp(path.join(output,names.find(name=>name.endsWith('.jpg')))).metadata()).width,6);
+  await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="保持原格式（压缩）"]').click();
+  await expect(page.locator('#image-convert-start')).toHaveText('开始压缩');await page.locator('#image-convert-start').click();
+  await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
+  const compressed=(await readdir(output)).find(name=>name.includes('-compressed-')&&name.endsWith('.png'));assert.ok(compressed);
+  assert.equal((await sharp(path.join(output,compressed)).metadata()).width,6);
   await page.locator('#tool-tab-color').click();await expect(page.locator('#color-heading-actions')).toBeVisible();
   assert.deepEqual(errors,[]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}

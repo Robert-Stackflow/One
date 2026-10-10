@@ -6,16 +6,16 @@ const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
 export function imageConvertPage(){return `<div class="image-convert-page">
-  <section class="image-convert-panel"><h2>批量转换图片</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF。原图片保持不变，转换结果保存到所选文件夹。</p>
+  <section class="image-convert-panel"><h2>批量转换与压缩</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF。原图片保持不变，结果保存到所选文件夹。</p>
     <div class="image-convert-picks"><button id="image-convert-add" type="button">添加图片</button><button id="image-convert-clear" type="button" class="quiet">清空列表</button><span id="image-convert-count" aria-live="polite">尚未选择图片</span></div>
     <div id="image-convert-files" class="image-convert-files" aria-label="待转换图片"></div>
     <div class="image-convert-destination"><label for="image-convert-directory">输出文件夹</label><input id="image-convert-directory" readonly placeholder="选择保存位置"><button id="image-convert-pick-directory" type="button">选择文件夹</button></div>
-    <div class="image-convert-options"><label>目标格式<select id="image-convert-format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp" selected>WebP</option><option value="gif">GIF</option><option value="tiff">TIFF</option></select></label>
+    <div class="image-convert-options"><label>目标格式<select id="image-convert-format"><option value="original">保持原格式（压缩）</option><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp" selected>WebP</option><option value="gif">GIF</option><option value="tiff">TIFF</option></select></label>
       <label>JPEG / WebP 质量 <span id="image-convert-quality-value">85</span><input id="image-convert-quality" type="range" min="1" max="100" value="85"></label>
       <label>最大宽度<input id="image-convert-width" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
       <label>最大高度<input id="image-convert-height" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
       <label class="image-convert-metadata"><input id="image-convert-metadata" type="checkbox" checked>保留图片元数据</label></div>
-    <p class="image-convert-note">JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，每批最多 100 张。</p>
+    <p class="image-convert-note">选择“保持原格式”可批量压缩；质量仅作用于 JPEG / WebP，其他格式采用无损重新编码。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，每批最多 100 张。</p>
     <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div>
   </section></div>`;}
 
@@ -31,7 +31,7 @@ export function setupImageConvert(){
   files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'转换中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始批量转换。</p>';
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pickDirectory.disabled=running;cancel.disabled=!running;
   for(const input of [directory,format,width,height,metadata])input.disabled=running;
-  quality.disabled=running||!['jpeg','webp'].includes(format.value);
+  quality.disabled=running||!['original','jpeg','webp'].includes(format.value);
   retry.hidden=running||![...results.values()].some(result=>result.status!=='done');
   retry.disabled=running;
  };
@@ -52,7 +52,7 @@ export function setupImageConvert(){
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};
  pickDirectory.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  quality.oninput=()=>{q('image-convert-quality-value').textContent=quality.value;};
- format.onchange=render;
+ format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':'开始转换';render();};
  start.onclick=()=>void run(paths);
  retry.onclick=()=>void run(paths.filter(path=>results.get(path)?.status!=='done'));
  cancel.onclick=()=>void api.imageConvertCancel().catch(toast);

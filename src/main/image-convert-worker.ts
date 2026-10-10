@@ -17,11 +17,13 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   if(!metadata.width||!metadata.height||metadata.width*(metadata.pageHeight||metadata.height)*pages>100_000_000)throw Error('图片像素或总帧数超过处理上限');
   if(!['png','jpeg','webp','gif','tiff'].includes(metadata.format||''))throw Error('暂不支持该图片编码');
   if(pages>1&&metadata.format==='png')throw Error('动画 PNG 尚未验证转换，原文件未修改');
-  if(pages>1&&!['gif','webp','tiff'].includes(options.format))throw Error('目标格式不能保留动画或多页内容，请选择 GIF、WebP 或 TIFF');
+  const target=options.format==='original'?metadata.format:options.format;
+  if(options.format==='original'){const suffix=entry.output.split('.').pop()?.toLowerCase(),expected=metadata.format==='jpeg'?['jpg','jpeg']:metadata.format==='tiff'?['tif','tiff']:[metadata.format];if(!suffix||!expected.includes(suffix))throw Error('扩展名与实际图片格式不一致，请选择明确的目标格式转换');}
+  if(pages>1&&!['gif','webp','tiff'].includes(target))throw Error('目标格式不能保留动画或多页内容，请选择 GIF、WebP 或 TIFF');
   pipeline=pipeline.rotate();
   if(options.maxWidth||options.maxHeight)pipeline=pipeline.resize({width:options.maxWidth,height:options.maxHeight,fit:'inside',withoutEnlargement:true});
   if(options.preserveMetadata)pipeline=pipeline.withMetadata();
-  switch(options.format){
+  switch(target){
    case 'png':pipeline=pipeline.png({compressionLevel:9});break;
    case 'jpeg':pipeline=pipeline.flatten({background:'#ffffff'}).jpeg({quality:options.quality,mozjpeg:true});break;
    case 'webp':pipeline=pipeline.webp({quality:options.quality,effort:4,loop:metadata.loop||0,delay:metadata.delay});break;
@@ -32,7 +34,7 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   if(pages>1){const output=await sharp(entry.temp,{animated:true}).metadata();if((output.pages||1)!==pages)throw Error('输出未能保留全部动画帧或 TIFF 页面');}
   await rename(entry.temp,entry.output);
   const after=(await stat(entry.output)).size;
-  return {source:entry.source,output:entry.output,before,after,status:'done',message:options.format==='jpeg'&&metadata.hasAlpha?'透明区域已填充白色':undefined};
+  return {source:entry.source,output:entry.output,before,after,status:'done',message:target==='jpeg'&&metadata.hasAlpha?'透明区域已填充白色':options.format==='original'&&after>before?'输出体积大于原图':undefined};
  }catch(error){await rm(entry.temp,{force:true}).catch(()=>{});return {source:entry.source,before,status:'error',message:(error as Error).message.slice(0,300)};}
 }
 

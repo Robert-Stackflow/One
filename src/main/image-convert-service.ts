@@ -17,8 +17,7 @@ export class ImageConvertService {
   const outputDir=resolve(directory),info=await stat(outputDir).catch(()=>null);if(!info?.isDirectory())throw Error('输出目录不存在');
   const options:ImageConvertOptions=imageConvertOptions(settings),unique=[...new Set((paths as string[]).map(path=>resolve(path).toLowerCase()))];
   if(unique.length!==paths.length)throw Error('图片列表含重复路径');
-  const extension=options.format==='jpeg'?'jpg':options.format==='tiff'?'tiff':options.format;
-  const entries:Entry[]=(paths as string[]).map(path=>{const source=resolve(path),name=basename(source,extname(source)).slice(0,90)||'image',id=randomUUID();return {source,output:join(outputDir,`${name}-converted-${id.slice(0,8)}.${extension}`),temp:join(outputDir,`.one-image-${id}.tmp.${extension}`)};});
+  const entries:Entry[]=(paths as string[]).map(path=>{const source=resolve(path),name=basename(source,extname(source)).slice(0,90)||'image',id=randomUUID();const sourceExtension=extname(source).slice(1).toLowerCase();if(options.format==='original'&&!['png','jpg','jpeg','webp','gif','tif','tiff'].includes(sourceExtension))throw Error('保持原格式压缩仅支持 PNG、JPEG、WebP、GIF 和 TIFF');const extension=options.format==='original'?sourceExtension:options.format==='jpeg'?'jpg':options.format==='tiff'?'tiff':options.format;const suffix=options.format==='original'?'compressed':'converted';return {source,output:join(outputDir,`${name}-${suffix}-${id.slice(0,8)}.${extension}`),temp:join(outputDir,`.one-image-${id}.tmp.${extension}`)};});
   const worker=new Worker(join(__dirname,'image-convert-worker.cjs'),{workerData:{entries,options},resourceLimits:{maxOldGenerationSizeMb:256}});
   const session:Session={worker,entries,results:new Map(),cancelled:false};this.sessions.set(owner,session);
   const task=new Promise<ImageConvertSummary>(resolve=>{
