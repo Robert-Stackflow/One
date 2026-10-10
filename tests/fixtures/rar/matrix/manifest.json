@@ -1,0 +1,368 @@
+{
+  "schema": 1,
+  "description": "RAR4/5 data/header encryption × solid/non-solid × single/multi-volume; fixed non-ASCII password and Unicode filenames. Independently created and extracted by official RAR, not by One.",
+  "writer": {
+    "version": "RAR 6.24 x64 (3 Oct 2023)",
+    "url": "https://www.rarlab.com/rar/winrar-x64-624.exe",
+    "packageSha256": "794481dbbc9009a2565726fb5b4a4ab2fe216ff9edbb08951548ee765de9b4a6",
+    "executableSha256": "a9cec009503d067f241b5eddaea4e42c38edcb0b57c1b46e946c5281b7f1ea21"
+  },
+  "password": "归档-漢字-한글-🔐-é",
+  "expected": [
+    {
+      "name": "emoji-🔐.txt",
+      "bytes": 18000,
+      "sha256": "b9471f9be5a1451fa860856658f0130583cc91cf8cc266f5c7b5f6c52a0de83c"
+    },
+    {
+      "name": "目录/한글.txt",
+      "bytes": 22000,
+      "sha256": "5b6901693518af61a7dec579ea4745f1c9a247437e17e18cbde65cb283bf3c28"
+    },
+    {
+      "name": "目录/表と漢字.txt",
+      "bytes": 2000,
+      "sha256": "af654685727b4541e4f4819c3ec2cd1f4841a7bd4ec08b6b1423a6770a638c79"
+    },
+    {
+      "name": "说明.txt",
+      "bytes": 6000,
+      "sha256": "866012a87b10f4c5d900ddfd413bb71f9bd6916d95ea056597073ed6c16bd721"
+    }
+  ],
+  "cases": [
+    {
+      "id": "rar4-files-data-single",
+      "version": 4,
+      "solid": false,
+      "headers": false,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 48691,
+          "sha256": "c494cd21c4e642be5534906fcff8d4c12b75c1674545523cd66c2c5b84f83872"
+        }
+      ]
+    },
+    {
+      "id": "rar4-files-data-volumes",
+      "version": 4,
+      "solid": false,
+      "headers": false,
+      "split": true,
+      "naming": "legacy",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.r00",
+          "bytes": 16044,
+          "sha256": "845f88f36104096e1f09c325bb07193e2177f6537ca05f6441fa8d84dae7d4c2"
+        },
+        {
+          "name": "资料.rar",
+          "bytes": 32768,
+          "sha256": "6b757ca4b318ff38d96fd3d8d01f7961076aa0052791047e314c5eacf0b19f81"
+        }
+      ]
+    },
+    {
+      "id": "rar4-files-headers-single",
+      "version": 4,
+      "solid": false,
+      "headers": true,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 48772,
+          "sha256": "f831c83dc381742f556ae1c966d203bd9d7e399883dfbe79282967c245512fc6"
+        }
+      ]
+    },
+    {
+      "id": "rar4-files-headers-volumes",
+      "version": 4,
+      "solid": false,
+      "headers": true,
+      "split": true,
+      "naming": "legacy",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.r00",
+          "bytes": 16168,
+          "sha256": "d73b70254954bf782b2dd3f9ccfcbaa3f6b2349b14d3b9371810eba91085d2f8"
+        },
+        {
+          "name": "资料.rar",
+          "bytes": 32768,
+          "sha256": "9f01d952735689966d067dd5e127bcae67a0fc02140bf3b44b88a3c098fe773e"
+        }
+      ]
+    },
+    {
+      "id": "rar4-solid-data-single",
+      "version": 4,
+      "solid": true,
+      "headers": false,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 48499,
+          "sha256": "43971601a4ba1ed388bc01642fc7e009133f81ea7e428653b3e1cb18bc06c35e"
+        }
+      ]
+    },
+    {
+      "id": "rar4-solid-data-volumes",
+      "version": 4,
+      "solid": true,
+      "headers": false,
+      "split": true,
+      "naming": "legacy",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.r00",
+          "bytes": 15852,
+          "sha256": "9a4b2e11274776cda02693eca6de2d041dd6ce46fd98a9932c9e39143c42d0c8"
+        },
+        {
+          "name": "资料.rar",
+          "bytes": 32768,
+          "sha256": "c3821fbe6b388726b3f8f2f29dedefa02602c9f7282298e386eb3e6a169ea276"
+        }
+      ]
+    },
+    {
+      "id": "rar4-solid-headers-single",
+      "version": 4,
+      "solid": true,
+      "headers": true,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 48580,
+          "sha256": "0e13663d42903849c00c79d9bc57319ac38b0fc088b58c0d1c8d7b9276eb5a13"
+        }
+      ]
+    },
+    {
+      "id": "rar4-solid-headers-volumes",
+      "version": 4,
+      "solid": true,
+      "headers": true,
+      "split": true,
+      "naming": "legacy",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.r00",
+          "bytes": 15976,
+          "sha256": "fa61b808e16b4f97c0d1827ea1699577a14bd80360a7310e76d7a433a4e54354"
+        },
+        {
+          "name": "资料.rar",
+          "bytes": 32768,
+          "sha256": "5f3e61da5134a7bc09feedb7cf852d0f5d2f0193eb5957e5d204dc4f06f84ccd"
+        }
+      ]
+    },
+    {
+      "id": "rar5-files-data-single",
+      "version": 5,
+      "solid": false,
+      "headers": false,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 49108,
+          "sha256": "52863e3e375b970aea729963811a8d373a7e2ab8329b3d6c15778c8f8602b799"
+        }
+      ]
+    },
+    {
+      "id": "rar5-files-data-volumes",
+      "version": 5,
+      "solid": false,
+      "headers": false,
+      "split": true,
+      "naming": "part",
+      "first": "资料.part1.rar",
+      "members": [
+        {
+          "name": "资料.part1.rar",
+          "bytes": 32768,
+          "sha256": "32b149d81986c624236f4c0e357a309a6efad0f0eac251a0c0396f6f16fe6e1b"
+        },
+        {
+          "name": "资料.part2.rar",
+          "bytes": 16617,
+          "sha256": "c398ce95c08ba8eaa96e802ce23f2f8336d201afe17587baf27548242743ec91"
+        }
+      ]
+    },
+    {
+      "id": "rar5-files-headers-single",
+      "version": 5,
+      "solid": false,
+      "headers": true,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 49486,
+          "sha256": "2aa1547edb19f7749457f1b0e3199dbe3057acd81ff9f4e390d3d6c49feb4372"
+        }
+      ]
+    },
+    {
+      "id": "rar5-files-headers-volumes",
+      "version": 5,
+      "solid": false,
+      "headers": true,
+      "split": true,
+      "naming": "part",
+      "first": "资料.part1.rar",
+      "members": [
+        {
+          "name": "资料.part1.rar",
+          "bytes": 32768,
+          "sha256": "4cd47aae5b2becf2e715d2c792373effda7cccdea035d860f39a76388ffaef29"
+        },
+        {
+          "name": "资料.part2.rar",
+          "bytes": 17230,
+          "sha256": "652c09984a98b3d3cfcbac7bd02942e5cdba8347ab17de0e3398134dd8ffc5da"
+        }
+      ]
+    },
+    {
+      "id": "rar5-solid-data-single",
+      "version": 5,
+      "solid": true,
+      "headers": false,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 48949,
+          "sha256": "50f7ebd7b56b1861cad50d714acfedfb9e9c48da7a9acf89fcfc07b0f0f69d07"
+        }
+      ]
+    },
+    {
+      "id": "rar5-solid-data-volumes",
+      "version": 5,
+      "solid": true,
+      "headers": false,
+      "split": true,
+      "naming": "part",
+      "first": "资料.part1.rar",
+      "members": [
+        {
+          "name": "资料.part1.rar",
+          "bytes": 32768,
+          "sha256": "587c6f733d6272c22a7954dcdb3d03bd8b0a9f9ed5db0a85fa99d2e684e20dcf"
+        },
+        {
+          "name": "资料.part2.rar",
+          "bytes": 16464,
+          "sha256": "553d7fb36fa56f8671b4e683cd9a3a75d9873dc50032ab2231188293777357cc"
+        }
+      ]
+    },
+    {
+      "id": "rar5-solid-headers-single",
+      "version": 5,
+      "solid": true,
+      "headers": true,
+      "split": false,
+      "naming": "single",
+      "first": "资料.rar",
+      "members": [
+        {
+          "name": "资料.rar",
+          "bytes": 49326,
+          "sha256": "778536e4834668781d577a14a32fe72bd73ac21da4168bddac9412194c78662f"
+        }
+      ]
+    },
+    {
+      "id": "rar5-solid-headers-volumes",
+      "version": 5,
+      "solid": true,
+      "headers": true,
+      "split": true,
+      "naming": "part",
+      "first": "资料.part1.rar",
+      "members": [
+        {
+          "name": "资料.part1.rar",
+          "bytes": 32768,
+          "sha256": "7750bce3a0a8588247327e539cc1db5cac909834eef481ff25e4f21b72162be6"
+        },
+        {
+          "name": "资料.part2.rar",
+          "bytes": 17070,
+          "sha256": "4441c5ab89741225c29c6443512f4563cfdf8feed6e122faa80745058dbf9eb8"
+        }
+      ]
+    }
+  ],
+  "generation": {
+    "payload": "SHA256(UTF8(filename + separator U+007C + decimal block index)), concatenated and truncated to bytes",
+    "fileMtime": "2024-01-02T03:04:06.000Z",
+    "command": [
+      "a",
+      "-cfg-",
+      "-y",
+      "-idq",
+      "-ma{version}",
+      "{-s|-s-}",
+      "{-p|-hp}{password}",
+      "-r",
+      "[-v32768b]",
+      "[RAR4 volumes: -vn]",
+      "archive",
+      "*"
+    ],
+    "oracleCommands": [
+      [
+        "t",
+        "-cfg-",
+        "-idq",
+        "-y",
+        "-p{password}",
+        "archive"
+      ],
+      [
+        "x",
+        "-cfg-",
+        "-idq",
+        "-y",
+        "-p{password}",
+        "archive",
+        "destination"
+      ]
+    ]
+  }
+}

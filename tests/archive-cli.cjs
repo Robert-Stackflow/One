@@ -51,6 +51,12 @@ async function main(){
    assert.deepEqual(listed.records.filter(record=>record.type==='entry'&&!record.directory).map(record=>record.name.replace(/\\/g,'/')).sort(),fixture.expected.map(entry=>entry.name).sort());await run(['test','--json',...options,source]);
    const output=path.join(root,fixture.name+'.cli-output');await fs.mkdir(output);await run(['extract','--json',...options,'--output',output,'--destination','here',source]);for(const entry of fixture.expected){const data=await fs.readFile(path.join(output,entry.name));assert.equal(data.length,entry.bytes);assert.equal(require('node:crypto').createHash('sha256').update(data).digest('hex'),entry.sha256);}
   }
+  const rarMatrix=JSON.parse(await fs.readFile('tests/fixtures/rar/matrix/manifest.json','utf8'));
+  for(const fixture of rarMatrix.cases.filter(item=>item.headers&&item.solid&&item.split)){
+   const source=path.resolve('tests/fixtures/rar/matrix',fixture.id,fixture.first),password=rarMatrix.password;
+   await run(['list','--json',source],'',3);const listed=await run(['list','--json','--password-stdin',source],password);assert(!listed.out.includes(password));assert.deepEqual(listed.records.filter(record=>record.type==='entry'&&!record.directory).map(record=>record.name.replace(/\\/g,'/')).sort(),rarMatrix.expected.map(entry=>entry.name).sort());
+   await run(['test','--json','--password-stdin',source],password);const output=path.join(root,fixture.id+'.cli-output');await fs.mkdir(output);await run(['extract','--json','--password-stdin','--output',output,'--destination','here',source],password);for(const entry of rarMatrix.expected){const data=await fs.readFile(path.join(output,entry.name));assert.equal(data.length,entry.bytes);assert.equal(require('node:crypto').createHash('sha256').update(data).digest('hex'),entry.sha256);}
+  }
   for(const [name,encoding,password] of [['methods.alz','949',''],['korean-password.alz','949','비밀'],['utf8.alz','65001','']]){
    const source=path.resolve('tests/fixtures/archives/alz',name),options=['--encoding',encoding,...(password?['--password-stdin']:[])];
    const listed=await run(['list','--json',...options,source],password);assert(listed.records.some(record=>record.type==='entry'));

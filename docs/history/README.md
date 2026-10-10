@@ -7,6 +7,7 @@
 - [早期需求与交互修订](projects/早期需求与交互修订.md)
 - [归档百万目录优化记录](projects/归档百万目录优化记录.md)
 - [归档LHA兼容记录](projects/归档LHA兼容记录.md)
+- [归档RAR兼容记录](projects/归档RAR兼容记录.md)
 - [归档发布性能优化记录](projects/归档发布性能优化记录.md)
 - [归档十万小文件优化记录](projects/归档十万小文件优化记录.md)
 - [优化与文件工具阶段记录](projects/优化与文件工具阶段记录.md)
