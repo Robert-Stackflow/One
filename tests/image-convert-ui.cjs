@@ -6,8 +6,8 @@ const sharp=require('sharp');
 const {_electron:electron,expect}=require('@playwright/test');
 
 test('image conversion tab converts a picked file and reports results',async()=>{
- const root=await mkdtemp(path.resolve('work/current/image-convert-ui-')),profile=path.join(root,'profile'),output=path.join(root,'output'),source=path.join(root,'source.png');
- await mkdir(output);await sharp({create:{width:12,height:12,channels:4,background:'red'}}).png().toFile(source);
+ const root=await mkdtemp(path.resolve('work/current/image-convert-ui-')),profile=path.join(root,'profile'),output=path.join(root,'output'),source=path.join(root,'source.png'),svg=path.join(root,'vector.svg');
+ await mkdir(output);await sharp({create:{width:12,height:12,channels:4,background:'red'}}).png().toFile(source);await require('node:fs/promises').writeFile(svg,'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16"><rect width="24" height="16" fill="red"/></svg>');
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,ONE_SEARCH_BACKEND:'memory'};delete env.ELECTRON_RUN_AS_NODE;
  const packaged=process.env.ONE_TEST_EXECUTABLE;
  const app=await electron.launch({executablePath:packaged||require('electron'),args:packaged?[]:['.'],cwd:process.cwd(),env,timeout:30000});
@@ -29,6 +29,18 @@ test('image conversion tab converts a picked file and reports results',async()=>
   await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
   const compressed=(await readdir(output)).find(name=>name.includes('-compressed-')&&name.endsWith('.png'));assert.ok(compressed);
   assert.equal((await sharp(path.join(output,compressed)).metadata()).width,6);
+  await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="ICO 多尺寸图标"]').click();
+  await expect(page.locator('#image-convert-metadata')).toBeDisabled();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
+  assert.equal((await readdir(output)).filter(name=>name.endsWith('.ico')).length,1);
+  await expect(page.locator('#image-codec-status')).toContainText('HEIC',{timeout:10000});
+  await app.evaluate(({dialog},chosen)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[chosen]});},svg);
+  await page.locator('#image-convert-clear').click();await page.locator('#image-convert-add').click();await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="SVG 优化（仅 SVG 输入）"]').click();
+  await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');assert.equal((await readdir(output)).filter(name=>name.endsWith('.svg')).length,1);
+  await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="PNG"]').click();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');assert((await readdir(output)).some(name=>name.endsWith('.png')&&name.includes('vector')));
+  const motionDir=path.join(root,'motion');await require('./image-preview-fixtures.cjs').fixtures(motionDir);const motion=path.join(motionDir,'google-old.jpg');
+  await app.evaluate(({dialog},chosen)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[chosen]});},motion);await page.locator('#image-convert-clear').click();await page.locator('#image-convert-add').click();
+  await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('失败 1 张');await expect(page.locator('#image-convert-files')).toContainText('检测到动态照片');
+  await page.locator('#image-convert-motion-still').check();await page.locator('#image-convert-retry').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');await expect(page.locator('#image-convert-files')).toContainText('动态视频未写入');
   await page.locator('#tool-tab-color').click();await expect(page.locator('#color-heading-actions')).toBeVisible();
   assert.deepEqual(errors,[]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}

@@ -56,6 +56,7 @@ import {ThemeLocationService} from './theme-location';
 import {BarcodeCapture,barcodeFile,barcodeClipboard} from './barcode';
 import {ImageConvertService} from './image-convert-service';
 import {ImageMetadataService} from './image-metadata-service';
+import {imageCodecCapabilities} from './image-codec';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
 import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
@@ -755,8 +756,10 @@ function registerIPC() {
   handle('display-profile-apply',(_event,id)=>displayProfiles.apply(id),['main']);
   handle('barcode-file',(_event,path)=>barcodeFile(path));
   handle('image-pick-files',async event=>{const owner=BrowserWindow.fromWebContents(event.sender)||main;if(!owner||owner.isDestroyed())throw Error('窗口已关闭');const result=await dialog.showOpenDialog(owner,{title:'选择图片',properties:['openFile','multiSelections'],filters:[{name:'常见图片',extensions:['png','jpg','jpeg','webp','gif','tif','tiff']}]});return result.canceled?[]:result.filePaths;});
+  handle('image-convert-pick-files',async event=>{const owner=BrowserWindow.fromWebContents(event.sender)||main;if(!owner||owner.isDestroyed())throw Error('窗口已关闭');const result=await dialog.showOpenDialog(owner,{title:'选择图片或 SVG',properties:['openFile','multiSelections'],filters:[{name:'图片和 SVG',extensions:['png','jpg','jpeg','webp','gif','tif','tiff','svg']}]});return result.canceled?[]:result.filePaths;},['main']);
   handle('image-convert-start',(event,paths,directory,options)=>imageConvert.start(event.sender.id,paths,directory,options,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-convert-progress',progress);}));
   handle('image-convert-cancel',event=>imageConvert.cancel(event.sender.id));
+  handle('image-convert-capabilities',()=>imageCodecCapabilities(),['main']);
   handle('image-metadata-start',(event,paths,directory,options)=>imageMetadata.start(event.sender.id,paths,directory,options,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-metadata-progress',progress);}),['main']);
   handle('image-metadata-cancel',event=>imageMetadata.cancel(event.sender.id),['main']);
   handle('image-crop-preview',(_event,path)=>imageCropPreview(filePath(path)),['main']);

@@ -156,6 +156,8 @@ export interface OneAPI {
   pickerPreferences(value: import('./picker').PickerPreferences): Promise<import('./picker').PickerPreferences>;
   pickDirectory(initialPath?: string): Promise<string | null>; scan(path: string): Promise<ScanSummary>; cancelScan(): Promise<void>;
   imagePickFiles():Promise<string[]>;
+  imageConvertPickFiles():Promise<string[]>;
+  imageConvertCapabilities():Promise<import('./image-codec').ImageCodecCapabilities>;
   imageConvertStart(paths:string[],directory:string,options:import('./image-convert').ImageConvertOptions):Promise<import('./image-convert').ImageConvertSummary>;
   imageConvertCancel():Promise<boolean>;
   onImageConvertProgress(callback:(progress:import('./image-convert').ImageConvertProgress)=>void):()=>void;

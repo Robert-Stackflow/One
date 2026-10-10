@@ -30,6 +30,9 @@ function edit(path,args){const result=spawnSync(exiftool,['-overwrite_original',
    assert.equal((await sharp(summary.results[0].output).metadata()).format,format);
    assert(!Object.keys(tags(summary.results[0].output)).some(key=>key.endsWith(':Artist')));
   }
+  const motionDir=join(root,'motion');await require('./image-preview-fixtures.cjs').fixtures(motionDir);
+  const motion=await service.start(5,[join(motionDir,'google-old.jpg')],out,{removeExif:true,removeGps:true,removeXmp:true,removeIptc:true},()=>{});
+  assert.equal(motion.results[0].status,'error');assert.match(motion.results[0].message,/动态照片/);
   console.log('Image metadata: selective removal, orientation, ICC, source integrity OK');
  }finally{await rm(root,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

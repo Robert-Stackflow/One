@@ -1,7 +1,7 @@
-export type ImageConvertFormat='original'|'png'|'jpeg'|'webp'|'gif'|'tiff';
+export type ImageConvertFormat='original'|'png'|'jpeg'|'webp'|'gif'|'tiff'|'ico'|'svg';
 export interface ImageCropRule {x:number;y:number;width:number;height:number;ratio?:number}
 export type ImageResizeRule={mode:'pixels';width?:number;height?:number;keepAspect:boolean}|{mode:'percent';percent:number;keepAspect:true}|{mode:'long-edge';longEdge:number;keepAspect:true};
-export interface ImageConvertOptions {format:ImageConvertFormat;quality:number;maxWidth?:number;maxHeight?:number;preserveMetadata:boolean;crop?:ImageCropRule;resize?:ImageResizeRule}
+export interface ImageConvertOptions {format:ImageConvertFormat;quality:number;maxWidth?:number;maxHeight?:number;preserveMetadata:boolean;motionPolicy?:'reject'|'still';crop?:ImageCropRule;resize?:ImageResizeRule}
 export interface ImageConvertResult {source:string;output?:string;before:number;after?:number;width?:number;height?:number;pages?:number;status:'done'|'error'|'cancelled';message?:string}
 export interface ImageConvertProgress {done:number;total:number;current?:string;result?:ImageConvertResult}
 export interface ImageConvertSummary {results:ImageConvertResult[];cancelled:boolean}
@@ -45,10 +45,13 @@ export function imageResizeDimensions(rule:ImageResizeRule,width:number,height:n
 }
 export function imageConvertOptions(value:unknown):ImageConvertOptions{
  if(!value||typeof value!=='object')throw Error('转换设置无效');const v=value as ImageConvertOptions;
- if(!['original','png','jpeg','webp','gif','tiff'].includes(v.format)||!Number.isInteger(v.quality)||v.quality<1||v.quality>100||typeof v.preserveMetadata!=='boolean')throw Error('转换设置无效');
+ if(!['original','png','jpeg','webp','gif','tiff','ico','svg'].includes(v.format)||!Number.isInteger(v.quality)||v.quality<1||v.quality>100||typeof v.preserveMetadata!=='boolean')throw Error('转换设置无效');
  for(const key of ['maxWidth','maxHeight'] as const){const dimension=v[key];if(dimension!==undefined&&(!Number.isInteger(dimension)||dimension<1||dimension>16384))throw Error('尺寸需在 1 至 16384 像素之间');}
  const crop=v.crop===undefined?undefined:imageCropRule(v.crop);
  const resize=v.resize===undefined?undefined:imageResizeRule(v.resize);
  if(crop&&resize||crop&&(v.format!=='original'||v.maxWidth!==undefined||v.maxHeight!==undefined)||resize&&(v.format!=='original'||v.maxWidth!==undefined||v.maxHeight!==undefined))throw Error('裁剪或缩放任务必须保持原格式，不能与其他尺寸设置混用');
- return {format:v.format,quality:v.quality,maxWidth:v.maxWidth,maxHeight:v.maxHeight,preserveMetadata:v.preserveMetadata,crop,resize};
+ if(v.format==='ico'&&(v.preserveMetadata||v.maxWidth!==undefined||v.maxHeight!==undefined))throw Error('ICO 使用固定多尺寸图标，不支持保留元数据或设置最大宽高');
+ if(v.format==='svg'&&(v.preserveMetadata||v.maxWidth!==undefined||v.maxHeight!==undefined))throw Error('SVG 优化不能保留元数据或设置位图尺寸');
+ if(v.motionPolicy!==undefined&&!['reject','still'].includes(v.motionPolicy))throw Error('动态照片处理设置无效');
+ return {format:v.format,quality:v.quality,maxWidth:v.maxWidth,maxHeight:v.maxHeight,preserveMetadata:v.preserveMetadata,motionPolicy:v.motionPolicy||'reject',crop,resize};
 }

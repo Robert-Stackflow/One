@@ -5,6 +5,7 @@ import {copyFile,rename,rm,stat} from 'node:fs/promises';
 import sharp from 'sharp';
 import {imageMetadataOptions,type ImageMetadataOptions,type ImageMetadataProgress,type ImageMetadataSummary} from '../shared/image-metadata';
 import type {ImageConvertResult} from '../shared/image-convert';
+import {inspectMotionPhoto} from './motion-photo';
 
 sharp.cache({files:0});
 const executable=(require('exiftool-vendored.exe') as string).replace('app.asar\\','app.asar.unpacked\\');
@@ -48,6 +49,7 @@ export class ImageMetadataService{
   try{
    before=(await stat(entry.source)).size;if(before>100*1024*1024)throw Error('单张图片超过 100 MB 上限');
    const metadata=await sharp(entry.source,{animated:true,limitInputPixels:50_000_000,failOn:'error'}).metadata();if(!formats.has(metadata.format||''))throw Error('暂不支持该图片编码');
+   if(metadata.format==='jpeg'){let notice='';const motion=await inspectMotionPhoto(entry.source,message=>{notice=message;});if(motion||notice)throw Error('动态照片暂不支持元数据清理，以免视频或配对关系丢失');}
    const pages=metadata.pages||1;if(!metadata.width||!metadata.height||metadata.width*(metadata.pageHeight||metadata.height)*pages>100_000_000)throw Error('图片像素或总帧数超过处理上限');
    if(options.removeExif&&metadata.orientation&&metadata.orientation!==1){
     if(pages>1)throw Error('多帧图片含方向标记，暂无法安全校正方向');
