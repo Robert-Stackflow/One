@@ -66,6 +66,14 @@ ZIP/7Z 外部编辑针对单个普通文件，大小不超过 256 MiB。RAR 及�
 - [ ] 调研 SQLite/SQLCipher 引擎及 Electron 集成方式，核对开源许可、Windows 原生打包、版本兼容和资源预算，不以普通 SQLite 可打开代表 SQLCipher 已支持。
 - [ ] 验收包含多后缀/无后缀识别、非数据库 `.db`、普通与加密样本、错误密码与兼容参数、表切换/分页/SQL/DDL、WAL 数据库、只读/锁定文件、大表深分页、查询取消和关闭后文件可释放。
 
+## 深浅色模式自动切换
+
+- [ ] 参考 [Microsoft PowerToys Light Switch](https://learn.microsoft.com/en-us/windows/powertoys/light-switch)，支持按固定时间、当地日出日落或 Windows 夜间模式计划自动切换深浅色模式。
+- [ ] 支持启用/关闭自动切换、手动切换和快捷键；评估分别应用到 Windows 系统界面、应用主题及 One 自身外观的设置，明确作用范围。
+- [ ] 评估日出日落所需的位置来源、手动经纬度与时间偏移设置；处理休眠唤醒、时区变化及应用重启后的主题同步。
+
+2026-10-10 进行中：计划模型与串行调度核心已实现，269 项检查及 NOAA 72 组参考对照通过；设置界面、Windows 适配器、快捷键与应用生命周期尚未接入，不能在产品中启用。范围与分阶段验收见[自动主题切换实现计划](自动主题切换实现计划.md)。
+
 ## 系统信息 · 代理：扩展连通性测试
 
 - [x] 扩展预置网站，覆盖 TikTok、X/Twitter、Grok、Gemini、Instagram 等，并考虑 ChatGPT、YouTube、Google、GitHub 等更多常用网站；X 与 Twitter 兼顾域名差异及重定向。

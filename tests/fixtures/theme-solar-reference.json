@@ -1,0 +1,511 @@
+{
+  "source": "https://gml.noaa.gov/grad/solcalc/main.js",
+  "sha256": "3832956f24724eafacf9e18173b9299b1554d6252bed0784d9c9aca6d9f54856",
+  "method": "NOAA Julian-century calculator, two-pass UTC sunrise/sunset; government reference, not product code",
+  "cases": [
+    {
+      "date": "2024-02-29",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1709160545396,
+      "sunset": 1709201116118
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1709206235825,
+      "sunset": 1709246806506
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1709149331495,
+      "sunset": 1709195558153
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1709195816691,
+      "sunset": 1709232265985
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1709162081959,
+      "sunset": 1709205591342
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1709205777685,
+      "sunset": 1709249386662
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1709230140282,
+      "sunset": 1709273737581
+    },
+    {
+      "date": "2024-02-29",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1709143751550,
+      "sunset": 1709187349466
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1710886666789,
+      "sunset": 1710930387541
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1710932307573,
+      "sunset": 1710976121063
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1710878301596,
+      "sunset": 1710921979803
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1710919603276,
+      "sunset": 1710963880941
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1710889735359,
+      "sunset": 1710933326731
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1710933478141,
+      "sunset": 1710977068627
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1710957833010,
+      "sunset": 1711001423838
+    },
+    {
+      "date": "2024-03-20",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1710871450806,
+      "sunset": 1710915041681
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1718916364277,
+      "sunset": 1718970385959
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1718961908421,
+      "sunset": 1719016246965
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1718917210703,
+      "sunset": 1718952833481
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1718938575590,
+      "sunset": 1719014562283
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1718924437950,
+      "sunset": 1718968361538
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1718968355892,
+      "sunset": 1719011960797
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1718992700834,
+      "sunset": 1719036343186
+    },
+    {
+      "date": "2024-06-21",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1718906287793,
+      "sunset": 1718949930183
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1726956122268,
+      "sunset": 1726999888084
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1727001845102,
+      "sunset": 1727045533744
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1726947883637,
+      "sunset": 1726991498084
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1726989112906,
+      "sunset": 1727033206074
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1726959252338,
+      "sunset": 1727002843019
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1727002994957,
+      "sunset": 1727046584261
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1727027348985,
+      "sunset": 1727070938196
+    },
+    {
+      "date": "2024-09-22",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1726940970136,
+      "sunset": 1726984559292
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1734737545081,
+      "sunset": 1734771162082
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1734783405991,
+      "sunset": 1734816725050
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1734720049912,
+      "sunset": 1734771947959
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1734780098330,
+      "sunset": 1734795016115
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1734735693777,
+      "sunset": 1734779063625
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1734779301613,
+      "sunset": 1734822989918
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1734803688742,
+      "sunset": 1734847339569
+    },
+    {
+      "date": "2024-12-21",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1734717259003,
+      "sunset": 1734760909818
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1773958713446,
+      "sunset": 1774002357852
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1774004355352,
+      "sunset": 1774048090312
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1773950279365,
+      "sunset": 1773994018996
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1773991705679,
+      "sunset": 1774035795189
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1773961744936,
+      "sunset": 1774005334188
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1774005486532,
+      "sunset": 1774049077330
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1774029841563,
+      "sunset": 1774073432412
+    },
+    {
+      "date": "2026-03-20",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1773943459291,
+      "sunset": 1773987050203
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1781988358565,
+      "sunset": 1782042380127
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1782033902260,
+      "sunset": 1782088241624
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1781989204410,
+      "sunset": 1782024827420
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1782010570242,
+      "sunset": 1782086560206
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1781996431913,
+      "sunset": 1782040355508
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1782040349855,
+      "sunset": 1782083954774
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1782064694801,
+      "sunset": 1782108337174
+    },
+    {
+      "date": "2026-06-21",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1781978281748,
+      "sunset": 1782021924143
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1790028095055,
+      "sunset": 1790071935913
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1790073816773,
+      "sunset": 1790117582628
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1790019924115,
+      "sunset": 1790063478233
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1790061030528,
+      "sunset": 1790105308678
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1790031261626,
+      "sunset": 1790074854401
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1790075005420,
+      "sunset": 1790118594413
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1790099359293,
+      "sunset": 1790142948471
+    },
+    {
+      "date": "2026-09-22",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1790012980491,
+      "sunset": 1790056569628
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": 39.9,
+      "longitude": 116.4,
+      "sunrise": 1797809529586,
+      "sunset": 1797843147819
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": 40.7,
+      "longitude": -74,
+      "sunrise": 1797855390978,
+      "sunset": 1797888710274
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": -33.9,
+      "longitude": 151.2,
+      "sunrise": 1797792036039,
+      "sunset": 1797843932913
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": 64.1,
+      "longitude": -21.9,
+      "sunrise": 1797852082109,
+      "sunset": 1797867002191
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": 1.35,
+      "longitude": 103.8,
+      "sunrise": 1797807679073,
+      "sunset": 1797851048932
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": -0.18,
+      "longitude": -78.5,
+      "sunrise": 1797851286916,
+      "sunset": 1797894975210
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": 0,
+      "longitude": -180,
+      "sunrise": 1797875674036,
+      "sunset": 1797919324859
+    },
+    {
+      "date": "2026-12-21",
+      "latitude": 0,
+      "longitude": 180,
+      "sunrise": 1797789244328,
+      "sunset": 1797832895118
+    }
+  ]
+}
