@@ -27,6 +27,11 @@ test('local image batch conversion preserves source, animation and cancellation 
   const animated=await service.start(1,[gif,tiff],out,{format:'webp',quality:75,preserveMetadata:true},()=>{});
   assert.deepEqual(animated.results.map(result=>result.status),['done','done'],JSON.stringify(animated.results));
   assert.equal((await sharp(animated.results[0].output,{animated:true}).metadata()).pages,2);
+  for(const format of ['gif','tiff']){
+   const converted=await service.start(1,[gif],out,{format,quality:75,preserveMetadata:true},()=>{});
+   assert.equal(converted.results[0].status,'done',JSON.stringify(converted.results[0]));
+   assert.equal((await sharp(converted.results[0].output,{animated:true}).metadata()).pages,2);
+  }
   const rejected=await service.start(1,[gif],out,{format:'png',quality:80,preserveMetadata:false},()=>{});
   assert.equal(rejected.results[0].status,'error');assert.match(rejected.results[0].message,/动画|多页/);
   const pending=service.start(1,Array(40).fill(0).map((_,index)=>{const duplicate=join(root,`copy-${index}.png`);return duplicate;}),out,settings,()=>{});
