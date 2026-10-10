@@ -31,6 +31,8 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   if(options.enhance&&pages>1)throw Error('画质优化暂不支持动图或多页图片，原文件未修改');
   const target=options.format==='original'?metadata.format:options.format;
   if(options.compressionMode==='lossless'&&!['png','webp','tiff'].includes(target))throw Error('此格式不支持无损像素优化，请改选 PNG、WebP 或 TIFF');
+  const highPrecision=!!metadata.depth&&metadata.depth!=='uchar';
+  if(options.compressionMode==='lossless'&&highPrecision&&!(metadata.depth==='ushort'&&target==='png'&&['rgb16','grey16'].includes(metadata.space||'')))throw Error('此高精度图片无法在所选格式下保持位深；请改选 PNG 无损输出或按质量重新编码');
   if(options.format==='original'){const suffix=entry.output.split('.').pop()?.toLowerCase(),expected=metadata.format==='jpeg'?['jpg','jpeg']:metadata.format==='tiff'?['tif','tiff']:[metadata.format];if(!suffix||!expected.includes(suffix))throw Error('扩展名与实际图片格式不一致，请选择明确的目标格式转换');}
   if(pages>1&&!['gif','webp','tiff'].includes(target))throw Error('目标格式不能保留动画或多页内容，请选择 GIF、WebP 或 TIFF');
   if(target==='svg'){
@@ -51,18 +53,20 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   if(options.maxWidth||options.maxHeight)pipeline=pipeline.resize({width:options.maxWidth,height:options.maxHeight,fit:'inside',withoutEnlargement:true});
   if(options.enhance){const enhance=options.enhance;if(enhance.denoise)pipeline=pipeline.median(3);if(enhance.contrast)pipeline=pipeline.normalise({lower:1,upper:99});if(enhance.brightness!==1||enhance.saturation!==1)pipeline=pipeline.modulate({brightness:enhance.brightness,saturation:enhance.saturation});if(enhance.sharpen===1)pipeline=pipeline.sharpen();else if(enhance.sharpen===2)pipeline=pipeline.sharpen({sigma:2,m1:0,m2:3});}
   if(options.metadataPolicy==='all')pipeline=pipeline.keepMetadata();else if(options.metadataPolicy==='color')pipeline=pipeline.keepIccProfile();
+  if(options.compressionMode==='lossless'&&highPrecision)pipeline=pipeline.toColourspace(metadata.space!);
   switch(target){
    case 'png':pipeline=pipeline.png({compressionLevel:9});break;
    case 'jpeg':pipeline=pipeline.flatten({background:'#ffffff'}).jpeg({quality:options.quality,mozjpeg:true});break;
-   case 'webp':pipeline=pipeline.webp({quality:options.quality,lossless:options.compressionMode==='lossless',effort:options.compressionMode==='lossless'?6:4,loop:metadata.loop||0,delay:metadata.delay});break;
+   case 'webp':pipeline=pipeline.webp({quality:options.quality,lossless:options.compressionMode==='lossless',exact:options.compressionMode==='lossless',effort:options.compressionMode==='lossless'?6:4,loop:metadata.loop||0,delay:metadata.delay});break;
    case 'gif':pipeline=pipeline.gif({effort:5,keepDuplicateFrames:true,loop:metadata.loop||0,delay:metadata.delay});break;
    case 'tiff':pipeline=pipeline.tiff({quality:options.quality,compression:'lzw'});break;
   }
   await pipeline.toFile(entry.temp);
   const output=await sharp(entry.temp,{animated:true}).metadata();if(pages>1&&(output.pages||1)!==pages)throw Error('输出未能保留全部动画帧或 TIFF 页面');
+  if(options.compressionMode==='lossless'&&highPrecision&&output.depth!==metadata.depth)throw Error('输出位深与原图不同，无损优化已取消');
   await rename(entry.temp,entry.output);
   const after=(await stat(entry.output)).size;
-  const messages:string[]=[];if(motionStill)messages.push('已仅导出静态照片，动态视频未写入结果');if(options.enhance)messages.push('已应用画质调整');if(target==='jpeg'&&metadata.hasAlpha)messages.push('透明区域已填充白色');if(after>before)messages.push('输出体积大于原图');
+  const messages:string[]=[];if(motionStill)messages.push('已仅导出静态照片，动态视频未写入结果');if(options.enhance)messages.push('已应用画质调整');if(highPrecision&&output.depth!==metadata.depth)messages.push('高精度输入已转为 8 位输出');if(target==='jpeg'&&metadata.hasAlpha)messages.push('透明区域已填充白色');if(after>before)messages.push('输出体积大于原图');
   return {source:entry.source,output:entry.output,before,after,width:output.width,height:output.pageHeight||output.height,pages:output.pages||1,status:'done',message:messages.join('；')||undefined};
  }catch(error){await rm(entry.temp,{force:true}).catch(()=>{});return {source:entry.source,before,status:'error',message:(error as Error).message.slice(0,300)};}
 }
