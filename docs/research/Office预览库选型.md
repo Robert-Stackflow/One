@@ -1,23 +1,23 @@
 # Office 预览库选型：免费开源优先
 
-2026-10-10。用户反馈 Windows 原生预览及目录跳转卡顿，要求先调研替代库，优先免费开源。本轮核验官方文档、源码入口与发布元数据，并在独立窗口中测试 XLSX 和 PPTX 候选；不改主程序依赖、不上传用户文件，不把宣传中的“高性能”视为实测结果。
+2026-10-10。用户反馈 Windows 原生预览及目录跳转卡顿，要求先调研替代库，优先免费开源。本轮核验官方文档、源码入口与发布元数据，并在独立窗口中测试 XLSX、DOCX 和 PPTX 候选；不改主程序依赖、不上传用户文件，不把宣传中的“高性能”视为实测结果。
 
 ## 选型结论
 
-已发现同时提供 DOCX/XLSX/PPTX 查看器的 MIT 候选 `@silurus/ooxml`，其中 XLSX 已通过下方日常样本核验；其 DOCX/PPTX 尚未实测。当前仍没有可直接认定满足“免费开源、轻量离线、完整覆盖 DOC/DOCX、XLS/XLSX、PPT/PPTX、Office 保真”的单一 npm 库，尤其不能把现代格式通过扩大成旧格式通过。应区分文件解析器、网页排版器、电子表格组件和完整 Office 引擎；能读取文件不等于能忠实展示。
+已发现同时提供 DOCX/XLSX/PPTX 查看器的 MIT 候选 `@silurus/ooxml`，其中 XLSX 日常格式、DOCX 自动分页和书签定位已有隔离实测证据，其 PPTX 尚未实测。当前仍没有可直接认定满足“免费开源、轻量离线、完整覆盖 DOC/DOCX、XLS/XLSX、PPT/PPTX、Office 保真”的单一 npm 库。旧格式与现代格式必须分别验证，文件解析能力也不能替代渲染保真验收。
 
 继续按格式验证，不因 XLSX 首个候选失利而停止其他格式的筛选：
 
-1. **XLSX：优先候选改为 `@silurus/ooxml@0.88.0` 的现成 `XlsxViewer`。** 同组样本的前导零、公式金额、错误值、1904 日期、图片、柱状图、工作表切换和末行定位已通过，Electron 下也能显示。由库负责整个表格画布与交互，One 不重写网格。大表仍有主线程长任务，下一步核验库内 worker 渲染路径及真实复杂文件；首个 `@js-preview/excel` 候选仍不采用。真实旧二进制 XLS 尚未验证，不能仅改后缀测试。
+1. **XLSX：优先候选为 `@silurus/ooxml@0.88.0` 的现成 `XlsxViewer`。** 同组样本的前导零、公式金额、错误值、1904 日期、图片、柱状图、工作表切换和末行定位已通过，Electron 下也能显示。由库负责表格画布与交互，One 不重写网格。worker 绘制与主模式的日常样本截图逐像素一致，但大表仍有主线程长任务，不能据后台绘制承诺不卡顿。首个 `@js-preview/excel` 候选不采用；真实旧二进制 XLS 尚未验证。
 2. **PPTX：新增优先候选 `@aiden0z/pptx-renderer@1.3.0`。** 新一轮检索发现了持续维护的浏览器渲染项目，不能只依据旧 PPTXjs 判断免费方案。自有样本的组合文字、母版/布局装饰、表格、图片、柱状图和目录 API 已通过隔离验证；列表模式需要稳定滚动条布局。尚未完整对照真实 PowerPoint 输出，也未完成 One 内集成与可见窗口验收，不宣称全格式保真。
-3. **DOCX：先核验统一候选的自动分页与目录；旧 DOC/PPT 独立验证。** `@silurus/ooxml` 已提供 DOCX 查看器和文档引擎 API，但本轮仅实测其 XLSX，不把 API 存在算作 Word 保真通过。LibreOffice 本地转换 + 现有 PDF.js 保留作对照，可利用 PDF 书签/页码导航，仍需测冷启动与字体差异。本机常见路径及命令入口未发现 LibreOffice，未下载整套引擎。旧 PPT 另有 Rust/WASM 候选，尚未实测。
+3. **DOCX：优先候选为统一库的 `DocxDocument` + `DocxScrollViewer`，重点评估 worker 排版。** 无手动分页符的 120 段文字自动分为多页且没有丢段，书签映射到实际渲染页；主模式与 worker 模式的目标页截图一致。本轮 worker 样本未出现 ≥50 ms 主线程长任务，但这不是复杂文档保真或大文件性能承诺。worker 不暴露原始文档模型，目录需单独提取结构并映射到书签/源段落；不能只按重复标题文字搜索。LibreOffice 本地转换 + PDF.js 保留作对照；本机未发现完整引擎，未安装。旧 DOC/PPT 独立验证。
 4. **ZetaOffice/ZetaJS 作为统一引擎备选。** 它在浏览器内提供 LibreOffice 能力，方向符合无需安装 Office，但整套引擎的冷启动、内存、资源体积和 Electron 离线集成尚未测量，不能预先承诺比原生快。
 
 ## 候选比较
 
 | 候选 | 已核验能力与授权 | 对 One 的判断 |
 | --- | --- | --- |
-| `@silurus/ooxml` | 主项目 MIT，提供第三方声明；Rust/WASM 解析与现成 Canvas 查看器，独立 DOCX/XLSX/PPTX 入口 | XLSX 新增优先候选，已实测日常保真及生命周期。无需 Vue/React 或 Office 安装；DOCX/PPTX、旧格式、worker 绘制仍需分别验证，不能据统一 API 宣称全部格式已通过。 |
+| `@silurus/ooxml` | 主项目 MIT，提供第三方声明；Rust/WASM 解析与现成 Canvas 查看器，独立 DOCX/XLSX/PPTX 入口 | XLSX/DOCX 优先候选，已实测日常表格、自动分页、书签和两种绘制路径。无需 Vue/React 或 Office 安装；复杂文件、PPTX 和旧格式仍需分别验证，不能据统一 API 宣称全部格式已通过。 |
 | `@vue-office/excel` / `@js-preview/excel` | 发布包 MIT；支持本地二进制输入；底层 ExcelJS + x-data-spreadsheet，同项目提供纯 JavaScript 入口 | 已隔离测试 JS 入口；基础展示可用，但前导零、公式数字格式、错误值、图表与快速销毁存在问题。暂不接入主程序，不能把“可打开”当作保真通过。 |
 | `@extend-ai/react-xlsx` | 仓库 MIT；React 查看器，使用 `@dukelib/sheets-wasm` 解析/计算，官方说明图片与图表展示及部分旧格式边界 | 新增备选，当前只核验 README/源码入口，未实测；上游 WASM 对应源码、许可和 React 引入成本需进一步核验。优先验证无需 React 的上述查看器。 |
 | SheetXL | 官方模块表区分 MIT UI/IO 与商业 `@sheetxl/sdk` 核心 | UI 开源不等于整个 Excel 引擎免费开源，不作为当前优先方案。 |
@@ -74,11 +74,30 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 | 损坏与限额 | 资源条目限额会拒绝为 `OoxmlResourceLimitError`。非 ZIP 和损坏 ZIP 的 `load()` 却正常 fulfilled，画布显示 `ZIP central directory preflight failed` 诊断页；并非有效工作表，也不是静默成功。集成时不能只据 Promise 完成或 sheetCount 判定有效预览，需统一诊断提示。 |
 | Blob 生命周期观察 | 主页面看到每次加载创建一个脚本 Blob URL，但撤销发生在 worker 内的首句 `URL.revokeObjectURL(import.meta.url)`，主页面钩子不会收到。已定位源码与 worker 创建/终止；不能把主页面未观察到 revoke 的计数当作已确认泄漏，也未据此宣称完整内存回收审计通过。 |
 
-一轮 Chrome 154 测量中，模块加载后日常样本 `load()` 约 **287 ms**、首次文字绘制约 **212 ms**、包含图表的检查点约 **296 ms**；再次打开约 **85 ms**。12 万单元格约 **960 ms**，有 **123/101 ms** 两个主线程长任务，JS 堆采样约 **33 MB**；工作表切换约 **3–12 ms**，末行定位 API 约 **3.5 ms**。独立隐藏 Electron 的日常样本加载约 **263 ms**、图表检查点约 **280 ms**。均非应用冷启动、峰值内存或真实前台点击延迟；两个浏览器版本不混作一次公平性能对比。默认路径为 worker 解析、主线程绘制，尚未测试 `mode: 'worker'` 的完整绘制路径。
+一轮 Chrome 154 测量中，模块加载后日常样本 `load()` 约 **287 ms**、首次文字绘制约 **212 ms**、包含图表的检查点约 **296 ms**；再次打开约 **85 ms**。12 万单元格约 **960 ms**，有 **123/101 ms** 两个主线程长任务，JS 堆采样约 **33 MB**；工作表切换约 **3–12 ms**，末行定位 API 约 **3.5 ms**。独立隐藏 Electron 的日常样本加载约 **263 ms**、图表检查点约 **280 ms**。均非应用冷启动、峰值内存或真实前台点击延迟；两个浏览器版本不混作一次公平性能对比。默认路径为 worker 解析、主线程绘制，完整 worker 绘制结果见下段。
 
-**决策：XLSX 进入优先集成评估，保真优先于单项速度。** 当前结果比首个候选更接近日常需求，但下一步仍需 worker 绘制、大表进度/中止、真实文件、冻结和统一错误提示。DOCX 自动分页/目录与 PPTX 应分别测试后再决定是否共用这套库；暂未替换主程序。
+完整 `mode: 'worker'` 路径也已测试：日常样本约 **446 ms**，12 万单元格约 **1,185 ms**，后者仍出现 **119/73 ms** 主线程长任务；两个工作表与末行定位、加载中销毁、连续替换及资源限额均有效，8 个 worker 全部终止。日常截图 1100×750、825,000 像素与主模式 **零差异**。这轮 worker 样本加载更慢，不能默认选择 worker 或宣称卡顿已解决。
 
-材料位于 `work/current/office-preview/research/unified/`：`package-metadata.json`、`probe-results.json`、`probe-electron-results.json`、`probe-lifecycle-results.json`、`daily-render.png` 与探针源码。沿用同组自有 XLSX，并只派生合法布尔标记的 1904 样本；用户文件未参与，测试进程已退出。
+**决策：XLSX 进入优先集成评估，保真优先于单项速度。** 当前结果比首个候选更接近日常需求；仍需大表进度/中止、真实文件、冻结和统一错误提示。DOCX 已补自动分页/目录试验，PPTX 尚未测试统一库；暂未替换主程序。
+
+材料位于 `work/current/office-preview/research/unified/`：`package-metadata.json`、`probe-results.json`、`probe-electron-results.json`、`probe-lifecycle-results.json`、`probe-worker-results.json`、`pixel-comparison.json`、`daily-render.png`、`worker-daily-render.png` 与探针源码。沿用自有 XLSX，并只派生合法布尔标记的 1904 样本；用户文件未参与，测试进程已退出。
+
+## 统一候选的 DOCX 隔离核验
+
+使用同一发布包的 `DocxDocument` 与 `DocxScrollViewer.fromDocument`，只解析一次，再由现成滚动查看器挂载页面。维持原有安全策略，禁用在线字体与外链点击；Chrome 154 中无页面异常、无外部请求。主模式实际加载的静态资源去重约 4.10 MB，worker 模式约 5.84 MB；这是探针请求的资源图，不是整个安装包体积。
+
+| 检查项 | 实测结果 |
+| --- | --- |
+| 自动分页与完整性 | 120 段、没有手动分页符的旧复现样本自动分为 2 页。派生样本显式设置 12 pt 后分为 3 页；各模式均从页面文字运行结果收集到 1–120 全部标记，各出现一次。页数来自实际排版，不能用它推断与 Word 分页完全一致。 |
+| 书签与目录 | 派生样本第 1/60/120 段的书签分别映射到实际第 1/2/3 页。另一个 4 节样本可提取 Heading1 并跳至最后一节，画面确认中文、emoji 和正文可见。搜索有重复标题时会返回多个匹配，产品目录应使用书签或源段落映射。 |
+| 主模式 | 三个样本完整排版约 315–395 ms，出现 189–256 ms 主线程长任务；最后段落/标题搜索约 1.8–2.6 ms，跳到目标页并等待两次动画帧约 11–19 ms，内部滚动位置与可见页索引一致。 |
+| worker 模式 | 12 pt 派生样本完整排版约 439 ms，收集全部页面文字后约 482 ms；本轮没有 ≥50 ms 主线程长任务。最后段落搜索约 5.8 ms，目标页跳转检查点约 4.9 ms，主模式与 worker 目标页截图 825,000 像素零差异。不能将这次小样本扩大为全部文档响应承诺。 |
+| 模型边界 | worker 模式访问 `document` 会按设计抛错，原始模型留在后台。`collectPageRuns`、`getBookmarkPage` 与文本搜索仍可用；探针对派生样本使用已知的书签名，尚未实现产品目录自动提取链。 |
+| 错误与释放 | 非 ZIP 被拒绝，但错误是通用 `RangeError: Error page size must be positive`，需要产品统一提示。主/worker 轮次分别创建并终止 4/2 个 worker，销毁后 DOM 清空。加载中关闭与连续换文件还需集成验收，不能以加载后销毁代替。 |
+
+**决策：DOCX 与 XLSX 可以优先评估共用该库；DOCX 的 worker 路径值得采用。** 这次证据解决了“库是否支持自动分页和直接目录定位”，没有解决复杂 Word 排版保真。表格跨页、页眉页脚、图片浮动、脚注、公式、中文字体替代及真实文件仍需验证；不再依靠 Windows UI Automation 搜索标题。上述时间不含应用/模块冷启动、峰值内存或真实用户点击，也未与原生方案做等条件性能对比。
+
+复现文件：`work/current/office-preview/research/unified/docx-probe.js`、`run-docx-probe.cjs`、`probe-docx-results.json`、`probe-docx-worker-results.json`、`flow-bookmarks.docx`、`docx-navigation.png`、`docx-flow.png`、`docx-worker-flow.png`。两种 DOCX 模式截图差异统计另存 `docx-pixel-comparison.json`；样本均由项目自产，用户文档未参与。
 
 ## PPTX 隔离样本核验
 
@@ -103,7 +122,7 @@ Luckysheet 官方仓库已在 2025-10-30 归档，不作为新增依赖。商业
 ## 目录与性能应如何验收
 
 - **表格：** 库负责单元格显示、滚动、冻结和工作表切换；One 仅保留统一标题栏/侧栏，关闭编辑入口。先验证多工作表、合并、金额/百分比/1904 日期/前导零、缓存公式、图片、图表、大范围空白和真实 XLS。
-- **Word：** HTML 路线通过已渲染标题节点直接定位；PDF 路线读取导出的书签/命名目标。页码、缩略图和自动分页必须来自实际展示结果，不能以 XML 里的静态分页标记假装精确页码。
+- **Word：** Canvas 路线从实际排版读取书签/源段落到页码的映射，复用查看器直接跳页；HTML 路线定位已渲染标题节点，PDF 路线读取导出书签/命名目标。不能用重复标题搜索或 XML 静态分页标记假装精确目录定位。
 - **PPT：** HTML 路线按幻灯片节点定位；PDF 路线按页定位。组合形状、母版/主题、裁剪图片、表格、中文和嵌入对象必须做内容完整性对照。
 - **实际测量：** 同一设备、同一批自有样本，分别记录冷启动、热启动、第一屏、目录点击、滚动掉帧、主线程长任务、峰值内存、资源体积、失败恢复和连续切文件。先测再选，不用一个标题的约 90 ms 原生调用推导整个预览已经流畅。
 - **建议通过条件：** 日常文件热打开第一屏目标 500 ms 内、目录响应目标 100 ms 左右，较大文件应能显示进度并取消；这是待测目标。保真必须同时通过，不能靠丢图片/图表换速度。旧格式与新版格式分别记录。

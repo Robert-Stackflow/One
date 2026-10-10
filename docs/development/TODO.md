@@ -66,14 +66,15 @@ ZIP/7Z 外部编辑针对单个普通文件，大小不超过 256 MiB。RAR 及�
 - [x] 按用户要求调研免费开源 Office 预览库；核验 vue-office、Univer、FortuneSheet、docx-preview、PPTXjs、ZetaOffice、LibreOffice 等的格式、导入链、授权与维护，见 [Office 预览库选型](../research/Office预览库选型.md)。
 - [x] 完成首个 XLSX 库的隔离样本试验：`@js-preview/excel@1.7.14`（vue-office 的纯 JS 入口）基础展示可用，但前导零、公式格式、错误值、图表和快速销毁未通过；已记录大表长任务与 CSP 兼容问题，暂不接入主程序。见 [实测记录](../research/Office预览库选型.md#xlsx-隔离样本核验)。
 - [x] 新增统一库 `@silurus/ooxml@0.88.0` 的 XLSX 隔离核验：同组样本的数字/公式/错误值、两种 1904 标记、图片和柱状图正确，工作表切换与末行定位有效；Electron 显示、关闭中止、连续替换与限额已检查。见 [实测记录](../research/Office预览库选型.md#统一候选的-xlsx-隔离核验)。
-- [ ] XLSX 优先评估该库的现成查看器集成：worker 绘制、大表响应/进度、真实文件、冻结/滚动、只读、统一诊断与主题；不由 One 自绘网格。旧 XLS 独立验证，不把新版样本当作旧格式已通过。
+- [ ] XLSX 优先评估该库的现成查看器集成：大表响应/进度、真实文件、冻结/滚动、只读、统一诊断与主题；worker 绘制已测试，仍有主线程长任务，不默认视为优化完成。One 不自绘网格，旧 XLS 独立验证。
 - [x] 新增 PPTX 开源候选筛选与隔离试验：`@aiden0z/pptx-renderer@1.3.0` 可显示自有样本的组合文字、布局装饰、图片、表格和柱状图；已核验直接跳页、150 页按需挂载、错误恢复及 Blob 回收，记录列表布局和图表异步就绪边界。见 [实测记录](../research/Office预览库选型.md#pptx-隔离样本核验)。
 - [ ] PPTX 优先评估上述现成渲染库的集成：真实复杂文件/字体、目录与缩略图、窗口缩放、解析中取消和统一提示层；旧 PPT 独立验证 Rust/WASM 候选，不把 PPTX 样本当作旧格式已通过。
 - [x] 对照作者公开的复杂 PPTX 与 PowerPoint 参考图：主要组合图文可见，字体、换行和留白仍有差异，容器边距未完全归一化；第二页仅核验跳页与文字，不宣称整份文件像素保真通过。
-- [ ] DOCX 优先核验统一库的自动分页、字体与目录定位，再决定是否共用引擎；旧 DOC/PPT 与 LibreOffice 本地转换 + PDF.js 保留独立对照。当前未安装完整引擎，Windows 原生原型卡顿路线继续暂停。
+- [x] 核验统一库 DOCX 自动分页与目录 API：无手动分页的 120 段全部保留，12 pt 样本分为 3 页，书签映射实际页；worker 目标页截图与主模式一致，本轮没有 ≥50 ms 主线程长任务。见 [实测记录](../research/Office预览库选型.md#统一候选的-docx-隔离核验)。
+- [ ] DOCX 优先评估该库 worker 路径集成：目录结构提取与书签/源段落映射、真实复杂排版、字体、取消/换文件、统一错误和提示层；旧 DOC/PPT 与 LibreOffice + PDF.js 保留独立对照，原生卡顿路线继续暂停。
 - [ ] Office 体验稳定后按日常需求评估 CSV 大文件表格、EPUB 导航等短板；不扩大为全部格式变体实现。
 
-2026-10-10：XLSX 原生接入和透明 tooltip 已实现，宿主 50 项、缺组件模拟 6 项及本机真实 Excel 12 项检查通过；XLSM/ODS 等原有预览回归通过。本机默认 WPS 关联失效，但实际存在可用 Excel 组件，已回退使用；未安装、修复或修改关联。Word/PPT 原生原型已做功能检查，但用户体验反馈仍卡顿；后续优先免费开源库，当前 XLSX/PPTX 均有已实测的优先候选，DOCX 统一库待核验，主程序替代引擎尚未接入。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
+2026-10-10：XLSX 原生接入和透明 tooltip 已实现，宿主 50 项、缺组件模拟 6 项及本机真实 Excel 12 项检查通过；XLSM/ODS 等原有预览回归通过。本机默认 WPS 关联失效，但实际存在可用 Excel 组件，已回退使用；未安装、修复或修改关联。Word/PPT 原生原型已做功能检查，但用户体验反馈仍卡顿；后续优先免费开源库，当前 XLSX/DOCX/PPTX 均有隔离实测的优先候选，DOCX worker 自动分页/书签已通过小样本核验，复杂排版和集成体验待验收，主程序替代引擎尚未接入。证据见 verification/native-preview/latest.json；原始调研见 verification/preview-research/latest.json。
 
 ## 深浅色模式自动切换
 
