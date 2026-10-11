@@ -2,12 +2,27 @@ export type ImageConvertFormat='original'|'png'|'jpeg'|'webp'|'gif'|'tiff'|'heic
 export interface ImageCropRule {x:number;y:number;width:number;height:number;ratio?:number}
 export type ImageResizeRule={mode:'pixels';width?:number;height?:number;keepAspect:boolean}|{mode:'percent';percent:number;keepAspect:true}|{mode:'long-edge';longEdge:number;keepAspect:true};
 export interface ImageEnhanceOptions {brightness:number;saturation:number;sharpen:0|1|2;contrast:boolean;denoise:boolean}
-export interface ImageConvertOptions {format:ImageConvertFormat;quality:number;maxWidth?:number;maxHeight?:number;preserveMetadata:boolean;metadataPolicy?:'all'|'color'|'none';compressionMode?:'quality'|'lossless';motionPolicy?:'reject'|'still';hdrPolicy?:'reject'|'sdr';enhance?:ImageEnhanceOptions;crop?:ImageCropRule;resize?:ImageResizeRule}
+export type ImageOutputNaming={mode:'default'|'numbered'}|{mode:'prefix';prefix:string};
+export interface ImageConvertOptions {format:ImageConvertFormat;quality:number;maxWidth?:number;maxHeight?:number;preserveMetadata:boolean;metadataPolicy?:'all'|'color'|'none';compressionMode?:'quality'|'lossless';motionPolicy?:'reject'|'still';hdrPolicy?:'reject'|'sdr';enhance?:ImageEnhanceOptions;crop?:ImageCropRule;resize?:ImageResizeRule;naming?:ImageOutputNaming}
 export interface ImageConvertResult {source:string;output?:string;before:number;after?:number;width?:number;height?:number;pages?:number;status:'done'|'error'|'cancelled';message?:string}
 export interface ImageConvertProgress {done:number;total:number;current?:string;result?:ImageConvertResult}
 export interface ImageConvertSummary {results:ImageConvertResult[];cancelled:boolean}
 export interface ImageCropPreview {url:string;width:number;height:number;format:string}
 export const imageConvertExtensions=['png','jpg','jpeg','webp','gif','tif','tiff'] as const;
+export function imageOutputNaming(value:unknown):ImageOutputNaming{
+ if(value===undefined)return {mode:'default'};
+ if(!value||typeof value!=='object')throw Error('输出命名设置无效');const naming=value as ImageOutputNaming;
+ if(naming.mode==='default'||naming.mode==='numbered')return {mode:naming.mode};
+ if(naming.mode==='prefix'&&typeof naming.prefix==='string'){
+  const prefix=naming.prefix.trim();if(prefix.length>0&&prefix.length<=40&&/^[\p{L}\p{N} _-]+$/u.test(prefix))return {mode:'prefix',prefix};
+ }
+ throw Error('自定义前缀需为 1 至 40 个字母、数字、空格、下划线或连字符');
+}
+export function imageOutputStem(name:string,index:number,suffix:string,shortId:string,naming:ImageOutputNaming){
+ if(!Number.isInteger(index)||index<1||index>100||!/^[0-9a-f]{8}$/i.test(shortId))throw Error('输出命名参数无效');
+ if(naming.mode==='default')return `${name}-${suffix}-${shortId}`;
+ return `${naming.mode==='prefix'?naming.prefix:name}-${String(index).padStart(3,'0')}-${shortId}`;
+}
 export function imageCropRule(value:unknown):ImageCropRule{
  if(!value||typeof value!=='object')throw Error('裁剪区域无效');const rule=value as ImageCropRule;
  if(![rule.x,rule.y,rule.width,rule.height].every(Number.isFinite)||rule.x<0||rule.y<0||rule.width<=0||rule.height<=0||rule.x+rule.width>1.000001||rule.y+rule.height>1.000001)throw Error('裁剪区域需位于图片范围内');
@@ -63,5 +78,5 @@ export function imageConvertOptions(value:unknown):ImageConvertOptions{
  if(enhance&&(v.compressionMode==='lossless'||v.format==='ico'||v.format==='svg'||crop||resize))throw Error('画质调整不能与无损优化、ICO、SVG、裁剪或缩放任务混用');
  if(v.motionPolicy!==undefined&&!['reject','still'].includes(v.motionPolicy))throw Error('动态照片处理设置无效');
  if(v.hdrPolicy!==undefined&&!['reject','sdr'].includes(v.hdrPolicy))throw Error('HDR 增益图处理设置无效');
- return {format:v.format,quality:v.quality,maxWidth:v.maxWidth,maxHeight:v.maxHeight,preserveMetadata:v.preserveMetadata,metadataPolicy:v.metadataPolicy??(v.preserveMetadata?'all':'none'),compressionMode:v.compressionMode||'quality',motionPolicy:v.motionPolicy||'reject',hdrPolicy:v.hdrPolicy||'reject',enhance,crop,resize};
+ return {format:v.format,quality:v.quality,maxWidth:v.maxWidth,maxHeight:v.maxHeight,preserveMetadata:v.preserveMetadata,metadataPolicy:v.metadataPolicy??(v.preserveMetadata?'all':'none'),compressionMode:v.compressionMode||'quality',motionPolicy:v.motionPolicy||'reject',hdrPolicy:v.hdrPolicy||'reject',enhance,crop,resize,naming:imageOutputNaming(v.naming)};
 }

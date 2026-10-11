@@ -27,6 +27,7 @@ test('local image batch conversion preserves source, animation and cancellation 
   assert.equal((await sharp(first.results[0].output).metadata()).width,4);
   assert.match(first.results[0].message,/白色/);assert.ok(updates.some(value=>value.done===1));
   assert.equal((await sharp(source).metadata()).format,'png');
+  const named=await service.start(1,[source,tiff],out,{format:'webp',quality:80,preserveMetadata:false,naming:{mode:'prefix',prefix:'假期'}},()=>{});assert.deepEqual(named.results.map(result=>result.status),['done','done']);assert.match(named.results[0].output,/假期-001-[0-9a-f]{8}\.webp$/);assert.match(named.results[1].output,/假期-002-[0-9a-f]{8}\.webp$/);const namedAgain=await service.start(1,[source],out,{format:'webp',quality:80,preserveMetadata:false,naming:{mode:'prefix',prefix:'假期'}},()=>{});assert.notEqual(namedAgain.results[0].output,named.results[0].output);assert((await stat(named.results[0].output)).size>0);
   const animated=await service.start(1,[gif,tiff],out,{format:'webp',quality:75,preserveMetadata:true},()=>{});
   assert.deepEqual(animated.results.map(result=>result.status),['done','done'],JSON.stringify(animated.results));
   assert.equal((await sharp(animated.results[0].output,{animated:true}).metadata()).pages,2);
