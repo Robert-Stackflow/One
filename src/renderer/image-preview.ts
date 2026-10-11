@@ -14,9 +14,9 @@ export function renderImage(body:HTMLElement,data:PreviewData,controls:HTMLEleme
  const clearTimer=()=>{clearTimeout(timer);timer=undefined;};
  const button=(name:string,title:string,glyph:string,run:()=>void)=>{const holder=document.createElement('span');holder.innerHTML=iconButton('image-'+name,title,glyph);const b=holder.firstElementChild as HTMLButtonElement;b.onclick=run;controls.append(b);return b;};
  const label=(b:HTMLButtonElement,title:string,glyph:string)=>{b.title=title;b.setAttribute('aria-label',title);b.innerHTML=icon(glyph);};
- const surface=(node:Surface,width:number,height:number)=>{if(!alive||!width||!height)return;metadata({'尺寸':width+' × '+height});onSurface(node,width,height);};
+ const surface=(node:Surface,width:number,height:number,preview=false)=>{if(!alive||!width||!height)return;metadata({[preview?'预览尺寸':'尺寸']:width+' × '+height});onSurface(node,width,height);};
  const unsupported=(message:string)=>{if(!alive)return;stage.classList.add('image-unavailable');const hint=document.createElement('p');hint.className='image-preview-hint';hint.textContent=message;stage.append(hint);};
- photo.onload=()=>{if(alive&&photo.isConnected)surface(photo,photo.naturalWidth,photo.naturalHeight);};
+ photo.onload=()=>{if(alive&&photo.isConnected)surface(photo,photo.naturalWidth,photo.naturalHeight,!!stillURL);};
  photo.onerror=()=>{void (async()=>{
    if(!alive)return;
    const fallback=await api.previewStillImage(data.url!).catch(()=>null);
@@ -80,7 +80,7 @@ export function renderImage(body:HTMLElement,data:PreviewData,controls:HTMLEleme
   makePoster=()=>{if(!alive||posterMade||!stillFailed)return;if(movie.error){unsupported('此照片和视频需要系统解码支持，请用默认程序打开');return;}if(movie.readyState<2){movie.preload='auto';movie.load();return;}
    // HEIC may require an optional system codec. A decoded movie frame is an explicit fallback.
    const poster=document.createElement('canvas');poster.width=movie.videoWidth;poster.height=movie.videoHeight;if(!poster.width||!poster.height||poster.width*poster.height>32*1024*1024)return;
-   posterMade=true;poster.getContext('2d')?.drawImage(movie,0,0);photo.replaceWith(poster);const cover=document.createElement('canvas');cover.width=192;cover.height=Math.max(1,Math.round(192*poster.height/poster.width));cover.getContext('2d')?.drawImage(poster,0,0,cover.width,cover.height);data.cover=cover.toDataURL();surface(poster,poster.width,poster.height);metadata({'照片预览':'使用动态片段画面'});
+   posterMade=true;poster.getContext('2d')?.drawImage(movie,0,0);photo.replaceWith(poster);const cover=document.createElement('canvas');cover.width=192;cover.height=Math.max(1,Math.round(192*poster.height/poster.width));cover.getContext('2d')?.drawImage(poster,0,0,cover.width,cover.height);data.cover=cover.toDataURL();surface(poster,poster.width,poster.height,true);metadata({'照片预览':'使用动态片段画面'});
   };
   movie.onloadeddata=makePoster;
   movie.onerror=()=>{if(!alive)return;stopMotion();motionButton.disabled=true;soundButton.disabled=true;metadata({'动态播放':'视频编码不可用，请用默认程序打开'});if(stillFailed&&!posterMade)unsupported('此照片和视频需要系统解码支持，请用默认程序打开');};

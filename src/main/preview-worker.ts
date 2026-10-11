@@ -7,6 +7,7 @@ import { open, type Entry, type ZipFile } from 'yauzl';
 import { readFile,stat } from 'node:fs/promises';
 import { parseFile } from 'music-metadata';
 import exifr from 'exifr';
+import sharp from 'sharp';
 import type { FileEntry } from '../shared/types';
 
 // Only enumerate archives; never extract or run their contents. Bound decompression before Office rendering.
@@ -67,7 +68,11 @@ async function run(){
     let lyrics='';const sidecar=path.slice(0,-extname(path).length)+'.lrc';try{if((await stat(sidecar)).size<=200000){const b=await readFile(sidecar);if(b.length<=200000)lyrics=b.toString('utf8');}}catch{}
     if(!lyrics)for(const l of common.lyrics||[]){if(l.text)lyrics+=l.text+'\n';else if(l.syncText)lyrics+=l.syncText.map(t=>'['+Math.floor((t.timestamp||0)/60000)+':'+(((t.timestamp||0)/1000)%60).toFixed(2)+']'+t.text).join('\n');}
     return {metadata,cover,lyrics:parseLyrics(lyrics)};}
-  if(kind==='image'){const data=await exifr.parse(path,{gps:true,exif:true,tiff:true,icc:false,iptc:true,xmp:true,translateValues:false,reviveValues:false,makerNote:false,userComment:false})||{};const result=photoMetadata(data);return {metadata:result.metadata,photoLocation:result.location};}
+  if(kind==='image'){const heic=/\.(?:heic|heif)$/i.test(path);
+    const data=await exifr.parse(path,{gps:true,exif:true,tiff:true,icc:false,iptc:true,xmp:true,translateValues:false,reviveValues:false,makerNote:false,userComment:false}).catch(error=>{if(heic)return {};throw error;})||{};
+    const result=photoMetadata(data);
+    if(heic){const dimensions=await sharp(path).metadata().catch(()=>null);if(dimensions?.width&&dimensions.height)result.metadata['原图尺寸']=`${dimensions.width} × ${dimensions.height}`;}
+    return {metadata:result.metadata,photoLocation:result.location};}
   return {};
 }
 if(parentPort)run().then(result=>parentPort!.postMessage({result})).catch(error=>parentPort!.postMessage({error:error.message}));
