@@ -6,7 +6,7 @@ import type {ImageConvertResult} from '../shared/image-convert';
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
-export function imageMetadataPage(){return `<div class="image-convert-page image-metadata-page"><header class="image-convert-heading"><h2>清理图片元数据</h2><p>按所选项目批量生成新文件，保留原图与 ICC 色彩配置。</p></header>
+export function imageMetadataPage(){return `<div class="image-convert-page image-metadata-page">
  <div class="image-convert-layout"><section class="settings-card image-convert-panel"><h3>图片与输出</h3>
  <div class="image-convert-picks"><button id="image-metadata-add" type="button">添加图片</button><button id="image-metadata-clear" type="button" class="quiet">清空列表</button><span id="image-metadata-count" aria-live="polite">尚未选择图片</span></div>
  <div id="image-metadata-files" class="image-convert-files" aria-label="待清理图片"></div>
@@ -14,7 +14,7 @@ export function imageMetadataPage(){return `<div class="image-convert-page image
  <div class="image-convert-actions"><button id="image-metadata-start" type="button">开始清理</button><button id="image-metadata-cancel" type="button" class="quiet" disabled>取消</button><button id="image-metadata-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-metadata-status" role="status" aria-live="polite"></span></div></section>
  <section class="settings-card image-convert-panel"><h3>清理设置</h3>
  <div class="image-convert-options image-metadata-options"><label class="image-convert-metadata"><input id="image-metadata-exif" type="checkbox" checked>移除 EXIF（含 GPS）</label><label class="image-convert-metadata"><input id="image-metadata-gps" type="checkbox" checked>移除 GPS</label><label class="image-convert-metadata"><input id="image-metadata-xmp" type="checkbox" checked>移除 XMP</label><label class="image-convert-metadata"><input id="image-metadata-iptc" type="checkbox" checked>移除 IPTC</label></div>
- <p class="image-convert-note">支持 PNG、JPEG、WebP、GIF、TIFF，每批最多 100 张，单张最大 100 MB。删除 EXIF 会同时删除其中的 GPS；只选 GPS 时，其他 EXIF 保留。输出后核验所选标签和 ICC。多帧图片含方向标记时将提示无法安全处理。</p>
+ <details class="tool-notes"><summary>格式与限制</summary><p class="image-convert-note">支持 PNG、JPEG、WebP、GIF、TIFF，每批最多 100 张，单张最大 100 MB。删除 EXIF 会同时删除其中的 GPS；只选 GPS 时，其他 EXIF 保留。输出后核验所选标签和 ICC。多帧图片含方向标记时将提示无法安全处理。</p></details>
  </section></div></div>`;}
 
 export function setupImageMetadata(){

@@ -6,14 +6,14 @@ import type {ImageAiProgress,ImageAiResult} from '../shared/image-ai';
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const megabytes=(bytes:number)=>`${(bytes/1048576).toFixed(1)} MB`;
 
-export function imageRepairPage(){return `<div class="image-ai-page image-repair-page"><header class="image-ai-heading"><h2>AI 局部修复</h2><p>涂抹划痕或缺损区域，在本机生成修复后的 PNG 副本。模型会推测缺失内容，请核对重要细节。</p></header>
+export function imageRepairPage(){return `<div class="image-ai-page image-repair-page">
  <div class="image-ai-layout"><section class="settings-card image-ai-setup" aria-label="局部修复设置"><h3>处理设置</h3>
  <div class="image-ai-field"><span class="image-ai-label">源图片</span><div class="image-ai-picker"><button id="image-repair-pick" type="button">选择图片</button><strong id="image-repair-source">尚未选择图片</strong></div></div>
  <div class="image-ai-field"><label class="image-ai-label" for="image-repair-brush">画笔大小</label><div class="image-repair-brush"><input id="image-repair-brush" type="range" min="6" max="64" value="18"><output id="image-repair-brush-value" for="image-repair-brush">18 px</output></div><div class="image-repair-edit-actions"><button id="image-repair-undo" type="button" disabled>撤销上一笔</button><button id="image-repair-clear" type="button" disabled>清除涂抹</button></div></div>
  <div class="image-ai-field"><label class="image-ai-label" for="image-repair-directory">输出文件夹</label><div class="image-ai-directory"><input id="image-repair-directory" readonly placeholder="选择保存位置"><button id="image-repair-pick-directory" type="button">选择文件夹</button></div></div>
  <div class="image-ai-field"><span class="image-ai-label">本地模型</span><p id="image-repair-model" role="status">正在检查模型缓存…</p></div>
  <div class="image-ai-command"><button id="image-repair-start" type="button" disabled>开始修复</button><button id="image-repair-cancel" type="button" disabled>取消</button></div><span id="image-repair-status" class="image-ai-status" role="status" aria-live="polite"></span>
- <p class="image-ai-note">首次使用下载约 26.8 MB 的 MI-GAN 模型，后续可离线运行。一次处理一张不超过 25 MB、200 万像素的静态 8 位 PNG、JPEG、WebP 或 TIFF；单边最多 2048 像素，涂抹区域最多占 40%。图片不会上传。</p></section>
+ <details class="tool-notes"><summary>模型与图片限制</summary><p class="image-ai-note">首次使用下载约 26.8 MB 的 MI-GAN 模型，后续可离线运行。一次处理一张不超过 25 MB、200 万像素的静态 8 位 PNG、JPEG、WebP 或 TIFF；单边最多 2048 像素，涂抹区域最多占 40%。图片不会上传。</p></details></section>
  <section class="settings-card image-ai-preview" aria-label="局部修复编辑与预览"><h3>涂抹修复区域</h3><div class="image-ai-empty">选择图片后，在预览上涂抹需要修复的区域。</div>
  <div id="image-repair-stage" class="image-repair-stage" hidden><img id="image-repair-editor-image" alt="待修复图片"><canvas id="image-repair-canvas" aria-label="在图片上涂抹要修复的区域"></canvas></div>
  <div id="image-repair-comparison" class="image-ai-comparison" hidden><figure><figcaption>原图</figcaption><img id="image-repair-original" alt="原始图片预览"></figure><figure><figcaption>修复结果</figcaption><img id="image-repair-result" alt="修复 PNG 结果预览"></figure></div><div id="image-repair-output" class="image-ai-output" hidden><span id="image-repair-detail"></span><button id="image-repair-reveal" type="button">显示文件</button></div></section></div></div>`;}

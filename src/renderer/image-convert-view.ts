@@ -6,7 +6,6 @@ const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
 export function imageConvertPage(){return `<div class="image-convert-page">
-  <header class="image-convert-heading"><h2>批量转换与压缩</h2><p>本地处理图片并保存副本，原文件保持不变。HEIC 读写依赖 Windows HEIF/HEVC 扩展。</p></header>
   <div class="image-convert-layout"><section class="settings-card image-convert-panel"><h3>图片与输出</h3>
     <div class="image-convert-picks"><button id="image-convert-add" type="button">添加图片</button><button id="image-convert-clear" type="button" class="quiet">清空列表</button><span id="image-convert-count" aria-live="polite">尚未选择图片</span></div>
     <div id="image-convert-files" class="image-convert-files" aria-label="待转换图片"></div>
@@ -27,8 +26,7 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>锐化<select id="image-enhance-sharpen"><option value="0">关闭</option><option value="1" selected>轻度</option><option value="2">较强</option></select></label>
       <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
     </div></fieldset>
-    <details class="image-convert-rules"><summary>格式与保留规则</summary><p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p></details>
-    <p id="image-codec-status" class="image-convert-note" role="status">HEIC 读写依赖 Windows HEIF/HEVC 系统扩展；当前仅处理 8 位静态主图并仅保留 ICC，含 HDR 增益图或动态视频时需分别确认丢弃。</p>
+    <details class="image-convert-rules"><summary>格式与保留规则</summary><p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p><p id="image-codec-status" class="image-convert-note">HEIC 读写依赖 Windows HEIF/HEVC 系统扩展；当前仅处理 8 位静态主图并仅保留 ICC，含 HDR 增益图或动态视频时需分别确认丢弃。</p></details>
   </section></div></div>`;}
 
 export function setupImageConvert(){

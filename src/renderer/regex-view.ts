@@ -2,7 +2,7 @@ import './regex.css';
 import {api,q,esc,toast} from './ui';
 import type {RegexRequest,RegexResult} from '../shared/regex-tool';
 
-export function regexPage(){return `<div class="regex-page"><header class="regex-heading"><h2>正则表达式测试</h2><p>查看匹配位置、捕获组和替换预览；复杂匹配超过 500 毫秒会自动停止。</p></header>
+export function regexPage(){return `<div class="regex-page">
  <section class="settings-card regex-settings" aria-label="正则设置"><h3>匹配设置</h3><div class="regex-pattern"><label for="regex-pattern">表达式</label><input id="regex-pattern" spellcheck="false" placeholder="例如 (?<name>\\w+)"></div>
  <fieldset class="regex-flags"><legend>选项</legend><label><input type="checkbox" data-regex-flag="g" checked>全局 g</label><label><input type="checkbox" data-regex-flag="i">忽略大小写 i</label><label><input type="checkbox" data-regex-flag="m">多行 m</label><label><input type="checkbox" data-regex-flag="s">点匹配换行 s</label><label><input type="checkbox" data-regex-flag="u">Unicode u</label></fieldset>
  <div class="regex-actions"><button id="regex-test" type="button">测试匹配</button><button id="regex-preview" type="button">预览替换</button><button id="regex-cancel" type="button" hidden>取消</button><span id="regex-status" role="status" aria-live="polite"></span></div></section>

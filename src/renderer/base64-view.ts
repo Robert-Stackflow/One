@@ -3,7 +3,7 @@ import {api,q,toast,errorMessage} from './ui';
 import {maxBase64FileBytes} from '../shared/base64';
 
 type Mode='encode-text'|'decode-text'|'encode-file'|'decode-file';
-export function base64Page(){return `<div class="base64-page"><header class="base64-heading"><h2>Base64</h2><p>在本机编码或解码文本与文件。</p></header>
+export function base64Page(){return `<div class="base64-page">
  <section class="settings-card base64-settings" aria-label="Base64 设置"><h3>处理设置</h3><div class="base64-toolbar"><label for="base64-mode">操作</label><select id="base64-mode"><option value="encode-text">文本编码</option><option value="decode-text">文本解码</option><option value="encode-file">文件编码</option><option value="decode-file">Base64 导出文件</option></select><input id="base64-file" type="file" hidden><button id="base64-choose" type="button" hidden>选择文件</button><span id="base64-file-name"></span></div>
  <p id="base64-help">按 UTF-8 编码文本，支持中文与表情符号。所有内容仅在本机处理。</p>
  <div class="base64-actions"><button id="base64-run" type="button">编码</button><button id="base64-cancel" type="button" hidden>取消</button><button id="base64-copy" type="button" disabled>复制结果</button><button id="base64-export" type="button" disabled>导出文本</button></div><span id="base64-status" role="status" aria-live="polite"></span></section>

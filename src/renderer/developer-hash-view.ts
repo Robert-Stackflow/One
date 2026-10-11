@@ -2,7 +2,7 @@ import './developer-hash.css';
 import {api,q,toast,errorMessage} from './ui';
 import type {HashAlgorithm,HashRequest,HashResult,HashProgress} from '../shared/developer-hash';
 
-export function developerHashPage(){return `<div class="developer-hash-page"><header class="developer-hash-heading"><h2>哈希与校验</h2><p>计算 UTF-8 文本或文件摘要，并可用预期摘要校验；原文件不会修改。</p></header>
+export function developerHashPage(){return `<div class="developer-hash-page">
  <div class="developer-hash-layout"><section class="settings-card developer-hash-panel" aria-label="哈希设置"><h3>计算设置</h3>
  <div class="developer-hash-options"><label>来源<select id="developer-hash-kind"><option value="text">文本</option><option value="file">文件</option></select></label><label>算法<select id="developer-hash-algorithm"><option value="sha256">SHA-256</option><option value="sha512">SHA-512</option><option value="sha1">SHA-1</option><option value="md5">MD5</option></select></label></div>
  <label id="developer-hash-text-field" class="developer-hash-text">文本内容<textarea id="developer-hash-text" spellcheck="false" maxlength="2097152"></textarea></label>

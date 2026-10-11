@@ -6,4 +6,4 @@
 .developer-diff-inputs label{font-size:12px}
 .developer-diff-output{display:grid;gap:16px}
 .developer-diff-empty{border-style:dashed;border-color:var(--line);background:var(--soft);color:var(--muted)}
-@container (max-width:700px){.developer-diff-inputs{grid-template-columns:1fr}.developer-diff-inputs textarea{min-height:180px}}
+@container (max-width:700px){.developer-diff-inputs{grid-template-columns:1fr}.developer-diff-inputs textarea{min-height:140px}}

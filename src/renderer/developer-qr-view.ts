@@ -2,7 +2,7 @@ import './developer-qr.css';
 import {api,q,toast,errorMessage} from './ui';
 import type {QrRequest,QrErrorLevel} from '../shared/developer-qr';
 
-export function developerQrPage(){return `<div class="developer-qr-page"><header class="developer-qr-heading"><h2>生成二维码</h2><p>输入文本或链接，在本地生成可复制、导出的 PNG 二维码。</p></header>
+export function developerQrPage(){return `<div class="developer-qr-page">
  <div class="developer-qr-layout"><section class="settings-card developer-qr-panel" aria-label="二维码设置"><h3>生成设置</h3>
  <label class="developer-qr-input">内容<textarea id="developer-qr-text" spellcheck="false" maxlength="2048" placeholder="输入要编码的文本或链接"></textarea></label>
  <div class="developer-qr-options"><label>图片尺寸<select id="developer-qr-size"><option value="256">256 × 256</option><option value="512" selected>512 × 512</option><option value="1024">1024 × 1024</option></select></label><label>纠错级别<select id="developer-qr-level"><option value="L">低 L</option><option value="M" selected>中 M</option><option value="Q">较高 Q</option><option value="H">高 H</option></select></label></div>
