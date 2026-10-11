@@ -15,7 +15,7 @@ test('regex tab shows groups, replacement and cancels slow patterns',async()=>{
   await page.locator('[data-regex-snippet="digits"]').click();await expect(page.locator('#regex-pattern')).toHaveValue('a\\d+Z');
   await page.locator('#regex-pattern').evaluate(field=>field.setSelectionRange(0,field.value.length));await page.locator('[data-regex-snippet="named"]').click();await expect(page.locator('#regex-pattern')).toHaveValue('(?<name>)');assert.equal(await page.locator('#regex-pattern').evaluate(field=>field.selectionStart),8);
   await page.locator('#regex-pattern').fill('(?<word>[a-z]+)');await page.locator('[data-regex-flag="i"]').check();
-  await page.locator('#regex-input').fill('Hi 123 HELLO');await page.locator('#regex-replacement').fill('[$<word>]');await page.locator('#regex-preview').click();
+  await page.locator('#regex-input').fill('Hi 123 HELLO');await page.locator('#regex-replacement').fill('[$<word>]');
   await expect(page.locator('#regex-status')).toHaveText('替换预览已生成');await expect(page.locator('#regex-count')).toContainText('2 个匹配');
   await expect(page.locator('#regex-matches')).toContainText('word =');await expect(page.locator('#regex-output')).toHaveValue('[Hi] 123 [HELLO]');
   await page.locator('#regex-highlight-toggle').click();await expect(page.locator('#regex-highlights mark')).toHaveCount(2);await expect(page.locator('#regex-highlights')).toContainText('Hi 123 HELLO');

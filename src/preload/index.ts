@@ -67,7 +67,7 @@ const api: OneAPI = {
   imageCropPreview:path=>invoke('image-crop-preview',path),
   imageColorPreview:(path,compact)=>invoke('image-color-preview',path,compact),imageColorSample:(path,x,y)=>invoke('image-color-sample',path,x,y),
   codecExportFile:(value,codec)=>invoke('codec-export-file',value,codec),
-  developerHashStart:request=>invoke('developer-hash-start',request),developerHashCancel:()=>invoke('developer-hash-cancel'),onDeveloperHashProgress:callback=>listen('developer-hash-progress',callback),
+  developerHashStart:request=>invoke('developer-hash-start',request),developerHashAllStart:request=>invoke('developer-hash-all-start',request),developerHashCancel:()=>invoke('developer-hash-cancel'),onDeveloperHashProgress:callback=>listen('developer-hash-progress',callback),
   developerQrGenerate:request=>invoke('developer-qr-generate',request),developerQrCopy:()=>invoke('developer-qr-copy'),developerQrExport:()=>invoke('developer-qr-export'),
   quit: () => invoke('quit'), closeWindow: () => invoke('close-window'), onProgress: callback => listen('progress', callback), onReceiveText: callback => listen('receive-text', callback), onEcho: callback => listen('echo', callback),onEchoHide:callback=>listen('echo-hide',callback), onCopyText: callback => listen('copy-text', callback), onPreviewChanged: callback => listen('preview-changed', callback)
 };

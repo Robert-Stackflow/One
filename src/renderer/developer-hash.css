@@ -19,7 +19,11 @@
 .developer-hash-result{display:grid;gap:12px;align-content:start;min-height:250px}
 .developer-hash-result header{justify-content:space-between}
 .developer-hash-result header h3{margin:0}
+.developer-hash-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.developer-hash-tabs button{min-height:30px;padding:4px 10px;font-size:12px;border-radius:8px}
+.developer-hash-tabs button[aria-selected=true]{border-color:var(--accent);color:var(--accent);background:var(--soft)}
 .developer-hash-result code{overflow-wrap:anywhere;user-select:text}
+.developer-hash-result .developer-hash-expected{margin-top:4px}
 .developer-hash-result [data-match=true]{color:#238655}
 .developer-hash-result [data-match=false]{color:#c44444}
 @container (max-width:850px){.developer-hash-layout{grid-template-columns:1fr}.developer-hash-result{min-height:180px}}

@@ -4,6 +4,7 @@
 .url-codec-settings.settings-card,.url-codec-panel.settings-card{margin:0;padding:20px;min-width:0}
 .url-codec-settings h3{font-size:14px;font-weight:600;margin:0 0 16px}
 .url-codec-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.url-codec-toolbar [data-url-action][aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:var(--soft)}
 .url-codec-toolbar label,.url-codec-columns label{font-size:12px;font-weight:600}
 .url-codec-settings p,#url-codec-status{color:var(--muted);font-size:12px;line-height:1.5}
 .url-codec-settings p{margin:12px 0 0}

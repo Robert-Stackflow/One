@@ -12,8 +12,8 @@ test('QR tab previews, copies and exports a code readable by barcode recognition
  try{
   await app.evaluate(async({clipboard})=>{globalThis.oneSavedQrClipboard=await clipboard.read();});
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.locator('[data-page="developer"]').click();await page.locator('#tool-tab-developer-qr').click();
-  await page.locator('#developer-qr-text').fill(payload);await page.locator('#developer-qr-generate').click();await expect(page.locator('#developer-qr-image')).toHaveAttribute('src',/^data:image\/png;base64,/);await expect(page.locator('#developer-qr-copy')).toBeEnabled();
-  await page.locator('#developer-qr-copy').click();const copied=await app.evaluate(async({clipboard})=>{const items=await clipboard.read();const item=items.find(value=>value.types.includes('image/png'));return item?(await item.getType('image/png')).size:0;});assert(copied>0);
+  await page.locator('#developer-qr-text').fill(payload);await expect(page.locator('#developer-qr-image')).toHaveAttribute('src',/^data:image\/png;base64,/);await expect(page.locator('#developer-qr-copy')).toBeEnabled();
+  await page.locator('#developer-qr-copy').click();await expect.poll(()=>app.evaluate(async({clipboard})=>{const items=await clipboard.read();const item=items.find(value=>value.types.includes('image/png'));return item?(await item.getType('image/png')).size:0;})).toBeGreaterThan(0);
   await app.evaluate(({dialog},path)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},output);await page.locator('#developer-qr-export').click();await expect(page.locator('#developer-qr-status')).toContainText('已导出 code.png');const png=await readFile(output);assert(png.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')));
   await app.evaluate(({BrowserWindow},path)=>BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().includes('view=main')).webContents.send('one:navigate-page',{page:'barcode',path}),output);
   await expect(page.locator('#barcode-content')).toHaveValue(payload,{timeout:20000});assert.deepEqual(errors,[]);

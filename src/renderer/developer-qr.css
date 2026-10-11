@@ -8,7 +8,9 @@
 .developer-qr-input,.developer-qr-options label{display:grid;gap:7px;font-size:12px;font-weight:600}
 .developer-qr-input textarea{width:100%;min-height:140px;resize:vertical;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
 .developer-qr-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
-.developer-qr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:20px}
+.developer-qr-result-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.developer-qr-result-head h3{margin:0}
+.developer-qr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #developer-qr-status{display:block;margin-top:12px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 #developer-qr-status:empty{display:none}
 .developer-qr-preview{display:grid;place-items:center;min-height:330px;padding:16px;border:1px dashed var(--line);border-radius:var(--field-radius);background:var(--soft)}

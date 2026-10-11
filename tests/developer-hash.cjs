@@ -17,6 +17,10 @@ test('text and file hashes match Node digests and validate expected values',asyn
   const file=join(root,'bytes.bin'),data=randomBytes(1024*1024+17);await writeFile(file,data);const updates=[];
   const result=await service.start(2,{kind:'file',path:file,algorithm:'sha512',expected:createHash('sha512').update(data).digest('hex')},value=>updates.push(value));
   assert.equal(result.match,true);assert.equal(result.bytes,data.length);assert(updates.at(-1).processed===data.length);assert((await readFile(file)).equals(data));assert.equal(service.pendingTasks,false);
+  const allText=await service.startAll(2,{kind:'text',text:'abc'},()=>{});assert.equal(allText.bytes,3);
+  const allFile=await service.startAll(2,{kind:'file',path:file},()=>{});assert.equal(allFile.bytes,data.length);
+  for(const algorithm of ['sha256','sha512','sha1','md5']){assert.equal(allText.digests[algorithm],createHash(algorithm).update('abc').digest('hex'));assert.equal(allFile.digests[algorithm],createHash(algorithm).update(data).digest('hex'));}
   const large=join(root,'large.bin');await writeFile(large,Buffer.alloc(8*1024*1024,0x5a));const pending=service.start(3,{kind:'file',path:large,algorithm:'sha256'},()=>{});assert.equal(service.cancel(3),true);await assert.rejects(pending,/已取消/);assert.equal(service.pendingTasks,false);
+  const pendingAll=service.startAll(3,{kind:'file',path:large},()=>{});assert.equal(service.cancel(3),true);await assert.rejects(pendingAll,/已取消/);assert.equal(service.pendingTasks,false);
  }finally{await rm(root,{recursive:true,force:true});}
 });

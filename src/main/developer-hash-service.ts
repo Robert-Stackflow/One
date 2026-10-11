@@ -1,10 +1,11 @@
 import {createHash,timingSafeEqual} from 'node:crypto';
 import {isAbsolute,resolve} from 'node:path';
-import {stamp,hashFile} from './file-tool-fs';
-import type {HashAlgorithm,HashRequest,HashResult,HashProgress} from '../shared/developer-hash';
+import {stamp,hashFile,hashFileMany} from './file-tool-fs';
+import type {HashAlgorithm,HashRequest,HashResult,HashProgress,HashAllRequest,HashAllResult} from '../shared/developer-hash';
 
 const lengths:Record<HashAlgorithm,number>={md5:32,sha1:40,sha256:64,sha512:128};
-interface Session {cancelled:boolean;task?:Promise<HashResult>}
+interface Session {cancelled:boolean;task?:Promise<unknown>}
+const algorithms=['sha256','sha512','sha1','md5'] as const satisfies readonly HashAlgorithm[];
 
 export class DeveloperHashService{
  private sessions=new Map<number,Session>();
@@ -24,6 +25,23 @@ export class DeveloperHashService{
    return {algorithm:request.algorithm,digest,bytes,match};
   })().finally(()=>this.sessions.delete(owner));session.task=task;return task;
  }
+ async startAll(owner:number,value:unknown,notify:(progress:HashProgress)=>void):Promise<HashAllResult>{
+  if(this.sessions.has(owner))throw Error('已有哈希任务正在进行');
+  if(!value||typeof value!=='object')throw Error('哈希输入无效');const request=value as HashAllRequest;
+  if(request.kind==='text'?typeof request.text!=='string':request.kind==='file'?typeof request.path!=='string'||!isAbsolute(request.path)||request.path.length>32768||request.path.includes('\0'):true)throw Error('哈希输入无效');
+  const session:Session={cancelled:false};this.sessions.set(owner,session);
+  const task=(async()=>{
+   let digests:Record<HashAlgorithm,string>,bytes:number;
+   if(request.kind==='text'){
+    const data=Buffer.from(request.text,'utf8');if(data.length>2*1024*1024)throw Error('文本不能超过 2 MB');bytes=data.length;
+    digests=Object.fromEntries(algorithms.map(algorithm=>[algorithm,createHash(algorithm).update(data).digest('hex')])) as Record<HashAlgorithm,string>;notify({processed:bytes,total:bytes});
+   }else{
+    const file=await stamp(resolve(request.path));if(file.directory)throw Error('请选择普通文件');bytes=file.size;let last=0;
+    digests=await hashFileMany(file,algorithms,processed=>{if(session.cancelled)throw Error('已取消');const now=Date.now();if(now-last>=100||processed===bytes){last=now;notify({processed,total:bytes});}}) as Record<HashAlgorithm,string>;
+   }
+   if(session.cancelled)throw Error('已取消');return {digests,bytes};
+  })().finally(()=>this.sessions.delete(owner));session.task=task;return task;
+ }
  cancel(owner:number){const session=this.sessions.get(owner);if(!session)return false;session.cancelled=true;return true;}
- async stopAll(){const tasks=[...this.sessions.values()].map(session=>session.task).filter((task):task is Promise<HashResult>=>!!task);for(const owner of this.sessions.keys())this.cancel(owner);await Promise.allSettled(tasks);}
+ async stopAll(){const tasks=[...this.sessions.values()].map(session=>session.task).filter((task):task is Promise<unknown>=>!!task);for(const owner of this.sessions.keys())this.cancel(owner);await Promise.allSettled(tasks);}
 }

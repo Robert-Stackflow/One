@@ -30,6 +30,15 @@ export async function hashFile(file:FileStamp,partial=false,tick:(bytes:number)=
   const after=await handle.stat({bigint:true});if(identity(after,file.path)!==file.identity||after.mtimeNs.toString()!==file.mtime||Number(after.size)!==file.size)throw Error('文件在校验过程中发生变化');return hash.digest('hex');
  }finally{await handle.close();}
 }
+export async function hashFileMany(file:FileStamp,algorithms:readonly string[],tick:(bytes:number)=>void=()=>{}){
+ const handle=await open(file.path,'r');try{
+  const before=await handle.stat({bigint:true});if(!sameStamp(file,before))throw Error('文件在扫描后发生变化');
+  const hashes=algorithms.map(algorithm=>[algorithm,createHash(algorithm)] as const),buffer=Buffer.allocUnsafe(hashBufferBytes);let bytes=0;
+  while(true){const read=await handle.read(buffer,0,buffer.length,null);if(!read.bytesRead)break;const part=buffer.subarray(0,read.bytesRead);for(const [,hash] of hashes)hash.update(part);bytes+=read.bytesRead;tick(bytes);}
+  const after=await handle.stat({bigint:true});if(!sameStamp(file,after))throw Error('文件在校验过程中发生变化');
+  return Object.fromEntries(hashes.map(([algorithm,hash])=>[algorithm,hash.digest('hex')]));
+ }finally{await handle.close();}
+}
 /** Compare two files exactly and stop reading as soon as their contents differ. */
 export async function sameFileContent(left:FileStamp,right:FileStamp,tick:(bytes:number)=>void=()=>{}):Promise<boolean>{
  if(left.directory||right.directory)throw Error('只能比较文件内容');

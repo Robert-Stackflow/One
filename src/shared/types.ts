@@ -179,6 +179,7 @@ export interface OneAPI {
   imageColorSample(path:string,x:number,y:number):Promise<import('./image-color').ImagePixelSample>;
   codecExportFile(value:string,codec:import('./text-codecs').BinaryCodec):Promise<string|null>;
   developerHashStart(request:import('./developer-hash').HashRequest):Promise<import('./developer-hash').HashResult>;
+  developerHashAllStart(request:import('./developer-hash').HashAllRequest):Promise<import('./developer-hash').HashAllResult>;
   developerHashCancel():Promise<boolean>;
   onDeveloperHashProgress(callback:(progress:import('./developer-hash').HashProgress)=>void):()=>void;
   developerQrGenerate(request:import('./developer-qr').QrRequest):Promise<import('./developer-qr').QrResult>;

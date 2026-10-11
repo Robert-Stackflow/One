@@ -5,18 +5,23 @@
 .base64-settings h3{font-size:14px;font-weight:600;margin:0 0 16px}
 .base64-toolbar,.base64-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .base64-toolbar label,.base64-columns label{font-size:12px;font-weight:600}
-.base64-toolbar span,#base64-status,#base64-help{color:var(--muted);font-size:12px}
-#base64-help{margin:12px 0 0;line-height:1.5}
-#base64-help:empty{display:none}
-#base64-codec-field[hidden]+#base64-codec{display:none}
+.base64-toolbar span,#base64-status{color:var(--muted);font-size:12px}
 #base64-file-codec-field[hidden]+#base64-file-codec{display:none}
-.base64-actions{margin-top:16px}
+.base64-codecs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:14px}
+.base64-codecs[hidden]{display:none}
+.base64-codecs button{min-height:30px;padding:4px 10px;font-size:12px;border-radius:8px}
+.base64-codecs button[aria-selected=true]{border-color:var(--accent);color:var(--accent);background:var(--soft)}
+.base64-actions{margin-top:12px;gap:8px}
+.base64-actions:has(>[hidden]:first-child):has(>[hidden]:last-child){display:none}
+.base64-result-head,.base64-result-head>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.base64-result-head{justify-content:space-between}
 #base64-status{display:block;margin-top:10px;overflow-wrap:anywhere}
 #base64-status:empty{display:none}
 .base64-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .base64-columns:has(>section[hidden]){grid-template-columns:1fr}
 .base64-columns section{display:grid;gap:10px}
-.base64-columns textarea{min-height:300px;width:100%;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.base64-columns textarea{min-height:260px;width:100%;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .base64-columns section[hidden]{display:none}
+.base64-page [hidden]{display:none!important}
 @container (max-width:700px){.base64-columns{grid-template-columns:1fr}.base64-columns textarea{min-height:180px}}
 @media(max-width:760px){.base64-page{padding:16px}}
