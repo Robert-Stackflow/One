@@ -34,6 +34,11 @@ const sharp=require('sharp');
   await expect(page.locator('#image-repair-result')).toHaveAttribute('src',/^data:image\/png;base64,/);
   const files=(await readdir(output)).filter(name=>name.endsWith('.png'));assert.equal(files.length,1);
   const saved=await sharp(path.join(output,files[0])).metadata();assert.equal(saved.width,320);assert.equal(saved.height,240);
+  await page.locator('#image-repair-remove').click();await expect(page.locator('#image-repair-remove')).toHaveAttribute('aria-pressed','true');
+  assert.equal(await page.locator('#image-repair-brush').getAttribute('max'),'192');
+  await page.locator('#image-repair-clear').click();await page.mouse.move(box.x+box.width*.35,box.y+box.height*.3);await page.mouse.down();await page.mouse.move(box.x+box.width*.65,box.y+box.height*.6,{steps:12});await page.mouse.up();
+  await page.locator('#image-repair-start').click();await expect(page.locator('#image-repair-status')).toContainText('物体移除完成',{timeout:120000});
+  const removalFiles=(await readdir(output)).filter(name=>name.includes('-object-removed-')&&name.endsWith('.png'));assert.equal(removalFiles.length,1);
   assert.deepEqual(await readFile(source),original);
   assert.equal((await stat(path.join(profile,'models','migan-pipeline-v2-6f1f3530a1a2.onnx'))).size,28079181);
   const cancelled=await page.evaluate(({source,output})=>new Promise(resolve=>{
@@ -41,8 +46,11 @@ const sharp=require('sharp');
    let requested=false;const off=window.one.onImageRepairProgress(progress=>{if(progress.phase==='process'&&progress.message==='正在本地填补选区'&&!requested){requested=true;void window.one.imageAiCancel();}});
    void window.one.imageRepairStart(source,output,canvas.toDataURL('image/png')).then(()=>{off();resolve(false);},()=>{off();resolve(true);});
   }),{source,output});
-  assert.equal(cancelled,true);assert.equal((await readdir(output)).filter(name=>name.endsWith('.png')).length,1);assert.deepEqual(errors,[]);
-  console.log(`image-repair-ui: ${cached?'cached model':'first download'}, brush/undo, result preview and mid-inference cancel passed`);
+  assert.equal(cancelled,true);assert.equal((await readdir(output)).filter(name=>name.endsWith('.png')).length,2);
+  await page.setViewportSize({width:700,height:850});
+  const overflow=await page.locator('#page-image-repair').evaluate(element=>({scroll:element.scrollWidth,client:element.clientWidth}));assert.ok(overflow.scroll<=overflow.client+1,JSON.stringify(overflow));
+  assert.deepEqual(errors,[]);
+  console.log(`image-repair-ui: ${cached?'cached model':'first download'}, damage/removal mode, brush/undo, result preview and mid-inference cancel passed`);
  }catch(error){console.error('repair-ui-state',JSON.stringify({appExit}));throw error;}
  finally{await app.close();await rm(root,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

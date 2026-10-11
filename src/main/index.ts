@@ -791,7 +791,7 @@ function registerIPC() {
   handle('image-superres-model-status',async()=>({ready:await imageAi.superResolutionReady(),bytes:imageAi.superResolutionBytes}),['main']);
   handle('image-superres-start',(event,source,directory)=>imageAi.startSuperResolution(event.sender.id,source,directory,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-superres-progress',progress);}),['main']);
   handle('image-repair-model-status',async()=>({ready:await imageAi.repairReady(),bytes:imageAi.repairBytes}),['main']);
-  handle('image-repair-start',(event,source,directory,mask)=>imageAi.startRepair(event.sender.id,source,directory,mask,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-repair-progress',progress);}),['main']);
+  handle('image-repair-start',(event,source,directory,mask,mode)=>imageAi.startRepair(event.sender.id,source,directory,mask,mode,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-repair-progress',progress);}),['main']);
   handle('image-ai-cancel',event=>imageAi.cancel(event.sender.id),['main']);
   handle('image-metadata-start',(event,paths,directory,options)=>imageMetadata.start(event.sender.id,paths,directory,options,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-metadata-progress',progress);}),['main']);
   handle('image-metadata-cancel',event=>imageMetadata.cancel(event.sender.id),['main']);

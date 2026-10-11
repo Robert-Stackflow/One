@@ -169,7 +169,7 @@ export interface OneAPI {
   imageSuperresStart(source:string,directory:string):Promise<import('./image-ai').ImageAiResult>;
   onImageSuperresProgress(callback:(progress:import('./image-ai').ImageAiProgress)=>void):()=>void;
   imageRepairModelStatus():Promise<{ready:boolean;bytes:number}>;
-  imageRepairStart(source:string,directory:string,mask:string):Promise<import('./image-ai').ImageAiResult>;
+  imageRepairStart(source:string,directory:string,mask:string,mode?:import('./image-ai').ImageRepairMode):Promise<import('./image-ai').ImageAiResult>;
   onImageRepairProgress(callback:(progress:import('./image-ai').ImageAiProgress)=>void):()=>void;
   imageMetadataStart(paths:string[],directory:string,options:import('./image-metadata').ImageMetadataOptions):Promise<import('./image-metadata').ImageMetadataSummary>;
   imageMetadataCancel():Promise<boolean>;

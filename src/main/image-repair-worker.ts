@@ -3,9 +3,9 @@ import {rename,rm,stat} from 'node:fs/promises';
 import sharp from 'sharp';
 import * as ort from 'onnxruntime-node';
 import {inspectMotionPhoto} from './motion-photo';
-import type {ImageAiResult} from '../shared/image-ai';
+import type {ImageAiResult,ImageRepairMode} from '../shared/image-ai';
 
-interface Job {source:string;output:string;temporary:string;model:string;mask:string;cancelBuffer:SharedArrayBuffer}
+interface Job {source:string;output:string;temporary:string;model:string;mask:string;mode?:ImageRepairMode;cancelBuffer:SharedArrayBuffer}
 const job=workerData as Job;
 const cancelFlag=new Int32Array(job.cancelBuffer);
 const checkCancelled=()=>{if(Atomics.load(cancelFlag,0))throw Error('已取消 AI 图片任务');};
@@ -58,7 +58,7 @@ async function repair():Promise<ImageAiResult>{
   if(saved.width!==width||saved.height!==height)throw Error('AI 修复输出校验失败');
   checkCancelled();
   await rename(job.temporary,job.output);
-  return {source:job.source,output:job.output,before,after:(await stat(job.output)).size,width,height,message:'已使用本地 MI-GAN 模型填补涂抹区域；细节由模型推测，请检查结果'};
+  return {source:job.source,output:job.output,before,after:(await stat(job.output)).size,width,height,message:job.mode==='remove'?'物体已移除；请检查边缘和纹理':'选区已修复；请检查细节'};
  }catch(error){await rm(job.temporary,{force:true}).catch(()=>{});throw error;}
 }
 
