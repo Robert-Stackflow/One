@@ -23,15 +23,22 @@ test('Base64 handles Unicode text, binary files and invalid input',async()=>{
   await chooseCodec('十六进制');await page.locator('#base64-input').fill(Buffer.from('中文 🌄').toString('hex'));await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('中文 🌄');
   await chooseCodec('Base32');await page.locator('#base64-input').fill('MZXW6YTBOI======');await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('foobar');
   await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文本编码"]').click();await page.locator('#base64-input').fill('foobar');await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('MZXW6YTBOI======');
+  await chooseCodec('HTML 实体');await page.locator('#base64-input').fill('A&B <中文> 😀');await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue(/&amp;B/);const html=await page.locator('#base64-output').inputValue();
+  await expect(page.locator('#base64-file-codec')).toBeHidden();
+  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文本解码"]').click();await page.locator('#base64-input').fill(html);await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('A&B <中文> 😀');
+  await chooseCodec('Unicode 转义');await page.locator('#base64-input').fill('A\\n\\u{1F600}');await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('A\n😀');await page.locator('#base64-input').fill('\\u{110000}');await page.locator('#base64-run').click();await expect(page.locator('#base64-status')).toContainText('无效');
   await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文件编码"]').click();await page.locator('#base64-file').setInputFiles(source);await page.locator('#base64-run').click();
   await expect(page.locator('#base64-codec')).toBeHidden();
   await expect(page.locator('#base64-output')).toHaveValue('AAEC/w==');
-  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="Base64 导出文件"]').click();await page.locator('#base64-input').fill('AAEC/w==');
-  const newWindow=app.waitForEvent('window');await page.locator('#base64-run').click();const picker=await newWindow;
-  await picker.locator('#picker-path').fill(output);await picker.locator('#picker-go').click();
-  await picker.locator('#picker-name').fill('decoded.bin');await picker.locator('#picker-confirm').click();
-  await expect(page.locator('#base64-status')).toHaveText('已保存文件');
-  assert.deepEqual(await readFile(path.join(output,'decoded.bin')),Buffer.from([0,1,2,255]));
+  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="解码并保存文件"]').click();
+  await expect(page.locator('#base64-file-codec')).toBeVisible();
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(win=>win.webContents.getURL().includes('view=main')).setSize(700,720));assert.equal(await page.evaluate(()=>{const content=document.querySelector('.content'),button=document.querySelector('#base64-run'),rect=button.getBoundingClientRect();return content.scrollWidth<=content.clientWidth+1&&rect.right<=innerWidth&&rect.top<innerHeight;}),true);
+  for(const [label,encoded,expected,fileName] of [['Base64','AAEC/w==',Buffer.from([0,1,2,255]),'base64.bin'],['Base64URL','AAEC_w',Buffer.from([0,1,2,255]),'base64url.bin'],['十六进制','000102ff',Buffer.from([0,1,2,255]),'hex.bin'],['Base32','MZXW6YTBOI======',Buffer.from('foobar'),'base32.bin']]){
+   await page.locator('#base64-file-codec').click();await page.locator(`#base64-file-codec-options [role="option"][aria-label="${label}"]`).click();await page.locator('#base64-input').fill(encoded);
+   const newWindow=app.waitForEvent('window');await page.locator('#base64-run').click();const picker=await newWindow;
+   await picker.locator('#picker-path').fill(output);await picker.locator('#picker-go').click();await picker.locator('#picker-name').fill(fileName);await picker.locator('#picker-confirm').click();
+   await expect(page.locator('#base64-status')).toHaveText('已保存文件');assert.deepEqual(await readFile(path.join(output,fileName)),expected);
+  }
   assert.deepEqual(errors,[]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });

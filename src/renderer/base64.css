@@ -9,6 +9,7 @@
 #base64-help{margin:12px 0 0;line-height:1.5}
 #base64-help:empty{display:none}
 #base64-codec-field[hidden]+#base64-codec{display:none}
+#base64-file-codec-field[hidden]+#base64-file-codec{display:none}
 .base64-actions{margin-top:16px}
 #base64-status{display:block;margin-top:10px;overflow-wrap:anywhere}
 #base64-status:empty{display:none}

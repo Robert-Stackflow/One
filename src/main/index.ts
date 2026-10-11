@@ -64,7 +64,8 @@ import {exportMotionPhotoVideo} from './motion-photo-export';
 import {inspectMotionPhoto,inspectLivp,releaseLivpTemporary,type LivpTemporary} from './motion-photo';
 import {imageCropPreview} from './image-crop-preview';
 import {imageColorPreview,imageColorSample} from './image-color';
-import {normalizeBase64,maxBase64FileBytes} from '../shared/base64';
+import {maxBase64FileBytes} from '../shared/base64';
+import {decodeBytes,type BinaryCodec} from '../shared/text-codecs';
 import {barcodeURL} from '../shared/barcode';
 import {DisplayShortcutController} from './display-shortcuts';
 import {DisplayProfilesService} from './display-profiles';
@@ -797,7 +798,7 @@ function registerIPC() {
   handle('image-crop-preview',(_event,path)=>imageCropPreview(filePath(path)),['main']);
   handle('image-color-preview',(_event,path)=>imageColorPreview(filePath(path)),['main']);
   handle('image-color-sample',(_event,path,x,y)=>imageColorSample(filePath(path),x,y),['main']);
-  handle('base64-export-file',async(_event,value)=>{const source=normalizeBase64(textValue(value,10_000_000)),bytes=Buffer.from(source,'base64');if(!bytes.length||bytes.length>maxBase64FileBytes)throw Error('解码后的文件不能超过 6 MB');const path=await pickPath('save','保存解码文件','解码文件.bin');if(!path)return null;await writeFile(path,bytes);return path;},['main']);
+  handle('codec-export-file',async(_event,value,codec)=>{const text=textValue(value,10_000_000);if(typeof codec!=='string'||!['base64','base64url','hex','base32'].includes(codec))throw Error('编码类型无效');const bytes=decodeBytes(text,codec as BinaryCodec);if(!bytes.length||bytes.length>maxBase64FileBytes)throw Error('解码后的文件不能超过 6 MB');const path=await pickPath('save','保存解码文件','解码文件.bin');if(!path)return null;await writeFile(path,bytes);return path;},['main']);
   handle('developer-hash-start',(event,request)=>developerHash.start(event.sender.id,request,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:developer-hash-progress',progress);}),['main']);
   handle('developer-hash-cancel',event=>developerHash.cancel(event.sender.id),['main']);
   handle('developer-qr-generate',async(event,request)=>{qrImages.delete(event.sender.id);const png=await generateQr(request);qrImages.set(event.sender.id,png);return {url:`data:image/png;base64,${png.toString('base64')}`,size:(request as {size:number}).size,bytes:png.length};},['main']);

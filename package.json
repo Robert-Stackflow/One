@@ -104,6 +104,7 @@
   "dependencies": {
     "@lezer/json": "1.0.3",
     "@noble/hashes": "^2.4.0",
+    "entities": "4.5.0",
     "exiftool-vendored.exe": "^13.59.3",
     "iconv-lite": "^0.7.3",
     "koffi": "^3.3.2",

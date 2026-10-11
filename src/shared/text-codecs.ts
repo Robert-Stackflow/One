@@ -1,6 +1,8 @@
 import {normalizeBase64} from './base64';
+import {decodeHTML,encodeHTML} from 'entities';
 
-export type TextCodec='base64'|'base64url'|'hex'|'base32';
+export type BinaryCodec='base64'|'base64url'|'hex'|'base32';
+export type TextCodec=BinaryCodec|'html'|'unicode';
 const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const maxOutput=10*1024*1024;
 
@@ -45,7 +47,63 @@ function fromHex(text:string){
  return Uint8Array.from({length:compact.length/2},(_,index)=>parseInt(compact.slice(index*2,index*2+2),16));
 }
 
+function unicodeEscape(text:string){
+ let result='';
+ for(const char of text){
+  const value=char.codePointAt(0)!;
+  if(value>=0xd800&&value<=0xdfff)throw Error('输入包含无效的 Unicode 代理项');
+  if(char==='\\')result+='\\\\';
+  else if(char==='\n')result+='\\n';
+  else if(char==='\r')result+='\\r';
+  else if(char==='\t')result+='\\t';
+  else if(value>=0x20&&value<=0x7e)result+=char;
+  else if(value<=0xffff)result+='\\u'+value.toString(16).toUpperCase().padStart(4,'0');
+  else result+='\\u{'+value.toString(16).toUpperCase()+'}';
+  if(result.length>maxOutput)throw Error('编码结果超过 10 MB 上限');
+ }
+ return result;
+}
+
+function fromUnicodeEscape(text:string){
+ let result='';
+ for(let index=0;index<text.length;index++){
+  const char=text[index];
+  if(char!=='\\'){result+=char;continue;}
+  const start=index,next=text[++index];
+  if(next==='\\')result+='\\';
+  else if(next==='n')result+='\n';
+  else if(next==='r')result+='\r';
+  else if(next==='t')result+='\t';
+  else if(next==='u'){
+   let value:number;
+   if(text[index+1]==='{'){
+    const end=text.indexOf('}',index+2),digits=end<0?'':text.slice(index+2,end);
+    if(!/^[0-9a-fA-F]{1,6}$/.test(digits))throw Error(`第 ${start+1} 个字符处的 Unicode 转义无效`);
+    value=parseInt(digits,16);index=end;
+   }else{
+    const digits=text.slice(index+1,index+5);
+    if(!/^[0-9a-fA-F]{4}$/.test(digits))throw Error(`第 ${start+1} 个字符处的 Unicode 转义无效`);
+    value=parseInt(digits,16);index+=4;
+   }
+   if(value>0x10ffff||value>=0xdc00&&value<=0xdfff)throw Error(`第 ${start+1} 个字符处的 Unicode 码点无效`);
+   if(value>=0xd800&&value<=0xdbff){
+    if(text.slice(index+1,index+3)!=='\\u'||!/^[0-9a-fA-F]{4}$/.test(text.slice(index+3,index+7)))throw Error(`第 ${start+1} 个字符处缺少低位代理项`);
+    const low=parseInt(text.slice(index+3,index+7),16);
+    if(low<0xdc00||low>0xdfff)throw Error(`第 ${start+1} 个字符处缺少低位代理项`);
+    value=0x10000+((value-0xd800)<<10)+(low-0xdc00);index+=6;
+   }
+   result+=String.fromCodePoint(value);
+  }else throw Error(`第 ${start+1} 个字符处的转义无效`);
+ }
+ for(const char of result){const value=char.codePointAt(0)!;if(value>=0xd800&&value<=0xdfff)throw Error('解码结果包含无效的 Unicode 代理项');}
+ return result;
+}
+
 export function encodeText(text:string,codec:TextCodec){
+ if(codec==='unicode')return unicodeEscape(text);
+ if(codec==='html'){
+  const result=encodeHTML(text);if(result.length>maxOutput)throw Error('编码结果超过 10 MB 上限');return result;
+ }
  const bytes=new TextEncoder().encode(text);
  const estimated=codec==='hex'?bytes.length*2:codec==='base32'?Math.ceil(bytes.length/5)*8:Math.ceil(bytes.length/3)*4;
  if(estimated>maxOutput)throw Error('编码结果超过 10 MB 上限');
@@ -57,12 +115,18 @@ export function encodeText(text:string,codec:TextCodec){
  throw Error('不支持的编码类型');
 }
 
-export function decodeText(text:string,codec:TextCodec){
+export function decodeBytes(text:string,codec:BinaryCodec){
  let bytes:Uint8Array;
  if(codec==='hex')bytes=fromHex(text);
  else if(codec==='base32')bytes=fromBase32(text);
  else if(codec==='base64url')bytes=fromBase64Url(text);
  else if(codec==='base64')bytes=Uint8Array.from(atob(normalizeBase64(text)),char=>char.charCodeAt(0));
  else throw Error('不支持的编码类型');
- try{return new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{throw Error('解码后的字节不是有效 UTF-8 文本');}
+ return bytes;
+}
+
+export function decodeText(text:string,codec:TextCodec){
+ if(codec==='unicode')return fromUnicodeEscape(text);
+ if(codec==='html')return decodeHTML(text);
+ try{return new TextDecoder('utf-8',{fatal:true}).decode(decodeBytes(text,codec));}catch(error){if(error instanceof TypeError)throw Error('解码后的字节不是有效 UTF-8 文本');throw error;}
 }

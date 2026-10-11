@@ -19,4 +19,13 @@ test('RFC 4648 Base32 and Base64URL, hex and UTF-8 round trips',()=>{
  assert.throws(()=>decodeText('MZXW6==','base32'),/填充/);
  assert.throws(()=>decodeText('%%','base64url'),/无效/);
  assert.throws(()=>decodeText('_w','base64url'),/UTF-8/);
+ assert.equal(encodeText('&<>"\'','html'),'&amp;&lt;&gt;&quot;&apos;');
+ assert.equal(decodeText('&copy; &#x1F600; &unknown;','html'),'© 😀 &unknown;');
+ assert.equal(decodeText(encodeText(unicode,'html'),'html'),unicode);
+ assert.equal(encodeText('A\n😀\\','unicode'),'A\\n\\u{1F600}\\\\');
+ assert.equal(decodeText('A\\n\\u{1F600}\\\\','unicode'),'A\n😀\\');
+ assert.equal(decodeText('\\uD83D\\uDE00','unicode'),'😀');
+ assert.throws(()=>decodeText('\\uD800\\u0061','unicode'),/低位代理项/);
+ assert.throws(()=>decodeText('hello \\q','unicode'),/第 7 个字符/);
+ assert.throws(()=>decodeText('\\u{110000}','unicode'),/码点无效/);
 });
