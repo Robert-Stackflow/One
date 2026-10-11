@@ -21,6 +21,8 @@ async function fixtures(dir){
  const xmp=text=>{const content=Buffer.from(text),header=Buffer.alloc(4);header.writeUInt16BE(0xffe1);header.writeUInt16BE(content.length+2,2);return Buffer.concat([photo.subarray(0,2),header,content,photo.subarray(2)]);};
  await fs.writeFile(path.join(dir,'google-old.jpg'),Buffer.concat([xmp(`<x GCamera:MicroVideoOffset="${movie.length}" GCamera:MicroVideoPresentationTimestampUs="500000"/>`),movie]));
  await fs.writeFile(path.join(dir,'google-container.jpg'),Buffer.concat([xmp(`<Container:Item Item:Semantic="MotionPhoto" Item:Mime="video/mp4" Item:Length="${movie.length}"/>`),movie]));
+  await fs.writeFile(path.join(dir,'oppo-video-length.jpg'),Buffer.concat([xmp(`<x Other:VideoLength="1" OpCamera:MotionPhotoOwner="oplus" OpCamera:VideoLength="${movie.length}"/>`),movie]));
+  await fs.writeFile(path.join(dir,'oppo-missing.jpg'),xmp(`<x OpCamera:MotionPhotoOwner="oplus" OpCamera:VideoLength="${movie.length}"/>`));
  await fs.writeFile(path.join(dir,'motion-missing.jpg'),xmp('<x GCamera:MotionPhoto="1"/>'));
  await fs.writeFile(path.join(dir,'samsung-sef.jpg'),sef(photo,movie));await fs.writeFile(path.join(dir,'samsung-mpv2.jpg'),sef(photo,movie,true));
  await fs.writeFile(path.join(dir,'vendor-trailer.jpg'),Buffer.concat([photo,Buffer.alloc(31),movie,Buffer.from('private-trailer')]));

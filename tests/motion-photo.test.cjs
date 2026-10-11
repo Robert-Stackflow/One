@@ -21,9 +21,10 @@ test('stored LIVP exposes validated photo and movie slices without extracting fi
 });
 test('embedded motion photo variants expose only their valid movie slice',async t=>{
  const {inspectMotionPhoto}=await ready,{movie}=await fixtures(path.join(output,'embedded'));
- for(const [name,source] of [['google-old.jpg','Google MicroVideo'],['google-container.jpg','Motion Photo'],['samsung-sef.jpg','Samsung SEF'],['samsung-mpv2.jpg','Samsung SEF'],['vendor-trailer.jpg','嵌入式动态照片'],['heic-motion.heic','Motion Photo mpvd']])await t.test(name,async()=>{
+ for(const [name,source] of [['google-old.jpg','Google MicroVideo'],['google-container.jpg','Motion Photo'],['oppo-video-length.jpg','OPPO VideoLength'],['samsung-sef.jpg','Samsung SEF'],['samsung-mpv2.jpg','Samsung SEF'],['vendor-trailer.jpg','嵌入式动态照片'],['heic-motion.heic','Motion Photo mpvd']])await t.test(name,async()=>{
   const file=path.join(output,'embedded',name),before=await fs.readFile(file),found=await inspectMotionPhoto(file);assert.equal(found.source,source);assert.equal(found.length,movie.length);assert.deepEqual(before.subarray(found.offset,found.offset+found.length),movie);assert.deepEqual(await fs.readFile(file),before);if(name==='google-old.jpg')assert.equal(found.presentationTime,.5);
  });
+ let notice='';assert.equal(await inspectMotionPhoto(path.join(output,'embedded','oppo-missing.jpg'),message=>notice=message),null);assert.match(notice,/检测到动态照片标记/);
 });
 test('sidecars prefer matching Apple content identifiers and reject mismatched identifiers',async()=>{
  const {inspectMotionPhoto}=await ready,dir=path.join(output,'apple');await fs.mkdir(dir,{recursive:true});

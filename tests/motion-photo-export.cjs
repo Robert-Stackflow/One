@@ -14,7 +14,7 @@ test('export copies the exact embedded or paired video and protects originals',a
   const inspectBundle=resolve('work/current/motion-photo-inspect-unit.cjs');
   await build({entryPoints:['src/main/motion-photo.ts'],outfile:inspectBundle,bundle:true,platform:'node'});
   const {exportMotionPhotoVideo}=require(bundle),{inspectMotionPhoto}=require(inspectBundle);
-  for(const name of ['google-old.jpg','apple-pair.jpg']){
+  for(const name of ['google-old.jpg','oppo-video-length.jpg','apple-pair.jpg']){
    const original=await readFile(join(directory,name));
    const motion=await inspectMotionPhoto(join(directory,name));assert(motion,name);
    const target=join(directory,`${name}-video.${motion.mime==='video/quicktime'?'mov':'mp4'}`);
