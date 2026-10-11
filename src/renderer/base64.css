@@ -7,6 +7,8 @@
 .base64-toolbar label,.base64-columns label{font-size:12px;font-weight:600}
 .base64-toolbar span,#base64-status,#base64-help{color:var(--muted);font-size:12px}
 #base64-help{margin:12px 0 0;line-height:1.5}
+#base64-help:empty{display:none}
+#base64-codec-field[hidden]+#base64-codec{display:none}
 .base64-actions{margin-top:16px}
 #base64-status{display:block;margin-top:10px;overflow-wrap:anywhere}
 #base64-status:empty{display:none}

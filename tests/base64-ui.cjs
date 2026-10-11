@@ -18,7 +18,13 @@ test('Base64 handles Unicode text, binary files and invalid input',async()=>{
   await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文本解码"]').click();await page.locator('#base64-input').fill(encoded);await page.locator('#base64-run').click();
   await expect(page.locator('#base64-output')).toHaveValue('中文 🌄');
   await page.locator('#base64-input').fill('%%not-base64');await page.locator('#base64-run').click();await expect(page.locator('#base64-status')).toContainText('无效');
+  const chooseCodec=async label=>{await page.locator('#base64-codec').click();await page.locator(`#base64-codec-options [role="option"][aria-label="${label}"]`).click();};
+  await chooseCodec('Base64URL');await page.locator('#base64-input').fill(Buffer.from('中文 🌄').toString('base64url'));await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('中文 🌄');
+  await chooseCodec('十六进制');await page.locator('#base64-input').fill(Buffer.from('中文 🌄').toString('hex'));await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('中文 🌄');
+  await chooseCodec('Base32');await page.locator('#base64-input').fill('MZXW6YTBOI======');await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('foobar');
+  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文本编码"]').click();await page.locator('#base64-input').fill('foobar');await page.locator('#base64-run').click();await expect(page.locator('#base64-output')).toHaveValue('MZXW6YTBOI======');
   await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文件编码"]').click();await page.locator('#base64-file').setInputFiles(source);await page.locator('#base64-run').click();
+  await expect(page.locator('#base64-codec')).toBeHidden();
   await expect(page.locator('#base64-output')).toHaveValue('AAEC/w==');
   await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="Base64 导出文件"]').click();await page.locator('#base64-input').fill('AAEC/w==');
   const newWindow=app.waitForEvent('window');await page.locator('#base64-run').click();const picker=await newWindow;
