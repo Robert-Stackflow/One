@@ -39,7 +39,7 @@ test('image conversion tab converts a picked file and reports results',async()=>
   await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="ICO 多尺寸图标"]').click();
   await expect(page.locator('#image-convert-metadata-policy')).toBeDisabled();await expect(page.locator('#image-enhance-enabled')).not.toBeChecked();await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');
   assert.equal((await readdir(output)).filter(name=>name.endsWith('.ico')).length,1);
-  await expect(page.locator('#image-codec-status')).toContainText('HEIC',{timeout:10000});
+  await page.locator('#page-image-convert .tool-info').hover();await expect(page.locator('#one-tooltip')).toContainText('HEIC');
   await app.evaluate(({dialog},chosen)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[chosen]});},svg);
   await page.locator('#image-convert-clear').click();await page.locator('#image-convert-add').click();await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="SVG 优化（仅 SVG 输入）"]').click();
   await page.locator('#image-convert-start').click();await expect(page.locator('#image-convert-status')).toContainText('已完成 1 张');assert.equal((await readdir(output)).filter(name=>name.endsWith('.svg')).length,1);

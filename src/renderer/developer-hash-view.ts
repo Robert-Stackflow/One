@@ -1,12 +1,13 @@
 import './developer-hash.css';
 import {api,q,toast,errorMessage} from './ui';
 import type {HashAlgorithm,HashAllRequest,HashAllResult,HashProgress} from '../shared/developer-hash';
+import {installToolFileDrop,toolInfo} from './tool-page-components';
 
 const algorithms:[HashAlgorithm,string][]=[['sha256','SHA-256'],['sha512','SHA-512'],['sha1','SHA-1'],['md5','MD5']];
 const lengths:Record<HashAlgorithm,number>={sha256:64,sha512:128,sha1:40,md5:32};
 
 export function developerHashPage(){return `<div class="developer-hash-page">
- <div class="developer-hash-layout"><section class="settings-card developer-hash-panel" aria-label="哈希输入"><h3>输入</h3>
+ <div class="developer-hash-layout"><section class="settings-card developer-hash-panel" aria-label="哈希输入"><div class="tool-card-head"><h3>输入</h3>${toolInfo('哈希说明','文件只读取一次，即可生成四种摘要；MD5 和 SHA-1 仅适合兼容性校验。')}</div>
  <div class="developer-hash-options"><label>来源<select id="developer-hash-kind"><option value="text">文本</option><option value="file">文件</option></select></label></div>
  <label id="developer-hash-text-field" class="developer-hash-text">文本内容<textarea id="developer-hash-text" spellcheck="false" maxlength="2097152" placeholder="输入后自动计算全部摘要"></textarea></label>
  <div id="developer-hash-file-field" class="developer-hash-file" hidden><input id="developer-hash-file" aria-label="文件路径" readonly placeholder="选择或拖入文件"><button id="developer-hash-pick" type="button">选择文件</button></div>
@@ -29,7 +30,7 @@ export function setupDeveloperHash(){
  kind.onchange=()=>schedule(0);text.oninput=()=>schedule();expected.oninput=show;
  file.onchange=()=>schedule(0);
  pick.onclick=()=>void api.pickFile(file.value||undefined).then(path=>{if(path){file.value=path;schedule(0);}}).catch(toast);
- fileField.ondragover=event=>{event.preventDefault();event.dataTransfer!.dropEffect='copy';};fileField.ondrop=event=>{event.preventDefault();const item=event.dataTransfer?.files[0];if(item)try{file.value=api.droppedFile(item);schedule(0);}catch(error){toast(error);}};
+ installToolFileDrop(q('page-developer-hash'),'计算文件摘要',paths=>{kind.value='file';file.value=paths[0];schedule(0);});
  tabs.onclick=event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-hash-algorithm]');if(!button||!tabs.contains(button))return;selected=button.dataset.hashAlgorithm as HashAlgorithm;for(const tab of tabs.querySelectorAll<HTMLButtonElement>('[data-hash-algorithm]'))tab.setAttribute('aria-selected',String(tab===button));show();};
  tabs.onkeydown=event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;const buttons=[...tabs.querySelectorAll<HTMLButtonElement>('[data-hash-algorithm]')],index=buttons.findIndex(button=>button.dataset.hashAlgorithm===selected),next=buttons[(index+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length];event.preventDefault();next.focus();next.click();};
  cancel.onclick=()=>{revision++;if(timer)clearTimeout(timer);queued=false;void api.developerHashCancel().catch(toast);status.textContent='已取消';};

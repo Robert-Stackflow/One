@@ -25,8 +25,8 @@ test('crop tab draws a fixed-ratio selection, applies it to a batch and previews
   await page.mouse.move(box.x+box.width*.15,box.y+box.height*.15);await page.mouse.down();await page.mouse.move(box.x+box.width*.75,box.y+box.height*.75);await page.mouse.up();
   await expect(page.locator('#image-crop-bounds')).toContainText('选区');await expect(page.locator('#image-crop-start')).toBeEnabled();
   const chosenBounds=await page.locator('#image-crop-bounds').textContent();
-  await page.locator('.image-crop-presets summary').click();await page.locator('#image-crop-preset-name').fill('方形头像');await page.locator('#image-crop-preset-save').click();
-  await page.locator('.image-crop-preview .image-batch-preview summary').click();await page.locator('#image-crop-batch-load').click();
+  await page.locator('#image-crop-preset-name').fill('方形头像');await page.locator('#image-crop-preset-save').click();
+  await page.locator('#image-crop-batch-load').click();
   await expect(page.locator('#image-crop-batch-grid .image-batch-card')).toHaveCount(3);
   await expect(page.locator('#image-crop-batch-grid')).toContainText('动图或多页图片不支持裁剪');
   await expect(page.locator('#image-crop-batch-grid')).toContainText('120 × 120 →');

@@ -11,7 +11,7 @@ test('regex tab shows groups, replacement and cancels slow patterns',async()=>{
  try{
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.locator('[data-page="developer"]').click();await page.locator('#tool-tab-regex').click();
-  await page.locator('#regex-snippets summary').click();await page.locator('#regex-pattern').fill('aZ');await page.locator('#regex-pattern').evaluate(field=>field.setSelectionRange(1,1));
+  await page.locator('#regex-pattern').fill('aZ');await page.locator('#regex-pattern').evaluate(field=>field.setSelectionRange(1,1));
   await page.locator('[data-regex-snippet="digits"]').click();await expect(page.locator('#regex-pattern')).toHaveValue('a\\d+Z');
   await page.locator('#regex-pattern').evaluate(field=>field.setSelectionRange(0,field.value.length));await page.locator('[data-regex-snippet="named"]').click();await expect(page.locator('#regex-pattern')).toHaveValue('(?<name>)');assert.equal(await page.locator('#regex-pattern').evaluate(field=>field.selectionStart),8);
   await page.locator('#regex-pattern').fill('(?<word>[a-z]+)');await page.locator('[data-regex-flag="i"]').check();

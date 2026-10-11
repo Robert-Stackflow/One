@@ -1,6 +1,7 @@
 import './image-color.css';
 import {api,q,toast,errorMessage} from './ui';
 import {ColorPalette} from './color-palette';
+import {installToolFileDrop} from './tool-page-components';
 import type {ImageColorPreview} from '../shared/image-color';
 import type {ImagePaletteColor} from '../shared/image-palette';
 
@@ -17,8 +18,7 @@ export function setupImageColor(){
  const clearPalette=()=>{paletteRevision++;stopPalette();colors=[];swatches.replaceChildren();extracted.hidden=true;paletteStatus.textContent='';};
  const open=async(path:string)=>{const id=++revision;sampleRevision++;source=undefined;preview=undefined;clearPalette();image.removeAttribute('src');marker.hidden=true;empty.hidden=false;empty.textContent='正在读取图片…';status.textContent='';position.textContent='';try{const value=await api.imageColorPreview(path);if(id!==revision)return;image.src=value.url;await image.decode();if(id!==revision)return;source=path;preview=value;extract.disabled=false;name.textContent=path.split(/[\\/]/).pop()||path;empty.hidden=true;status.textContent=value.pages>1?`已打开，取第 1 / ${value.pages} 帧`:`已打开 ${value.width} × ${value.height}`;}catch(error){if(id!==revision)return;empty.textContent=errorMessage(error);status.textContent=errorMessage(error);}};
  q<HTMLButtonElement>('image-color-open').onclick=()=>void api.imagePickFiles().then(paths=>{if(paths[0])void open(paths[0]);}).catch(toast);
- frame.ondragover=event=>{event.preventDefault();event.dataTransfer!.dropEffect='copy';};
- frame.ondrop=event=>{event.preventDefault();const file=event.dataTransfer?.files[0];if(file)try{const path=api.droppedFile(file);if(path)void open(path);}catch(error){toast(error);}};
+ installToolFileDrop(q('page-image-color'),'打开图片',paths=>open(paths[0]));
  image.onclick=event=>{if(!source||!preview)return;const path=source,value=preview,id=++sampleRevision,box=image.getBoundingClientRect(),x=Math.min(value.width-1,Math.max(0,Math.floor((event.clientX-box.left)/box.width*value.width))),y=Math.min(value.height-1,Math.max(0,Math.floor((event.clientY-box.top)/box.height*value.height)));
   status.textContent='正在读取像素…';void api.imageColorSample(path,x,y).then(sample=>{if(id!==sampleRevision||source!==path)return;palette.select(sample.hex);marker.hidden=false;marker.style.left=`${(x+.5)/value.width*100}%`;marker.style.top=`${(y+.5)/value.height*100}%`;position.textContent=`像素 (${x}, ${y}) · ${sample.hex} · 不透明度 ${sample.alpha}%`;status.textContent='已取色，可复制格式或保存到历史';}).catch(error=>{if(id===sampleRevision)status.textContent=errorMessage(error);});
  };

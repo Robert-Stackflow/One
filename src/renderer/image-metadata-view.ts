@@ -1,5 +1,6 @@
 import './image-convert.css';
 import {api,esc,q,toast,errorMessage} from './ui';
+import {toolInfo,installToolFileDrop} from './tool-page-components';
 import {dialogMarkup,openDialog} from './dialog';
 import type {ImageMetadataOptions,ImageMetadataProgress,ImageMetadataResult} from '../shared/image-metadata';
 
@@ -14,7 +15,7 @@ export function imageMetadataPage(){return `<div class="image-convert-page image
  <div class="image-convert-actions"><button id="image-metadata-start" class="primary" type="button">开始清理</button><button id="image-metadata-cancel" type="button" class="quiet" disabled>取消</button><button id="image-metadata-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-metadata-status" role="status" aria-live="polite"></span></div></section>
  <section class="settings-card image-convert-panel"><h3>清理设置</h3>
  <div class="image-convert-options image-metadata-options"><label class="image-convert-metadata"><input id="image-metadata-exif" type="checkbox" checked>移除 EXIF（含 GPS）</label><label class="image-convert-metadata"><input id="image-metadata-gps" type="checkbox" checked>移除 GPS</label><label class="image-convert-metadata"><input id="image-metadata-xmp" type="checkbox" checked>移除 XMP</label><label class="image-convert-metadata"><input id="image-metadata-iptc" type="checkbox" checked>移除 IPTC</label></div>
- <details class="tool-notes"><summary>格式与限制</summary><p class="image-convert-note">支持 PNG、JPEG、WebP、GIF、TIFF，每批最多 100 张，单张最大 100 MB。删除 EXIF 会同时删除其中的 GPS；只选 GPS 时，其他 EXIF 保留。输出后核验所选标签和 ICC。多帧图片含方向标记时将提示无法安全处理。</p></details>
+ ${toolInfo("使用限制","支持 PNG、JPEG、WebP、GIF、TIFF；每批最多 100 张。删除 EXIF 会同时删除 GPS，输出会核验所选标签。")}
  </section></div></div>`;}
 
 export function setupImageMetadata(){
@@ -33,7 +34,9 @@ export function setupImageMetadata(){
   running=true;current=undefined;for(const path of selected)results.delete(path);render();status.textContent=`正在处理 0 / ${selected.length}`;
   try{const summary=await api.imageMetadataStart(selected,directory.value,options);for(const result of summary.results)results.set(result.source,result);const done=summary.results.filter(result=>result.status==='done').length,failed=summary.results.filter(result=>result.status==='error').length;status.textContent=summary.cancelled?`已取消，完成 ${done} 张`:failed?`完成 ${done} 张，失败 ${failed} 张`:`已完成 ${done} 张`;}catch(error){status.textContent=errorMessage(error);toast(error);}finally{running=false;current=undefined;render();}
  };
- add.onclick=()=>void api.imagePickFiles().then(chosen=>{const set=new Set(paths.map(path=>path.toLowerCase()));for(const path of chosen)if(!set.has(path.toLowerCase())&&paths.length<100){paths.push(path);set.add(path.toLowerCase());}render();if(chosen.length&&paths.length===100)status.textContent='每批最多 100 张图片';}).catch(toast);
+const addFiles=(chosen:string[])=>{const set=new Set(paths.map(path=>path.toLowerCase()));for(const path of chosen)if(!set.has(path.toLowerCase())&&paths.length<100){paths.push(path);set.add(path.toLowerCase());}render();if(chosen.length&&paths.length===100)status.textContent='每批最多 100 张图片';};
+ add.onclick=()=>void api.imagePickFiles().then(addFiles).catch(toast);
+ installToolFileDrop(q('page-image-metadata'),'添加图片',addFiles,()=>!running);
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};pick.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  start.onclick=()=>void run(paths);retry.onclick=()=>void run(paths.filter(path=>results.get(path)?.status!=='done'));cancel.onclick=()=>void api.imageMetadataCancel().catch(toast);
  const showDiff=(result:ImageMetadataResult)=>{const diff=result.metadataDiff;if(!diff)return;const rows=diff.changes.map(change=>`<div><strong>${esc(change.tag)}</strong><span><small>处理前</small>${esc(change.before??'—')}</span><span><small>处理后</small>${esc(change.after??'—')}</span></div>`).join('');const body=rows?`<div class="image-metadata-diff-list">${rows}</div>${diff.truncated?`<p>显示前 ${diff.changes.length} / ${diff.count} 项变化。</p>`:''}`:'<p>没有标签变化。</p>';const template=document.createElement('template');template.innerHTML=dialogMarkup({id:'image-metadata-diff-dialog',title:`元数据差异 · ${nameOf(result.source)}`,className:'image-metadata-diff-dialog',body,actions:'<button type="button" data-dialog-dismiss autofocus>关闭</button>'});const dialog=template.content.firstElementChild as HTMLDialogElement;dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);openDialog(dialog);};

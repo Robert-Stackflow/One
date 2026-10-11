@@ -16,8 +16,8 @@ test('resize tab applies percent, exact pixels and long-edge rules to a batch',a
   await page.locator('[data-page="images"]').click();await page.locator('#tool-tab-image-resize').click();
   await page.locator('#image-resize-directory').evaluate((input,value)=>{input.value=value;},output);
   await page.locator('#image-resize-add').click();await expect(page.locator('#image-resize-count')).toContainText('2 张');
-  await page.locator('.image-resize-presets summary').click();await page.locator('#image-resize-preset-name').fill('半尺寸');await page.locator('#image-resize-preset-save').click();
-  await page.locator('.image-resize-output .image-batch-preview summary').click();await page.locator('#image-resize-batch-load').click();
+  await page.locator('#image-resize-preset-name').fill('半尺寸');await page.locator('#image-resize-preset-save').click();
+  await page.locator('#image-resize-batch-load').click();
   await expect(page.locator('#image-resize-batch-grid .image-batch-card')).toHaveCount(2);
   await expect(page.locator('#image-resize-batch-grid')).toContainText('120 × 80 → 60 × 40');
   await expect(page.locator('#image-resize-start')).toBeEnabled();await page.locator('#image-resize-start').click();await expect(page.locator('#image-resize-status')).toContainText('已完成 2 张');
@@ -46,7 +46,7 @@ test('resize batch preview loads at most eight images per page',async()=>{
   await app.evaluate(({dialog},selected)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:selected});},files);
   const page=await app.firstWindow();await page.locator('[data-page="images"]').click();await page.locator('#tool-tab-image-resize').click();
   await page.locator('#image-resize-add').click();await expect(page.locator('#image-resize-count')).toContainText('9 张');
-  await page.locator('.image-resize-output .image-batch-preview summary').click();await page.locator('#image-resize-batch-load').click();
+  await page.locator('#image-resize-batch-load').click();
   await expect(page.locator('#image-resize-batch-grid .image-batch-card img')).toHaveCount(8);
   await expect(page.locator('#image-resize-batch-position')).toHaveText('1 / 2');
   await page.locator('#image-resize-batch-next').click();await expect(page.locator('#image-resize-batch-grid .image-batch-card img')).toHaveCount(1);

@@ -1,5 +1,6 @@
 import './regex.css';
 import {api,q,esc,toast} from './ui';
+import {toolInfo} from './tool-page-components';
 import type {RegexRequest,RegexResult} from '../shared/regex-tool';
 
 const snippets=[
@@ -13,8 +14,8 @@ const snippets=[
 ];
 
 export function regexPage(){return `<div class="regex-page">
- <section class="settings-card regex-settings" aria-label="正则设置"><h3>匹配设置</h3><div class="regex-pattern"><label for="regex-pattern">表达式</label><input id="regex-pattern" spellcheck="false" placeholder="例如 (?<name>\\w+)"></div>
- <details id="regex-snippets" class="regex-snippets"><summary>插入常用片段</summary><div>${snippets.map(item=>`<button type="button" data-regex-snippet="${item.id}">${item.label}</button>`).join('')}</div></details>
+ <section class="settings-card regex-settings" aria-label="正则设置"><div class="tool-card-head"><h3>正则表达式</h3>${toolInfo('正则测试提示','输入表达式和测试文本后自动匹配；运行超过 500 毫秒会停止。')}</div><div class="regex-pattern"><label for="regex-pattern">表达式</label><input id="regex-pattern" spellcheck="false" placeholder="例如 (?<name>\\w+)"></div>
+ <div id="regex-snippets" class="regex-snippets"><span>常用片段</span><div>${snippets.map(item=>`<button type="button" data-regex-snippet="${item.id}">${item.label}</button>`).join('')}</div></div>
  <fieldset class="regex-flags"><legend>选项</legend><label><input type="checkbox" data-regex-flag="g" checked>全局 g</label><label><input type="checkbox" data-regex-flag="i">忽略大小写 i</label><label><input type="checkbox" data-regex-flag="m">多行 m</label><label><input type="checkbox" data-regex-flag="s">点匹配换行 s</label><label><input type="checkbox" data-regex-flag="u">Unicode u</label></fieldset>
  <div class="regex-actions"><button id="regex-test" type="button">测试匹配</button><button id="regex-single" type="button" disabled>替换当前处</button><button id="regex-preview" type="button">替换全部</button><button id="regex-cancel" type="button" hidden>取消</button><span id="regex-status" role="status" aria-live="polite"></span></div></section>
  <div class="regex-columns"><section class="settings-card regex-panel"><div class="regex-input-heading"><label for="regex-input">测试文本</label><div class="regex-nav"><button id="regex-highlight-toggle" type="button" disabled>高亮匹配</button><button id="regex-prev" type="button" disabled>上一处</button><span id="regex-position" aria-live="polite"></span><button id="regex-next" type="button" disabled>下一处</button></div></div><textarea id="regex-input" spellcheck="false"></textarea><div id="regex-highlights" class="regex-highlights" aria-label="匹配高亮" hidden></div></section><section class="settings-card regex-panel"><label for="regex-replacement">替换文本</label><textarea id="regex-replacement" spellcheck="false" placeholder="例如 $& 或 $<name>"></textarea></section></div>

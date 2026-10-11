@@ -1,28 +1,31 @@
 import './timestamp.css';
 import {api,q,esc,toast} from './ui';
 import {currentTimestamp,dateToTimestamp,timestampToDate,type TimestampResult,type TimestampUnit,type TimestampDisambiguation} from '../shared/timestamp';
+import {datePickerMarkup,setupDatePicker} from './date-picker';
+import {timePickerMarkup,setupTimePicker} from './time-picker';
+import {toolInfo} from './tool-page-components';
 
-export function timestampPage(){const local=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';return `<div class="timestamp-page">
+export function timestampPage(){const local=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',today=new Date(),day=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;return `<div class="timestamp-page">
  <div class="timestamp-head"><label for="timestamp-zone">时区<select id="timestamp-zone"><option value="local">系统本地（${esc(local)}）</option><option value="UTC">UTC</option><option value="Asia/Shanghai">上海（Asia/Shanghai）</option><option value="Asia/Tokyo">东京（Asia/Tokyo）</option><option value="Europe/London">伦敦（Europe/London）</option><option value="Europe/Berlin">柏林（Europe/Berlin）</option><option value="America/New_York">纽约（America/New_York）</option><option value="America/Los_Angeles">洛杉矶（America/Los_Angeles）</option></select></label></div>
  <section class="settings-card timestamp-now"><div><strong>当前时间</strong><span id="timestamp-now-date"></span><small id="timestamp-now-epoch"></small></div><button id="timestamp-use-now" type="button">填入当前时间</button></section>
  <div class="timestamp-grid"><section class="settings-card"><h3>时间戳 → 日期时间</h3><div class="timestamp-input-row"><label for="timestamp-number">时间戳</label><input id="timestamp-number" inputmode="decimal" spellcheck="false" placeholder="例如 1710052200"><select id="timestamp-unit" aria-label="时间戳单位"><option value="seconds">秒</option><option value="milliseconds">毫秒</option></select></div><pre id="timestamp-date-result" aria-live="polite"></pre><button id="timestamp-copy-date" type="button" disabled>复制结果</button></section>
- <section class="settings-card"><h3>日期时间 → 时间戳</h3><div class="timestamp-input-row"><label for="timestamp-date">日期时间</label><input id="timestamp-date" type="datetime-local" step="0.001"></div><label class="timestamp-choice" for="timestamp-ambiguity">夏令时重复时间<select id="timestamp-ambiguity"><option value="earlier">选择较早的时刻</option><option value="later">选择较晚的时刻</option></select></label><pre id="timestamp-epoch-result" aria-live="polite"></pre><button id="timestamp-copy-epoch" type="button" disabled>复制结果</button></section></div>
- <details class="tool-notes"><summary>夏令时说明</summary><p class="timestamp-hint">所选时区的夏令时切换可能让某个本地时间出现两次，或完全不存在。重复时可选择较早或较晚的时刻；不存在时会显示错误。</p></details>
+ <section class="settings-card"><div class="tool-card-head"><h3>日期时间 → 时间戳</h3>${toolInfo('夏令时说明','夏令时切换可能让本地时间出现两次或不存在；重复时可选择较早或较晚的时刻。')}</div><div class="timestamp-date-controls"><label>日期${datePickerMarkup('timestamp-date','选择日期',day)}</label><label>时间${timePickerMarkup('timestamp-time','选择时间','00:00')}</label><label>秒<input id="timestamp-seconds" type="number" min="0" max="59.999" step="0.001" value="0"></label></div><label class="timestamp-choice" for="timestamp-ambiguity">夏令时重复时间<select id="timestamp-ambiguity"><option value="earlier">选择较早的时刻</option><option value="later">选择较晚的时刻</option></select></label><pre id="timestamp-epoch-result" aria-live="polite"></pre><button id="timestamp-copy-epoch" type="button" disabled>复制结果</button></section></div>
  </div>`;}
 
 export function setupTimestamp(){
- const zone=q<HTMLSelectElement>('timestamp-zone'),number=q<HTMLInputElement>('timestamp-number'),unit=q<HTMLSelectElement>('timestamp-unit'),date=q<HTMLInputElement>('timestamp-date'),ambiguity=q<HTMLSelectElement>('timestamp-ambiguity');
+ const zone=q<HTMLSelectElement>('timestamp-zone'),number=q<HTMLInputElement>('timestamp-number'),unit=q<HTMLSelectElement>('timestamp-unit'),date=q<HTMLButtonElement & {value:string}>('timestamp-date'),time=q<HTMLButtonElement & {value:string}>('timestamp-time'),seconds=q<HTMLInputElement>('timestamp-seconds'),ambiguity=q<HTMLSelectElement>('timestamp-ambiguity');
+ const calendar=setupDatePicker(date),clock=setupTimePicker(time);
  const nowDate=q<HTMLElement>('timestamp-now-date'),nowEpoch=q<HTMLElement>('timestamp-now-epoch'),dateResult=q<HTMLElement>('timestamp-date-result'),epochResult=q<HTMLElement>('timestamp-epoch-result'),copyDate=q<HTMLButtonElement>('timestamp-copy-date'),copyEpoch=q<HTMLButtonElement>('timestamp-copy-epoch');
  let timer:ReturnType<typeof setInterval>|undefined;
  const show=(target:HTMLElement,button:HTMLButtonElement,value:TimestampResult)=>{target.dataset.error='false';target.textContent=`${value.zoned}  (${value.timeZone})\nUTC: ${value.utc}\n秒: ${value.seconds}\n毫秒: ${value.milliseconds}${value.ambiguous?'\n该本地时间出现两次，已按所选规则换算。':''}`;button.disabled=false;};
  const fail=(target:HTMLElement,button:HTMLButtonElement,error:unknown)=>{target.dataset.error='true';target.textContent=error instanceof Error?error.message:String(error);button.disabled=true;};
  const refresh=()=>{try{const value=currentTimestamp(zone.value);nowDate.textContent=`${value.zoned} (${value.timeZone})`;nowEpoch.textContent=`${value.seconds} 秒 · ${value.milliseconds} 毫秒`;}catch(error){nowDate.textContent=error instanceof Error?error.message:String(error);}};
  const fromNumber=()=>{if(!number.value.trim()){dateResult.textContent='';copyDate.disabled=true;return;}try{show(dateResult,copyDate,timestampToDate(number.value,unit.value as TimestampUnit,zone.value));}catch(error){fail(dateResult,copyDate,error);}};
- const fromDate=()=>{if(!date.value){epochResult.textContent='';copyEpoch.disabled=true;return;}try{show(epochResult,copyEpoch,dateToTimestamp(date.value,zone.value,ambiguity.value as TimestampDisambiguation));}catch(error){fail(epochResult,copyEpoch,error);}};
- q<HTMLButtonElement>('timestamp-use-now').onclick=()=>{const value=currentTimestamp(zone.value);number.value=String(value.milliseconds);unit.value='milliseconds';date.value=value.zoned.replace(' ','T');fromNumber();fromDate();};
+ const fromDate=()=>{if(!date.value){epochResult.textContent='';copyEpoch.disabled=true;return;}try{const part=Number(seconds.value);if(!Number.isFinite(part)||part<0||part>=60)throw Error('秒数须介于 0 与 59.999');const local=`${date.value}T${time.value}:${part.toFixed(3).padStart(6,'0')}`;show(epochResult,copyEpoch,dateToTimestamp(local,zone.value,ambiguity.value as TimestampDisambiguation));}catch(error){fail(epochResult,copyEpoch,error);}};
+ q<HTMLButtonElement>('timestamp-use-now').onclick=()=>{const value=currentTimestamp(zone.value),parts=value.zoned.split(' ');number.value=String(value.milliseconds);unit.value='milliseconds';date.value=parts[0];time.value=parts[1].slice(0,5);seconds.value=String(Number(parts[1].slice(6)));fromNumber();fromDate();};
  zone.onchange=()=>{refresh();fromNumber();fromDate();};
- number.oninput=fromNumber;date.oninput=fromDate;unit.onchange=fromNumber;ambiguity.onchange=fromDate;
+ number.oninput=fromNumber;date.onchange=time.onchange=fromDate;seconds.oninput=fromDate;unit.onchange=fromNumber;ambiguity.onchange=fromDate;
  copyDate.onclick=()=>void api.copyText(dateResult.textContent||'').then(()=>toast('已复制结果')).catch(toast);
  copyEpoch.onclick=()=>void api.copyText(epochResult.textContent||'').then(()=>toast('已复制结果')).catch(toast);
- refresh();return {activate(value:boolean){if(value){refresh();if(!timer)timer=setInterval(refresh,1000);}else if(timer){clearInterval(timer);timer=undefined;}},dispose(){if(timer)clearInterval(timer);timer=undefined;}};
+ refresh();return {activate(value:boolean){if(value){refresh();if(!timer)timer=setInterval(refresh,1000);}else if(timer){clearInterval(timer);timer=undefined;}},dispose(){calendar.dispose();clock.close();if(timer)clearInterval(timer);timer=undefined;}};
 }

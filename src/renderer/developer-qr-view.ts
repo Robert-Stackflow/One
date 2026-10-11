@@ -1,9 +1,10 @@
 import './developer-qr.css';
 import {api,q,toast,errorMessage} from './ui';
 import type {QrRequest,QrErrorLevel} from '../shared/developer-qr';
+import {toolInfo} from './tool-page-components';
 
 export function developerQrPage(){return `<div class="developer-qr-page">
- <div class="developer-qr-layout"><section class="settings-card developer-qr-panel" aria-label="二维码设置"><h3>生成设置</h3>
+ <div class="developer-qr-layout"><section class="settings-card developer-qr-panel" aria-label="二维码设置"><div class="tool-card-head"><h3>内容与尺寸</h3>${toolInfo('二维码输入限制','输入最多 2048 字节；尺寸和纠错级别改变后会自动重新生成。')}</div>
  <label class="developer-qr-input">内容<textarea id="developer-qr-text" spellcheck="false" maxlength="2048" placeholder="输入要编码的文本或链接"></textarea></label>
  <div class="developer-qr-options"><label>图片尺寸<select id="developer-qr-size"><option value="256">256 × 256</option><option value="512" selected>512 × 512</option><option value="1024">1024 × 1024</option></select></label><label>纠错级别<select id="developer-qr-level"><option value="L">低 L</option><option value="M" selected>中 M</option><option value="Q">较高 Q</option><option value="H">高 H</option></select></label></div>
  </section>

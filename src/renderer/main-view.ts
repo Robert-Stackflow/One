@@ -4,6 +4,7 @@ import './styles.css';
 import './refinement.css';
 import './selection.css';
 import './interface-refinement.css';
+import './tool-redesign.css';
 // Main-workspace views mount on demand, but their layout is visible immediately
 // after navigation. Keep their compact structural sheets eager so a page never
 // paints with generic controls and then reflows when a dynamic module's CSS

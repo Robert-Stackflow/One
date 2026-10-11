@@ -7,7 +7,7 @@
 .base64-toolbar label,.base64-columns label{font-size:12px;font-weight:600}
 .base64-toolbar span,#base64-status{color:var(--muted);font-size:12px}
 #base64-file-codec-field[hidden]+#base64-file-codec{display:none}
-.base64-codecs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:14px}
+.base64-codecs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 2px}
 .base64-codecs[hidden]{display:none}
 .base64-codecs button{min-height:30px;padding:4px 10px;font-size:12px;border-radius:8px}
 .base64-codecs button[aria-selected=true]{border-color:var(--accent);color:var(--accent);background:var(--soft)}

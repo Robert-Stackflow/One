@@ -1,5 +1,6 @@
 import './image-convert.css';
 import {api,esc,q,toast,errorMessage} from './ui';
+import {toolInfo,installToolFileDrop} from './tool-page-components';
 import type {ImageConvertFormat,ImageConvertOptions,ImageConvertProgress,ImageConvertResult,ImageEnhanceOptions} from '../shared/image-convert';
 
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
@@ -27,7 +28,7 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>锐化<select id="image-enhance-sharpen"><option value="0">关闭</option><option value="1" selected>轻度</option><option value="2">较强</option></select></label>
       <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
     </div></fieldset>
-    <details class="image-convert-rules"><summary>格式与保留规则</summary><p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p><p id="image-codec-status" class="image-convert-note">HEIC 读写依赖 Windows HEIF/HEVC 系统扩展；当前仅处理 8 位静态主图并仅保留 ICC，含 HDR 增益图或动态视频时需分别确认丢弃。</p></details>
+    ${toolInfo("格式与保留规则","无损模式限 PNG/WebP/TIFF，且不能缩放；ICO 不保留元数据；动图应输出为 GIF/WebP/TIFF。HEIC 依赖 Windows 扩展。每批最多 100 张，单张最多 100 MB。")}
   </section></div></div>`;}
 
 export function setupImageConvert(){
@@ -63,7 +64,9 @@ export function setupImageConvert(){
   try{const summary=await api.imageConvertStart(selected,directory.value,settings);for(const result of summary.results)results.set(result.source,result);const done=summary.results.filter(result=>result.status==='done').length,failed=summary.results.filter(result=>result.status==='error').length;status.textContent=summary.cancelled?`已取消，完成 ${done} 张`:failed?`完成 ${done} 张，失败 ${failed} 张`:`已完成 ${done} 张`;
   }catch(error){status.textContent=errorMessage(error);toast(error);}finally{running=false;current=undefined;render();}
  };
- add.onclick=()=>void api.imageConvertPickFiles().then(chosen=>{const set=new Set(paths.map(path=>path.toLowerCase()));for(const path of chosen)if(!set.has(path.toLowerCase())&&paths.length<100){paths.push(path);set.add(path.toLowerCase());}render();if(chosen.length&&paths.length===100)status.textContent='每批最多 100 张图片';}).catch(toast);
+const addFiles=(chosen:string[])=>{const set=new Set(paths.map(path=>path.toLowerCase()));for(const path of chosen)if(!set.has(path.toLowerCase())&&paths.length<100){paths.push(path);set.add(path.toLowerCase());}render();if(chosen.length&&paths.length===100)status.textContent='每批最多 100 张图片';};
+ add.onclick=()=>void api.imageConvertPickFiles().then(addFiles).catch(toast);
+ installToolFileDrop(q('page-image-convert'),'添加图片',addFiles,()=>!running);
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};
  pickDirectory.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  quality.oninput=()=>{q('image-convert-quality-value').textContent=quality.value;};

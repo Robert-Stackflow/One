@@ -1,21 +1,22 @@
 import './image-ai.css';
 import './image-repair.css';
 import {api,q,toast,errorMessage} from './ui';
+import {toolInfo,installToolFileDrop} from './tool-page-components';
 import type {ImageAiProgress,ImageAiResult,ImageRepairMode} from '../shared/image-ai';
 
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const megabytes=(bytes:number)=>`${(bytes/1048576).toFixed(1)} MB`;
 
 export function imageRepairPage(){return `<div class="image-ai-page image-repair-page">
- <div class="image-ai-layout"><section class="settings-card image-ai-setup" aria-label="局部修复设置"><h3>处理设置</h3>
+ <div class="image-ai-layout"><section class="settings-card image-ai-setup" aria-label="局部修复设置"><h3>局部修复</h3>
  <div class="image-ai-field"><span class="image-ai-label">源图片</span><div class="image-ai-picker"><button id="image-repair-pick" type="button">选择图片</button><strong id="image-repair-source">尚未选择图片</strong></div></div>
  <div class="image-ai-field"><span class="image-ai-label">处理目标</span><div class="image-repair-modes" role="group" aria-label="处理目标"><button id="image-repair-damage" type="button" aria-pressed="true">修复划痕/缺损</button><button id="image-repair-remove" type="button" aria-pressed="false">移除物体</button></div></div>
  <div class="image-ai-field"><label class="image-ai-label" for="image-repair-brush">画笔大小</label><div class="image-repair-brush"><input id="image-repair-brush" type="range" min="6" max="64" value="18"><output id="image-repair-brush-value" for="image-repair-brush">18 px</output></div><div class="image-repair-edit-actions"><button id="image-repair-undo" type="button" disabled>撤销上一笔</button><button id="image-repair-clear" type="button" disabled>清除涂抹</button></div></div>
  <div class="image-ai-field"><label class="image-ai-label" for="image-repair-directory">输出文件夹</label><div class="image-ai-directory"><input id="image-repair-directory" readonly placeholder="选择保存位置"><button id="image-repair-pick-directory" type="button">选择文件夹</button></div></div>
  <div class="image-ai-field"><span class="image-ai-label">本地模型</span><p id="image-repair-model" role="status">正在检查模型缓存…</p></div>
  <div class="image-ai-command"><button id="image-repair-start" class="primary" type="button" disabled>开始修复</button><button id="image-repair-cancel" type="button" disabled>取消</button></div><span id="image-repair-status" class="image-ai-status" role="status" aria-live="polite"></span>
- <details class="tool-notes"><summary>模型与图片限制</summary><p class="image-ai-note">首次使用下载约 26.8 MB 的 MI-GAN 模型，后续可离线运行。一次处理一张不超过 25 MB、200 万像素的静态 8 位 PNG、JPEG、WebP 或 TIFF；单边最多 2048 像素，涂抹区域最多占 40%。图片不会上传。</p></details></section>
- <section class="settings-card image-ai-preview" aria-label="局部修复编辑与预览"><h3 id="image-repair-editor-heading">涂抹修复区域</h3><div class="image-ai-empty">选择图片后，在预览上涂抹处理区域。</div>
+ ${toolInfo("使用限制","首次使用下载约 26.8 MB 模型；一次处理一张静态 8 位图片，最多 25 MB、200 万像素，涂抹区域不超过 40%。")}</section>
+ <section class="settings-card image-ai-preview" aria-label="局部修复编辑与预览"><h3 id="image-repair-editor-heading">涂抹修复区域</h3><div class="image-ai-empty">选择图片后涂抹处理区域</div>
  <div id="image-repair-stage" class="image-repair-stage" hidden><img id="image-repair-editor-image" alt="待修复图片"><canvas id="image-repair-canvas" aria-label="在图片上涂抹要修复的区域"></canvas></div>
  <div id="image-repair-comparison" class="image-ai-comparison" hidden><figure><figcaption>原图</figcaption><img id="image-repair-original" alt="原始图片预览"></figure><figure><figcaption>修复结果</figcaption><img id="image-repair-result" alt="修复 PNG 结果预览"></figure></div><div id="image-repair-output" class="image-ai-output" hidden><span id="image-repair-detail"></span><button id="image-repair-reveal" type="button">显示文件</button></div></section></div></div>`;}
 
@@ -39,7 +40,9 @@ export function setupImageRepair(){
  damageMode.onclick=()=>setMode('damage');removeMode.onclick=()=>setMode('remove');
  undo.onclick=()=>{if(!previous)return;paint.putImageData(previous.paint,0,0);mask.putImageData(previous.mask,0,0);strokes=previous.strokes;previous=undefined;invalidateResult();render();};
  clear.onclick=resetPaint;
- pick.onclick=()=>void api.imagePickFiles().then(async paths=>{if(!paths.length)return;const path=paths[0],ticket=++version;loaded=false;stage.hidden=true;source='';result=undefined;output.hidden=true;comparison.hidden=true;resultImage.removeAttribute('src');status.textContent='正在准备图片预览';render();try{const value=await api.imageCropPreview(path);if(ticket!==version)return;if(!['png','jpeg','webp','tiff'].includes(value.format))throw Error('AI 修复仅支持静态 PNG、JPEG、WebP 或 TIFF');const image=new Image();image.onload=()=>{if(ticket!==version)return;source=path;canvas.width=maskCanvas.width=image.naturalWidth;canvas.height=maskCanvas.height=image.naturalHeight;stage.style.width=`${image.naturalWidth}px`;editorImage.src=value.url;original.src=value.url;stage.hidden=false;loaded=true;resetPaint();status.textContent='涂抹需要修复的区域';render();};image.onerror=()=>{if(ticket===version)status.textContent='图片预览加载失败';};image.src=value.url;}catch(error){if(ticket===version)status.textContent=errorMessage(error);}}).catch(toast);
+const loadSource=async(paths:string[])=>{if(!paths.length)return;const path=paths[0],ticket=++version;loaded=false;stage.hidden=true;source='';result=undefined;output.hidden=true;comparison.hidden=true;resultImage.removeAttribute('src');status.textContent='正在准备图片预览';render();try{const value=await api.imageCropPreview(path);if(ticket!==version)return;if(!['png','jpeg','webp','tiff'].includes(value.format))throw Error('AI 修复仅支持静态 PNG、JPEG、WebP 或 TIFF');const image=new Image();image.onload=()=>{if(ticket!==version)return;source=path;canvas.width=maskCanvas.width=image.naturalWidth;canvas.height=maskCanvas.height=image.naturalHeight;stage.style.width=`${image.naturalWidth}px`;editorImage.src=value.url;original.src=value.url;stage.hidden=false;loaded=true;resetPaint();status.textContent='涂抹需要修复的区域';render();};image.onerror=()=>{if(ticket===version)status.textContent='图片预览加载失败';};image.src=value.url;}catch(error){if(ticket===version)status.textContent=errorMessage(error);}};
+ pick.onclick=()=>void api.imagePickFiles().then(loadSource).catch(toast);
+ installToolFileDrop(q('page-image-repair'),'选择修复图片',loadSource,()=>!running);
  pickDirectory.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;render();}).catch(toast);
  const progress=(value:ImageAiProgress)=>{if(!running)return;status.textContent=value.phase==='download'&&value.total&&value.received?`下载模型 ${Math.round(value.received/value.total*100)}%`:value.message;};
  start.onclick=()=>{if(!source||!directory.value||!strokes)return;const selection=maskCanvas.toDataURL('image/png'),taskMode=mode;running=true;result=undefined;output.hidden=true;resultImage.removeAttribute('src');status.textContent=ready?'准备本地推理':'准备下载模型';render();const ticket=version;void api.imageRepairStart(source,directory.value,selection,taskMode).then(value=>{result=value;ready=true;modelLabel.textContent='模型已缓存，可离线使用';status.textContent=taskMode==='remove'?'物体移除完成':'局部修复完成';void preview(value.output,resultImage,ticket);}).catch(error=>{status.textContent=errorMessage(error);}).finally(()=>{running=false;render();});};
