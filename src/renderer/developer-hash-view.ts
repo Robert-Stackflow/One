@@ -2,13 +2,14 @@ import './developer-hash.css';
 import {api,q,toast,errorMessage} from './ui';
 import type {HashAlgorithm,HashRequest,HashResult,HashProgress} from '../shared/developer-hash';
 
-export function developerHashPage(){return `<div class="developer-hash-page"><h2>哈希与校验</h2><p>计算 UTF-8 文本或文件摘要；可粘贴预期值校验。文件按块读取，原文件不修改。</p>
+export function developerHashPage(){return `<div class="developer-hash-page"><header class="developer-hash-heading"><h2>哈希与校验</h2><p>计算 UTF-8 文本或文件摘要，并可用预期摘要校验；原文件不会修改。</p></header>
+ <div class="developer-hash-layout"><section class="settings-card developer-hash-panel" aria-label="哈希设置"><h3>计算设置</h3>
  <div class="developer-hash-options"><label>来源<select id="developer-hash-kind"><option value="text">文本</option><option value="file">文件</option></select></label><label>算法<select id="developer-hash-algorithm"><option value="sha256">SHA-256</option><option value="sha512">SHA-512</option><option value="sha1">SHA-1</option><option value="md5">MD5</option></select></label></div>
  <label id="developer-hash-text-field" class="developer-hash-text">文本内容<textarea id="developer-hash-text" spellcheck="false" maxlength="2097152"></textarea></label>
  <div id="developer-hash-file-field" class="developer-hash-file" hidden><input id="developer-hash-file" aria-label="文件路径" readonly placeholder="选择或拖入文件"><button id="developer-hash-pick" type="button">选择文件</button></div>
  <label class="developer-hash-expected">预期摘要（可选）<input id="developer-hash-expected" spellcheck="false" placeholder="粘贴十六进制摘要以校验"></label>
- <div class="developer-hash-actions"><button id="developer-hash-run" type="button">计算摘要</button><button id="developer-hash-cancel" type="button" hidden>取消</button><span id="developer-hash-status" role="status" aria-live="polite"></span></div>
- <section class="developer-hash-result" aria-label="哈希结果"><header><strong>计算结果</strong><button id="developer-hash-copy" type="button" disabled>复制摘要</button></header><code id="developer-hash-digest">尚未计算</code><span id="developer-hash-match"></span></section></div>`;}
+ <div class="developer-hash-actions"><button id="developer-hash-run" type="button">计算摘要</button><button id="developer-hash-cancel" type="button" hidden>取消</button></div><span id="developer-hash-status" role="status" aria-live="polite"></span></section>
+ <section class="settings-card developer-hash-panel developer-hash-result" aria-label="哈希结果"><header><h3>计算结果</h3><button id="developer-hash-copy" type="button" disabled>复制摘要</button></header><code id="developer-hash-digest">尚未计算</code><span id="developer-hash-match"></span></section></div></div>`;}
 
 export function setupDeveloperHash(){
  const kind=q<HTMLSelectElement>('developer-hash-kind'),algorithm=q<HTMLSelectElement>('developer-hash-algorithm'),text=q<HTMLTextAreaElement>('developer-hash-text'),file=q<HTMLInputElement>('developer-hash-file'),expected=q<HTMLInputElement>('developer-hash-expected');

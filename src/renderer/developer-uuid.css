@@ -1,1 +1,16 @@
-.developer-uuid-page{max-width:780px;margin:0 auto;padding:20px 24px 40px;display:grid;gap:16px}.developer-uuid-page h2{font-size:20px;margin:0}.developer-uuid-page p{margin:0;color:var(--muted,#758093)}.developer-uuid-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.developer-uuid-options label{display:grid;gap:6px;font-weight:600}.developer-uuid-options .developer-uuid-case{display:flex;align-items:center;gap:8px}.developer-uuid-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.developer-uuid-actions span{color:var(--muted,#758093)}.developer-uuid-output{width:100%;min-height:220px;resize:vertical;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}@media(max-width:760px){.developer-uuid-page{padding:16px}.developer-uuid-options{grid-template-columns:1fr}}
+.developer-uuid-page{max-width:1120px;margin:0 auto;padding:20px 24px 40px;container-type:inline-size}
+.developer-uuid-heading{margin-bottom:18px}
+.developer-uuid-heading h2{font-size:20px;margin:0 0 6px}
+.developer-uuid-heading p{margin:0;color:var(--muted)}
+.developer-uuid-layout{display:grid;grid-template-columns:minmax(280px,320px) minmax(0,1fr);gap:16px;align-items:start}
+.developer-uuid-panel.settings-card{margin:0;padding:20px;min-width:0}
+.developer-uuid-panel h3{font-size:14px;font-weight:600;margin:0 0 18px}
+.developer-uuid-options{display:grid;gap:14px}
+.developer-uuid-options label{display:grid;gap:7px;font-size:12px;font-weight:600}
+.developer-uuid-options .developer-uuid-case{display:flex;align-items:center;gap:8px}
+.developer-uuid-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:20px}
+#developer-uuid-status{display:block;margin-top:12px;color:var(--muted);font-size:12px}
+#developer-uuid-status:empty{display:none}
+.developer-uuid-output{width:100%;min-height:320px;resize:vertical;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
+@container (max-width:850px){.developer-uuid-layout{grid-template-columns:1fr}.developer-uuid-output{min-height:220px}}
+@media(max-width:760px){.developer-uuid-page{padding:16px}}

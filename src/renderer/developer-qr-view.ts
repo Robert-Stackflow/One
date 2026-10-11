@@ -2,11 +2,12 @@ import './developer-qr.css';
 import {api,q,toast,errorMessage} from './ui';
 import type {QrRequest,QrErrorLevel} from '../shared/developer-qr';
 
-export function developerQrPage(){return `<div class="developer-qr-page"><h2>生成二维码</h2><p>输入文本或链接，生成带标准留白的 PNG 二维码。可复制图片或导出文件；识别可使用“条码识别”页。</p>
+export function developerQrPage(){return `<div class="developer-qr-page"><header class="developer-qr-heading"><h2>生成二维码</h2><p>输入文本或链接，在本地生成可复制、导出的 PNG 二维码。</p></header>
+ <div class="developer-qr-layout"><section class="settings-card developer-qr-panel" aria-label="二维码设置"><h3>生成设置</h3>
  <label class="developer-qr-input">内容<textarea id="developer-qr-text" spellcheck="false" maxlength="2048" placeholder="输入要编码的文本或链接"></textarea></label>
  <div class="developer-qr-options"><label>图片尺寸<select id="developer-qr-size"><option value="256">256 × 256</option><option value="512" selected>512 × 512</option><option value="1024">1024 × 1024</option></select></label><label>纠错级别<select id="developer-qr-level"><option value="L">低 L</option><option value="M" selected>中 M</option><option value="Q">较高 Q</option><option value="H">高 H</option></select></label></div>
- <div class="developer-qr-actions"><button id="developer-qr-generate" type="button">生成二维码</button><button id="developer-qr-copy" type="button" disabled>复制图片</button><button id="developer-qr-export" type="button" disabled>导出 PNG</button><span id="developer-qr-status" role="status" aria-live="polite"></span></div>
- <div class="developer-qr-preview"><img id="developer-qr-image" alt="生成的二维码" hidden><p id="developer-qr-empty">生成后在这里预览。</p></div></div>`;}
+ <div class="developer-qr-actions"><button id="developer-qr-generate" type="button">生成二维码</button><button id="developer-qr-copy" type="button" disabled>复制图片</button><button id="developer-qr-export" type="button" disabled>导出 PNG</button></div><span id="developer-qr-status" role="status" aria-live="polite"></span></section>
+ <section class="settings-card developer-qr-panel" aria-label="二维码预览"><h3>预览</h3><div class="developer-qr-preview"><img id="developer-qr-image" alt="生成的二维码" hidden><p id="developer-qr-empty">生成后在这里预览。</p></div></section></div></div>`;}
 
 export function setupDeveloperQr(){
  const input=q<HTMLTextAreaElement>('developer-qr-text'),size=q<HTMLSelectElement>('developer-qr-size'),level=q<HTMLSelectElement>('developer-qr-level'),generate=q<HTMLButtonElement>('developer-qr-generate'),copy=q<HTMLButtonElement>('developer-qr-copy'),exportButton=q<HTMLButtonElement>('developer-qr-export');

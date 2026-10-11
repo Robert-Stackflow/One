@@ -5,12 +5,15 @@ import type {ImageAiProgress,ImageAiResult} from '../shared/image-ai';
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const megabytes=(bytes:number)=>`${(bytes/1048576).toFixed(1)} MB`;
 
-export function imageAiPage(){return `<div class="image-ai-page"><h2>AI 去背景</h2><p>选择一张静态图片，在本机生成透明 PNG。首次使用需下载约 4.4 MB 的 U²-Net-p 模型；照片不会上传。</p>
- <div class="image-ai-controls"><button id="image-ai-pick" type="button">选择图片</button><strong id="image-ai-source">尚未选择图片</strong></div>
- <div class="image-ai-controls"><label for="image-ai-directory">输出文件夹</label><input id="image-ai-directory" readonly placeholder="选择保存位置"><button id="image-ai-pick-directory" type="button">选择文件夹</button></div>
- <p id="image-ai-model" role="status">正在检查模型缓存…</p><div class="image-ai-controls"><button id="image-ai-start" type="button" disabled>开始去背景</button><button id="image-ai-cancel" type="button" disabled>取消</button><span id="image-ai-status" role="status" aria-live="polite"></span></div>
- <div id="image-ai-comparison" class="image-ai-comparison" hidden><figure><figcaption>原图</figcaption><img id="image-ai-original" alt="原始图片预览"></figure><figure><figcaption>去背景结果</figcaption><img id="image-ai-result" alt="透明 PNG 结果预览"></figure></div><div id="image-ai-output" class="image-ai-output" hidden><span id="image-ai-detail"></span><button id="image-ai-reveal" type="button">显示文件</button></div>
- <p class="image-ai-note">支持 50 MB、2000 万像素以内的静态 PNG、JPEG、WebP、TIFF。每次只处理一张；模型估计的边缘可能有误，请检查结果。</p></div>`;}
+export function imageAiPage(){return `<div class="image-ai-page"><header class="image-ai-heading"><h2>AI 去背景</h2><p>在本机生成透明 PNG 副本。图片不会上传；模型估计的边缘请在结果中检查。</p></header>
+ <div class="image-ai-layout"><section class="settings-card image-ai-setup" aria-label="去背景设置"><h3>处理设置</h3>
+ <div class="image-ai-field"><span class="image-ai-label">源图片</span><div class="image-ai-picker"><button id="image-ai-pick" type="button">选择图片</button><strong id="image-ai-source">尚未选择图片</strong></div></div>
+ <div class="image-ai-field"><label class="image-ai-label" for="image-ai-directory">输出文件夹</label><div class="image-ai-directory"><input id="image-ai-directory" readonly placeholder="选择保存位置"><button id="image-ai-pick-directory" type="button">选择文件夹</button></div></div>
+ <div class="image-ai-field"><span class="image-ai-label">本地模型</span><p id="image-ai-model" role="status">正在检查模型缓存…</p></div>
+ <div class="image-ai-command"><button id="image-ai-start" type="button" disabled>开始去背景</button><button id="image-ai-cancel" type="button" disabled>取消</button></div><span id="image-ai-status" class="image-ai-status" role="status" aria-live="polite"></span>
+ <p class="image-ai-note">首次使用下载约 4.4 MB 的 U²-Net-p 模型。每次处理一张 50 MB、2000 万像素以内的静态 PNG、JPEG、WebP 或 TIFF。</p></section>
+ <section class="settings-card image-ai-preview" aria-label="去背景预览"><h3>前后对比</h3><div class="image-ai-empty">选择图片后可在这里查看原图和处理结果。</div>
+ <div id="image-ai-comparison" class="image-ai-comparison" hidden><figure><figcaption>原图</figcaption><img id="image-ai-original" alt="原始图片预览"></figure><figure><figcaption>去背景结果</figcaption><img id="image-ai-result" alt="透明 PNG 结果预览"></figure></div><div id="image-ai-output" class="image-ai-output" hidden><span id="image-ai-detail"></span><button id="image-ai-reveal" type="button">显示文件</button></div></section></div></div>`;}
 
 export function setupImageAi(){
  const pick=q<HTMLButtonElement>('image-ai-pick'),sourceLabel=q<HTMLElement>('image-ai-source'),directory=q<HTMLInputElement>('image-ai-directory'),pickDirectory=q<HTMLButtonElement>('image-ai-pick-directory'),modelLabel=q<HTMLElement>('image-ai-model'),start=q<HTMLButtonElement>('image-ai-start'),cancel=q<HTMLButtonElement>('image-ai-cancel'),status=q<HTMLElement>('image-ai-status'),comparison=q<HTMLElement>('image-ai-comparison'),original=q<HTMLImageElement>('image-ai-original'),resultImage=q<HTMLImageElement>('image-ai-result'),output=q<HTMLElement>('image-ai-output'),detail=q<HTMLElement>('image-ai-detail'),reveal=q<HTMLButtonElement>('image-ai-reveal');
