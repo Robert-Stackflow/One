@@ -12,6 +12,8 @@ module.exports=async function interactions(page,files){
  const state=()=>page.evaluate(()=>({left:document.querySelector('[aria-label^="Spreadsheet viewport"]').scrollLeft,top:document.querySelector('[aria-label^="Spreadsheet viewport"]').scrollTop}));
  assert.equal(await cell(100,35),'CELL_1_1');
  assert.equal(await cell(300,55),'CELL_2_2');
+ await page.keyboard.press('ArrowDown');assert.equal(await copy(),'CELL_4_2','keyboard skips hidden row 3');
+ await page.keyboard.press('ArrowRight');assert.equal(await copy(),'CELL_4_4','keyboard skips hidden column C');
  assert.equal(await cell(300,75),'CELL_4_2','hidden row 3 takes no visible space');
  assert.equal(await cell(360,75),'CELL_4_4','hidden column C takes no visible space');
  assert.equal(await cell(300,75),'CELL_4_2');

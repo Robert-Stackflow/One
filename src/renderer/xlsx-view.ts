@@ -1,4 +1,5 @@
 import {XlsxViewer, XlsxWorkbook} from '@silurus/ooxml/xlsx';
+import {columnName} from '../shared/workbook';
 import type {SetOutline} from './preview-outline';
 import './xlsx-view.css';
 
@@ -9,6 +10,11 @@ interface Session {
   timer?: number;
   workbook?: XlsxWorkbook;
   viewer?: Viewer;
+  hiddenRows?: Set<number>;
+  hiddenColumns?: Set<number>;
+  rightToLeft?: boolean;
+  activeSheet?: number;
+  removeKeyHandler?: () => void;
 }
 
 /** The library owns the grid. One owns file lifetime, navigation and error UI. */
@@ -30,6 +36,7 @@ export function renderXlsx(
     session.closed = true;
     session.controller.abort();
     if (session.timer !== undefined) window.clearInterval(session.timer);
+    session.removeKeyHandler?.();
     session.viewer?.destroy();
     // fromWorkbook borrows the engine; the caller must release it separately.
     session.workbook?.destroy();
@@ -119,9 +126,38 @@ export function renderXlsx(
       const first = await workbook.getWorksheet(visible[0].index);
       if (session.closed) return;
       if (first.parseError) throw new Error(first.parseError);
+      const rememberHidden = (sheet: typeof first) => {
+        session.hiddenRows = new Set(sheet.rows.filter(row => row.hidden).map(row => row.index));
+        session.hiddenColumns = new Set(Object.entries(sheet.colHidden ?? {}).filter(([, hidden]) => hidden).map(([column]) => Number(column)));
+        session.rightToLeft = sheet.rightToLeft;
+      };
+      session.activeSheet = visible[0].index;
+      rememberHidden(first);
       const surface = document.createElement('div');
       surface.className = 'xlsx-preview-surface';
       stage.replaceChildren(surface);
+      const skipHidden = (event: KeyboardEvent) => {
+        if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ||
+            !(event.target instanceof Element) || !event.target.closest('[aria-label^="Spreadsheet viewport"]')) return;
+        const direction = session.rightToLeft ? -1 : 1;
+        const step = event.key === 'ArrowDown' ? [1, 0] : event.key === 'ArrowUp' ? [-1, 0] :
+          event.key === 'ArrowRight' ? [0, direction] : event.key === 'ArrowLeft' ? [0, -direction] : null;
+        if (!step || session.closed || !session.viewer) return;
+        const active = session.viewer.selectionState?.activeCell;
+        if (!active) return;
+        let row = active.row + step[0], col = active.col + step[1];
+        if (row < 1 || row > 1048576 || col < 1 || col > 16384) return;
+        const hidden = step[0] ? session.hiddenRows : session.hiddenColumns;
+        if (!hidden?.has(step[0] ? row : col)) return;
+        while (hidden.has(step[0] ? row : col)) {row += step[0];col += step[1];}
+        if (row < 1 || row > 1048576 || col < 1 || col > 16384) return;
+        event.preventDefault();event.stopPropagation();
+        const cell = `${columnName(col - 1)}${row}`;
+        session.viewer.setSelection(cell);
+        void session.viewer.scrollToCell(cell).catch(error => fail(session, error));
+      };
+      stage.addEventListener('keydown', skipHidden, true);
+      session.removeKeyHandler = () => stage.removeEventListener('keydown', skipHidden, true);
       session.viewer = XlsxViewer.fromWorkbook(surface, workbook, {
         hiddenSheetMode: 'skip',
         enableHyperlinks: false,
@@ -140,8 +176,14 @@ export function renderXlsx(
         },
         onSheetChange: index => {
           if (session.closed) return;
+          session.activeSheet = index;
+          session.hiddenRows = undefined;
+          session.hiddenColumns = undefined;
+          session.rightToLeft = undefined;
           void workbook.getWorksheet(index).then(sheet => {
+            if (session.closed || session.activeSheet !== index) return;
             if (sheet.parseError) fail(session, new Error(sheet.parseError));
+            else rememberHidden(sheet);
           }).catch(error => fail(session, error));
         },
         onError: error => fail(session, error),
