@@ -1,11 +1,11 @@
 const fs=require('node:fs/promises'),path=require('node:path');
 const box=(type,payload=Buffer.alloc(0))=>{const header=Buffer.alloc(8);header.writeUInt32BE(payload.length+8);if(typeof type==='number')header.writeUInt32BE(type,4);else header.write(type,4);return Buffer.concat([header,payload]);};
 const id='12345678-1234-1234-1234-123456789abc';
-function identifiedMovie(identifier=id){
+function identifiedMovie(identifier=id,quickTimeMeta=false){
  const hdlr=Buffer.alloc(12);hdlr.write('vide',8);const key=Buffer.from('com.apple.quicktime.content.identifier');const keyEntry=box('mdta',key),keys=box('keys',Buffer.concat([Buffer.alloc(4),Buffer.from([0,0,0,1]),keyEntry]));
  const data=box('data',Buffer.concat([Buffer.from([0,0,0,1,0,0,0,0]),Buffer.from(identifier)]));
- const meta=box('meta',Buffer.concat([Buffer.alloc(4),keys,box('ilst',box(1,data))]));
- return Buffer.concat([box('ftyp',Buffer.from('qt  \0\0\0\0qt  ')),box('moov',Buffer.concat([box('trak',box('mdia',box('hdlr',hdlr))),box('udta',meta)])),box('mdat',Buffer.from('synthetic video data'))]);
+ const meta=box('meta',Buffer.concat([...(quickTimeMeta?[box('hdlr',Buffer.alloc(24))]:[Buffer.alloc(4)]),keys,box('ilst',box(1,data))]));
+ return Buffer.concat([box('ftyp',Buffer.from('qt  \0\0\0\0qt  ')),box('moov',Buffer.concat([box('trak',box('mdia',box('hdlr',hdlr))),quickTimeMeta?meta:box('udta',meta)])),box('mdat',Buffer.from('synthetic video data'))]);
 }
 function appleMaker(identifier=id){const note=Buffer.alloc(65);note.write('Apple iOS\0');note.write('MM',12);note.writeUInt16BE(1,14);note.writeUInt16BE(0x11,16);note.writeUInt16BE(2,18);note.writeUInt32BE(37,20);note.writeUInt32BE(28,24);note.write(identifier,28);return note;}
 function sef(photo,movie,indirect=false){

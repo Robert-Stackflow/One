@@ -36,6 +36,15 @@ test('sidecars prefer matching Apple content identifiers and reject mismatched i
  const {movie}=await fixtures(path.join(output,'pair-fallback'));await fs.writeFile(path.join(dir,'photo.MOV'),movie);await fs.writeFile(path.join(dir,'renamed.MOV'),identifiedMovie());
  assert.equal((await inspectMotionPhoto(photo)).path,path.join(dir,'renamed.MOV'));
 });
+test('QuickTime meta without full-box header matches a renamed HEIC sidecar',async()=>{
+ const {inspectMotionPhoto}=await ready,dir=path.join(output,'apple-quicktime');await fs.mkdir(dir,{recursive:true});
+ const photo=path.join(dir,'photo.heic'),movie=path.join(dir,'different.mov');
+ await fs.writeFile(photo,Buffer.concat([box('ftyp',Buffer.from('heic\0\0\0\0heic')),appleMaker()]));
+ await fs.writeFile(movie,identifiedMovie(id,true));
+ const found=await inspectMotionPhoto(photo);assert.equal(found?.path,movie);assert.equal(found.source,'Apple Live Photo（标识匹配）');assert.equal(found.contentIdentifier,id);
+ await fs.writeFile(movie,identifiedMovie('aaaaaaaa-1234-1234-1234-123456789abc',true));
+ assert.equal(await inspectMotionPhoto(photo),null,'mismatched QuickTime content identifier must not pair');
+});
 test('same-basename exports work without metadata; static and malformed files stay static',async()=>{
  const {inspectMotionPhoto}=await ready,dir=path.join(output,'bounds'),{photo,movie}=await fixtures(dir);
  assert.equal((await inspectMotionPhoto(path.join(dir,'apple-pair.jpg'))).paired,true);

@@ -25,7 +25,10 @@ function movieIdentifier(data:Buffer):string|undefined{
  function visit(start:number,end:number,depth:number):string|undefined{if(depth>4)return undefined;for(const item of children(start,end)){
   if(['moov','udta'].includes(item.type)){const value=visit(item.start,item.end,depth+1);if(value)return value;}
   if(item.type!=='meta'||item.start+4>item.end)continue;
-  const parts=children(item.start+4,item.end),keys=parts.find(p=>p.type==='keys'),ilst=parts.find(p=>p.type==='ilst');if(!keys||!ilst||keys.start+8>keys.end)continue;
+  // ISO meta is a full box; QuickTime also writes meta with children directly.
+  let parts=children(item.start+4,item.end),keys=parts.find(p=>p.type==='keys'),ilst=parts.find(p=>p.type==='ilst');
+  if(!keys||!ilst){parts=children(item.start,item.end);keys=parts.find(p=>p.type==='keys');ilst=parts.find(p=>p.type==='ilst');}
+  if(!keys||!ilst||keys.start+8>keys.end)continue;
   let target=0,at=keys.start+8;const count=Math.min(data.readUInt32BE(keys.start+4),512);
   for(let i=1;i<=count&&at+8<=keys.end;i++){const size=data.readUInt32BE(at);if(size<8||at+size>keys.end)break;if(data.toString('utf8',at+8,at+size)==='com.apple.quicktime.content.identifier')target=i;at+=size;}
   if(!target)continue;for(const entry of children(ilst.start,ilst.end)){if(entry.index!==target)continue;for(const value of children(entry.start,entry.end)){if(value.type!=='data'||value.start+8>value.end||value.end-value.start>80)continue;const id=data.toString('utf8',value.start+8,value.end).replace(/\0+$/,'');if(uuid.test(id))return id.toLowerCase();}}
