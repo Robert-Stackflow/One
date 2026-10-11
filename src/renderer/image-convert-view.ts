@@ -16,7 +16,8 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>最大高度<input id="image-convert-height" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
       <label>处理模式<select id="image-convert-mode"><option value="quality">按质量重新编码</option><option value="lossless">无损像素优化（PNG / WebP / TIFF）</option></select></label>
       <label>元数据策略<select id="image-convert-metadata-policy"><option value="all">保留全部</option><option value="color">仅保留 ICC 色彩配置</option><option value="none">移除全部</option></select></label>
-      <label class="image-convert-metadata"><input id="image-convert-motion-still" type="checkbox">动态照片仅导出静态图（不保留视频）</label></div>
+      <label class="image-convert-metadata"><input id="image-convert-motion-still" type="checkbox">动态照片仅导出静态图（不保留视频）</label>
+      <label class="image-convert-metadata"><input id="image-convert-hdr-sdr" type="checkbox">HDR 图片仅导出 SDR 图像（不保留增益图）</label></div>
     <fieldset class="image-enhance-options"><legend><label><input id="image-enhance-enabled" type="checkbox">画质优化（静态图片）</label></legend><div>
       <label>亮度 <output id="image-enhance-brightness-value">100%</output><input id="image-enhance-brightness" type="range" min="70" max="130" value="100"></label>
       <label>饱和度 <output id="image-enhance-saturation-value">100%</output><input id="image-enhance-saturation" type="range" min="50" max="150" value="100"></label>
@@ -32,7 +33,7 @@ export function setupImageConvert(){
  const files=q<HTMLElement>('image-convert-files'),count=q<HTMLElement>('image-convert-count'),status=q<HTMLElement>('image-convert-status'),codecStatus=q<HTMLElement>('image-codec-status');
  const add=q<HTMLButtonElement>('image-convert-add'),clear=q<HTMLButtonElement>('image-convert-clear'),pickDirectory=q<HTMLButtonElement>('image-convert-pick-directory');
  const directory=q<HTMLInputElement>('image-convert-directory'),format=q<HTMLSelectElement>('image-convert-format'),quality=q<HTMLInputElement>('image-convert-quality');
- const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),mode=q<HTMLSelectElement>('image-convert-mode'),metadata=q<HTMLSelectElement>('image-convert-metadata-policy'),motionStill=q<HTMLInputElement>('image-convert-motion-still');
+ const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),mode=q<HTMLSelectElement>('image-convert-mode'),metadata=q<HTMLSelectElement>('image-convert-metadata-policy'),motionStill=q<HTMLInputElement>('image-convert-motion-still'),hdrSdr=q<HTMLInputElement>('image-convert-hdr-sdr');
  const enhanceEnabled=q<HTMLInputElement>('image-enhance-enabled'),brightness=q<HTMLInputElement>('image-enhance-brightness'),saturation=q<HTMLInputElement>('image-enhance-saturation'),sharpen=q<HTMLSelectElement>('image-enhance-sharpen'),contrast=q<HTMLInputElement>('image-enhance-contrast'),denoise=q<HTMLInputElement>('image-enhance-denoise');
  const start=q<HTMLButtonElement>('image-convert-start'),cancel=q<HTMLButtonElement>('image-convert-cancel'),retry=q<HTMLButtonElement>('image-convert-retry');
  let paths:string[]=[],results=new Map<string,ImageConvertResult>(),running=false,current:string|undefined;
@@ -41,7 +42,7 @@ export function setupImageConvert(){
   files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'转换中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始批量转换。</p>';
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pickDirectory.disabled=running;cancel.disabled=!running;
   for(const input of [directory,format])input.disabled=running;
-  const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special;mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;
+  const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special;mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;hdrSdr.disabled=running;
   enhanceEnabled.disabled=running||special||mode.value==='lossless';for(const input of [brightness,saturation,sharpen,contrast,denoise])input.disabled=running||!enhanceEnabled.checked||enhanceEnabled.disabled;
   quality.disabled=running||mode.value==='lossless'||!['original','jpeg','webp'].includes(format.value);
   retry.hidden=running||![...results.values()].some(result=>result.status!=='done');
@@ -51,7 +52,7 @@ export function setupImageConvert(){
   const dimension=(value:string,label:string)=>{if(!value.trim())return undefined;const parsed=Number(value);if(!Number.isInteger(parsed)||parsed<1||parsed>16384)throw Error(`${label}需在 1 至 16384 像素之间`);return parsed;};
   if(!directory.value)throw Error('请先选择输出文件夹');
   const enhance:ImageEnhanceOptions|undefined=enhanceEnabled.checked?{brightness:Number(brightness.value)/100,saturation:Number(saturation.value)/100,sharpen:Number(sharpen.value) as 0|1|2,contrast:contrast.checked,denoise:denoise.checked}:undefined;
-  return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.value==='all',metadataPolicy:metadata.value as 'all'|'color'|'none',compressionMode:mode.value as 'quality'|'lossless',motionPolicy:motionStill.checked?'still':'reject',enhance};
+  return {format:format.value as ImageConvertFormat,quality:Number(quality.value),maxWidth:dimension(width.value,'最大宽度'),maxHeight:dimension(height.value,'最大高度'),preserveMetadata:metadata.value==='all',metadataPolicy:metadata.value as 'all'|'color'|'none',compressionMode:mode.value as 'quality'|'lossless',motionPolicy:motionStill.checked?'still':'reject',hdrPolicy:hdrSdr.checked?'sdr':'reject',enhance};
  };
  const progress=(value:ImageConvertProgress)=>{if(!running)return;current=value.current;if(value.result){results.set(value.result.source,value.result);current=undefined;}status.textContent=`已完成 ${value.done} / ${value.total}`;render();};
  const run=async(selected:string[])=>{

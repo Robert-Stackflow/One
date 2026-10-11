@@ -22,6 +22,8 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   if(!metadata.width||!metadata.height||metadata.width*(metadata.pageHeight||metadata.height)*pages>100_000_000)throw Error('图片像素或总帧数超过处理上限');
   if(!['png','jpeg','webp','gif','tiff','svg'].includes(metadata.format||''))throw Error('暂不支持该图片编码');
   if(metadata.format==='svg'&&!svg)throw Error('SVG 文件扩展名与实际编码不一致');
+  const hdrStill=Boolean(metadata.gainMap);
+  if(hdrStill&&options.hdrPolicy!=='sdr')throw Error('检测到 HDR 增益图；勾选“仅导出 SDR 图像”后再转换，HDR 增益图不会写入结果');
   let motionStill=false;if(metadata.format==='jpeg'){
    let motionNotice='';const motion=await inspectMotionPhoto(entry.source,message=>{motionNotice=message;});
    if(motion||motionNotice){if(options.motionPolicy!=='still')throw Error('检测到动态照片；勾选“仅导出静态照片”后再转换，视频不会写入结果');motionStill=true;}
@@ -63,10 +65,11 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   }
   await pipeline.toFile(entry.temp);
   const output=await sharp(entry.temp,{animated:true}).metadata();if(pages>1&&(output.pages||1)!==pages)throw Error('输出未能保留全部动画帧或 TIFF 页面');
+  if(hdrStill&&output.gainMap)throw Error('输出仍包含 HDR 增益图，未能生成仅 SDR 图像');
   if(options.compressionMode==='lossless'&&highPrecision&&output.depth!==metadata.depth)throw Error('输出位深与原图不同，无损优化已取消');
   await rename(entry.temp,entry.output);
   const after=(await stat(entry.output)).size;
-  const messages:string[]=[];if(motionStill)messages.push('已仅导出静态照片，动态视频未写入结果');if(options.enhance)messages.push('已应用画质调整');if(highPrecision&&output.depth!==metadata.depth)messages.push('高精度输入已转为 8 位输出');if(target==='jpeg'&&metadata.hasAlpha)messages.push('透明区域已填充白色');if(after>before)messages.push('输出体积大于原图');
+  const messages:string[]=[];if(motionStill)messages.push('已仅导出静态照片，动态视频未写入结果');if(hdrStill)messages.push('已仅导出 SDR 图像，HDR 增益图未写入结果');if(options.enhance)messages.push('已应用画质调整');if(highPrecision&&output.depth!==metadata.depth)messages.push('高精度输入已转为 8 位输出');if(target==='jpeg'&&metadata.hasAlpha)messages.push('透明区域已填充白色');if(after>before)messages.push('输出体积大于原图');
   return {source:entry.source,output:entry.output,before,after,width:output.width,height:output.pageHeight||output.height,pages:output.pages||1,status:'done',message:messages.join('；')||undefined};
  }catch(error){await rm(entry.temp,{force:true}).catch(()=>{});return {source:entry.source,before,status:'error',message:(error as Error).message.slice(0,300)};}
 }
