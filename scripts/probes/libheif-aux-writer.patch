@@ -1,0 +1,59 @@
+diff --git a/libheif/api/libheif/heif_aux_images.cc b/libheif/api/libheif/heif_aux_images.cc
+index 214ebfb..0988fe2 100644
+--- a/libheif/api/libheif/heif_aux_images.cc
++++ b/libheif/api/libheif/heif_aux_images.cc
+@@ -29,0 +30,40 @@
++heif_error heif_context_add_auxiliary_image_probe(heif_context* ctx,
++                                                  const heif_image_handle* master,
++                                                  const heif_image* pixels,
++                                                  heif_encoder* encoder,
++                                                  const char* auxiliary_type,
++                                                  heif_image_handle** out_auxiliary_handle)
++{
++  if (!ctx || !master || !pixels || !encoder || !auxiliary_type || !out_auxiliary_handle) {
++    return heif_error_null_pointer_argument;
++  }
++  *out_auxiliary_handle = nullptr;
++  if (master->context != ctx->context) {
++    return Error(heif_error_Usage_error, heif_suberror_Invalid_parameter_value,
++                 "Master image belongs to a different context").error_struct(ctx->context.get());
++  }
++  heif_encoding_options* options = heif_encoding_options_alloc();
++  if (!options) {
++    return Error(heif_error_Memory_allocation_error, heif_suberror_Unspecified,
++                 "Could not allocate encoding options").error_struct(ctx->context.get());
++  }
++  auto result = ctx->context->encode_image(pixels->image, encoder, *options,
++                                          heif_image_input_class_normal);
++  heif_encoding_options_free(options);
++  if (!result) {
++    return result.error_struct(ctx->context.get());
++  }
++  const auto image = *result;
++  const auto file = ctx->context->get_heif_file();
++  file->add_iref_reference(image->get_id(), fourcc("auxl"), {master->image->get_id()});
++  if (Error error = file->set_auxC_property(image->get_id(), auxiliary_type)) {
++    return error.error_struct(ctx->context.get());
++  }
++  master->image->add_aux_image(image);
++  *out_auxiliary_handle = new heif_image_handle;
++  (*out_auxiliary_handle)->image = image;
++  (*out_auxiliary_handle)->context = ctx->context;
++  return heif_error_success;
++}
++
++
+diff --git a/libheif/api/libheif/heif_aux_images.h b/libheif/api/libheif/heif_aux_images.h
+index ad239e6..3987f07 100644
+--- a/libheif/api/libheif/heif_aux_images.h
++++ b/libheif/api/libheif/heif_aux_images.h
+@@ -170,0 +171,9 @@ heif_error heif_image_handle_get_auxiliary_image_handle(const heif_image_handle*
++// Local research-only API: encode and associate an auxiliary HEVC image.
++LIBHEIF_API
++heif_error heif_context_add_auxiliary_image_probe(heif_context* ctx,
++                                                  const heif_image_handle* master,
++                                                  const heif_image* pixels,
++                                                  heif_encoder* encoder,
++                                                  const char* auxiliary_type,
++                                                  heif_image_handle** out_auxiliary_handle);
++
