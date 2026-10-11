@@ -31,7 +31,7 @@ export class ImageConvertService {
    worker.on('error',error=>{session.fatal=error.message.slice(0,300);});
    worker.on('exit',()=>{void(async()=>{
     if(session.childPid)try{process.kill(session.childPid);}catch{}
-    for(const entry of entries){await rm(entry.temp,{force:true}).catch(()=>{});await rm(entry.temp+'.decoded.png',{force:true}).catch(()=>{});}
+    for(const entry of entries){await rm(entry.temp,{force:true}).catch(()=>{});await rm(entry.temp+'.decoded.png',{force:true}).catch(()=>{});await rm(entry.temp+'.encode.png',{force:true}).catch(()=>{});}
     this.sessions.delete(owner);
     const results=entries.map(entry=>session.results.get(entry.source)||{source:entry.source,before:0,status:session.cancelled?'cancelled':'error',message:session.cancelled?'已取消':session.fatal||'图片处理未完成'} as ImageConvertResult);
     resolve({results,cancelled:session.cancelled});

@@ -1,4 +1,4 @@
-export type ImageConvertFormat='original'|'png'|'jpeg'|'webp'|'gif'|'tiff'|'ico'|'svg';
+export type ImageConvertFormat='original'|'png'|'jpeg'|'webp'|'gif'|'tiff'|'heic'|'ico'|'svg';
 export interface ImageCropRule {x:number;y:number;width:number;height:number;ratio?:number}
 export type ImageResizeRule={mode:'pixels';width?:number;height?:number;keepAspect:boolean}|{mode:'percent';percent:number;keepAspect:true}|{mode:'long-edge';longEdge:number;keepAspect:true};
 export interface ImageEnhanceOptions {brightness:number;saturation:number;sharpen:0|1|2;contrast:boolean;denoise:boolean}
@@ -46,7 +46,7 @@ export function imageResizeDimensions(rule:ImageResizeRule,width:number,height:n
 }
 export function imageConvertOptions(value:unknown):ImageConvertOptions{
  if(!value||typeof value!=='object')throw Error('转换设置无效');const v=value as ImageConvertOptions;
- if(!['original','png','jpeg','webp','gif','tiff','ico','svg'].includes(v.format)||!Number.isInteger(v.quality)||v.quality<1||v.quality>100||typeof v.preserveMetadata!=='boolean')throw Error('转换设置无效');
+ if(!['original','png','jpeg','webp','gif','tiff','heic','ico','svg'].includes(v.format)||!Number.isInteger(v.quality)||v.quality<1||v.quality>100||typeof v.preserveMetadata!=='boolean')throw Error('转换设置无效');
  for(const key of ['maxWidth','maxHeight'] as const){const dimension=v[key];if(dimension!==undefined&&(!Number.isInteger(dimension)||dimension<1||dimension>16384))throw Error('尺寸需在 1 至 16384 像素之间');}
  const crop=v.crop===undefined?undefined:imageCropRule(v.crop);
  const resize=v.resize===undefined?undefined:imageResizeRule(v.resize);

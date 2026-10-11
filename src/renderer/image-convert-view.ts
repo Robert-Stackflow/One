@@ -6,12 +6,12 @@ const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
 export function imageConvertPage(){return `<div class="image-convert-page">
-  <section class="image-convert-panel"><h2>批量转换与压缩</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF；已安装 Windows HEIF/HEVC 扩展时可读取部分 HEIC 并转为 PNG/JPEG。原图片保持不变，结果保存到所选文件夹。</p>
+  <section class="image-convert-panel"><h2>批量转换与压缩</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF；已安装 Windows HEIF/HEVC 扩展时可读取部分 HEIC，或将静态 SDR 图片转为 HEIC。原图片保持不变，结果保存到所选文件夹。</p>
     <div class="image-convert-picks"><button id="image-convert-add" type="button">添加图片</button><button id="image-convert-clear" type="button" class="quiet">清空列表</button><span id="image-convert-count" aria-live="polite">尚未选择图片</span></div>
     <div id="image-convert-files" class="image-convert-files" aria-label="待转换图片"></div>
     <div class="image-convert-destination"><label for="image-convert-directory">输出文件夹</label><input id="image-convert-directory" readonly placeholder="选择保存位置"><button id="image-convert-pick-directory" type="button">选择文件夹</button></div>
-    <div class="image-convert-options"><label>目标格式<select id="image-convert-format"><option value="original">保持原格式（压缩）</option><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp" selected>WebP</option><option value="gif">GIF</option><option value="tiff">TIFF</option><option value="ico">ICO 多尺寸图标</option><option value="svg">SVG 优化（仅 SVG 输入）</option></select></label>
-      <label>JPEG / WebP 质量 <span id="image-convert-quality-value">85</span><input id="image-convert-quality" type="range" min="1" max="100" value="85"></label>
+    <div class="image-convert-options"><label>目标格式<select id="image-convert-format"><option value="original">保持原格式（压缩）</option><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp" selected>WebP</option><option value="gif">GIF</option><option value="tiff">TIFF</option><option value="heic">HEIC（需要 Windows 编解码扩展）</option><option value="ico">ICO 多尺寸图标</option><option value="svg">SVG 优化（仅 SVG 输入）</option></select></label>
+      <label>JPEG / WebP / HEIC 质量 <span id="image-convert-quality-value">85</span><input id="image-convert-quality" type="range" min="1" max="100" value="85"></label>
       <label>最大宽度<input id="image-convert-width" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
       <label>最大高度<input id="image-convert-height" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
       <label>处理模式<select id="image-convert-mode"><option value="quality">按质量重新编码</option><option value="lossless">无损像素优化（PNG / WebP / TIFF）</option></select></label>
@@ -25,7 +25,7 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
     </div></fieldset>
     <p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
-    <p id="image-codec-status" class="image-convert-note" role="status">HEIC 输入仅支持 8 位、带 ICC 的主图；HDR/辅助图像和动态视频需单独确认，HEIC 输出暂不支持。</p>
+    <p id="image-codec-status" class="image-convert-note" role="status">HEIC 读写依赖 Windows HEIF/HEVC 系统扩展；当前仅处理 8 位静态主图并仅保留 ICC，含 HDR 增益图或动态视频时需分别确认丢弃。</p>
     <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div>
   </section></div>`;}
 
@@ -42,9 +42,9 @@ export function setupImageConvert(){
   files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'转换中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始批量转换。</p>';
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pickDirectory.disabled=running;cancel.disabled=!running;
   for(const input of [directory,format])input.disabled=running;
-  const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special;mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;hdrSdr.disabled=running;
+  const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special||format.value==='heic';mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;hdrSdr.disabled=running;
   enhanceEnabled.disabled=running||special||mode.value==='lossless';for(const input of [brightness,saturation,sharpen,contrast,denoise])input.disabled=running||!enhanceEnabled.checked||enhanceEnabled.disabled;
-  quality.disabled=running||mode.value==='lossless'||!['original','jpeg','webp'].includes(format.value);
+  quality.disabled=running||mode.value==='lossless'||!['original','jpeg','webp','heic'].includes(format.value);
   retry.hidden=running||![...results.values()].some(result=>result.status!=='done');
   retry.disabled=running;
  };
@@ -66,7 +66,7 @@ export function setupImageConvert(){
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};
  pickDirectory.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  quality.oninput=()=>{q('image-convert-quality-value').textContent=quality.value;};
- format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':format.value==='svg'?'开始优化':'开始转换';if(format.value==='ico'||format.value==='svg'){width.value='';height.value='';metadata.value='none';metadata.dispatchEvent(new Event('change',{bubbles:true}));enhanceEnabled.checked=false;}if(!['original','png','webp','tiff'].includes(format.value)){mode.value='quality';mode.dispatchEvent(new Event('change',{bubbles:true}));}render();};
+ format.onchange=()=>{start.textContent=format.value==='original'?'开始压缩':format.value==='svg'?'开始优化':'开始转换';if(format.value==='ico'||format.value==='svg'){width.value='';height.value='';metadata.value='none';metadata.dispatchEvent(new Event('change',{bubbles:true}));enhanceEnabled.checked=false;}if(format.value==='heic'){metadata.value='color';metadata.dispatchEvent(new Event('change',{bubbles:true}));}if(!['original','png','webp','tiff'].includes(format.value)){mode.value='quality';mode.dispatchEvent(new Event('change',{bubbles:true}));}render();};
  mode.onchange=()=>{if(mode.value==='lossless'){width.value='';height.value='';enhanceEnabled.checked=false;}render();};enhanceEnabled.onchange=render;
  for(const [input,output] of [[brightness,'image-enhance-brightness-value'],[saturation,'image-enhance-saturation-value']] as const)input.oninput=()=>{q(output).textContent=`${input.value}%`;};
  start.onclick=()=>void run(paths);
