@@ -1,7 +1,7 @@
 import {md5,sha1} from '@noble/hashes/legacy.js';
 
 export type UuidFormat='standard'|'compact'|'braces';
-export type UuidVersion='v3'|'v4'|'v5'|'v7';
+export type UuidVersion='v1'|'v3'|'v4'|'v5'|'v6'|'v7';
 export type UuidNamespace='dns'|'url'|'oid'|'x500'|'custom';
 export interface UuidOptions {version:UuidVersion;count:number;format:UuidFormat;uppercase:boolean;name?:string;namespace?:UuidNamespace;customNamespace?:string}
 
@@ -14,8 +14,10 @@ const namespaces:Record<Exclude<UuidNamespace,'custom'>,string>={
 const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const randomLimit=(1n<<74n)-1n;
 let lastTimestamp=-1,lastRandom=-1n;
+const gregorianOffset=122192928000000000n,maxGregorianTimestamp=(1n<<60n)-1n;
+let lastGregorianTimestamp=-1n;
 
-export interface UuidInspection {standard:string;version:number;variant:'NCS'|'RFC'|'Microsoft'|'Future';valid:boolean;special?:'Nil'|'Max'}
+export interface UuidInspection {standard:string;version:number;variant:'NCS'|'RFC'|'Microsoft'|'Future';valid:boolean;special?:'Nil'|'Max';timestampMs?:number}
 
 export function inspectUuid(input:string):UuidInspection{
  if(typeof input!=='string'||input.length>100)throw Error('UUID 长度无效');
@@ -24,7 +26,13 @@ export function inspectUuid(input:string):UuidInspection{
  const hex=value.replaceAll('-','').toLowerCase(),octet=parseInt(hex.slice(16,18),16),version=parseInt(hex[12],16);
  const variant=(octet&0x80)===0?'NCS':(octet&0xc0)===0x80?'RFC':(octet&0xe0)===0xc0?'Microsoft':'Future';
  const special=/^0{32}$/.test(hex)?'Nil':/^f{32}$/.test(hex)?'Max':undefined;
- return {standard:`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`,version,variant,valid:!!special||variant==='RFC'&&version>=1&&version<=8,special};
+ let timestampMs:number|undefined;
+ if(variant==='RFC'&&version===7)timestampMs=parseInt(hex.slice(0,12),16);
+ if(variant==='RFC'&&(version===1||version===6)){
+  const fields=version===1?hex.slice(13,16)+hex.slice(8,12)+hex.slice(0,8):hex.slice(0,12)+hex.slice(13,16);
+  timestampMs=Number((BigInt(`0x${fields}`)-gregorianOffset)/10000n);
+ }
+ return {standard:`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`,version,variant,valid:!!special||variant==='RFC'&&version>=1&&version<=8,special,...(timestampMs===undefined?{}:{timestampMs})};
 }
 
 export function convertUuid(input:string,format:UuidFormat,uppercase:boolean){
@@ -70,10 +78,25 @@ function uuidV7(){
  return bytes;
 }
 
+function uuidGregorian(version:'v1'|'v6'){
+ const now=Date.now();if(!Number.isSafeInteger(now)||now<0)throw Error('系统时间超出 UUID 时间范围');
+ const candidate=BigInt(now)*10000n+gregorianOffset,timestamp=candidate>lastGregorianTimestamp?candidate:lastGregorianTimestamp+1n;
+ if(timestamp>maxGregorianTimestamp)throw Error('系统时间超出 UUID 时间范围');
+ lastGregorianTimestamp=timestamp;
+ const bytes=new Uint8Array(16),write=(start:number,length:number,value:bigint)=>{for(let index=start+length-1;index>=start;index--){bytes[index]=Number(value&255n);value>>=8n;}};
+ if(version==='v6'){
+  write(0,6,timestamp>>12n);bytes[6]=0x60|Number((timestamp>>8n)&15n);bytes[7]=Number(timestamp&255n);
+ }else{
+  write(0,4,timestamp&0xffffffffn);write(4,2,(timestamp>>32n)&0xffffn);bytes[6]=0x10|Number((timestamp>>56n)&15n);bytes[7]=Number((timestamp>>48n)&255n);
+ }
+ const random=crypto.getRandomValues(new Uint8Array(8));bytes[8]=(random[0]&0x3f)|0x80;bytes[9]=random[1];bytes.set(random.subarray(2),10);bytes[10]|=1;
+ return bytes;
+}
+
 export function generateUuids(options:UuidOptions):string[]{
  const {version,count,format,uppercase}=options;
  if(!Number.isInteger(count)||count<1||count>1000)throw Error('生成数量需在 1 至 1000 之间');
- if(!['v3','v4','v5','v7'].includes(version)||!['standard','compact','braces'].includes(format)||typeof uppercase!=='boolean')throw Error('UUID 参数无效');
+ if(!['v1','v3','v4','v5','v6','v7'].includes(version)||!['standard','compact','braces'].includes(format)||typeof uppercase!=='boolean')throw Error('UUID 参数无效');
  if((version==='v3'||version==='v5')&&count!==1)throw Error('名称型 UUID 每次生成一个');
  const namespace=options.namespace??'dns';
  if((version==='v3'||version==='v5')&&!['dns','url','oid','x500','custom'].includes(namespace))throw Error('命名空间无效');
@@ -82,6 +105,7 @@ export function generateUuids(options:UuidOptions):string[]{
   let bytes:Uint8Array;
   if(version==='v3'||version==='v5')bytes=uuidFromName(version,options.name??'',namespace,options.customNamespace);
   else if(version==='v7')bytes=uuidV7();
+  else if(version==='v1'||version==='v6')bytes=uuidGregorian(version);
   else{bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&0x0f)|0x40;bytes[8]=(bytes[8]&0x3f)|0x80;}
   result.push(formatUuid(bytes,format,uppercase));
  }

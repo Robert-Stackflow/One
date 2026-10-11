@@ -18,6 +18,14 @@ test('UUID v3/v5 match RFC 9562 vectors and v4/v7 preserve variant, order and fo
   for(let i=0;i<v7.length;i++){const value=v7[i],time=parseInt(value.slice(0,8)+value.slice(9,13),16);assert.match(value,/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);assert(time>=before&&time<=after);if(i)assert(v7[i]>v7[i-1]);}
   const next=generateUuids({version:'v7',count:1,format:'standard',uppercase:false})[0];assert(next>v7.at(-1));
   const clock=Date.now;try{Date.now=()=>before-1;assert(generateUuids({version:'v7',count:1,format:'standard',uppercase:false})[0]>next);}finally{Date.now=clock;}
+  const rfcTime=1645557742000;
+  assert.equal(inspectUuid('C232AB00-9414-11EC-B3C8-9F6BDECED846').timestampMs,rfcTime);
+  assert.equal(inspectUuid('1EC9414C-232A-6B00-B3C8-9F6BDECED846').timestampMs,rfcTime);
+  const v6Before=Date.now(),v6=generateUuids({version:'v6',count:1000,format:'standard',uppercase:false}),v6After=Date.now();assert.equal(new Set(v6).size,1000);
+  for(let index=0;index<v6.length;index++){const value=v6[index],info=inspectUuid(value),node=parseInt(value.replaceAll('-','').slice(20,22),16);assert.match(value,/^[0-9a-f]{8}-[0-9a-f]{4}-6[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);assert.equal(node&1,1);assert(info.timestampMs>=v6Before&&info.timestampMs<=v6After);if(index)assert(value>v6[index-1]);}
+  const v1=generateUuids({version:'v1',count:100,format:'standard',uppercase:false});assert.equal(new Set(v1).size,100);
+  for(const value of v1){assert.match(value,/^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);assert.equal(parseInt(value.replaceAll('-','').slice(20,22),16)&1,1);assert.equal(inspectUuid(value).version,1);}
+  const v6Next=v6.at(-1);const rollback=Date.now;try{Date.now=()=>v6Before-1;assert(generateUuids({version:'v6',count:1,format:'standard',uppercase:false})[0]>v6Next);}finally{Date.now=rollback;}
   assert.match(generateUuids({...v4,count:1,format:'compact',uppercase:true})[0],/^[0-9A-F]{12}4[0-9A-F]{3}[89AB][0-9A-F]{15}$/);
   assert.match(generateUuids({...named,version:'v5',format:'braces',uppercase:true})[0],/^\{[0-9A-F-]{36}\}$/);
   assert.deepEqual(inspectUuid(' '+values[0]+' '),{standard:values[0],version:4,variant:'RFC',valid:true,special:undefined});
