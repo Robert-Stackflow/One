@@ -19,20 +19,24 @@ async function main(){
    const popup=app.windows().find(p=>/[?&]view=file-context(?:$|&)/.test(p.url())&&!p.url().includes('submenu='));
    await expect(popup.locator('.file-context-heading strong')).toHaveText(path.basename(file));return popup;
   };
+  const task=async()=>{await expect.poll(()=>app.windows().filter(p=>/[?&]view=archive-task(?:$|&)/.test(p.url())).length,{timeout:15000}).toBe(1);return app.windows().find(p=>/[?&]view=archive-task(?:$|&)/.test(p.url()));};
+  const closeTask=async(p)=>{await p.locator('#archive-task-cancel').click({noWaitAfter:true}).catch(error=>{if(!p.isClosed())throw error;});await expect.poll(()=>app.windows().includes(p)).toBe(false);};
   let popup=await menu(file);await expect(popup.locator('[data-file-action^="archive-"]')).toHaveCount(1);
-  await popup.locator('[data-file-action="archive-create"]').click();await expect(page.locator('#archive-sources')).toHaveValue(file);
+  await popup.locator('[data-file-action="archive-create"]').click();await expect(popup.locator('[data-file-action="archive-create-zip"]')).toBeVisible();await popup.locator('[data-file-action="archive-create"]').click();let progress=await task();await expect(progress.locator('#archive-task-path')).toHaveValue(path.join(root,'ordinary.zip'));await closeTask(progress);
   popup=await menu(root,true);await expect(popup.locator('[data-file-action^="archive-"]')).toHaveCount(1);
-  await popup.locator('[data-file-action="archive-create"]').click();await expect(page.locator('#archive-sources')).toHaveValue(root);
-  popup=await menu(archive);await expect(popup.locator('[data-file-action^="archive-"]')).toHaveCount(5);
+  await popup.locator('[data-file-action="archive-create"]').click();await expect(popup.locator('[data-file-action="archive-create-7z"]')).toBeVisible();await popup.locator('[data-file-action="archive-create"]').click();progress=await task();await expect(progress.locator('#archive-task-path')).toHaveValue(root+'.zip');await closeTask(progress);
+  popup=await menu(file);await popup.locator('[data-file-action="archive-create"]').click();await popup.locator('[data-file-action="archive-create-zip"]').click();progress=await task();await expect(progress.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});await closeTask(progress);await fs.stat(path.join(root,'ordinary.zip'));
+  popup=await menu(archive);await expect(popup.locator('[data-file-action^="archive-"]')).toHaveCount(3);
+  await popup.locator('[data-file-action="archive-extract-menu"]').click();await expect(popup.locator('[data-file-action="archive-choose"]')).toBeVisible();
+  await popup.locator('#file-context-back').click();
   await popup.locator('[data-file-action="archive-extract"]').click();await expect(page.locator('#archive-source')).toHaveValue(archive);await expect(page.locator('.archive-entry-name')).toHaveText('inside.txt');
   await assert.rejects(fs.stat(path.join(root,'inside.txt')),{code:'ENOENT'});
   for(const action of ['archive-here','archive-folder','archive-smart']){
-   popup=await menu(archive);await popup.locator(`[data-file-action="${action}"]`).click();
-   await expect.poll(()=>page.locator('#archive-destination-mode').evaluate(node=>node.value)).toBe(action.slice('archive-'.length));
-   await expect(page.locator('#archive-status-text')).toContainText('已解压',{timeout:30000});
-   assert.equal(await page.locator('#archive-destination-mode').evaluate(node=>node.value),action.slice('archive-'.length));
+   popup=await menu(archive);await popup.locator('[data-file-action="archive-extract-menu"]').click();await popup.locator(`[data-file-action="${action}"]`).click();
+   progress=await task();await expect(progress.locator('#archive-task-feedback')).toContainText('已解压',{timeout:30000});await closeTask(progress);
   }
   assert.equal(await fs.readFile(path.join(root,'inside.txt'),'utf8'),'archive contents');assert.equal(await fs.readFile(path.join(root,'menu','inside.txt'),'utf8'),'archive contents');
+  popup=await menu(archive);await popup.locator('[data-file-action="archive-extract-menu"]').click();await popup.locator('[data-file-action="archive-choose"]').click();progress=await task();await expect(progress.locator('#archive-task-directory')).toHaveValue(root);await closeTask(progress);
   assert.equal(await app.evaluate(()=>globalThis.archiveExplorerCalls),0);assert.deepEqual(errors,[]);
   console.log('One file menu passed: create file/folder, archive-only actions, browse without extraction, all extraction actions, session routing and no Explorer windows.');
  }finally{if(app)await app.close();const relative=path.relative(base,root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}

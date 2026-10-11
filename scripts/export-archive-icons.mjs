@@ -22,11 +22,17 @@ export const formats=[
 export const sizes=[16,20,24,32,40,48,64,96,128,256];
 const glyphs={A:['010','101','111','101','101'],R:['110','101','110','101','101'],C:['011','100','100','100','011'],Z:['111','001','010','100','111'],I:['111','010','010','010','111'],P:['110','101','110','100','100'],'7':['111','001','010','010','010'],'0':['111','101','101','101','111'],'1':['010','110','010','010','111'],'2':['110','001','010','100','111'],T:['111','010','010','010','010'],G:['011','100','101','101','011'],X:['101','101','010','101','101'],B:['110','101','110','101','110'],H:['101','101','111','101','101'],L:['100','100','100','100','111'],M:['101','111','111','101','101'],S:['011','100','010','001','110'],W:['101','101','111','111','101'],D:['110','101','101','101','110'],U:['101','101','101','101','111'],F:['111','100','110','100','100'],Q:['010','101','101','111','011'],E:['111','100','110','100','111'],J:['001','001','001','101','010'],K:['101','101','110','101','101'],N:['101','111','111','111','101']};
 glyphs.O=['010','101','101','101','010'];
-function pixelLabel(label){const unit=label.length>4?10:label.length>3?13:16,start=(256-(label.length*4-1)*unit)/2;return [...label].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>pixel==='1'?`<rect x="${start+(i*4+x)*unit}" y="${160+y*unit}" width="${unit}" height="${unit}" fill="#FFFFFF"/>`:''))).join('');}
+function pixelLabel(label){const text=label.slice(0,3),unit=16,start=Math.round((256-(text.length*4-1)*unit)/32)*16;return [...text].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>pixel==='1'?`<rect x="${start+(i*4+x)*unit}" y="${96+y*unit}" width="${unit}" height="${unit}" fill="#FFFFFF"/>`:''))).join('');}
 export function artwork(label,color,size=256){
- const small=size<=20,zipper=small?'<path d="M112 42h32v94h-32z" fill="#D5E5DB"/><path d="M112 42h16v16h-16m16 16h16v16h-16m-16 16h16v16h-16" stroke="#426351" stroke-width="8"/>':
-  '<rect x="116" y="39" width="24" height="100" rx="7" fill="#DCE8DF"/>'+Array.from({length:6},(_,i)=>`<rect x="${i%2?128:116}" y="${44+i*13}" width="12" height="7" rx="2" fill="#688773"/>`).join('')+'<rect x="110" y="115" width="36" height="39" rx="11" fill="#284435" stroke="#F6FAF7" stroke-width="3"/><rect x="121" y="129" width="14" height="13" rx="4" fill="#C3DEC9"/>';
- return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><defs><linearGradient id="paper" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF4EF"/></linearGradient><linearGradient id="badge" x2="0" y2="1"><stop stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".92"/></linearGradient></defs><path d="M54 13H163L212 62V225Q212 241 196 241H54Q38 241 38 225V29Q38 13 54 13Z" fill="url(#paper)" stroke="#8A9F91" stroke-width="${small?9:3}" stroke-linejoin="round"/><path d="M164 15V48Q164 62 178 62H210" fill="#DCE8DF" stroke="#8A9F91" stroke-width="${small?8:3}" stroke-linejoin="round"/>${zipper}${small?'':'<circle cx="70" cy="56" r="12" fill="none" stroke="#35513F" stroke-width="6"/><path d="M77 47a12 12 0 0 1 5 7" fill="none" stroke="#8DB49A" stroke-width="6" stroke-linecap="round"/>'}<rect x="24" y="${small?152:166}" width="208" height="${small?94:58}" rx="${small?10:12}" fill="url(#badge)"/>${small?pixelLabel(label):`<text x="128" y="207" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="${label.length>2?37:42}" font-weight="700" letter-spacing="1" fill="#FFFFFF">${label}</text>`}</svg>`;
+ const small=size<=20;
+ if(small)return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="8" y="8" width="240" height="240" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${pixelLabel(label)}</svg>`;
+ const zip=/^(ZIP|ZIPX|JAR|WAR|APK|IPA|XPI)$/.test(label),seven=/^(7Z|ZPAQ|001)$/.test(label),disc=/^(ISO|IMG|ISZ|UDF|WIM|BIN|I00)$/.test(label),stack=/^(RAR|R00|ALZ|EGG|ACE|ARJ|LHA|LZH|PMA)$/.test(label);
+ const motif=zip?`<rect x="97" y="48" width="62" height="94" rx="14" fill="none" stroke="${color}" stroke-width="12"/>${Array.from({length:5},(_,i)=>`<path d="M${i%2?128:110} ${63+i*15}h18" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>`).join('')}<rect x="118" y="122" width="20" height="28" rx="5" fill="#FFFFFF"/>`:
+  seven?`<path d="M78 60h96l-17 24H95zm13 34h83l-17 24H74zm-13 34h96l-17 24H95z" fill="${color}" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>`:
+  disc?`<circle cx="128" cy="100" r="51" fill="none" stroke="${color}" stroke-width="15"/><circle cx="128" cy="100" r="15" fill="none" stroke="#FFFFFF" stroke-width="9"/><path d="M128 49v22m0 58v22" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>`:
+  stack?`<rect x="77" y="55" width="102" height="26" rx="7" fill="${color}"/><rect x="69" y="87" width="118" height="26" rx="7" fill="#FFFFFF"/><rect x="77" y="119" width="102" height="26" rx="7" fill="${color}"/>`:
+  `<path d="M75 81h106v67H75z" fill="none" stroke="${color}" stroke-width="12" stroke-linejoin="round"/><path d="m75 81 27-29h52l27 29m-53-29v54m-53 0h106" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="12" y="12" width="232" height="232" rx="48" fill="#203329"/><circle cx="49" cy="49" r="12" fill="none" stroke="#FFFFFF" stroke-width="7"/>${motif}<path d="M48 164h160" stroke="${color}" stroke-width="5" stroke-linecap="round"/><text x="128" y="222" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="${label.length>4?31:label.length>3?39:51}" font-weight="800" letter-spacing="1" fill="#FFFFFF">${label}</text></svg>`;
 }
 function ico(images){
  const header=Buffer.alloc(6+images.length*16);header.writeUInt16LE(1,2);header.writeUInt16LE(images.length,4);let offset=header.length;
@@ -47,17 +53,18 @@ async function main(){
  if(requested?.some(name=>!formats.some(format=>format[0]===name)))throw Error('Unknown archive icon format');
  const selected=requested?formats.filter(format=>requested.includes(format[0])):formats;
  const directory=resolve('assets/icons/archive');await mkdir(directory,{recursive:true});
+ const save=async(path,bytes)=>{for(let attempt=0;;attempt++){try{await writeFile(path,bytes);return;}catch(error){if(!['UNKNOWN','EBUSY','EPERM'].includes(error.code)||attempt===3)throw error;await new Promise(done=>setTimeout(done,100*(attempt+1)));}}};
  const browser=await chromium.launch({headless:true,...(process.env.ONE_ICON_BROWSER?{executablePath:process.env.ONE_ICON_BROWSER}:{})});
  try{
   const page=await browser.newPage({viewport:{width:1000,height:480},deviceScaleFactor:1});
   for(const [name,label,color] of selected){
-   await writeFile(resolve(directory,name+'.svg'),artwork(label,color));
+   await save(resolve(directory,name+'.svg'),artwork(label,color));
    const images=[];
    for(const size of sizes){
     const data=await page.evaluate(async({svg,size})=>{const img=new Image();img.src='data:image/svg+xml;base64,'+btoa(svg);await img.decode();const canvas=document.createElement('canvas');canvas.width=canvas.height=size;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,size,size);let raw='';if(size<256){const pixels=ctx.getImageData(0,0,size,size).data;for(let at=0;at<pixels.length;at+=8192)raw+=String.fromCharCode(...pixels.subarray(at,at+8192));}return {png:canvas.toDataURL('image/png').split(',')[1],rgba:btoa(raw)};},{svg:artwork(label,color,size),size});
     images.push({size,png:Buffer.from(data.png,'base64'),rgba:Buffer.from(data.rgba,'base64')});
    }
-   await writeFile(resolve(directory,name+'.ico'),ico(images));
+   await save(resolve(directory,name+'.ico'),ico(images));
   }
   if(requested){console.log(`Exported ${selected.length} archive icons: ${requested.join(', ')}`);return;}
   const cells=formats.map(([name,label,color])=>`<div class="cell"><img width="96" height="96" src="data:image/svg+xml;base64,${Buffer.from(artwork(label,color)).toString('base64')}"><b>${label}</b><div class="small">${[16,24,32].map(size=>`<img width="${size}" height="${size}" src="data:image/svg+xml;base64,${Buffer.from(artwork(label,color,size)).toString('base64')}">`).join('')}</div></div>`).join('');

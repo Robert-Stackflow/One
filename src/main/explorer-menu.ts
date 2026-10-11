@@ -3,6 +3,7 @@ import {join,resolve} from 'node:path';
 import {mkdir,copyFile,readFile,writeFile,stat} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {createHash} from 'node:crypto';
 import type {ExplorerMenuState} from '../shared/explorer-menu';
 const execute=promisify(execFile);
 const nativeRoot=()=>app.isPackaged?join(process.resourcesPath,'app.asar.unpacked/dist/native'):join(__dirname,'../native');
@@ -12,6 +13,19 @@ async function run(operation:string,config?:string):Promise<ExplorerMenuState>{
  const result=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script(),'-Operation',operation,...(config?['-Config',config]:[])],{windowsHide:true,timeout:60000,maxBuffer:1024*1024});return JSON.parse(result.stdout.replace(/^\uFEFF/,''));
 }
 export const explorerMenuState=()=>run('status');
+export async function repairExplorerMenu(){
+ if(!app.isPackaged||pending)return;
+ const state=await explorerMenuState();
+ if(!state.locksmith&&!state.rename&&!state.archiveCreate&&!state.archiveExtract)return;
+ const root=join(app.getPath('userData'),'explorer-menu');
+ const stamp=createHash('sha256').update(await readFile(script())).update(await readFile(join(nativeRoot(),'One.Shell.dll'))).update(process.execPath).digest('hex');
+ const marker=join(root,'registration-hash.txt');
+ let previous='';try{previous=(await readFile(marker,'utf8')).trim();}catch{}
+ if(previous===stamp&&state.modern)return;
+ const repaired=await setExplorerMenu(state);
+ if(repaired.error||!repaired.modern)throw Error(repaired.error||'系统右键菜单注册未完成');
+ await writeFile(marker,stamp);
+}
 export function setExplorerMenu(value:unknown):Promise<ExplorerMenuState>{
  if(!value||typeof value!=='object'||typeof(value as any).locksmith!=='boolean'||typeof(value as any).rename!=='boolean')return Promise.reject(Error('右键菜单设置无效'));
  if(pending)return Promise.reject(Error('正在更新右键菜单'));

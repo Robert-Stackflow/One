@@ -44,7 +44,7 @@ try {
   $format=$extension.Substring(1)
   $progId='One.Archive.'+$format.ToUpperInvariant()
   $key=$root.OpenSubKey('Classes\'+$progId+'\DefaultIcon')
-  try{Assert ($key.GetValue('') -eq ('"'+[IO.Path]::Combine($icons,$format+'.ico')+'",0')) ('Dedicated icon '+$extension)}finally{$key.Dispose()}
+  try{Assert ($key.GetValue('') -eq ('"'+[IO.Path]::Combine($icons,(ArchiveIcon $format)+'.ico')+'",0')) ('Mapped icon '+$extension)}finally{$key.Dispose()}
   $key=$root.OpenSubKey('One\Archive\Capabilities\FileAssociations')
   try{Assert ($key.GetValue($extension) -eq $progId) ('Dedicated candidate '+$extension)}finally{$key.Dispose()}
   $key=$root.OpenSubKey('Classes\'+$extension+'\OpenWithProgids')

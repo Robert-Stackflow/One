@@ -10,7 +10,7 @@ export async function readShellRequest(args:string[],profile:string):Promise<Fil
  try{const info=await handle.stat();if(!info.isFile()||info.size>4*1024*1024||Date.now()-info.mtimeMs>5*60*1000)throw Error('右键菜单请求已失效');value=JSON.parse(await handle.readFile('utf8'));}finally{await handle.close();}
  const action=typeof value?.tool==='string'?archiveShellAction(value.tool):undefined;
  if(!value||(!action&&!['locksmith','rename'].includes(value.tool))||!Array.isArray(value.paths)||!value.paths.length||value.paths.length>(action?128:value.tool==='locksmith'?32:4096)||value.paths.some((p:unknown)=>typeof p!=='string'||p.length>32767||!isAbsolute(p)||/[\x00\r\n]/.test(p)))throw Error('右键菜单选择无效');
- if(action&&action!=='create'&&value.paths.some((p:string)=>!isArchivePath(p)))throw Error('所选文件不是支持的压缩包');
- const seen=new Set<string>(),paths:string[]=value.paths.filter((p:string)=>{const key=resolve(p).toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
+ if(action&&!['create','quick-zip','quick-7z'].includes(action)&&value.paths.some((p:string)=>!isArchivePath(p)))throw Error('所选文件不是支持的压缩包');
+ const seen=new Set<string>(),paths:string[]=value.paths.map((p:string)=>action&&!['create','quick-zip','quick-7z'].includes(action)?resolve(p).replace(/\.z\d{2}$/i,'.zip'):p).filter((p:string)=>{const key=resolve(p).toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
  await unlink(path);return{tool:value.tool,paths};
 }

@@ -42,6 +42,8 @@ export interface OneAPI {
   trayMenuState():Promise<import('../main/tray-menu').TrayMenuView>;trayMenuAction(id:import('../main/tray-menu').TrayMenuAction):Promise<void>;trayMenuReady():Promise<void>;trayMenuHide():Promise<void>;onTrayMenuChanged(callback:()=>void):()=>void;
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;
+  archiveTaskData():Promise<{action:import('./archive-actions').ArchiveOpenAction;paths:string[];suggestedPath:string;conflict:import('./archive').ArchiveConflict;closeOnComplete:boolean}>;
+  archiveTaskAutoClose(value:boolean):Promise<boolean>;
   echoReady():Promise<void>;
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;
   archiveRun(request:import('./archive').ArchiveRequest,id?:string):Promise<import('./archive').ArchiveListing|import('./archive').ArchiveResult>;

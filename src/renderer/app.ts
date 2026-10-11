@@ -14,7 +14,7 @@ const view=new URLSearchParams(location.search).get('view')||'main';
 if(view!=='native-tooltip'){setupAppearance();setupTextSelection();setupTooltips();setupSegments();}
 window.addEventListener('error',event=>{void api.diagnosticsReport('uncaught-error',event.error?.stack||`${event.message} at ${event.filename}:${event.lineno}:${event.colno}`).catch(()=>{});});
 window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
-if(['main','file-action','preview','picker','search','color-editor','dialog-bar'].includes(view))setupWindowVisibility();
+if(['main','file-action','preview','picker','search','color-editor','dialog-bar','archive-task'].includes(view))setupWindowVisibility();
 const render=async()=>{
   if(view==='native-tooltip')(await import('./native-tooltip-view')).renderNativeTooltip();
   else if(view==='echo')(await import('./hud')).renderHUD();
@@ -28,6 +28,7 @@ const render=async()=>{
  else if(view==='preview')await (await import('./preview-view')).renderPreview();
  else if(view==='picker')(await import('./picker-view')).renderPicker();
  else if(view==='file-action')await (await import('./file-action-view')).renderFileAction();
+ else if(view==='archive-task')await (await import('./archive-task-view')).renderArchiveTask();
  else if(view==='search-menu')await (await import('./search-menu')).renderSearchMenu();
  else if(view==='tray-menu')await (await import('./tray-menu-view')).renderTrayMenu();
  else if(view==='file-context')await (await import('./file-context-view')).renderFileContextMenu();

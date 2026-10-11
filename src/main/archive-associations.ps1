@@ -4,7 +4,9 @@ $ErrorActionPreference='Stop'
 $archiveProgId='One.Archive'
 $archiveAppName='One 压缩与解压'
 $archiveExtensions=@('.zip','.7z','.rar','.r00','.tar','.tgz','.gz','.txz','.xz','.zipx','.jar','.apk','.bz2','.bzip2','.tbz','.tbz2','.zst','.zstd','.tzst','.cab','.lha','.lzh','.iso','.wim','.alz','.egg')
+$archiveExtensions+=@(1..99|ForEach-Object{'.z{0:D2}' -f $_})
 $archiveCapabilities='One\Archive\Capabilities'
+function ArchiveIcon([string]$Format){if($Format -match '^z\d\d$'){return 'zip'};return $Format}
 
 # Accept a RegistryKey so tests can exercise the same logic below an isolated
 # test branch. The production entry point always passes HKCU\Software.
@@ -32,7 +34,7 @@ function Get-OneArchiveRegistration([Microsoft.Win32.RegistryKey]$Software,[stri
   $key=$Software.OpenSubKey('Classes\'+$formatProgId+'\shell\open\command')
   try{if(!$key -or $key.GetValue('') -ne ('"'+$ExpectedExecutable+'" "--one-archive=%1"')){return $false}}finally{if($key){$key.Dispose()}}
   $key=$Software.OpenSubKey('Classes\'+$formatProgId+'\DefaultIcon')
-  try{if(!$key -or !$ExpectedIcons -or $key.GetValue('') -ne ('"'+[IO.Path]::Combine($ExpectedIcons,$format+'.ico')+'",0')){return $false}}finally{if($key){$key.Dispose()}}
+  try{if(!$key -or !$ExpectedIcons -or $key.GetValue('') -ne ('"'+[IO.Path]::Combine($ExpectedIcons,(ArchiveIcon $format)+'.ico')+'",0')){return $false}}finally{if($key){$key.Dispose()}}
   $key=$Software.OpenSubKey('Classes\'+$extension+'\OpenWithProgids')
   try{if(!$key -or $key.GetValueNames() -notcontains $formatProgId){return $false}}finally{if($key){$key.Dispose()}}
   $key=$Software.OpenSubKey($archiveCapabilities+'\FileAssociations')
@@ -49,7 +51,7 @@ function Install-OneArchiveRegistration([Microsoft.Win32.RegistryKey]$Software,[
  if(![IO.Path]::IsPathRooted($AppIcon) -or $AppIcon.Contains('"')){throw '图标路径无效'}
  if(![IO.Path]::IsPathRooted($ArchiveIcons) -or $ArchiveIcons.IndexOfAny([char[]]@('"',[char]0,[char]10,[char]13)) -ge 0){throw '压缩包图标目录无效'}
  # Validate the complete resource set before changing any registry values.
- foreach($format in @('archive')+@($archiveExtensions|ForEach-Object{$_.Substring(1)})){
+ foreach($format in @('archive')+@($archiveExtensions|ForEach-Object{ArchiveIcon $_.Substring(1)}|Select-Object -Unique)){
   if(![IO.File]::Exists([IO.Path]::Combine($ArchiveIcons,$format+'.ico'))){throw ('缺少压缩包图标：'+$format)}
  }
  $prog='Classes\'+$archiveProgId
@@ -69,7 +71,7 @@ function Install-OneArchiveRegistration([Microsoft.Win32.RegistryKey]$Software,[
   Set-OneArchiveValue $Software $formatKey '' ('One '+$format.ToUpperInvariant()+' 压缩包')
   Set-OneArchiveValue $Software $formatKey 'FriendlyTypeName' ('One '+$format.ToUpperInvariant()+' 压缩包')
   Set-OneArchiveValue $Software $formatKey 'OneExecutable' $AppExecutable
-  Set-OneArchiveValue $Software ($formatKey+'\DefaultIcon') '' ('"'+[IO.Path]::Combine($ArchiveIcons,$format+'.ico')+'",0')
+  Set-OneArchiveValue $Software ($formatKey+'\DefaultIcon') '' ('"'+[IO.Path]::Combine($ArchiveIcons,(ArchiveIcon $format)+'.ico')+'",0')
   Set-OneArchiveValue $Software ($formatKey+'\shell\open\command') '' ('"'+$AppExecutable+'" "--one-archive=%1"')
   # Candidate only: preserve existing extension defaults and UserChoice.
   Set-OneArchiveValue $Software ('Classes\'+$extension+'\OpenWithProgids') $formatProgId ''

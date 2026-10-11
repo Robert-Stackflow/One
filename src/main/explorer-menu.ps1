@@ -2,13 +2,17 @@ param([ValidateSet('status','set')][string]$Operation='status',[string]$Config)
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
 $key='HKCU:\Software\One\ExplorerMenu'
+$archiveExtensions=@('.zip','.zipx','.7z','.rar','.r00','.tar','.tgz','.gz','.txz','.xz','.jar','.apk','.bz2','.bzip2','.tbz','.tbz2','.zst','.zstd','.tzst','.cab','.lha','.lzh','.iso','.wim','.alz','.egg')
+$archiveExtensions+=@(1..99|ForEach-Object{'.z{0:D2}' -f $_})
 function Status {
  $v=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
  $locks=Get-AppxPackage -Name 'One.ExplorerMenu.Locksmith' -ErrorAction SilentlyContinue
  $rename=Get-AppxPackage -Name 'One.ExplorerMenu.Rename' -ErrorAction SilentlyContinue
  $archiveCreate=Get-AppxPackage -Name 'One.ExplorerMenu.ArchiveCreate' -ErrorAction SilentlyContinue
  $archiveExtract=Get-AppxPackage -Name 'One.ExplorerMenu.ArchiveExtract' -ErrorAction SilentlyContinue
- @{locksmith=([bool]$v.Locksmith);rename=([bool]$v.Rename);archiveCreate=([bool]$v.ArchiveCreate);archiveExtract=([bool]$v.ArchiveExtract);modern=(([bool]$v.Locksmith -or [bool]$v.Rename -or [bool]$v.ArchiveCreate -or [bool]$v.ArchiveExtract) -and (!$v.Locksmith -or [bool]$locks) -and (!$v.Rename -or [bool]$rename) -and (!$v.ArchiveCreate -or [bool]$archiveCreate) -and (!$v.ArchiveExtract -or [bool]$archiveExtract))}
+ $createVerb=Test-Path -LiteralPath 'HKCU:\Software\Classes\*\shell\OneArchiveCreate'
+ $extractVerb=Test-Path -LiteralPath 'HKCU:\Software\Classes\SystemFileAssociations\.zip\shell\OneArchiveExtract'
+ @{locksmith=([bool]$v.Locksmith);rename=([bool]$v.Rename);archiveCreate=([bool]$v.ArchiveCreate);archiveExtract=([bool]$v.ArchiveExtract);modern=(([bool]$v.Locksmith -or [bool]$v.Rename -or [bool]$v.ArchiveCreate -or [bool]$v.ArchiveExtract) -and (!$v.Locksmith -or [bool]$locks) -and (!$v.Rename -or [bool]$rename) -and (!$v.ArchiveCreate -or ([bool]$archiveCreate -and $createVerb)) -and (!$v.ArchiveExtract -or ([bool]$archiveExtract -and $extractVerb)))}
 }
 function Refresh-Shell {
  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class OneShellNotify { [DllImport("shell32.dll")] public static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2); }'
@@ -41,7 +45,7 @@ try {
     if([Environment]::OSVersion.Version.Build -ge 22000 -and (!$existing -or $previous.$hashName -ne $menu.manifestHash -or $existing.InstallLocation -ne $menu.root -or $registeredVersion -ne [string]$existing.Version)){
      # Keep one verb per app identity so Windows 11 exposes two first-level commands.
      [xml]$xml=Get-Content -LiteralPath $template -Raw -Encoding UTF8
-     if($existing){$version=[version]$existing.Version;$xml.Package.Identity.Version="$($version.Major).$($version.Minor).$($version.Build).$($version.Revision+1)"}
+     if($existing){$version=[version]$existing.Version;$xml.Package.Identity.Version="$($version.Major).$($version.Minor).$($version.Build).$($version.Revision+1)";if($existing.InstallLocation -ne $menu.root){$existing | Remove-AppxPackage -ErrorAction Stop}}
      $xml.Save($manifest)
      $signed=Join-Path $PSScriptRoot ($menu.packageName+'.msix')
      if(Test-Path -LiteralPath $signed){Add-AppxPackage -Path $signed -ExternalLocation $menu.root -ErrorAction Stop}
@@ -54,7 +58,8 @@ try {
     $dll=(Select-Xml -LiteralPath $template -XPath "//*[local-name()='Class'][1]").Node.Path
     New-Item -Path "$clsid\InprocServer32" -Force | Out-Null;Set-Item -LiteralPath "$clsid\InprocServer32" -Value (Join-Path $menu.root $dll)
     New-ItemProperty -LiteralPath "$clsid\InprocServer32" -Name ThreadingModel -Value Apartment -Force | Out-Null
-    $types=if($menu.tool -eq 'archive-extract'){@('*')}else{@('*','Directory')}
+    $types=if($menu.tool -eq 'archive-extract'){@($archiveExtensions|ForEach-Object{'SystemFileAssociations\'+$_})}else{@('*','Directory')}
+    if($menu.tool -eq 'archive-extract'){Remove-Item -LiteralPath 'HKCU:\Software\Classes\*\shell\OneArchiveExtract' -Recurse -Force -ErrorAction SilentlyContinue}
     foreach($type in $types){
      $verb="HKCU:\Software\Classes\$type\shell\$($menu.verb)";New-Item -Path $verb -Force | Out-Null;Set-Item -LiteralPath $verb -Value $menu.title
      New-ItemProperty -LiteralPath $verb -Name ExplorerCommandHandler -Value "{$($menu.clsid)}" -Force | Out-Null
@@ -65,7 +70,8 @@ try {
    }else{
     Disable-LaunchConfig $menu.root
     if($existing){$existing | Remove-AppxPackage -ErrorAction Stop}
-    foreach($type in @('*','Directory')){Remove-Item -LiteralPath "HKCU:\Software\Classes\$type\shell\$($menu.verb)" -Recurse -Force -ErrorAction SilentlyContinue}
+    $types=if($menu.tool -eq 'archive-extract'){@('*')+@($archiveExtensions|ForEach-Object{'SystemFileAssociations\'+$_})}else{@('*','Directory')}
+    foreach($type in $types){Remove-Item -LiteralPath "HKCU:\Software\Classes\$type\shell\$($menu.verb)" -Recurse -Force -ErrorAction SilentlyContinue}
     Remove-Item -LiteralPath $clsid -Recurse -Force -ErrorAction SilentlyContinue
    }
    New-ItemProperty -LiteralPath $key -Name $flag -Value ([int][bool]$menu.enabled) -PropertyType DWord -Force | Out-Null

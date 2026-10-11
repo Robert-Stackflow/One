@@ -8,5 +8,5 @@ export function archiveLaunchPath(args:string[]):string|undefined {
  const path=matches[0].slice('--one-archive='.length);
  if(!path||path.length>32768||!isAbsolute(path)||/[\0\r\n]/.test(path))throw Error('压缩包路径无效');
  if(!isArchivePath(path))throw Error('暂不支持该压缩格式');
- return resolve(path);
+ return resolve(path).replace(/\.z\d{2}$/i,'.zip');
 }

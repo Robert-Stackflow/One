@@ -174,6 +174,17 @@ static int32_t mz_stream_split_goto_disk(void *stream, int32_t number_disk) {
     return err;
 }
 
+static int32_t mz_stream_split_goto_next_read_disk(void *stream) {
+    mz_stream_split *split = (mz_stream_split *)stream;
+    int32_t err = mz_stream_split_goto_disk(stream, split->current_disk + 1);
+    /* Split ZIPs name the final (central-directory) volume .zip, not .zNN.
+     * An entry may span that boundary, including a ZIP64 entry larger than a
+     * whole volume. The caller validates that intermediate volumes exist. */
+    if (err == MZ_EXIST_ERROR)
+        err = mz_stream_split_goto_disk(stream, -1);
+    return err;
+}
+
 int32_t mz_stream_split_open(void *stream, const char *path, int32_t mode) {
     mz_stream_split *split = (mz_stream_split *)stream;
     int32_t number_disk = 0;
@@ -238,7 +249,7 @@ int32_t mz_stream_split_read(void *stream, void *buf, int32_t size) {
                 break;
             if (size != bytes_left) /* Report read from previous disk before switching */
                 break;
-            err = mz_stream_split_goto_disk(stream, split->current_disk + 1);
+            err = mz_stream_split_goto_next_read_disk(stream);
             if (err == MZ_EXIST_ERROR)
                 split->current_disk = -1;
             if (err != MZ_OK)
@@ -336,7 +347,7 @@ int32_t mz_stream_split_seek(void *stream, int64_t offset, int32_t origin) {
         disk_left = split->current_disk_size - position;
 
         while (offset > disk_left) {
-            err = mz_stream_split_goto_disk(stream, split->current_disk + 1);
+            err = mz_stream_split_goto_next_read_disk(stream);
             if (err != MZ_OK)
                 return err;
 

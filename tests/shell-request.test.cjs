@@ -10,7 +10,7 @@ test('system menu requests consume only fresh, bounded selections in the owning 
  await t.test('expired and oversized requests do not run',async()=>{const stale=await request({tool:'rename',paths:[file]});await fs.utimes(stale,new Date(0),new Date(0));await assert.rejects(invoke(stale),/失效/);const large=await request({tool:'rename',paths:[file]});await fs.writeFile(large,' '.repeat(4*1024*1024+1));await assert.rejects(invoke(large),/失效/);});
  await t.test('every archive action validates all files, bounds batches and folds Windows case duplicates',async()=>{
   const files=['a.ZIP','b.7z.001','c.tar.gz','d.ZIPX','e.CAB','f.LHA','g.ISO','h.WIM','i.tar.ZSTD','j.JAR','k.APK','l.ALZ'].map(name=>path.join(profile,name));
-  for(const tool of ['archive-extract','archive-smart','archive-here','archive-folder']){
+  for(const tool of ['archive-extract','archive-smart','archive-here','archive-folder','archive-choose']){
    const p=await request({tool,paths:[...files,files[0].toLowerCase()]});assert.deepEqual(await invoke(p),{tool,paths:files});
    const mixed=await request({tool,paths:[...files,file]});await assert.rejects(invoke(mixed),/不是支持的压缩包/);assert.ok((await fs.stat(mixed)).isFile());
    const over=await request({tool,paths:Array(129).fill(files[0])});await assert.rejects(invoke(over),/选择无效/);
