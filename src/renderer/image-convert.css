@@ -1,3 +1,25 @@
 .image-convert-page{max-width:960px;margin:0 auto;padding:20px 24px 40px}.image-convert-panel{display:grid;gap:16px}.image-convert-panel h2{margin:0;font-size:20px}.image-convert-panel p{margin:0;color:var(--muted,#758093);line-height:1.55}.image-convert-picks,.image-convert-actions,.image-convert-destination{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.image-convert-picks span,.image-convert-actions span{color:var(--muted,#758093)}.image-convert-files{min-height:76px;max-height:300px;overflow:auto;border:1px solid var(--border,#d8dee8);border-radius:10px}.image-convert-empty{padding:22px}.image-convert-file{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border,#d8dee8)}.image-convert-file:last-child{border-bottom:0}.image-convert-file>div{min-width:0;flex:1;display:grid;gap:3px}.image-convert-file strong,.image-convert-file small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.image-convert-file small{color:var(--muted,#758093)}.image-convert-file-state{white-space:nowrap}.image-convert-file-state[data-state=error]{color:#c44444}.image-convert-file-state[data-state=done]{color:#238655}.image-convert-destination label{font-weight:600}.image-convert-destination input{flex:1;min-width:220px}.image-convert-options{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:12px}.image-convert-options label{display:grid;gap:6px}.image-convert-options input,.image-convert-options select{width:100%}.image-convert-options .image-convert-metadata{display:flex;align-items:center;grid-column:1/-1}.image-convert-options .image-convert-metadata input{width:auto}.image-convert-panel .image-convert-note{font-size:13px}.image-convert-actions{padding-top:4px}@media(max-width:760px){.image-convert-page{padding:16px}.image-convert-options{grid-template-columns:repeat(2,minmax(0,1fr))}.image-convert-destination input{flex-basis:100%}}
 .image-metadata-options .image-convert-metadata{grid-column:auto}
 .image-enhance-options{border:1px solid var(--border,#d8dee8);border-radius:10px;padding:10px 14px 14px}.image-enhance-options legend{padding:0 6px;font-weight:600}.image-enhance-options legend label{display:flex;align-items:center;gap:8px}.image-enhance-options>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.image-enhance-options>div>label{display:grid;gap:6px}.image-enhance-options>div>.image-enhance-check{display:flex;align-items:center;gap:8px}@media(max-width:760px){.image-enhance-options>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.image-convert-page{max-width:1200px;container-type:inline-size}
+.image-convert-heading{margin-bottom:18px}
+.image-convert-heading h2{font-size:20px;margin:0 0 6px}
+.image-convert-heading p{margin:0;color:var(--muted);line-height:1.5}
+.image-convert-layout{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:16px;align-items:start}
+.image-convert-panel.settings-card{margin:0;padding:20px;min-width:0;gap:16px}
+.image-convert-panel h3{font-size:14px;font-weight:600;margin:0}
+.image-convert-picks span,.image-convert-actions span{font-size:12px;overflow-wrap:anywhere}
+.image-convert-destination label{flex-basis:100%;font-size:12px}
+.image-convert-destination input{flex:1;min-width:0}
+.image-convert-files{border-color:var(--line);border-radius:var(--field-radius)}
+.image-convert-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+.image-convert-options label{font-size:12px}
+.image-convert-options .image-convert-metadata{line-height:1.4}
+.image-enhance-options{border-color:var(--line);border-radius:var(--field-radius)}
+.image-enhance-options>div{grid-template-columns:repeat(2,minmax(0,1fr))}
+.image-convert-rules{font-size:12px;color:var(--muted)}
+.image-convert-rules summary{cursor:pointer;color:var(--fg)}
+.image-convert-rules .image-convert-note{margin-top:10px}
+.image-convert-panel .image-convert-note{font-size:12px}
+@container (max-width:900px){.image-convert-layout{grid-template-columns:1fr}}
+@container (max-width:540px){.image-convert-options,.image-enhance-options>div{grid-template-columns:1fr}.image-metadata-options{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -6,10 +6,13 @@ const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
 export function imageConvertPage(){return `<div class="image-convert-page">
-  <section class="image-convert-panel"><h2>批量转换与压缩</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF；已安装 Windows HEIF/HEVC 扩展时可读取部分 HEIC，或将静态 SDR 图片转为 HEIC。原图片保持不变，结果保存到所选文件夹。</p>
+  <header class="image-convert-heading"><h2>批量转换与压缩</h2><p>本地处理图片并保存副本，原文件保持不变。HEIC 读写依赖 Windows HEIF/HEVC 扩展。</p></header>
+  <div class="image-convert-layout"><section class="settings-card image-convert-panel"><h3>图片与输出</h3>
     <div class="image-convert-picks"><button id="image-convert-add" type="button">添加图片</button><button id="image-convert-clear" type="button" class="quiet">清空列表</button><span id="image-convert-count" aria-live="polite">尚未选择图片</span></div>
     <div id="image-convert-files" class="image-convert-files" aria-label="待转换图片"></div>
     <div class="image-convert-destination"><label for="image-convert-directory">输出文件夹</label><input id="image-convert-directory" readonly placeholder="选择保存位置"><button id="image-convert-pick-directory" type="button">选择文件夹</button></div>
+    <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div></section>
+  <section class="settings-card image-convert-panel"><h3>转换设置</h3>
     <div class="image-convert-options"><label>目标格式<select id="image-convert-format"><option value="original">保持原格式（压缩）</option><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp" selected>WebP</option><option value="gif">GIF</option><option value="tiff">TIFF</option><option value="heic">HEIC（需要 Windows 编解码扩展）</option><option value="ico">ICO 多尺寸图标</option><option value="svg">SVG 优化（仅 SVG 输入）</option></select></label>
       <label>JPEG / WebP / HEIC 质量 <span id="image-convert-quality-value">85</span><input id="image-convert-quality" type="range" min="1" max="100" value="85"></label>
       <label>最大宽度<input id="image-convert-width" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
@@ -24,10 +27,9 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>锐化<select id="image-enhance-sharpen"><option value="0">关闭</option><option value="1" selected>轻度</option><option value="2">较强</option></select></label>
       <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
     </div></fieldset>
-    <p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
+    <details class="image-convert-rules"><summary>格式与保留规则</summary><p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p></details>
     <p id="image-codec-status" class="image-convert-note" role="status">HEIC 读写依赖 Windows HEIF/HEVC 系统扩展；当前仅处理 8 位静态主图并仅保留 ICC，含 HDR 增益图或动态视频时需分别确认丢弃。</p>
-    <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div>
-  </section></div>`;}
+  </section></div></div>`;}
 
 export function setupImageConvert(){
  const files=q<HTMLElement>('image-convert-files'),count=q<HTMLElement>('image-convert-count'),status=q<HTMLElement>('image-convert-status');

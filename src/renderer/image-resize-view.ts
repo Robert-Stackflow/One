@@ -5,7 +5,8 @@ import {imageResizeRule,type ImageResizeRule,type ImageConvertProgress,type Imag
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
-export function imageResizePage(){return `<div class="image-resize-page"><div class="image-resize-heading"><h2>批量缩放</h2><p>按像素、百分比或长边调整图片尺寸。默认保持宽高比，结果保存为原格式的新文件。</p></div>
+export function imageResizePage(){return `<div class="image-resize-page"><header class="image-resize-heading"><h2>批量缩放</h2><p>按像素、百分比或长边调整尺寸，结果保存为原格式的新文件。</p></header>
+ <div class="image-resize-layout"><section class="settings-card image-resize-setup" aria-label="缩放设置"><h3>缩放设置</h3>
  <div class="image-resize-picks"><button id="image-resize-add" type="button">添加图片</button><button id="image-resize-clear" type="button">清空列表</button><span id="image-resize-count">尚未选择图片</span></div>
  <div class="image-resize-settings"><label>缩放规则<select id="image-resize-mode"><option value="pixels">按像素</option><option value="percent" selected>按比例</option><option value="long-edge">按长边</option></select></label>
   <div id="image-resize-pixels" class="image-resize-fields" hidden><label>宽度（像素）<input id="image-resize-width" type="number" min="1" max="16384" placeholder="可留空"></label><label>高度（像素）<input id="image-resize-height" type="number" min="1" max="16384" placeholder="可留空"></label></div>
@@ -15,7 +16,7 @@ export function imageResizePage(){return `<div class="image-resize-page"><div cl
  <div class="image-resize-destination"><label for="image-resize-directory">输出文件夹</label><input id="image-resize-directory" readonly placeholder="选择保存位置"><button id="image-resize-pick-directory" type="button">选择文件夹</button></div>
  <p class="image-resize-note">按像素填写单边时自动计算另一边；同时填写宽高且保持比例时，会缩放到该范围内。取消保持比例可拉伸到指定宽高。比例可放大到 400%，单边最多 16384 像素、总输出最多 1 亿像素。输出会移除常规元数据。</p>
  <div class="image-resize-actions"><button id="image-resize-start" type="button" disabled>开始批量缩放</button><button id="image-resize-cancel" type="button" disabled>取消</button><button id="image-resize-retry" type="button" hidden>重试失败项</button><span id="image-resize-status" role="status" aria-live="polite"></span></div>
- <div id="image-resize-results" class="image-resize-results" aria-label="缩放结果"></div></div>`;}
+ </section><section class="settings-card image-resize-output" aria-label="缩放结果"><h3>处理结果</h3><div id="image-resize-results" class="image-resize-results" aria-label="缩放结果"></div></section></div></div>`;}
 
 export function setupImageResize(){
  const add=q<HTMLButtonElement>('image-resize-add'),clear=q<HTMLButtonElement>('image-resize-clear'),count=q<HTMLElement>('image-resize-count'),mode=q<HTMLSelectElement>('image-resize-mode'),width=q<HTMLInputElement>('image-resize-width'),height=q<HTMLInputElement>('image-resize-height'),percent=q<HTMLInputElement>('image-resize-percent-value'),longEdge=q<HTMLInputElement>('image-resize-long-edge-value'),keepAspect=q<HTMLInputElement>('image-resize-keep-aspect');

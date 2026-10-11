@@ -6,15 +6,16 @@ const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 
-export function imageCropPage(){return `<div class="image-crop-page"><div class="image-crop-heading"><h2>批量裁剪</h2><p>在图片上拖动选区；同一相对位置和尺寸会应用到列表中的每张静态图片。固定比例会按每张图片重新计算。</p></div>
+export function imageCropPage(){return `<div class="image-crop-page"><header class="image-crop-heading"><h2>批量裁剪</h2><p>拖动选区后批量裁剪静态图片；固定比例会按每张图片重新计算。</p></header>
+ <div class="image-crop-layout"><section class="settings-card image-crop-setup" aria-label="裁剪设置"><h3>裁剪设置</h3>
  <div class="image-crop-picks"><button id="image-crop-add" type="button">添加图片</button><button id="image-crop-clear" type="button" class="quiet">清空列表</button><span id="image-crop-count">尚未选择图片</span></div>
  <div id="image-crop-files" class="image-crop-files" aria-label="待裁剪图片"></div>
  <div class="image-crop-controls"><label for="image-crop-ratio">选区比例</label><select id="image-crop-ratio"><option value="free">自由裁剪</option><option value="1">1:1</option><option value="1.3333333333">4:3</option><option value="1.7777777778">16:9</option><option value="0.8">4:5</option></select><span id="image-crop-bounds" aria-live="polite"></span></div>
- <div class="image-crop-preview-grid"><section><h3>原图与选区</h3><div class="image-crop-preview-frame"><div id="image-crop-stage" class="image-crop-stage"><img id="image-crop-source-image" alt="所选图片预览" draggable="false"><div id="image-crop-selection" class="image-crop-selection" hidden></div></div><p id="image-crop-empty">添加静态图片后拖动选区。</p></div></section><section><h3>裁剪结果预览</h3><div class="image-crop-preview-frame"><img id="image-crop-result-image" class="image-crop-result-image" alt="裁剪结果预览" hidden><p id="image-crop-result-empty">完成裁剪后可在此查看结果。</p></div><span id="image-crop-result-name"></span></section></div>
  <div class="image-crop-destination"><label for="image-crop-directory">输出文件夹</label><input id="image-crop-directory" readonly placeholder="选择保存位置"><button id="image-crop-pick-directory" type="button">选择文件夹</button></div>
  <p class="image-crop-note">保存原格式的新文件，不修改原图。当前裁剪仅支持静态 PNG、JPEG、WebP、GIF、TIFF；动图与多页图片会明确报错。输出会移除常规元数据。</p>
  <div class="image-crop-actions"><button id="image-crop-start" type="button" disabled>开始批量裁剪</button><button id="image-crop-cancel" type="button" disabled>取消</button><button id="image-crop-retry" type="button" hidden>重试失败项</button><span id="image-crop-status" role="status" aria-live="polite"></span></div>
- <div id="image-crop-results" class="image-crop-results" aria-label="裁剪结果"></div></div>`;}
+ </section><section class="settings-card image-crop-preview" aria-label="裁剪预览"><h3>预览与结果</h3><div class="image-crop-preview-grid"><section><h3>原图与选区</h3><div class="image-crop-preview-frame"><div id="image-crop-stage" class="image-crop-stage"><img id="image-crop-source-image" alt="所选图片预览" draggable="false"><div id="image-crop-selection" class="image-crop-selection" hidden></div></div><p id="image-crop-empty">添加静态图片后拖动选区。</p></div></section><section><h3>裁剪结果预览</h3><div class="image-crop-preview-frame"><img id="image-crop-result-image" class="image-crop-result-image" alt="裁剪结果预览" hidden><p id="image-crop-result-empty">完成裁剪后可在此查看结果。</p></div><span id="image-crop-result-name"></span></section></div>
+ <div id="image-crop-results" class="image-crop-results" aria-label="裁剪结果"></div></section></div></div>`;}
 
 export function setupImageCrop(){
  const add=q<HTMLButtonElement>('image-crop-add'),clear=q<HTMLButtonElement>('image-crop-clear'),count=q<HTMLElement>('image-crop-count'),files=q<HTMLElement>('image-crop-files');
