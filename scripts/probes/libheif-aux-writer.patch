@@ -1,17 +1,22 @@
 diff --git a/libheif/api/libheif/heif_aux_images.cc b/libheif/api/libheif/heif_aux_images.cc
-index 214ebfb..0988fe2 100644
+index 214ebfb..78bd529 100644
 --- a/libheif/api/libheif/heif_aux_images.cc
 +++ b/libheif/api/libheif/heif_aux_images.cc
-@@ -29,0 +30,40 @@
+@@ -29,0 +30,70 @@
 +heif_error heif_context_add_auxiliary_image_probe(heif_context* ctx,
 +                                                  const heif_image_handle* master,
 +                                                  const heif_image* pixels,
 +                                                  heif_encoder* encoder,
 +                                                  const char* auxiliary_type,
++                                                  int rotation_ccw,
 +                                                  heif_image_handle** out_auxiliary_handle)
 +{
 +  if (!ctx || !master || !pixels || !encoder || !auxiliary_type || !out_auxiliary_handle) {
 +    return heif_error_null_pointer_argument;
++  }
++  if (rotation_ccw != 0 && rotation_ccw != 90 && rotation_ccw != 180 && rotation_ccw != 270) {
++    return Error(heif_error_Usage_error, heif_suberror_Invalid_parameter_value,
++                 "Unsupported auxiliary rotation").error_struct(ctx->context.get());
 +  }
 +  *out_auxiliary_handle = nullptr;
 +  if (master->context != ctx->context) {
@@ -35,6 +40,12 @@ index 214ebfb..0988fe2 100644
 +  if (Error error = file->set_auxC_property(image->get_id(), auxiliary_type)) {
 +    return error.error_struct(ctx->context.get());
 +  }
++  file->get_infe_box(image->get_id())->set_hidden_item(true);
++  if (rotation_ccw) {
++    auto rotation = std::make_shared<Box_irot>();
++    rotation->set_rotation_ccw(rotation_ccw);
++    file->add_property(image->get_id(), rotation, true);
++  }
 +  master->image->add_aux_image(image);
 +  *out_auxiliary_handle = new heif_image_handle;
 +  (*out_auxiliary_handle)->image = image;
@@ -42,12 +53,31 @@ index 214ebfb..0988fe2 100644
 +  return heif_error_success;
 +}
 +
++heif_error heif_context_add_rotation_probe(heif_context* ctx,
++                                           const heif_image_handle* handle,
++                                           int rotation_ccw)
++{
++  if (!ctx || !handle) return heif_error_null_pointer_argument;
++  if (handle->context != ctx->context) {
++    return Error(heif_error_Usage_error, heif_suberror_Invalid_parameter_value,
++                 "Image belongs to a different context").error_struct(ctx->context.get());
++  }
++  if (rotation_ccw != 90 && rotation_ccw != 180 && rotation_ccw != 270) {
++    return Error(heif_error_Usage_error, heif_suberror_Invalid_parameter_value,
++                 "Unsupported rotation").error_struct(ctx->context.get());
++  }
++  auto rotation = std::make_shared<Box_irot>();
++  rotation->set_rotation_ccw(rotation_ccw);
++  ctx->context->get_heif_file()->add_property(handle->image->get_id(), rotation, true);
++  return heif_error_success;
++}
++
 +
 diff --git a/libheif/api/libheif/heif_aux_images.h b/libheif/api/libheif/heif_aux_images.h
-index ad239e6..3987f07 100644
+index ad239e6..d2be97c 100644
 --- a/libheif/api/libheif/heif_aux_images.h
 +++ b/libheif/api/libheif/heif_aux_images.h
-@@ -170,0 +171,9 @@ heif_error heif_image_handle_get_auxiliary_image_handle(const heif_image_handle*
+@@ -170,0 +171,15 @@ heif_error heif_image_handle_get_auxiliary_image_handle(const heif_image_handle*
 +// Local research-only API: encode and associate an auxiliary HEVC image.
 +LIBHEIF_API
 +heif_error heif_context_add_auxiliary_image_probe(heif_context* ctx,
@@ -55,5 +85,11 @@ index ad239e6..3987f07 100644
 +                                                  const heif_image* pixels,
 +                                                  heif_encoder* encoder,
 +                                                  const char* auxiliary_type,
++                                                  int rotation_ccw,
 +                                                  heif_image_handle** out_auxiliary_handle);
++
++LIBHEIF_API
++heif_error heif_context_add_rotation_probe(heif_context* ctx,
++                                           const heif_image_handle* handle,
++                                           int rotation_ccw);
 +
