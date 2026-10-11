@@ -2,11 +2,13 @@
 .developer-uuid-heading{margin-bottom:18px}
 .developer-uuid-heading h2{font-size:20px;margin:0 0 6px}
 .developer-uuid-heading p{margin:0;color:var(--muted)}
-.developer-uuid-layout{display:grid;grid-template-columns:minmax(280px,320px) minmax(0,1fr);gap:16px;align-items:start}
+.developer-uuid-layout{display:grid;grid-template-columns:minmax(320px,400px) minmax(0,1fr);gap:16px;align-items:start}
 .developer-uuid-panel.settings-card{margin:0;padding:20px;min-width:0}
 .developer-uuid-panel h3{font-size:14px;font-weight:600;margin:0 0 18px}
-.developer-uuid-options{display:grid;gap:14px}
+.developer-uuid-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .developer-uuid-options label{display:grid;gap:7px;font-size:12px;font-weight:600}
+.developer-uuid-options label.developer-uuid-wide{grid-column:1/-1}
+.developer-uuid-options input:not([type=checkbox]),.developer-uuid-options .custom-select{width:100%;min-width:0}
 .developer-uuid-options .developer-uuid-case{display:flex;align-items:center;gap:8px}
 .developer-uuid-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:20px}
 #developer-uuid-status{display:block;margin-top:12px;color:var(--muted);font-size:12px}

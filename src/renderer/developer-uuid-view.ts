@@ -1,17 +1,25 @@
 import './developer-uuid.css';
 import {api,q,toast,errorMessage} from './ui';
-import {generateUuids,type UuidFormat} from '../shared/uuid-tool';
+import {generateUuids,type UuidFormat,type UuidVersion,type UuidNamespace} from '../shared/uuid-tool';
 
 export function developerUuidPage(){return `<div class="developer-uuid-page">
  <div class="developer-uuid-layout"><section class="settings-card developer-uuid-panel" aria-label="生成设置"><h3>生成设置</h3>
- <div class="developer-uuid-options"><label>数量<input id="developer-uuid-count" type="number" min="1" max="1000" step="1" value="1"></label><label>格式<select id="developer-uuid-format"><option value="standard">标准（带连字符）</option><option value="compact">紧凑（无连字符）</option><option value="braces">花括号</option></select></label><label class="developer-uuid-case"><input id="developer-uuid-uppercase" type="checkbox">大写字母</label></div>
+ <div class="developer-uuid-options"><label>版本<select id="developer-uuid-version"><option value="v4">v4 · 随机</option><option value="v7">v7 · 时间排序</option><option value="v5">v5 · 名称 / SHA-1</option><option value="v3">v3 · 名称 / MD5</option></select></label><label id="developer-uuid-count-field">数量<input id="developer-uuid-count" type="number" min="1" max="1000" step="1" value="1"></label><label id="developer-uuid-namespace-field" hidden>命名空间<select id="developer-uuid-namespace"><option value="dns">DNS</option><option value="url">URL</option><option value="oid">OID</option><option value="x500">X.500</option><option value="custom">自定义 UUID</option></select></label><label id="developer-uuid-custom-field" class="developer-uuid-wide" hidden>自定义命名空间 UUID<input id="developer-uuid-custom" spellcheck="false" maxlength="36" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label><label id="developer-uuid-name-field" class="developer-uuid-wide" hidden>名称<input id="developer-uuid-name" spellcheck="false" maxlength="1024" placeholder="按原样使用 UTF-8 名称"></label><label>格式<select id="developer-uuid-format"><option value="standard">标准（带连字符）</option><option value="compact">紧凑（无连字符）</option><option value="braces">花括号</option></select></label><label class="developer-uuid-case"><input id="developer-uuid-uppercase" type="checkbox">大写字母</label></div>
  <div class="developer-uuid-actions"><button id="developer-uuid-generate" type="button">生成 UUID</button><button id="developer-uuid-copy" type="button" disabled>复制全部</button></div><span id="developer-uuid-status" role="status" aria-live="polite"></span></section>
  <section class="settings-card developer-uuid-panel" aria-label="生成结果"><h3>生成结果</h3><textarea id="developer-uuid-output" class="developer-uuid-output" readonly spellcheck="false" aria-label="生成的 UUID" placeholder="生成后在这里查看和复制 UUID"></textarea></section></div></div>`;}
 
 export function setupDeveloperUuid(){
- const count=q<HTMLInputElement>('developer-uuid-count'),format=q<HTMLSelectElement>('developer-uuid-format'),uppercase=q<HTMLInputElement>('developer-uuid-uppercase'),output=q<HTMLTextAreaElement>('developer-uuid-output');
+ const version=q<HTMLSelectElement>('developer-uuid-version'),count=q<HTMLInputElement>('developer-uuid-count'),format=q<HTMLSelectElement>('developer-uuid-format'),uppercase=q<HTMLInputElement>('developer-uuid-uppercase'),output=q<HTMLTextAreaElement>('developer-uuid-output');
+ const namespace=q<HTMLSelectElement>('developer-uuid-namespace'),name=q<HTMLInputElement>('developer-uuid-name'),custom=q<HTMLInputElement>('developer-uuid-custom');
+ const countField=q<HTMLElement>('developer-uuid-count-field'),namespaceField=q<HTMLElement>('developer-uuid-namespace-field'),nameField=q<HTMLElement>('developer-uuid-name-field'),customField=q<HTMLElement>('developer-uuid-custom-field');
  const generate=q<HTMLButtonElement>('developer-uuid-generate'),copy=q<HTMLButtonElement>('developer-uuid-copy'),status=q<HTMLElement>('developer-uuid-status');
- generate.onclick=()=>{try{const values=generateUuids(Number(count.value),format.value as UuidFormat,uppercase.checked);output.value=values.join('\n');status.textContent=`已生成 ${values.length} 个 UUID v4`;copy.disabled=false;}catch(error){status.textContent=errorMessage(error);}};
+ const named=()=>version.value==='v3'||version.value==='v5';
+ const update=()=>{const hasName=named();countField.hidden=hasName;namespaceField.hidden=!hasName;nameField.hidden=!hasName;customField.hidden=!hasName||namespace.value!=='custom';};
+ const invalidate=()=>{output.value='';copy.disabled=true;status.textContent='';};
+ version.addEventListener('change',()=>{update();invalidate();});namespace.addEventListener('change',()=>{update();invalidate();});
+ for(const field of [count,name,custom])field.addEventListener('input',invalidate);
+ format.addEventListener('change',invalidate);uppercase.addEventListener('change',invalidate);update();
+ generate.onclick=()=>{try{const selected=version.value as UuidVersion,values=generateUuids({version:selected,count:named()?1:Number(count.value),format:format.value as UuidFormat,uppercase:uppercase.checked,name:name.value,namespace:namespace.value as UuidNamespace,customNamespace:custom.value});output.value=values.join('\n');status.textContent=`已生成 ${values.length} 个 UUID ${selected}`;copy.disabled=false;}catch(error){output.value='';copy.disabled=true;status.textContent=errorMessage(error);}};
  copy.onclick=()=>void api.copyText(output.value).then(()=>toast('已复制 UUID')).catch(toast);
  return {activate(_value:boolean){},dispose(){}};
 }
