@@ -2,8 +2,19 @@ import './regex.css';
 import {api,q,esc,toast} from './ui';
 import type {RegexRequest,RegexResult} from '../shared/regex-tool';
 
+const snippets=[
+ {id:'digits',label:'数字',text:'\\d+'},
+ {id:'space',label:'空白',text:'\\s+'},
+ {id:'word',label:'单词',text:'\\b\\w+\\b'},
+ {id:'boundary',label:'单词边界',text:'\\b'},
+ {id:'group',label:'捕获组',text:'()',cursor:1},
+ {id:'named',label:'命名组',text:'(?<name>)',cursor:8},
+ {id:'noncapture',label:'非捕获组',text:'(?:)',cursor:3}
+];
+
 export function regexPage(){return `<div class="regex-page">
  <section class="settings-card regex-settings" aria-label="正则设置"><h3>匹配设置</h3><div class="regex-pattern"><label for="regex-pattern">表达式</label><input id="regex-pattern" spellcheck="false" placeholder="例如 (?<name>\\w+)"></div>
+ <details id="regex-snippets" class="regex-snippets"><summary>插入常用片段</summary><div>${snippets.map(item=>`<button type="button" data-regex-snippet="${item.id}">${item.label}</button>`).join('')}</div></details>
  <fieldset class="regex-flags"><legend>选项</legend><label><input type="checkbox" data-regex-flag="g" checked>全局 g</label><label><input type="checkbox" data-regex-flag="i">忽略大小写 i</label><label><input type="checkbox" data-regex-flag="m">多行 m</label><label><input type="checkbox" data-regex-flag="s">点匹配换行 s</label><label><input type="checkbox" data-regex-flag="u">Unicode u</label></fieldset>
  <div class="regex-actions"><button id="regex-test" type="button">测试匹配</button><button id="regex-single" type="button" disabled>替换当前处</button><button id="regex-preview" type="button">替换全部</button><button id="regex-cancel" type="button" hidden>取消</button><span id="regex-status" role="status" aria-live="polite"></span></div></section>
  <div class="regex-columns"><section class="settings-card regex-panel"><div class="regex-input-heading"><label for="regex-input">测试文本</label><div class="regex-nav"><button id="regex-highlight-toggle" type="button" disabled>高亮匹配</button><button id="regex-prev" type="button" disabled>上一处</button><span id="regex-position" aria-live="polite"></span><button id="regex-next" type="button" disabled>下一处</button></div></div><textarea id="regex-input" spellcheck="false"></textarea><div id="regex-highlights" class="regex-highlights" aria-label="匹配高亮" hidden></div></section><section class="settings-card regex-panel"><label for="regex-replacement">替换文本</label><textarea id="regex-replacement" spellcheck="false" placeholder="例如 $& 或 $<name>"></textarea></section></div>
@@ -14,6 +25,7 @@ export function setupRegex(){
  const pattern=q<HTMLInputElement>('regex-pattern'),input=q<HTMLTextAreaElement>('regex-input'),replacement=q<HTMLTextAreaElement>('regex-replacement'),output=q<HTMLTextAreaElement>('regex-output');
  const status=q<HTMLElement>('regex-status'),count=q<HTMLElement>('regex-count'),list=q<HTMLElement>('regex-matches'),test=q<HTMLButtonElement>('regex-test'),preview=q<HTMLButtonElement>('regex-preview'),single=q<HTMLButtonElement>('regex-single'),cancel=q<HTMLButtonElement>('regex-cancel'),copy=q<HTMLButtonElement>('regex-copy'),apply=q<HTMLButtonElement>('regex-apply');
  const prev=q<HTMLButtonElement>('regex-prev'),next=q<HTMLButtonElement>('regex-next'),position=q<HTMLElement>('regex-position'),exportButton=q<HTMLButtonElement>('regex-export'),highlightToggle=q<HTMLButtonElement>('regex-highlight-toggle'),highlights=q<HTMLElement>('regex-highlights');
+ const snippetPanel=q<HTMLElement>('regex-snippets');
  const flags=[...document.querySelectorAll<HTMLInputElement>('[data-regex-flag]')];let worker:Worker|undefined,timer:ReturnType<typeof setTimeout>|undefined,revision=0,matches:RegexResult['matches']=[],selected=0,lastResult:RegexResult|undefined,lastRequest:RegexRequest|undefined,highlightOpen=false;
  const stop=()=>{if(timer)clearTimeout(timer);timer=undefined;worker?.terminate();worker=undefined;test.disabled=preview.disabled=false;single.disabled=!matches.length;cancel.hidden=true;};
  const revealIn=(container:HTMLElement,node:HTMLElement)=>{const item=node.getBoundingClientRect(),frame=container.getBoundingClientRect();if(item.top<frame.top)container.scrollTop+=item.top-frame.top;else if(item.bottom>frame.bottom)container.scrollTop+=item.bottom-frame.bottom;};
@@ -38,6 +50,7 @@ export function setupRegex(){
  highlightToggle.onclick=()=>{highlightOpen=!highlightOpen;highlightToggle.textContent=highlightOpen?'隐藏高亮':'高亮匹配';drawHighlights();};
  list.onclick=event=>{const button=(event.target as HTMLElement).closest<HTMLElement>('[data-regex-match]');if(button&&list.contains(button))select(Number(button.dataset.regexMatch),true);};
  highlights.onclick=event=>{const mark=(event.target as HTMLElement).closest<HTMLElement>('[data-regex-highlight]');if(mark&&highlights.contains(mark))select(Number(mark.dataset.regexHighlight),true);};
+ snippetPanel.onclick=event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-regex-snippet]'),item=snippets.find(value=>value.id===button?.dataset.regexSnippet);if(!item)return;const start=pattern.selectionStart??pattern.value.length,end=pattern.selectionEnd??start;if(pattern.value.length-end+start+item.text.length>2000){status.textContent='表达式不能超过 2,000 字符';return;}pattern.setRangeText(item.text,start,end,'end');const cursor=start+(item.cursor??item.text.length);pattern.focus();pattern.setSelectionRange(cursor,cursor);pattern.dispatchEvent(new Event('input',{bubbles:true}));};
  for(const field of [pattern,input,...flags])field.addEventListener(field instanceof HTMLInputElement&&field.type==='checkbox'?'change':'input',()=>{revision++;stop();clear();status.textContent='';});
  replacement.addEventListener('input',()=>{output.value='';copy.disabled=apply.disabled=true;if(status.textContent==='替换预览已生成')status.textContent='';});
  copy.onclick=()=>void api.copyText(output.value).then(()=>toast('已复制结果')).catch(toast);

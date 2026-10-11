@@ -2,6 +2,7 @@
 .regex-page{container-type:inline-size}
 .regex-settings.settings-card,.regex-panel.settings-card,.regex-results.settings-card{margin:0;padding:20px;min-width:0}
 .regex-settings h3{font-size:14px;font-weight:600;margin:0 0 16px}
+.regex-snippets{margin-top:12px}.regex-snippets>summary{cursor:pointer;font-size:12px}.regex-snippets>div{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.regex-snippets button{font-size:12px}
 .regex-pattern label,.regex-columns label{font-size:12px}
 .regex-flags{margin-top:16px;border-color:var(--line);border-radius:var(--field-radius)}
 .regex-actions{margin-top:18px}
