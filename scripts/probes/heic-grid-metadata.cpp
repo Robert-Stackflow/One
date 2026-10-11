@@ -1,15 +1,18 @@
 // Research-only HEIC grid/metadata probe. Not built or shipped with One.
-// Usage: heic-grid-metadata input.heic output.heic
+// Usage: heic-grid-metadata input.heic output.heic [--sdr]
 // Re-encodes a static 8-bit primary image. Drops auxiliary images, motion video,
-// MakerNote, and XMP blocks containing known motion-photo markers.
+// MakerNote, and XMP blocks containing known motion-photo markers. HDR gain maps
+// require the explicit --sdr option; unknown auxiliary images are rejected.
 // Build separately with C++20, libheif headers/import library, and a HEVC codec.
 #include <libheif/heif.h>
 #include <libheif/heif_metadata.h>
 #include <libheif/heif_tiling.h>
+#include <libheif/heif_aux_images.h>
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
 #include <cctype>
+#include <string>
 #include <vector>
 
 static bool ok(heif_error error,const char* step){
@@ -84,7 +87,8 @@ static bool hasMotionMarker(const std::vector<unsigned char>& data){
 }
 
 int main(int argc,char** argv){
- if(argc!=3)return 2;
+ if(argc!=3&&argc!=4)return 2;
+ if(argc==4&&std::strcmp(argv[3],"--sdr")!=0)return 2;
  heif_context* source=heif_context_alloc();
  heif_context* target=heif_context_alloc();
  heif_image_handle* sourceImage=nullptr;
@@ -99,6 +103,45 @@ int main(int argc,char** argv){
  heif_image_tiling sourceTiling{};
  if(ok(heif_image_handle_get_image_tiling(sourceImage,1,&sourceTiling),"source tiling"))
   std::printf("sourceGrid=%ux%u tile=%ux%u\n",sourceTiling.num_columns,sourceTiling.num_rows,sourceTiling.tile_width,sourceTiling.tile_height);
+ const int auxiliaryCount=heif_image_handle_get_number_of_auxiliary_images(sourceImage,0);
+ std::printf("sourceAuxiliaryImages=%d\n",auxiliaryCount);
+ if(auxiliaryCount<0||auxiliaryCount>16)return 2;
+ bool hdrGainMap=false,unsupportedAuxiliary=false;
+ if(auxiliaryCount>0&&auxiliaryCount<=16){
+  std::vector<heif_item_id> auxiliaryIds(auxiliaryCount);
+  heif_image_handle_get_list_of_auxiliary_image_IDs(sourceImage,0,auxiliaryIds.data(),auxiliaryCount);
+  for(auto id:auxiliaryIds){
+   heif_image_handle* auxiliary=nullptr;
+   if(!ok(heif_image_handle_get_auxiliary_image_handle(sourceImage,id,&auxiliary),"auxiliary handle"))return 1;
+   const char* type=nullptr;
+   if(!ok(heif_image_handle_get_auxiliary_type(auxiliary,&type),"auxiliary type"))return 1;
+   if(type&&std::strcmp(type,"urn:com:apple:photo:2020:aux:hdrgainmap")==0)hdrGainMap=true;
+   else unsupportedAuxiliary=true;
+   std::printf("auxiliaryType=%.128s dimensions=%dx%d\n",type?type:"",heif_image_handle_get_width(auxiliary),heif_image_handle_get_height(auxiliary));
+   heif_image* auxiliaryPixels=nullptr;
+   if(ok(heif_decode_image(auxiliary,&auxiliaryPixels,heif_colorspace_undefined,heif_chroma_undefined,nullptr),"decode auxiliary")){
+    std::printf("auxiliaryPixels=%dx%d colorspace=%d chroma=%d bits=%d\n",heif_image_get_width(auxiliaryPixels,heif_channel_Y),heif_image_get_height(auxiliaryPixels,heif_channel_Y),heif_image_get_colorspace(auxiliaryPixels),heif_image_get_chroma_format(auxiliaryPixels),heif_image_get_bits_per_pixel_range(auxiliaryPixels,heif_channel_Y));
+    heif_image_release(auxiliaryPixels);
+   }
+   const int auxiliaryMetadata=heif_image_handle_get_number_of_metadata_blocks(auxiliary,nullptr);
+   std::printf("auxiliaryMetadataBlocks=%d\n",auxiliaryMetadata);
+   if(auxiliaryMetadata>0&&auxiliaryMetadata<=16){
+    std::vector<heif_item_id> metadataIds(auxiliaryMetadata);
+    heif_image_handle_get_list_of_metadata_block_IDs(auxiliary,nullptr,metadataIds.data(),auxiliaryMetadata);
+    for(auto metadataId:metadataIds){
+     const char* typeValue=heif_image_handle_get_metadata_type(auxiliary,metadataId);
+     const std::string metadataType=typeValue?typeValue:"";
+     const char* contentValue=heif_image_handle_get_metadata_content_type(auxiliary,metadataId);
+     const std::string contentType=contentValue?contentValue:"";
+     std::printf("auxiliaryMetadataType=%.128s content=%.128s bytes=%zu\n",metadataType.c_str(),contentType.c_str(),heif_image_handle_get_metadata_size(auxiliary,metadataId));
+    }
+   }
+   heif_image_handle_release_auxiliary_type(auxiliary,&type);
+   heif_image_handle_release(auxiliary);
+  }
+ }
+ if(unsupportedAuxiliary){std::fprintf(stderr,"Unknown auxiliary image; conversion refused\n");return 2;}
+ if(hdrGainMap&&argc!=4){std::fprintf(stderr,"HDR gain map would be discarded; rerun with --sdr\n");return 2;}
  const size_t iccSize=heif_image_handle_get_raw_color_profile_size(sourceImage);
  if(iccSize>128*1024)return 2;
  if(iccSize>0){
