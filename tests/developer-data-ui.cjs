@@ -14,6 +14,7 @@ test('developer data tab works in the full window',async()=>{
   await page.locator('[data-page="developer"]').click();
   await page.locator('#tool-tab-developer-data').click();
   await expect(page.locator('#page-developer-data')).toBeVisible();
+  await expect(page.locator('#developer-data-format')).toHaveAttribute('aria-label','输入格式');
   await expect(page.locator('#barcode-heading-actions')).toBeHidden();
   await page.locator('#developer-data-input').fill('{"name":"中文","count":2}');
   await page.locator('[data-data-action="format"]').click();
@@ -26,7 +27,7 @@ test('developer data tab works in the full window',async()=>{
   await page.locator('[data-data-action="validate"]').click();
   await expect(page.locator('#developer-data-status')).toContainText('第 2 行');
   assert.equal(await page.locator('#developer-data-input').evaluate(el=>el.selectionStart),8);
-  await page.locator('#developer-data-format').selectOption('yaml');
+  await page.locator('#developer-data-format').click();await page.locator('#developer-data-format-options [role="option"][aria-label="YAML"]').click();
   await page.locator('#developer-data-input').fill('enabled: true\nname: 中文');
   await page.locator('[data-data-action="convert"]').click();
   await expect(page.locator('#developer-data-status')).toContainText('已转换为 JSON');

@@ -14,8 +14,8 @@ test('developer hash tab computes, copies and verifies text and file digests',as
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.locator('[data-page="developer"]').click();await page.locator('#tool-tab-developer-hash').click();
   const sha=createHash('sha256').update('abc').digest('hex');await page.locator('#developer-hash-text').fill('abc');await page.locator('#developer-hash-expected').fill(sha.toUpperCase());await page.locator('#developer-hash-run').click();
   await expect(page.locator('#developer-hash-digest')).toHaveText(sha);await expect(page.locator('#developer-hash-match')).toHaveText('校验一致');await page.locator('#developer-hash-copy').click();assert.equal(await app.evaluate(({clipboard})=>clipboard.readText()),sha);
-  await page.locator('#developer-hash-kind').selectOption('file');await expect(page.locator('#developer-hash-file-field')).toBeVisible();
-  await page.locator('#developer-hash-file').evaluate((input,value)=>{input.value=value;},source);await page.locator('#developer-hash-algorithm').selectOption('md5');
+  await page.locator('#developer-hash-kind').click();await page.locator('#developer-hash-kind-options [role="option"][aria-label="文件"]').click();await expect(page.locator('#developer-hash-file-field')).toBeVisible();
+  await page.locator('#developer-hash-file').evaluate((input,value)=>{input.value=value;},source);await page.locator('#developer-hash-algorithm').click();await page.locator('#developer-hash-algorithm-options [role="option"][aria-label="MD5"]').click();
   const md5=createHash('md5').update(Buffer.from([0,1,2,3,255])).digest('hex');await page.locator('#developer-hash-expected').fill('0'.repeat(32));await page.locator('#developer-hash-run').click();await expect(page.locator('#developer-hash-digest')).toHaveText(md5);await expect(page.locator('#developer-hash-match')).toHaveText('校验不一致');assert.deepEqual(errors,[]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });

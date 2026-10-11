@@ -7,7 +7,9 @@ export function customControls(root: HTMLElement) {
     const options = [...select.options].map(option => ({ label: option.text, value: option.value, disabled: option.disabled }));
     const button = document.createElement('button'); button.type = 'button'; button.className = 'custom-select'; button.id = select.id;button.disabled=select.disabled;
     button.setAttribute('role','combobox'); button.setAttribute('aria-haspopup','listbox'); button.setAttribute('aria-expanded','false');
-    button.setAttribute('aria-label', select.getAttribute('aria-label') || select.closest('label')?.textContent?.trim() || '选择');
+    const associatedLabel=select.labels?.item(0);
+    const labelText=associatedLabel?[...associatedLabel.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent?.trim()).filter(Boolean).join(' '):'';
+    button.setAttribute('aria-label',select.getAttribute('aria-label')||labelText||associatedLabel?.querySelector('span')?.textContent?.trim()||'选择');
     const label = document.createElement('span');button.append(label);button.insertAdjacentHTML('beforeend',icon('chevron-down')); 
     let value = select.value; let menu: HTMLDivElement | null = null; let modal:HTMLDialogElement|null=null;let active = 0; let prefix = ''; let typedAt = 0;
     let focused:HTMLElement|null=null,selected:HTMLElement|null=null;

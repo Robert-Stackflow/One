@@ -15,12 +15,12 @@ test('Base64 handles Unicode text, binary files and invalid input',async()=>{
   await page.locator('#base64-input').fill('中文 🌄');await page.locator('#base64-run').click();
   await expect(page.locator('#base64-status')).toHaveText('已编码');
   const encoded=await page.locator('#base64-output').inputValue();assert.equal(encoded,Buffer.from('中文 🌄').toString('base64'));
-  await page.locator('#base64-mode').selectOption('decode-text');await page.locator('#base64-input').fill(encoded);await page.locator('#base64-run').click();
+  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文本解码"]').click();await page.locator('#base64-input').fill(encoded);await page.locator('#base64-run').click();
   await expect(page.locator('#base64-output')).toHaveValue('中文 🌄');
   await page.locator('#base64-input').fill('%%not-base64');await page.locator('#base64-run').click();await expect(page.locator('#base64-status')).toContainText('无效');
-  await page.locator('#base64-mode').selectOption('encode-file');await page.locator('#base64-file').setInputFiles(source);await page.locator('#base64-run').click();
+  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="文件编码"]').click();await page.locator('#base64-file').setInputFiles(source);await page.locator('#base64-run').click();
   await expect(page.locator('#base64-output')).toHaveValue('AAEC/w==');
-  await page.locator('#base64-mode').selectOption('decode-file');await page.locator('#base64-input').fill('AAEC/w==');
+  await page.locator('#base64-mode').click();await page.locator('#base64-mode-options [role="option"][aria-label="Base64 导出文件"]').click();await page.locator('#base64-input').fill('AAEC/w==');
   const newWindow=app.waitForEvent('window');await page.locator('#base64-run').click();const picker=await newWindow;
   await picker.locator('#picker-path').fill(output);await picker.locator('#picker-go').click();
   await picker.locator('#picker-name').fill('decoded.bin');await picker.locator('#picker-confirm').click();

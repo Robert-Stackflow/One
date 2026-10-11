@@ -15,7 +15,7 @@ test('URL codec tab encodes and decodes without changing the input',async()=>{
   await page.locator('[data-url-action="encode"]').click();await expect(page.locator('#url-codec-status')).toHaveText('已编码');
   assert.equal(await page.locator('#url-codec-output').inputValue(),'https://a.test/%E8%B7%AF%E5%BE%84?q=%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC');
   assert.equal(await page.locator('#url-codec-input').inputValue(),'https://a.test/路径?q=中文 空格');
-  await page.locator('#url-codec-scope').selectOption('parameter');await page.locator('#url-codec-input').fill('a+b%2Bc');
+  await page.locator('#url-codec-scope').click();await page.locator('#url-codec-scope-options [role="option"][aria-label="参数值"]').click();await page.locator('#url-codec-input').fill('a+b%2Bc');
   await page.locator('[data-url-action="decode"]').click();await expect(page.locator('#url-codec-output')).toHaveValue('a b+c');
   await page.locator('#url-codec-input').fill('%E4%A');await page.locator('[data-url-action="decode"]').click();await expect(page.locator('#url-codec-status')).toContainText('无效');
   assert.deepEqual(errors,[]);

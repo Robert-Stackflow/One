@@ -11,12 +11,12 @@ test('timestamp tab converts seconds and resolves ambiguous local time',async()=
  try{
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.locator('[data-page="developer"]').click();await page.locator('#tool-tab-timestamp').click();
-  await page.locator('#timestamp-zone').selectOption('UTC');await page.locator('#timestamp-number').fill('0');await page.locator('#timestamp-to-date').click();
+  await page.locator('#timestamp-zone').click();await page.locator('#timestamp-zone-options [role="option"][aria-label="UTC"]').click();await page.locator('#timestamp-number').fill('0');await page.locator('#timestamp-to-date').click();
   await expect(page.locator('#timestamp-date-result')).toContainText('1970-01-01 00:00:00.000');
   await expect(page.locator('#timestamp-now-epoch')).toContainText('毫秒');
-  await page.locator('#timestamp-zone').selectOption('America/New_York');await page.locator('#timestamp-date').fill('2024-11-03T01:30');await page.locator('#timestamp-to-epoch').click();
+  await page.locator('#timestamp-zone').click();await page.locator('#timestamp-zone-options [role="option"][aria-label="纽约（America/New_York）"]').click();await page.locator('#timestamp-date').fill('2024-11-03T01:30');await page.locator('#timestamp-to-epoch').click();
   await expect(page.locator('#timestamp-epoch-result')).toContainText('出现两次');
-  const earlier=await page.locator('#timestamp-epoch-result').textContent();await page.locator('#timestamp-ambiguity').selectOption('later');
+  const earlier=await page.locator('#timestamp-epoch-result').textContent();await page.locator('#timestamp-ambiguity').click();await page.locator('#timestamp-ambiguity-options [role="option"][aria-label="选择较晚的时刻"]').click();
   const later=await page.locator('#timestamp-epoch-result').textContent();assert.notEqual(later,earlier);
   await page.locator('#timestamp-date').fill('2024-03-10T02:30');await page.locator('#timestamp-to-epoch').click();await expect(page.locator('#timestamp-epoch-result')).toContainText('不存在');
   await page.locator('#timestamp-use-now').click();await expect(page.locator('#timestamp-date')).not.toHaveValue('');
