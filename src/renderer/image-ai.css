@@ -30,6 +30,10 @@
 .image-ai-comparison figure:has(img:not([src]))::after{content:'处理后显示';display:grid;place-items:center;height:300px;border:1px dashed var(--line);border-radius:var(--field-radius);color:var(--muted);font-size:12px}
 .image-ai-output{display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;overflow-wrap:anywhere}
 .image-ai-output span{flex:1;min-width:0}
+.image-ai-batch-list{display:grid;gap:6px;margin-top:14px;max-height:210px;overflow:auto}
+.image-ai-batch-list[hidden]{display:none}
+.image-ai-batch-row{width:100%;min-width:0;padding:8px 10px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.image-ai-batch-row[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
 @container (max-width:850px){.image-ai-layout{grid-template-columns:1fr}.image-ai-preview{min-height:0}.image-ai-empty{min-height:160px}}
 @container (max-width:570px){.image-ai-comparison{grid-template-columns:1fr}.image-ai-comparison img,.image-ai-comparison figure:has(img:not([src]))::after{height:240px}}
 @media(max-width:760px){.image-ai-page{padding:16px}}
