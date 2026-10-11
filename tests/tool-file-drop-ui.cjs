@@ -5,7 +5,7 @@ const path=require('node:path');
 const sharp=require('sharp');
 const {_electron:electron,expect}=require('@playwright/test');
 
-test('developer and image file tools share the file-occupation drop overlay',async()=>{
+test('developer and image file tools share the space-analysis drop hover',async()=>{
  const root=await mkdtemp(path.resolve('work/current/tool-file-drop-')),source=path.join(root,'sample.png');
  await sharp({create:{width:24,height:20,channels:4,background:'#d75050'}}).png().toFile(source);
  const env={...process.env,ONE_TEST_MODE:'1',ONE_SEARCH_BACKEND:'memory',ONE_DATA_DIR:path.join(root,'profile')};delete env.ELECTRON_RUN_AS_NODE;
@@ -17,8 +17,8 @@ test('developer and image file tools share the file-occupation drop overlay',asy
   assert.equal(await page.evaluate(()=>window.one.droppedFile(document.querySelector('#test-drag-file').files[0])),source);
   const drop=async(module,tab)=>{
    await page.locator(`[data-page="${module}"]`).click();await page.locator(`#tool-tab-${tab}`).click();
-   const label=await page.evaluate(id=>{const target=document.getElementById('page-'+id),file=document.querySelector('#test-drag-file').files[0],transfer=new DataTransfer();transfer.items.add(file);target.dispatchEvent(new DragEvent('dragenter',{bubbles:true,dataTransfer:transfer}));target.dispatchEvent(new DragEvent('dragover',{bubbles:true,dataTransfer:transfer}));return document.querySelector('.file-drop-overlay.visible')?.textContent||'';},tab);
-   assert(label.includes('松开'),`${tab}: overlay missing`);
+   const label=await page.evaluate(id=>{const target=document.getElementById('page-'+id),file=document.querySelector('#test-drag-file').files[0],transfer=new DataTransfer();transfer.items.add(file);target.dispatchEvent(new DragEvent('dragenter',{bubbles:true,dataTransfer:transfer}));target.dispatchEvent(new DragEvent('dragover',{bubbles:true,dataTransfer:transfer}));return target.querySelector('.file-drop-overlay.visible.local.spacious')?.textContent||'';},tab);
+   assert(label.includes('松开'),`${tab}: space-analysis drop hover missing`);
    await page.evaluate(id=>{const target=document.getElementById('page-'+id),file=document.querySelector('#test-drag-file').files[0],transfer=new DataTransfer();transfer.items.add(file);target.dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:transfer}));},tab);
   };
   await drop('developer','base64');await expect(page.locator('#base64-file-name')).toHaveText('sample.png');await expect(page.locator('#base64-output')).not.toHaveValue('');

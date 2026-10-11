@@ -16,6 +16,9 @@ test('image conversion tab converts a picked file and reports results',async()=>
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.locator('[data-page="images"]').click();await page.locator('#tool-tab-image-convert').click();
   await expect(page.locator('#page-image-convert')).toBeVisible();await expect(page.locator('#color-heading-actions')).toBeHidden();
+  await expect(page.locator('#image-enhance-fields')).toBeHidden();await expect(page.locator('#image-enhance-brightness')).toBeDisabled();
+  await page.locator('#image-enhance-enabled').check();await expect(page.locator('#image-enhance-fields')).toBeVisible();await expect(page.locator('#image-enhance-brightness')).toBeEnabled();
+  await page.locator('#image-enhance-enabled').uncheck();await expect(page.locator('#image-enhance-fields')).toBeHidden();
   await page.locator('#image-convert-add').click();await expect(page.locator('#image-convert-count')).toContainText('1 张');
   await page.locator('#image-convert-directory').evaluate((input,value)=>{input.value=value;},output);
   await page.locator('#image-convert-format').click();await page.locator('#image-convert-format-options [role="option"][aria-label="JPEG"]').click();

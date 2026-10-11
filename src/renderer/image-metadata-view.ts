@@ -13,9 +13,8 @@ export function imageMetadataPage(){return `<div class="image-convert-page image
  <div id="image-metadata-files" class="image-convert-files" aria-label="待清理图片"></div>
  <div class="image-convert-destination"><label for="image-metadata-directory">输出文件夹</label><input id="image-metadata-directory" readonly placeholder="选择保存位置"><button id="image-metadata-pick-directory" type="button">选择文件夹</button></div>
  <div class="image-convert-actions"><button id="image-metadata-start" class="primary" type="button">开始清理</button><button id="image-metadata-cancel" type="button" class="quiet" disabled>取消</button><button id="image-metadata-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-metadata-status" role="status" aria-live="polite"></span></div></section>
- <section class="settings-card image-convert-panel"><h3>清理设置</h3>
+ <section class="settings-card image-convert-panel"><div class="tool-card-head"><h3>清理设置</h3>${toolInfo("使用限制","支持 PNG、JPEG、WebP、GIF、TIFF；每批最多 100 张。删除 EXIF 会同时删除 GPS，输出会核验所选标签。")}</div>
  <div class="image-convert-options image-metadata-options"><label class="image-convert-metadata"><input id="image-metadata-exif" type="checkbox" checked>移除 EXIF（含 GPS）</label><label class="image-convert-metadata"><input id="image-metadata-gps" type="checkbox" checked>移除 GPS</label><label class="image-convert-metadata"><input id="image-metadata-xmp" type="checkbox" checked>移除 XMP</label><label class="image-convert-metadata"><input id="image-metadata-iptc" type="checkbox" checked>移除 IPTC</label></div>
- ${toolInfo("使用限制","支持 PNG、JPEG、WebP、GIF、TIFF；每批最多 100 张。删除 EXIF 会同时删除 GPS，输出会核验所选标签。")}
  </section></div></div>`;}
 
 export function setupImageMetadata(){

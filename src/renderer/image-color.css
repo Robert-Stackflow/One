@@ -4,6 +4,15 @@
 .image-color-image-panel.settings-card,.image-color-palette.settings-card{margin:0;padding:20px;min-width:0}
 .image-color-image-panel{gap:14px}
 .image-color-image-panel>h3,.image-color-palette>h3{font-size:14px;font-weight:600;margin:0}
+.image-color-image-panel>.tool-card-head{margin-bottom:12px}
+.image-color-image-panel>.tool-card-head .image-color-actions{gap:8px;flex-wrap:nowrap}
+.image-color-meta{display:flex;align-items:center;gap:10px;min-width:0;margin:0 0 12px;color:var(--muted);font-size:12px}
+.image-color-meta:not(:has(span:not(:empty))){display:none}
+.image-color-meta span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.image-color-stage:has(img:not([src])){display:none}
+.image-color-values [data-color-copy] strong{min-width:0;font-size:12px;font-weight:400;line-height:1.4;text-align:right}
+.image-color-values [data-color-copy]>span{flex:none;font-size:11px}
+.image-color-palette{align-content:start}
 .image-color-actions span{font-size:12px;overflow-wrap:anywhere}
 .image-color-frame{border-color:var(--line);border-radius:var(--field-radius)}
 .image-color-palette{border-color:var(--line);border-radius:var(--panel-radius)}

@@ -41,6 +41,6 @@ export function setupBase64(){
  cancel.onclick=()=>{revision++;stop();status.textContent='已取消';};
  copy.onclick=()=>void api.copyText(output.value).then(()=>toast('已复制结果')).catch(toast);
  save.onclick=()=>void api.saveText(output.value,'UTF-8').then(path=>{if(path)status.textContent='已导出文本';}).catch(toast);
- installFileDropOverlay(q('page-base64'),{title:'编码文件',detail:'松开以读取文件并生成编码',acceptVirtualFiles:true,onDrop:(_paths,event)=>{const dropped=event.dataTransfer?.files;if(!dropped?.length)return;mode.value='encode-file';update();file.files=dropped;name.textContent=dropped[0].name;void executeFile();}});
+ installFileDropOverlay(q('page-base64'),{placement:'host',spacious:true,title:'编码文件',detail:'松开以读取文件并生成编码',acceptVirtualFiles:true,onDrop:(_paths,event)=>{const dropped=event.dataTransfer?.files;if(!dropped?.length)return;mode.value='encode-file';update();file.files=dropped;name.textContent=dropped[0].name;void executeFile();}});
  update();return {activate(value:boolean){if(!value&&(worker||timer)){revision++;stop();status.textContent='已取消';}},dispose(){revision++;stop();}};
 }

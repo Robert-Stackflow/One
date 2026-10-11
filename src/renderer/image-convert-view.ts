@@ -1,5 +1,5 @@
 import './image-convert.css';
-import {api,esc,q,toast,errorMessage} from './ui';
+import {api,esc,q,toast,errorMessage,icon} from './ui';
 import {toolInfo,installToolFileDrop} from './tool-page-components';
 import type {ImageConvertFormat,ImageConvertOptions,ImageConvertProgress,ImageConvertResult,ImageEnhanceOptions} from '../shared/image-convert';
 
@@ -12,7 +12,7 @@ export function imageConvertPage(){return `<div class="image-convert-page">
     <div id="image-convert-files" class="image-convert-files" aria-label="待转换图片"></div>
     <div class="image-convert-destination"><label for="image-convert-directory">输出文件夹</label><input id="image-convert-directory" readonly placeholder="选择保存位置"><button id="image-convert-pick-directory" type="button">选择文件夹</button></div>
     <div class="image-convert-actions"><button id="image-convert-start" class="primary" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div></section>
-  <section class="settings-card image-convert-panel"><h3>转换设置</h3>
+  <section class="settings-card image-convert-panel"><div class="tool-card-head"><h3>转换设置</h3>${toolInfo("格式与保留规则","无损模式限 PNG/WebP/TIFF，且不能缩放；ICO 不保留元数据；动图应输出为 GIF/WebP/TIFF。HEIC 依赖 Windows 扩展。每批最多 100 张，单张最多 100 MB。")}</div>
     <div class="image-convert-options"><label>快速预设<select id="image-convert-preset"><option value="custom">自定义</option><option value="web">网页 · WebP</option><option value="share">分享 · JPEG</option><option value="small">小体积 · WebP</option><option value="lossless">PNG 无损优化</option></select></label><label>目标格式<select id="image-convert-format"><option value="original">保持原格式（压缩）</option><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp" selected>WebP</option><option value="gif">GIF</option><option value="tiff">TIFF</option><option value="heic">HEIC（需要 Windows 编解码扩展）</option><option value="ico">ICO 多尺寸图标</option><option value="svg">SVG 优化（仅 SVG 输入）</option></select></label>
       <label>JPEG / WebP / HEIC 质量 <span id="image-convert-quality-value">85</span><input id="image-convert-quality" type="range" min="1" max="100" value="85"></label>
       <label>最大宽度<input id="image-convert-width" type="number" min="1" max="16384" step="1" placeholder="保持原尺寸"></label>
@@ -22,13 +22,12 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label>输出命名<select id="image-convert-naming"><option value="default">原名 + 用途 + 短码</option><option value="numbered">原名 + 序号 + 短码</option><option value="prefix">前缀 + 序号 + 短码</option></select></label><label id="image-convert-prefix-field" hidden>统一前缀<input id="image-convert-prefix" maxlength="40" spellcheck="false" placeholder="例如 假期照片"></label>
       <label class="image-convert-metadata"><input id="image-convert-motion-still" type="checkbox">动态照片仅导出静态图（不保留视频）</label>
       <label class="image-convert-metadata"><input id="image-convert-hdr-sdr" type="checkbox">HDR 图片仅导出 SDR 图像（不保留增益图）</label></div>
-    <fieldset class="image-enhance-options"><legend><label><input id="image-enhance-enabled" type="checkbox">画质优化（静态图片）</label></legend><div>
+    <section class="image-enhance-options"><div class="image-enhance-heading"><span>高级选项</span><label class="image-enhance-toggle"><input id="image-enhance-enabled" type="checkbox">启用画质优化</label></div><div id="image-enhance-fields" hidden>
       <label>亮度 <output id="image-enhance-brightness-value">100%</output><input id="image-enhance-brightness" type="range" min="70" max="130" value="100"></label>
       <label>饱和度 <output id="image-enhance-saturation-value">100%</output><input id="image-enhance-saturation" type="range" min="50" max="150" value="100"></label>
       <label>锐化<select id="image-enhance-sharpen"><option value="0">关闭</option><option value="1" selected>轻度</option><option value="2">较强</option></select></label>
       <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
-    </div></fieldset>
-    ${toolInfo("格式与保留规则","无损模式限 PNG/WebP/TIFF，且不能缩放；ICO 不保留元数据；动图应输出为 GIF/WebP/TIFF。HEIC 依赖 Windows 扩展。每批最多 100 张，单张最多 100 MB。")}
+    </div></section>
   </section></div></div>`;}
 
 export function setupImageConvert(){
@@ -36,16 +35,16 @@ export function setupImageConvert(){
  const add=q<HTMLButtonElement>('image-convert-add'),clear=q<HTMLButtonElement>('image-convert-clear'),pickDirectory=q<HTMLButtonElement>('image-convert-pick-directory');
  const directory=q<HTMLInputElement>('image-convert-directory'),format=q<HTMLSelectElement>('image-convert-format'),quality=q<HTMLInputElement>('image-convert-quality'),preset=q<HTMLSelectElement>('image-convert-preset'),naming=q<HTMLSelectElement>('image-convert-naming'),prefix=q<HTMLInputElement>('image-convert-prefix'),prefixField=q<HTMLElement>('image-convert-prefix-field');
  const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),mode=q<HTMLSelectElement>('image-convert-mode'),metadata=q<HTMLSelectElement>('image-convert-metadata-policy'),motionStill=q<HTMLInputElement>('image-convert-motion-still'),hdrSdr=q<HTMLInputElement>('image-convert-hdr-sdr');
- const enhanceEnabled=q<HTMLInputElement>('image-enhance-enabled'),brightness=q<HTMLInputElement>('image-enhance-brightness'),saturation=q<HTMLInputElement>('image-enhance-saturation'),sharpen=q<HTMLSelectElement>('image-enhance-sharpen'),contrast=q<HTMLInputElement>('image-enhance-contrast'),denoise=q<HTMLInputElement>('image-enhance-denoise');
+ const enhanceEnabled=q<HTMLInputElement>('image-enhance-enabled'),enhanceFields=q<HTMLElement>('image-enhance-fields'),brightness=q<HTMLInputElement>('image-enhance-brightness'),saturation=q<HTMLInputElement>('image-enhance-saturation'),sharpen=q<HTMLSelectElement>('image-enhance-sharpen'),contrast=q<HTMLInputElement>('image-enhance-contrast'),denoise=q<HTMLInputElement>('image-enhance-denoise');
  const start=q<HTMLButtonElement>('image-convert-start'),cancel=q<HTMLButtonElement>('image-convert-cancel'),retry=q<HTMLButtonElement>('image-convert-retry');
  let paths:string[]=[],results=new Map<string,ImageConvertResult>(),running=false,current:string|undefined;
  const render=()=>{
   count.textContent=paths.length?`已选择 ${paths.length} 张图片`:'尚未选择图片';
-  files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'转换中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始批量转换。</p>';
+  files.classList.toggle('is-empty',!paths.length);files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'转换中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):`<button type="button" class="image-convert-empty">${icon('image')}<span>拖入图片，或点击添加图片</span></button>`;
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pickDirectory.disabled=running;cancel.disabled=!running;
   for(const input of [directory,format,preset,naming,prefix])input.disabled=running;
   const special=format.value==='ico'||format.value==='svg';for(const input of [width,height])input.disabled=running||special||mode.value==='lossless';metadata.disabled=running||special||format.value==='heic';mode.disabled=running||!['original','png','webp','tiff'].includes(format.value);motionStill.disabled=running;hdrSdr.disabled=running;
-  enhanceEnabled.disabled=running||special||mode.value==='lossless';for(const input of [brightness,saturation,sharpen,contrast,denoise])input.disabled=running||!enhanceEnabled.checked||enhanceEnabled.disabled;
+  enhanceEnabled.disabled=running||special||mode.value==='lossless';enhanceFields.hidden=!enhanceEnabled.checked;for(const input of [brightness,saturation,sharpen,contrast,denoise])input.disabled=running||!enhanceEnabled.checked||enhanceEnabled.disabled;
   quality.disabled=running||mode.value==='lossless'||!['original','jpeg','webp','heic'].includes(format.value);
   retry.hidden=running||![...results.values()].some(result=>result.status!=='done');
   retry.disabled=running;
@@ -82,7 +81,7 @@ const addFiles=(chosen:string[])=>{const set=new Set(paths.map(path=>path.toLowe
  start.onclick=()=>void run(paths);
  retry.onclick=()=>void run(paths.filter(path=>results.get(path)?.status!=='done'));
  cancel.onclick=()=>void api.imageConvertCancel().catch(toast);
- files.onclick=event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-image-reveal]');const output=button&&results.get(button.dataset.imageReveal||'')?.output;if(output)void api.revealFile(output).catch(toast);};
+ files.onclick=event=>{if((event.target as HTMLElement).closest('.image-convert-empty')){add.click();return;}const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-image-reveal]');const output=button&&results.get(button.dataset.imageReveal||'')?.output;if(output)void api.revealFile(output).catch(toast);};
  const unsubscribe=api.onImageConvertProgress(progress);render();
  return {dispose(){unsubscribe();if(running)void api.imageConvertCancel();}};
 }
