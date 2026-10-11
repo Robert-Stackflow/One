@@ -11,3 +11,12 @@
 .developer-data-columns textarea{width:100%;min-height:420px;resize:vertical;padding:14px;border:1px solid var(--line);border-radius:var(--panel-radius);background:var(--surface);color:var(--fg);font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2}
 .developer-data-result-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}
 @media(max-width:900px){.developer-data-columns{grid-template-columns:minmax(0,1fr)}.developer-data-columns textarea{min-height:240px}}
+.developer-data{max-width:1120px;margin:0 auto;padding:20px 24px 40px;container-type:inline-size}
+.developer-data-heading h2{font-size:20px;margin:0 0 6px}
+.developer-data-heading p{margin:0;color:var(--muted)}
+.developer-data-settings.settings-card,.developer-data-panel.settings-card{margin:0;padding:20px;min-width:0}
+.developer-data-settings h3{font-size:14px;font-weight:600;margin:0 0 16px}
+.developer-data-status{margin-top:12px;line-height:1.5;overflow-wrap:anywhere}
+.developer-data-columns textarea{min-height:300px}
+@container (max-width:700px){.developer-data-columns{grid-template-columns:1fr}.developer-data-columns textarea{min-height:220px}}
+@media(max-width:760px){.developer-data{padding:16px}}

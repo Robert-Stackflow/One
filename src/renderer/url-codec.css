@@ -1,1 +1,16 @@
-.url-codec-page{max-width:1120px;margin:0 auto;padding:20px 24px 40px;display:grid;gap:16px}.url-codec-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.url-codec-toolbar label,.url-codec-columns label{font-weight:600}.url-codec-page>p,.url-codec-page>div[role=status]{color:var(--muted,#758093);margin:0}.url-codec-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.url-codec-columns section{display:grid;gap:8px}.url-codec-columns section>div{display:flex;justify-content:space-between;align-items:center}.url-codec-columns textarea{width:100%;min-height:300px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}@media(max-width:760px){.url-codec-page{padding:16px}.url-codec-columns{grid-template-columns:1fr}.url-codec-columns textarea{min-height:180px}}
+.url-codec-page{max-width:1120px;margin:0 auto;padding:20px 24px 40px;display:grid;gap:16px;container-type:inline-size}
+.url-codec-heading h2{font-size:20px;margin:0 0 6px}
+.url-codec-heading p{margin:0;color:var(--muted)}
+.url-codec-settings.settings-card,.url-codec-panel.settings-card{margin:0;padding:20px;min-width:0}
+.url-codec-settings h3{font-size:14px;font-weight:600;margin:0 0 16px}
+.url-codec-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.url-codec-toolbar label,.url-codec-columns label{font-size:12px;font-weight:600}
+.url-codec-settings p,#url-codec-status{color:var(--muted);font-size:12px;line-height:1.5}
+.url-codec-settings p{margin:12px 0 0}
+#url-codec-status{margin-top:10px;overflow-wrap:anywhere}
+.url-codec-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.url-codec-columns section{display:grid;gap:10px}
+.url-codec-columns section>div{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.url-codec-columns textarea{width:100%;min-height:300px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+@container (max-width:700px){.url-codec-columns{grid-template-columns:1fr}.url-codec-columns textarea{min-height:180px}}
+@media(max-width:760px){.url-codec-page{padding:16px}}

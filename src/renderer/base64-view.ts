@@ -3,10 +3,11 @@ import {api,q,toast,errorMessage} from './ui';
 import {maxBase64FileBytes} from '../shared/base64';
 
 type Mode='encode-text'|'decode-text'|'encode-file'|'decode-file';
-export function base64Page(){return `<div class="base64-page"><div class="base64-toolbar"><label for="base64-mode">操作</label><select id="base64-mode"><option value="encode-text">文本编码</option><option value="decode-text">文本解码</option><option value="encode-file">文件编码</option><option value="decode-file">Base64 导出文件</option></select><input id="base64-file" type="file" hidden><button id="base64-choose" type="button" hidden>选择文件</button><span id="base64-file-name"></span></div>
+export function base64Page(){return `<div class="base64-page"><header class="base64-heading"><h2>Base64</h2><p>在本机编码或解码文本与文件。</p></header>
+ <section class="settings-card base64-settings" aria-label="Base64 设置"><h3>处理设置</h3><div class="base64-toolbar"><label for="base64-mode">操作</label><select id="base64-mode"><option value="encode-text">文本编码</option><option value="decode-text">文本解码</option><option value="encode-file">文件编码</option><option value="decode-file">Base64 导出文件</option></select><input id="base64-file" type="file" hidden><button id="base64-choose" type="button" hidden>选择文件</button><span id="base64-file-name"></span></div>
  <p id="base64-help">按 UTF-8 编码文本，支持中文与表情符号。所有内容仅在本机处理。</p>
- <div class="base64-columns"><section><label for="base64-input">输入</label><textarea id="base64-input" spellcheck="false" placeholder="输入文本"></textarea></section><section><label for="base64-output">结果</label><textarea id="base64-output" spellcheck="false" readonly></textarea></section></div>
- <div class="base64-actions"><button id="base64-run" type="button">编码</button><button id="base64-cancel" type="button" hidden>取消</button><button id="base64-copy" type="button" disabled>复制结果</button><button id="base64-export" type="button" disabled>导出文本</button><span id="base64-status" role="status" aria-live="polite"></span></div></div>`;}
+ <div class="base64-actions"><button id="base64-run" type="button">编码</button><button id="base64-cancel" type="button" hidden>取消</button><button id="base64-copy" type="button" disabled>复制结果</button><button id="base64-export" type="button" disabled>导出文本</button></div><span id="base64-status" role="status" aria-live="polite"></span></section>
+ <div class="base64-columns"><section class="settings-card base64-panel"><label for="base64-input">输入</label><textarea id="base64-input" spellcheck="false" placeholder="输入文本"></textarea></section><section class="settings-card base64-panel"><label for="base64-output">结果</label><textarea id="base64-output" spellcheck="false" readonly></textarea></section></div></div>`;}
 
 export function setupBase64(){
  const mode=q<HTMLSelectElement>('base64-mode'),file=q<HTMLInputElement>('base64-file'),choose=q<HTMLButtonElement>('base64-choose'),name=q<HTMLElement>('base64-file-name');
