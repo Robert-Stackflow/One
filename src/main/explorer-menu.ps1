@@ -45,11 +45,18 @@ try {
     if([Environment]::OSVersion.Version.Build -ge 22000 -and (!$existing -or $previous.$hashName -ne $menu.manifestHash -or $existing.InstallLocation -ne $menu.root -or $registeredVersion -ne [string]$existing.Version)){
      # Keep one verb per app identity so Windows 11 exposes two first-level commands.
      [xml]$xml=Get-Content -LiteralPath $template -Raw -Encoding UTF8
-     if($existing){$version=[version]$existing.Version;$xml.Package.Identity.Version="$($version.Major).$($version.Minor).$($version.Build).$($version.Revision+1)";if($existing.InstallLocation -ne $menu.root){$existing | Remove-AppxPackage -ErrorAction Stop}}
+     $oldVersion=''
+     if($existing){$version=[version]$existing.Version;$oldVersion=[string]$version;$xml.Package.Identity.Version="$($version.Major).$($version.Minor).$($version.Build).$($version.Revision+1)";$existing | Remove-AppxPackage -ErrorAction Stop}
      $xml.Save($manifest)
      $signed=Join-Path $PSScriptRoot ($menu.packageName+'.msix')
-     if(Test-Path -LiteralPath $signed){Add-AppxPackage -Path $signed -ExternalLocation $menu.root -ErrorAction Stop}
-     else{Add-AppxPackage -Register $manifest -ExternalLocation $menu.root -ErrorAction Stop}
+     try{
+      if(Test-Path -LiteralPath $signed){Add-AppxPackage -Path $signed -ExternalLocation $menu.root -ErrorAction Stop}
+      else{Add-AppxPackage -Register $manifest -ExternalLocation $menu.root -ErrorAction Stop}
+     }catch{
+      $failure=$_
+      if($oldVersion){try{$xml.Package.Identity.Version=$oldVersion;$xml.Save($manifest);Add-AppxPackage -Register $manifest -ExternalLocation $menu.root -ErrorAction Stop}catch{}}
+      throw $failure
+     }
      $installed=Get-AppxPackage -Name $menu.packageName -ErrorAction Stop
      if(!$installed){throw '菜单身份注册后未找到'}
      $xml.Package.Identity.Version=[string]$installed.Version;$xml.Save($manifest)

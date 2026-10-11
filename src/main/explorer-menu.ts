@@ -10,7 +10,7 @@ const nativeRoot=()=>app.isPackaged?join(process.resourcesPath,'app.asar.unpacke
 const script=()=>join(__dirname,'explorer-menu.ps1').replace('app.asar','app.asar.unpacked');
 let pending:Promise<ExplorerMenuState>|undefined;
 async function run(operation:string,config?:string):Promise<ExplorerMenuState>{
- const result=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script(),'-Operation',operation,...(config?['-Config',config]:[])],{windowsHide:true,timeout:60000,maxBuffer:1024*1024});return JSON.parse(result.stdout.replace(/^\uFEFF/,''));
+ const result=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script(),'-Operation',operation,...(config?['-Config',config]:[])],{windowsHide:true,timeout:600000,maxBuffer:1024*1024});return JSON.parse(result.stdout.replace(/^\uFEFF/,''));
 }
 export const explorerMenuState=()=>run('status');
 export async function repairExplorerMenu(){

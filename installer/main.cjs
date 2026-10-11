@@ -33,6 +33,18 @@ async function registry() {
   try {const {stdout} = await execute('powershell.exe', ['-NoProfile','-NonInteractive','-EncodedCommand', Buffer.from(script,'utf16le').toString('base64')], {windowsHide:true,timeout:10000}); return stdout.trim() ? JSON.parse(stdout.trim()) : null;}
   catch {return null;}
 }
+async function archiveAssociationWanted(directory) {
+  const expected=Buffer.from(path.join(directory,`${info.product}.exe`),'utf8').toString('base64');
+  const script=`$expected=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${expected}'));$key=Get-ItemProperty -LiteralPath 'HKCU:\\Software\\Classes\\One.Archive' -ErrorAction SilentlyContinue;if([string]::Equals([string]$key.OneExecutable,$expected,[StringComparison]::OrdinalIgnoreCase)){'true';exit};$root='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts';foreach($extension in Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue){$choice=Get-ItemProperty -LiteralPath ($extension.PSPath+'\\UserChoice') -ErrorAction SilentlyContinue;if([string]$choice.ProgId -like 'One.Archive*'){'true';exit}};'false'`;
+  const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{windowsHide:true,timeout:30000,maxBuffer:4096});
+  return stdout.trim().toLowerCase()==='true';
+}
+async function registerArchiveAssociation(directory) {
+  const resource=path.join(directory,'resources','app.asar.unpacked','dist');
+  const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(resource,'main','archive-associations.ps1'),'-Operation','register','-Executable',path.join(directory,`${info.product}.exe`),'-Icon',path.join(directory,`${info.product}.exe`),'-IconDirectory',path.join(resource,'icons','archive')],{windowsHide:true,timeout:60000,maxBuffer:65536});
+  const result=JSON.parse(stdout.replace(/^\uFEFF/,''));
+  if(!result.registered)throw Error('压缩包文件关联恢复失败');
+}
 function registeredDirectory(value) {
   if (!value?.icon) return '';
   const icon = value.icon.replace(/,\d+$/, '').replace(/^"|"$/g, '');
@@ -158,7 +170,7 @@ function validDirectory(input) {
 async function install(directory) {
   if(installing) return;
   if(!validDirectory(directory)) {send({stage:'failed',reason:'invalidPath'});return;}
-  installing=true;let scratch='',saved=null,changed=false,keepScratch=false,result=null;
+  installing=true;let scratch='',saved=null,changed=false,keepScratch=false,result=null,restoreArchive=false;
   try {
     send({stage:'checking',detail:'正在验证安装位置',caption:'准备中'});
     if(os.arch()!=='x64'&&os.arch()!=='arm64') throw Object.assign(Error('当前系统不受支持'),{reason:'unsupported'});
@@ -166,6 +178,7 @@ async function install(directory) {
     const existing=await registry();
     if(newerThan(existing?.version,info.version)) throw Object.assign(Error('已有更新版本'),{reason:'newer'});
     const old=registeredDirectory(existing);
+    restoreArchive=await archiveAssociationWanted(old||directory);
     if(old && old.toLowerCase()!==directory.toLowerCase()) {
       const inside=(child,parent)=>{const relative=path.relative(parent,child);return relative!==''&&!relative.startsWith('..')&&!path.isAbsolute(relative);};
       if(inside(directory,old)||inside(old,directory)) throw Object.assign(Error('安装位置不能包含原有目录'),{reason:'invalidPath'});
@@ -192,12 +205,13 @@ async function install(directory) {
     send({stage:'verifying',detail:'正在确认文件完整性',caption:'即将完成',percent:null});
     const asar=path.join(directory,'resources','app.asar');
     if(!fs.existsSync(path.join(directory,`${info.product}.exe`))||!fs.existsSync(asar)||await hash(asar)!==info.asarHash) throw Object.assign(Error('安装文件校验失败'),{reason:'installed-integrity'});
+    if(restoreArchive)await registerArchiveAssociation(directory);
     installedDirectory=directory;
     result={stage:'done',directory};
   } catch(error) {
     console.error('One installer failed:',error);
     if(changed&&saved) {
-      try {await restorePrevious(saved);} catch(restoreError) {keepScratch=true;error=Object.assign(Error(`无法恢复旧版，备份位置：${scratch}`),{reason:'restore'});}
+      try {await restorePrevious(saved);if(restoreArchive)await registerArchiveAssociation(saved.previous);} catch(restoreError) {keepScratch=true;error=Object.assign(Error(`无法恢复旧版，备份位置：${scratch}`),{reason:'restore'});}
     }
     result={stage:'failed',reason:error.reason||'engine',message:error.message};
   } finally {

@@ -30,16 +30,18 @@ int wmain(){
  assert(!archive_path(L"D:\\split.l00")&&!archive_path(L"D:\\split.a0"));
  wchar_t module[32768];GetModuleFileNameW(nullptr,module,32768);std::wstring file(module);file=file.substr(0,file.find_last_of(L"\\/"))+L"\\shell-config.bin";
  auto config=[&](bool enabled){const wchar_t* fields[]={L"",L"",L"",L"",enabled?L"1":L"0",enabled?L"1":L"0",enabled?L"1":L"0",enabled?L"1":L"0"};std::ofstream stream(file,std::ios::binary);for(auto value:fields)stream.write((const char*)value,(wcslen(value)+1)*sizeof(wchar_t));};
+ const std::wstring folderPath=file.substr(0,file.find_last_of(L"\\/"))+L"\\folder.zip",zipPath=file.substr(0,file.find_last_of(L"\\/"))+L"\\physical.zip";
+ assert(CreateDirectoryW(folderPath.c_str(),nullptr));HANDLE zipFile=CreateFileW(zipPath.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);assert(zipFile!=INVALID_HANDLE_VALUE);CloseHandle(zipFile);
  config(true);
  {
  Command locks(Action::locksmith),rename(Action::rename),archive(Action::archiveExtract),create(Action::archiveCreate);EXPCMDSTATE state;
- Items empty(0),one(1),many(33),limit(4096),over(4097),archives(128),archiveOver(129),mixed({L"D:\\ok.zip",L"D:\\bad.exe"}),folder({L"D:\\folder.zip"},true),formats({L"D:\\中文.ZIP",L"D:\\a.7z.001",L"D:\\a.tar.gz",L"D:\\a.RAR"});
+ Items empty(0),one(1),many(33),limit(4096),over(4097),archives(128),archiveOver(129),mixed({L"D:\\ok.zip",L"D:\\bad.exe"}),folder({folderPath},true),zipAsShellFolder({zipPath},true),formats({L"D:\\中文.ZIP",L"D:\\a.7z.001",L"D:\\a.tar.gz",L"D:\\a.RAR"});
  PWSTR name=nullptr;assert(locks.GetTitle(nullptr,&name)==S_OK&&wcscmp(name,L"文件占用")==0);CoTaskMemFree(name);assert(rename.GetTitle(nullptr,&name)==S_OK&&wcscmp(name,L"批量重命名")==0);CoTaskMemFree(name);
  assert(locks.GetState(nullptr,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(locks.Invoke(nullptr,nullptr)==E_INVALIDARG);assert(locks.GetState(&one,FALSE,nullptr)==E_POINTER);
  assert(locks.GetState(&empty,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(locks.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(locks.GetState(&many,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
  assert(rename.GetState(&limit,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(rename.GetState(&over,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
  assert(archive.GetState(&archives,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(archive.GetState(&archiveOver,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
- assert(archive.GetState(&mixed,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(archive.GetState(&folder,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(archive.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(archive.Invoke(&mixed,nullptr)==E_INVALIDARG);
+ assert(archive.GetState(&mixed,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(archive.GetState(&folder,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(archive.GetState(&zipAsShellFolder,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(archive.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(archive.Invoke(&mixed,nullptr)==E_INVALIDARG);
  EXPCMDFLAGS flags;assert(archive.GetFlags(&flags)==S_OK&&flags==ECF_HASSUBCOMMANDS);assert(archive.GetFlags(nullptr)==E_POINTER);
  IEnumExplorerCommand *commands=nullptr,*clone=nullptr;assert(archive.EnumSubCommands(&commands)==S_OK);assert(archive.EnumSubCommands(nullptr)==E_POINTER);IExplorerCommand* children[5]{};ULONG fetched=0;
  assert(commands->Next(2,children,&fetched)==S_OK&&fetched==2);assert(commands->Clone(&clone)==S_OK);assert(clone->Skip(1)==S_OK);assert(clone->Next(1,children+3,nullptr)==S_OK);assert(clone->Next(1,children+4,&fetched)==S_FALSE&&fetched==0);clone->Release();
@@ -55,7 +57,10 @@ int wmain(){
  createCommands->Release();
  assert(std::string(tool(Action::archiveZip))=="archive-create-zip");assert(std::string(tool(Action::archiveSeven))=="archive-create-7z");
  assert(std::string(tool(Action::archiveSmart))=="archive-smart");assert(std::string(tool(Action::archiveHere))=="archive-here");assert(std::string(tool(Action::archiveFolder))=="archive-folder");assert(std::string(tool(Action::archiveChoose))=="archive-choose");
+ {const wchar_t* fields[]={L"",L"",L"",L"",L"0",L"0",L"1",L"0"};std::ofstream stream(file,std::ios::binary);for(auto value:fields)stream.write((const char*)value,(wcslen(value)+1)*sizeof(wchar_t));}
+ Command createZip(Action::archiveZip),createSeven(Action::archiveSeven),configure(Action::archiveConfigure),smart(Action::archiveSmart);
+ assert(create.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createZip.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createSeven.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(configure.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(smart.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
  config(false);assert(locks.GetState(nullptr,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(rename.GetState(&one,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(archive.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
  }
- assert(DllCanUnloadNow()==S_OK);DeleteFileW(file.c_str());return 0;
+ assert(DllCanUnloadNow()==S_OK);DeleteFileW(file.c_str());DeleteFileW(zipPath.c_str());RemoveDirectoryW(folderPath.c_str());return 0;
 }

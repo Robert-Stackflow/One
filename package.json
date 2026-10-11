@@ -1,6 +1,6 @@
 {
   "name": "one-desktop",
-  "version": "0.16.21",
+  "version": "0.16.22",
   "private": true,
   "author": "One",
   "description": "本地 Windows 桌面工具箱",
@@ -230,8 +230,23 @@
       "dist/native/7z.dll"
     ],
     "extraFiles": [
-      {"from":"dist/native/One.Cli.exe","to":"One.Cli.exe"},
-      {"from":"vendor/archive/7zip","to":"third-party/7zip","filter":["7zip-26.04-source.tar.gz","one-password-codepage.patch","one-lha-headers.patch","one-cab-volumes.patch","SOURCE.json","MODIFICATIONS.txt","License.txt"]},
+      {
+        "from": "dist/native/One.Cli.exe",
+        "to": "One.Cli.exe"
+      },
+      {
+        "from": "vendor/archive/7zip",
+        "to": "third-party/7zip",
+        "filter": [
+          "7zip-26.04-source.tar.gz",
+          "one-password-codepage.patch",
+          "one-lha-headers.patch",
+          "one-cab-volumes.patch",
+          "SOURCE.json",
+          "MODIFICATIONS.txt",
+          "License.txt"
+        ]
+      },
       "README.md",
       "docs/**/*",
       "THIRD_PARTY_NOTICES.txt"
