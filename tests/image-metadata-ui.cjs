@@ -21,6 +21,7 @@ test('image metadata tab removes selected groups and reveals a verified copy',as
   await page.locator('#image-metadata-directory').evaluate((input,value)=>{input.value=value;},output);
   await page.locator('#image-metadata-start').click();await expect(page.locator('#image-metadata-status')).toHaveText('已完成 1 张',{timeout:30000});
   await expect(page.locator('#image-metadata-files')).toContainText('已核验所选元数据与色彩配置');await expect(page.locator('#image-metadata-files [data-image-reveal]')).toHaveCount(1);
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(win=>win.webContents.getURL().includes('view=main')).setSize(700,720));await expect(page.locator('#image-metadata-files [data-metadata-diff]')).toHaveText(/差异 [1-9]/);await page.locator('#image-metadata-files [data-metadata-diff]').click();await expect(page.locator('#image-metadata-diff-dialog')).toBeVisible();await expect(page.locator('#image-metadata-diff-dialog')).toContainText('Artist');await expect(page.locator('#image-metadata-diff-dialog')).toContainText('One Test');assert.equal(await page.evaluate(()=>{const dialog=document.querySelector('#image-metadata-diff-dialog').getBoundingClientRect(),content=document.querySelector('.content');return dialog.left>=0&&dialog.right<=innerWidth&&content.scrollWidth<=content.clientWidth+1;}),true);await page.locator('#image-metadata-diff-dialog [data-dialog-dismiss]').last().click();
   assert.deepEqual(errors,[]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });

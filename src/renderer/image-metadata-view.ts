@@ -1,7 +1,7 @@
 import './image-convert.css';
 import {api,esc,q,toast,errorMessage} from './ui';
-import type {ImageMetadataOptions,ImageMetadataProgress} from '../shared/image-metadata';
-import type {ImageConvertResult} from '../shared/image-convert';
+import {dialogMarkup,openDialog} from './dialog';
+import type {ImageMetadataOptions,ImageMetadataProgress,ImageMetadataResult} from '../shared/image-metadata';
 
 const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
@@ -21,10 +21,10 @@ export function setupImageMetadata(){
  const files=q<HTMLElement>('image-metadata-files'),count=q<HTMLElement>('image-metadata-count'),status=q<HTMLElement>('image-metadata-status'),directory=q<HTMLInputElement>('image-metadata-directory');
  const add=q<HTMLButtonElement>('image-metadata-add'),clear=q<HTMLButtonElement>('image-metadata-clear'),pick=q<HTMLButtonElement>('image-metadata-pick-directory'),start=q<HTMLButtonElement>('image-metadata-start'),cancel=q<HTMLButtonElement>('image-metadata-cancel'),retry=q<HTMLButtonElement>('image-metadata-retry');
  const exif=q<HTMLInputElement>('image-metadata-exif'),gps=q<HTMLInputElement>('image-metadata-gps'),xmp=q<HTMLInputElement>('image-metadata-xmp'),iptc=q<HTMLInputElement>('image-metadata-iptc');
- let paths:string[]=[],results=new Map<string,ImageConvertResult>(),running=false,current:string|undefined;
+ let paths:string[]=[],results=new Map<string,ImageMetadataResult>(),running=false,current:string|undefined;
  const render=()=>{
   count.textContent=paths.length?`已选择 ${paths.length} 张图片`:'尚未选择图片';
-  files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'清理中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始清理。</p>';
+  files.innerHTML=paths.length?paths.map(path=>{const result=results.get(path),state=result?.status==='done'?'已完成':result?.status==='error'?'失败':result?.status==='cancelled'?'已取消':path===current?'清理中':'待处理';return `<div class="image-convert-file"><div><strong title="${esc(path)}">${esc(nameOf(path))}</strong><small>${result?.before?sizeOf(result.before):''}${result?.after?` → ${sizeOf(result.after)}`:''}</small>${result?.message?`<small title="${esc(result.message)}">${esc(result.message)}</small>`:''}</div><span class="image-convert-file-state" data-state="${result?.status||''}">${state}</span>${result?.metadataDiff?`<button type="button" data-metadata-diff="${esc(path)}">差异 ${result.metadataDiff.count}</button>`:''}${result?.output?`<button type="button" data-image-reveal="${esc(path)}">显示文件</button>`:''}</div>`;}).join(''):'<p class="image-convert-empty">添加图片后可开始清理。</p>';
   start.disabled=running||!paths.length;add.disabled=running;clear.disabled=running;pick.disabled=running;cancel.disabled=!running;retry.hidden=running||![...results.values()].some(result=>result.status!=='done');retry.disabled=running;
   for(const input of [directory,exif,gps,xmp,iptc])input.disabled=running;
  };
@@ -36,6 +36,7 @@ export function setupImageMetadata(){
  add.onclick=()=>void api.imagePickFiles().then(chosen=>{const set=new Set(paths.map(path=>path.toLowerCase()));for(const path of chosen)if(!set.has(path.toLowerCase())&&paths.length<100){paths.push(path);set.add(path.toLowerCase());}render();if(chosen.length&&paths.length===100)status.textContent='每批最多 100 张图片';}).catch(toast);
  clear.onclick=()=>{paths=[];results.clear();current=undefined;status.textContent='';render();};pick.onclick=()=>void api.pickDirectory(directory.value||undefined).then(path=>{if(path)directory.value=path;}).catch(toast);
  start.onclick=()=>void run(paths);retry.onclick=()=>void run(paths.filter(path=>results.get(path)?.status!=='done'));cancel.onclick=()=>void api.imageMetadataCancel().catch(toast);
- files.onclick=event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-image-reveal]');const output=button&&results.get(button.dataset.imageReveal||'')?.output;if(output)void api.revealFile(output).catch(toast);};
+ const showDiff=(result:ImageMetadataResult)=>{const diff=result.metadataDiff;if(!diff)return;const rows=diff.changes.map(change=>`<div><strong>${esc(change.tag)}</strong><span><small>处理前</small>${esc(change.before??'—')}</span><span><small>处理后</small>${esc(change.after??'—')}</span></div>`).join('');const body=rows?`<div class="image-metadata-diff-list">${rows}</div>${diff.truncated?`<p>显示前 ${diff.changes.length} / ${diff.count} 项变化。</p>`:''}`:'<p>没有标签变化。</p>';const template=document.createElement('template');template.innerHTML=dialogMarkup({id:'image-metadata-diff-dialog',title:`元数据差异 · ${nameOf(result.source)}`,className:'image-metadata-diff-dialog',body,actions:'<button type="button" data-dialog-dismiss autofocus>关闭</button>'});const dialog=template.content.firstElementChild as HTMLDialogElement;dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);openDialog(dialog);};
+ files.onclick=event=>{const target=(event.target as HTMLElement),reveal=target.closest<HTMLButtonElement>('[data-image-reveal]'),diff=target.closest<HTMLButtonElement>('[data-metadata-diff]');if(reveal){const output=results.get(reveal.dataset.imageReveal||'')?.output;if(output)void api.revealFile(output).catch(toast);}else if(diff){const result=results.get(diff.dataset.metadataDiff||'');if(result)showDiff(result);}};
  const unsubscribe=api.onImageMetadataProgress(progress);render();return {dispose(){unsubscribe();if(running)void api.imageMetadataCancel();}};
 }

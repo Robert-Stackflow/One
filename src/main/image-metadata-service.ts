@@ -3,8 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {basename,extname,join,resolve} from 'node:path';
 import {copyFile,rename,rm,stat} from 'node:fs/promises';
 import sharp from 'sharp';
-import {imageMetadataOptions,type ImageMetadataOptions,type ImageMetadataProgress,type ImageMetadataSummary} from '../shared/image-metadata';
-import type {ImageConvertResult} from '../shared/image-convert';
+import {imageMetadataOptions,imageMetadataDiff,type ImageMetadataOptions,type ImageMetadataProgress,type ImageMetadataSummary,type ImageMetadataResult} from '../shared/image-metadata';
 import {inspectMotionPhoto} from './motion-photo';
 
 sharp.cache({files:0});
@@ -44,13 +43,14 @@ export class ImageMetadataService{
   const data=await this.command(session,['-j','-G1','-a','-s','-EXIF:all','-GPS:all','-XMP:all','-IPTC:all',path]);
   const parsed=JSON.parse(data) as Record<string,unknown>[];return parsed[0]||{};
  }
- private async process(entry:Entry,options:ImageMetadataOptions,session:Session):Promise<ImageConvertResult>{
+ private async process(entry:Entry,options:ImageMetadataOptions,session:Session):Promise<ImageMetadataResult>{
   let before=0;
   try{
    before=(await stat(entry.source)).size;if(before>100*1024*1024)throw Error('单张图片超过 100 MB 上限');
    const metadata=await sharp(entry.source,{animated:true,limitInputPixels:50_000_000,failOn:'error'}).metadata();if(!formats.has(metadata.format||''))throw Error('暂不支持该图片编码');
    if(metadata.format==='jpeg'){let notice='';const motion=await inspectMotionPhoto(entry.source,message=>{notice=message;});if(motion||notice)throw Error('动态照片暂不支持元数据清理，以免视频或配对关系丢失');}
    const pages=metadata.pages||1;if(!metadata.width||!metadata.height||metadata.width*(metadata.pageHeight||metadata.height)*pages>100_000_000)throw Error('图片像素或总帧数超过处理上限');
+   const beforeTags=await this.tags(session,entry.source);
    if(options.removeExif&&metadata.orientation&&metadata.orientation!==1){
     if(pages>1)throw Error('多帧图片含方向标记，暂无法安全校正方向');
     await sharp(entry.source,{limitInputPixels:50_000_000}).rotate().keepMetadata().toFile(entry.oriented);
@@ -71,12 +71,12 @@ export class ImageMetadataService{
    if(options.removeXmp&&names.some(key=>/^XMP[-:]/.test(key)))throw Error('XMP 未完全移除');
    if(options.removeIptc&&names.some(key=>/^IPTC:/.test(key)))throw Error('IPTC 未完全移除');
    if(session.cancelled)throw Error('已取消');await rename(entry.temp,entry.output);
-   return {source:entry.source,output:entry.output,before,after:(await stat(entry.output)).size,width:output.width,height:output.pageHeight||output.height,pages,status:'done',message:'已核验所选元数据与色彩配置'};
+   return {source:entry.source,output:entry.output,before,after:(await stat(entry.output)).size,width:output.width,height:output.pageHeight||output.height,pages,status:'done',message:'已核验所选元数据与色彩配置',metadataDiff:imageMetadataDiff(beforeTags,tags)};
   }catch(error){return {source:entry.source,before,status:session.cancelled?'cancelled':'error',message:(error as Error).message.slice(0,300)};}
   finally{await rm(entry.temp,{force:true}).catch(()=>{});await rm(entry.oriented,{force:true}).catch(()=>{});}
  }
  private async run(entries:Entry[],options:ImageMetadataOptions,session:Session,notify:(value:ImageMetadataProgress)=>void):Promise<ImageMetadataSummary>{
-  const results:ImageConvertResult[]=[];
+  const results:ImageMetadataResult[]=[];
   for(const entry of entries){if(session.cancelled){results.push({source:entry.source,before:0,status:'cancelled',message:'已取消'});continue;}notify({done:results.length,total:entries.length,current:entry.source});const result=await this.process(entry,options,session);results.push(result);notify({done:results.length,total:entries.length,result});}
   return {results,cancelled:session.cancelled};
  }

@@ -12,6 +12,7 @@
 .image-convert-destination label{flex-basis:100%;font-size:12px}
 .image-convert-destination input{flex:1;min-width:0}
 .image-convert-files{border-color:var(--line);border-radius:var(--field-radius)}
+.image-metadata-page .image-convert-file{flex-wrap:wrap}.image-metadata-diff-dialog{width:min(840px,calc(100vw - 36px))}.image-metadata-diff-list{display:grid;max-height:60vh;overflow:auto}.image-metadata-diff-list>div{display:grid;grid-template-columns:minmax(140px,1fr) repeat(2,minmax(0,1fr));gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.image-metadata-diff-list strong,.image-metadata-diff-list span{min-width:0;overflow-wrap:anywhere}.image-metadata-diff-list small{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}@media(max-width:700px){.image-metadata-diff-list>div{grid-template-columns:1fr}}
 .image-convert-options{grid-template-columns:repeat(2,minmax(0,1fr))}
 .image-convert-options label{font-size:12px}
 .image-convert-options .image-convert-metadata{line-height:1.4}
