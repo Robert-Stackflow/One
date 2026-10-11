@@ -99,7 +99,9 @@ export function renderXlsx(
       const workbook = await XlsxWorkbook.load(bytes, {
         useGoogleFonts: false,
         cjkFallback: 'sc',
-        mode: 'main',
+        // Keep the UI responsive while the library parses. A cancelled load is
+        // discarded and destroyed once this API resolves; it has no abort signal.
+        mode: 'worker',
         workerTimeoutMs: 15000,
         resourceLimits: {
           maxArchiveEntries: 20000,
