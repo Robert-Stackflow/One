@@ -39,6 +39,9 @@ for(const arch of [64,32]){
  const built=await run('cmd.exe',['/d','/c',file],{cwd:resolve('.'),windowsHide:true});process.stdout.write(built.stdout);
 }
 const result=await run('cmd.exe',['/d','/c',script],{cwd:resolve('.'),windowsHide:true});process.stdout.write(result.stdout);process.stderr.write(result.stderr);
+const heicScript=resolve('work/build-heic-decode.cmd');
+await writeFile(heicScript,`@echo off\r\ncall "${installation}\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\r\nif errorlevel 1 exit /b 1\r\ncl /nologo /std:c++20 /EHsc /MT /O2 /utf-8 /DUNICODE /D_UNICODE native\\heic-decode.cpp /Fe:dist\\native\\One.HeicDecode.exe /Fo:work\\heic-decode.obj /link windowscodecs.lib ole32.lib\r\n`);
+const heicResult=await run('cmd.exe',['/d','/c',heicScript],{cwd:resolve('.'),windowsHide:true});process.stdout.write(heicResult.stdout);
 const cargoTarget=resolve(process.env.CARGO_TARGET_DIR||'work/rust-search');
 await run('cargo',['build','--release','--locked','--manifest-path','native/search-engine/Cargo.toml'],{cwd:resolve('.'),windowsHide:true,env:{...process.env,CARGO_TARGET_DIR:cargoTarget,RUSTFLAGS:'-C target-feature=+crt-static'},maxBuffer:4*1024*1024});
 await copyFile(resolve(cargoTarget,'release/one-index.exe'),'dist/native/One.Index.exe');

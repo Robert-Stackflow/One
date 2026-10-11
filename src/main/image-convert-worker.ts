@@ -1,18 +1,34 @@
 import {parentPort,workerData} from 'node:worker_threads';
 import {rename,rm,stat,writeFile} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {join} from 'node:path';
 import sharp from 'sharp';
 import {optimize} from 'svgo';
 import {encodeIco,icoSizes} from './image-ico';
 import {readSafeSvg,validateSvg} from './image-svg';
 import {inspectMotionPhoto} from './motion-photo';
+import {heicFeatures} from './heic-features';
 import {imageCropBounds,imageResizeDimensions,type ImageConvertOptions,type ImageConvertResult} from '../shared/image-convert';
 
 interface Entry {source:string;output:string;temp:string}
 const {entries,options}=workerData as {entries:Entry[];options:ImageConvertOptions};
 sharp.cache(false);sharp.concurrency(1);
 
+async function decodeSystemHeic(source:string,output:string):Promise<void>{
+ const helper=join(__dirname,'../native/One.HeicDecode.exe').replace('app.asar\\','app.asar.unpacked\\');
+ await new Promise<void>((resolve,reject)=>{
+  const child=spawn(helper,[source,output],{windowsHide:true,stdio:['ignore','ignore','pipe']});
+  let error='',finished=false;
+  if(child.pid)parentPort!.postMessage({type:'child',pid:child.pid});
+  child.stderr.on('data',(chunk:Buffer)=>{error=(error+chunk.toString('utf8')).slice(0,500);});
+  const timer=setTimeout(()=>child.kill(),45000);
+  child.on('error',()=>{if(finished)return;finished=true;clearTimeout(timer);parentPort!.postMessage({type:'childDone'});reject(Error('Windows HEIC 解码器不可用；请确认应用文件完整且已安装 HEIF 和 HEVC 系统扩展'));});
+  child.on('close',code=>{if(finished)return;finished=true;clearTimeout(timer);parentPort!.postMessage({type:'childDone'});code===0?resolve():reject(Error('Windows HEIC 解码失败；请确认已安装 HEIF 和 HEVC 系统扩展'+(error?'（'+error.trim()+'）':'')));});
+ });
+}
+
 async function convert(entry:Entry):Promise<ImageConvertResult>{
- let before=0;
+ let before=0;const decoded=entry.temp+'.decoded.png';
  try{
   before=(await stat(entry.source)).size;
   if(before>100*1024*1024)throw Error('单张图片超过 100 MB 上限');
@@ -20,17 +36,31 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   let pipeline=sharp(input,{animated:true,limitInputPixels:50_000_000,failOn:'error'});
   const metadata=await pipeline.metadata(),pages=metadata.pages||1;
   if(!metadata.width||!metadata.height||metadata.width*(metadata.pageHeight||metadata.height)*pages>100_000_000)throw Error('图片像素或总帧数超过处理上限');
-  if(!['png','jpeg','webp','gif','tiff','svg'].includes(metadata.format||''))throw Error('暂不支持该图片编码');
+  const heic=/\.(?:heic|heif)$/i.test(entry.source)&&metadata.format==='heif';
+  if(!['png','jpeg','webp','gif','tiff','svg'].includes(metadata.format||'')&&!heic)throw Error('暂不支持该图片编码');
   if(metadata.format==='svg'&&!svg)throw Error('SVG 文件扩展名与实际编码不一致');
-  const hdrStill=Boolean(metadata.gainMap);
+  if(heic){
+   if(metadata.depth!=='uchar'||metadata.space!=='srgb'||!metadata.icc?.length||metadata.icc.length>128*1024||metadata.hasAlpha||pages!==1)throw Error('此 HEIC 的位深、色彩配置或辅助内容尚未验证；当前仅支持 8 位、带 ICC 的静态主图');
+   if(options.format==='original'||!['png','jpeg'].includes(options.format))throw Error('HEIC 输入当前仅支持转为 PNG 或 JPEG，尚不支持写入 HEIC');
+   if(options.metadataPolicy!=='color'||options.compressionMode!=='quality')throw Error('HEIC 转换请选择“仅保留 ICC”和“按质量重新编码”');
+  }
+  const features=heic?await heicFeatures(entry.source):undefined;
+  if(features?.unsupportedAuxiliary)throw Error('HEIC 含未验证的辅助图像，暂不转换以免丢失内容');
+  const hdrStill=Boolean(metadata.gainMap||features?.hdrGainMap);
   if(hdrStill&&options.hdrPolicy!=='sdr')throw Error('检测到 HDR 增益图；勾选“仅导出 SDR 图像”后再转换，HDR 增益图不会写入结果');
-  let motionStill=false;if(metadata.format==='jpeg'){
+  let motionStill=false;if(metadata.format==='jpeg'||heic){
    let motionNotice='';const motion=await inspectMotionPhoto(entry.source,message=>{motionNotice=message;});
    if(motion||motionNotice){if(options.motionPolicy!=='still')throw Error('检测到动态照片；勾选“仅导出静态照片”后再转换，视频不会写入结果');motionStill=true;}
   }
   if(pages>1&&metadata.format==='png')throw Error('动画 PNG 尚未验证转换，原文件未修改');
   if(options.crop&&pages>1)throw Error('裁剪暂不支持动图或多页图片，原文件未修改');
   if(options.enhance&&pages>1)throw Error('画质优化暂不支持动图或多页图片，原文件未修改');
+  if(heic){
+   await decodeSystemHeic(entry.source,decoded);
+   const picture=await stat(decoded),decodedMetadata=await sharp(decoded).metadata();
+   if(picture.size>150*1024*1024||decodedMetadata.width!==metadata.width||decodedMetadata.height!==metadata.height||!decodedMetadata.icc?.equals(metadata.icc!))throw Error('Windows HEIC 解码结果的尺寸或 ICC 与原件不符');
+   pipeline=sharp(decoded,{animated:true,limitInputPixels:50_000_000,failOn:'error'});
+  }
   const target=options.format==='original'?metadata.format:options.format;
   if(options.compressionMode==='lossless'&&!['png','webp','tiff'].includes(target))throw Error('此格式不支持无损像素优化，请改选 PNG、WebP 或 TIFF');
   const highPrecision=!!metadata.depth&&metadata.depth!=='uchar';
@@ -65,13 +95,15 @@ async function convert(entry:Entry):Promise<ImageConvertResult>{
   }
   await pipeline.toFile(entry.temp);
   const output=await sharp(entry.temp,{animated:true}).metadata();if(pages>1&&(output.pages||1)!==pages)throw Error('输出未能保留全部动画帧或 TIFF 页面');
+  if(heic&&!output.icc?.equals(metadata.icc!))throw Error('输出未能保留 HEIC 的 ICC 色彩配置');
   if(hdrStill&&output.gainMap)throw Error('输出仍包含 HDR 增益图，未能生成仅 SDR 图像');
   if(options.compressionMode==='lossless'&&highPrecision&&output.depth!==metadata.depth)throw Error('输出位深与原图不同，无损优化已取消');
   await rename(entry.temp,entry.output);
   const after=(await stat(entry.output)).size;
-  const messages:string[]=[];if(motionStill)messages.push('已仅导出静态照片，动态视频未写入结果');if(hdrStill)messages.push('已仅导出 SDR 图像，HDR 增益图未写入结果');if(options.enhance)messages.push('已应用画质调整');if(highPrecision&&output.depth!==metadata.depth)messages.push('高精度输入已转为 8 位输出');if(target==='jpeg'&&metadata.hasAlpha)messages.push('透明区域已填充白色');if(after>before)messages.push('输出体积大于原图');
+  const messages:string[]=[];if(heic)messages.push('已通过 Windows 系统解码器读取 HEIC 主图，仅保留 ICC');if(motionStill)messages.push('已仅导出静态照片，动态视频未写入结果');if(hdrStill)messages.push('已仅导出 SDR 图像，HDR 增益图未写入结果');if(options.enhance)messages.push('已应用画质调整');if(highPrecision&&output.depth!==metadata.depth)messages.push('高精度输入已转为 8 位输出');if(target==='jpeg'&&metadata.hasAlpha)messages.push('透明区域已填充白色');if(after>before)messages.push('输出体积大于原图');
   return {source:entry.source,output:entry.output,before,after,width:output.width,height:output.pageHeight||output.height,pages:output.pages||1,status:'done',message:messages.join('；')||undefined};
  }catch(error){await rm(entry.temp,{force:true}).catch(()=>{});return {source:entry.source,before,status:'error',message:(error as Error).message.slice(0,300)};}
+ finally{await rm(decoded,{force:true}).catch(()=>{});}
 }
 
 void(async()=>{for(const entry of entries){parentPort!.postMessage({type:'current',source:entry.source});parentPort!.postMessage({type:'result',result:await convert(entry)});}parentPort!.postMessage({type:'complete'});})().catch(error=>parentPort!.postMessage({type:'fatal',message:(error as Error).message.slice(0,300)}));

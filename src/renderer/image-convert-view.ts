@@ -6,7 +6,7 @@ const nameOf=(path:string)=>path.split(/[\\/]/).pop()||path;
 const sizeOf=(bytes:number)=>bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1048576).toFixed(1)} MB`;
 
 export function imageConvertPage(){return `<div class="image-convert-page">
-  <section class="image-convert-panel"><h2>批量转换与压缩</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF。原图片保持不变，结果保存到所选文件夹。</p>
+  <section class="image-convert-panel"><h2>批量转换与压缩</h2><p>本地处理 PNG、JPEG、WebP、GIF 和 TIFF；已安装 Windows HEIF/HEVC 扩展时可读取部分 HEIC 并转为 PNG/JPEG。原图片保持不变，结果保存到所选文件夹。</p>
     <div class="image-convert-picks"><button id="image-convert-add" type="button">添加图片</button><button id="image-convert-clear" type="button" class="quiet">清空列表</button><span id="image-convert-count" aria-live="polite">尚未选择图片</span></div>
     <div id="image-convert-files" class="image-convert-files" aria-label="待转换图片"></div>
     <div class="image-convert-destination"><label for="image-convert-directory">输出文件夹</label><input id="image-convert-directory" readonly placeholder="选择保存位置"><button id="image-convert-pick-directory" type="button">选择文件夹</button></div>
@@ -25,12 +25,12 @@ export function imageConvertPage(){return `<div class="image-convert-page">
       <label class="image-enhance-check"><input id="image-enhance-contrast" type="checkbox">自动拉伸对比度</label><label class="image-enhance-check"><input id="image-enhance-denoise" type="checkbox">中值降噪</label>
     </div></fieldset>
     <p class="image-convert-note">无损像素优化只支持 PNG、WebP、TIFF 且不能缩放；JPEG/GIF 等格式按质量重新编码。画质优化可调整静态图片的亮度、饱和度、锐化、对比度和降噪，会改变原图像素。ICO 会生成 16–256 像素的 7 种 PNG 图标，不保留元数据。SVG 可转为位图或优化原矢量结构，位图不能直接恢复为矢量。JPEG 会把透明区域填成白色。动图与多页图片请选择 GIF、WebP 或 TIFF；动画 PNG 暂不支持。单张最大 100 MB，SVG 最大 5 MB，每批最多 100 张。</p>
-    <p id="image-codec-status" class="image-convert-note" role="status">正在检测 HEIC 编解码能力…</p>
+    <p id="image-codec-status" class="image-convert-note" role="status">HEIC 输入仅支持 8 位、带 ICC 的主图；HDR/辅助图像和动态视频需单独确认，HEIC 输出暂不支持。</p>
     <div class="image-convert-actions"><button id="image-convert-start" type="button">开始转换</button><button id="image-convert-cancel" type="button" class="quiet" disabled>取消</button><button id="image-convert-retry" type="button" class="quiet" hidden>重试失败项</button><span id="image-convert-status" role="status" aria-live="polite"></span></div>
   </section></div>`;}
 
 export function setupImageConvert(){
- const files=q<HTMLElement>('image-convert-files'),count=q<HTMLElement>('image-convert-count'),status=q<HTMLElement>('image-convert-status'),codecStatus=q<HTMLElement>('image-codec-status');
+ const files=q<HTMLElement>('image-convert-files'),count=q<HTMLElement>('image-convert-count'),status=q<HTMLElement>('image-convert-status');
  const add=q<HTMLButtonElement>('image-convert-add'),clear=q<HTMLButtonElement>('image-convert-clear'),pickDirectory=q<HTMLButtonElement>('image-convert-pick-directory');
  const directory=q<HTMLInputElement>('image-convert-directory'),format=q<HTMLSelectElement>('image-convert-format'),quality=q<HTMLInputElement>('image-convert-quality');
  const width=q<HTMLInputElement>('image-convert-width'),height=q<HTMLInputElement>('image-convert-height'),mode=q<HTMLSelectElement>('image-convert-mode'),metadata=q<HTMLSelectElement>('image-convert-metadata-policy'),motionStill=q<HTMLInputElement>('image-convert-motion-still'),hdrSdr=q<HTMLInputElement>('image-convert-hdr-sdr');
@@ -74,6 +74,5 @@ export function setupImageConvert(){
  cancel.onclick=()=>void api.imageConvertCancel().catch(toast);
  files.onclick=event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-image-reveal]');const output=button&&results.get(button.dataset.imageReveal||'')?.output;if(output)void api.revealFile(output).catch(toast);};
  const unsubscribe=api.onImageConvertProgress(progress);render();
- void api.imageConvertCapabilities().then(capabilities=>{if(codecStatus.isConnected)codecStatus.textContent=capabilities.heicRead||capabilities.heicWrite?`HEIC 检测：读取${capabilities.heicRead?'可用':'不可用'}，写入${capabilities.heicWrite?'可用':'不可用'}；当前入口仅开放已验证格式。`:'当前内置引擎未提供 HEIC 编解码，HEIC 转换暂不可用。';}).catch(error=>{if(codecStatus.isConnected)codecStatus.textContent=`HEIC 能力检测失败：${errorMessage(error)}`;});
  return {dispose(){unsubscribe();if(running)void api.imageConvertCancel();}};
 }

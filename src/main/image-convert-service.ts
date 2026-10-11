@@ -5,7 +5,7 @@ import {rm,stat} from 'node:fs/promises';
 import {imageConvertOptions,type ImageConvertOptions,type ImageConvertProgress,type ImageConvertResult,type ImageConvertSummary} from '../shared/image-convert';
 
 interface Entry {source:string;output:string;temp:string}
-interface Session {worker:Worker;entries:Entry[];results:Map<string,ImageConvertResult>;cancelled:boolean;task?:Promise<ImageConvertSummary>;fatal?:string;current?:string}
+interface Session {worker:Worker;entries:Entry[];results:Map<string,ImageConvertResult>;cancelled:boolean;task?:Promise<ImageConvertSummary>;fatal?:string;current?:string;childPid?:number}
 
 export class ImageConvertService {
  private sessions=new Map<number,Session>();
@@ -21,14 +21,17 @@ export class ImageConvertService {
   const worker=new Worker(join(__dirname,'image-convert-worker.cjs'),{workerData:{entries,options},resourceLimits:{maxOldGenerationSizeMb:256}});
   const session:Session={worker,entries,results:new Map(),cancelled:false};this.sessions.set(owner,session);
   const task=new Promise<ImageConvertSummary>(resolve=>{
-   worker.on('message',(message:{type:string;source?:string;result?:ImageConvertResult;message?:string})=>{
+   worker.on('message',(message:{type:string;source?:string;result?:ImageConvertResult;message?:string;pid?:number})=>{
+    if(message.type==='child'&&typeof message.pid==='number'&&Number.isInteger(message.pid)&&message.pid>0){session.childPid=message.pid;return;}
+    if(message.type==='childDone'){session.childPid=undefined;return;}
     if(message.type==='current'){session.current=message.source;notify({done:session.results.size,total:entries.length,current:message.source});}
     else if(message.type==='result'&&message.result){session.results.set(message.result.source,message.result);notify({done:session.results.size,total:entries.length,result:message.result});}
     else if(message.type==='fatal'){session.fatal=message.message||'图片处理进程异常';void worker.terminate();}
    });
    worker.on('error',error=>{session.fatal=error.message.slice(0,300);});
    worker.on('exit',()=>{void(async()=>{
-    for(const entry of entries)await rm(entry.temp,{force:true}).catch(()=>{});
+    if(session.childPid)try{process.kill(session.childPid);}catch{}
+    for(const entry of entries){await rm(entry.temp,{force:true}).catch(()=>{});await rm(entry.temp+'.decoded.png',{force:true}).catch(()=>{});}
     this.sessions.delete(owner);
     const results=entries.map(entry=>session.results.get(entry.source)||{source:entry.source,before:0,status:session.cancelled?'cancelled':'error',message:session.cancelled?'已取消':session.fatal||'图片处理未完成'} as ImageConvertResult);
     resolve({results,cancelled:session.cancelled});
@@ -36,6 +39,6 @@ export class ImageConvertService {
   });
   session.task=task;return task;
  }
- cancel(owner:number){const session=this.sessions.get(owner);if(!session)return false;session.cancelled=true;void session.worker.terminate();return true;}
+ cancel(owner:number){const session=this.sessions.get(owner);if(!session)return false;session.cancelled=true;if(session.childPid)try{process.kill(session.childPid);}catch{}void session.worker.terminate();return true;}
  async stopAll(){const tasks=[...this.sessions.values()].map(session=>session.task).filter((task):task is Promise<ImageConvertSummary>=>!!task);for(const owner of this.sessions.keys())this.cancel(owner);await Promise.all(tasks);}
 }
