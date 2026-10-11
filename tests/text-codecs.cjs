@@ -19,6 +19,16 @@ test('RFC 4648 Base32 and Base64URL, hex and UTF-8 round trips',()=>{
  assert.throws(()=>decodeText('MZXW6==','base32'),/填充/);
  assert.throws(()=>decodeText('%%','base64url'),/无效/);
  assert.throws(()=>decodeText('_w','base64url'),/UTF-8/);
+ assert.equal(encodeText('A=B 中文\n','quoted-printable'),'A=3DB =E4=B8=AD=E6=96=87=0A');
+ assert.equal(encodeText('a \t','quoted-printable'),'a =09');
+ assert.equal(decodeText('A=3DB=20=C3=A9','quoted-printable'),'A=B é');
+ assert.equal(decodeText('a=\r\nb','quoted-printable'),'ab');
+ assert.equal(decodeText('a=\nb','quoted-printable'),'ab');
+ assert.equal(decodeText('a \r\nb','quoted-printable'),'a\r\nb');
+ const wrapped=encodeText('a'.repeat(160),'quoted-printable');assert.ok(wrapped.split('\r\n').every(line=>line.length<=76));assert.equal(decodeText(wrapped,'quoted-printable'),'a'.repeat(160));
+ assert.throws(()=>decodeText('A=G0','quoted-printable'),/第 2 个字符/);
+ assert.throws(()=>decodeText('=FF','quoted-printable'),/UTF-8/);
+ assert.throws(()=>decodeText('😀','quoted-printable'),/第 1 个字符/);
  assert.equal(encodeText('&<>"\'','html'),'&amp;&lt;&gt;&quot;&apos;');
  assert.equal(decodeText('&copy; &#x1F600; &unknown;','html'),'© 😀 &unknown;');
  assert.equal(decodeText(encodeText(unicode,'html'),'html'),unicode);

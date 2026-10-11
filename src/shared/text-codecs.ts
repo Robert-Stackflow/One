@@ -2,7 +2,7 @@ import {normalizeBase64} from './base64';
 import {decodeHTML,encodeHTML} from 'entities';
 
 export type BinaryCodec='base64'|'base64url'|'hex'|'base32';
-export type TextCodec=BinaryCodec|'html'|'unicode';
+export type TextCodec=BinaryCodec|'html'|'unicode'|'quoted-printable';
 const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const maxOutput=10*1024*1024;
 
@@ -45,6 +45,39 @@ function fromHex(text:string){
  if(bad)throw Error(`十六进制第 ${bad.index+1} 个字符无效`);
  if(compact.length%2)throw Error('十六进制字符数必须为偶数');
  return Uint8Array.from({length:compact.length/2},(_,index)=>parseInt(compact.slice(index*2,index*2+2),16));
+}
+
+function quotedPrintable(bytes:Uint8Array){
+ let result='',column=0;
+ for(let index=0;index<bytes.length;index++){
+  const byte=bytes[index],literal=(byte>=33&&byte<=60)||(byte>=62&&byte<=126)||((byte===9||byte===32)&&index<bytes.length-1);
+  const token=literal?String.fromCharCode(byte):`=${byte.toString(16).toUpperCase().padStart(2,'0')}`;
+  if(column+token.length>75){result+='=\r\n';column=0;}
+  result+=token;column+=token.length;
+  if(result.length>maxOutput)throw Error('编码结果超过 10 MB 上限');
+ }
+ return result;
+}
+
+function fromQuotedPrintable(text:string){
+ const output=new Uint8Array(text.length);let used=0;
+ for(let index=0;index<text.length;index++){
+  const code=text.charCodeAt(index);
+  if(code===61){
+   const start=index,next=text[index+1];
+   if(next==='\r'&&text[index+2]==='\n'){index+=2;continue;}
+   if(next==='\n'){index++;continue;}
+   const digits=text.slice(index+1,index+3);
+   if(!/^[0-9a-fA-F]{2}$/.test(digits))throw Error(`Quoted-Printable 第 ${start+1} 个字符处的转义无效`);
+   output[used++]=parseInt(digits,16);index+=2;continue;
+  }
+  if(code===13&&text[index+1]==='\n'){output[used++]=13;output[used++]=10;index++;continue;}
+  if(code===10){output[used++]=10;continue;}
+  if(code===9||code===32){if(index===text.length-1||text[index+1]==='\n'||text[index+1]==='\r'&&text[index+2]==='\n')continue;output[used++]=code;continue;}
+  if((code>=33&&code<=60)||(code>=62&&code<=126)){output[used++]=code;continue;}
+  throw Error(`Quoted-Printable 第 ${index+1} 个字符无效`);
+ }
+ return output.subarray(0,used);
 }
 
 function unicodeEscape(text:string){
@@ -105,6 +138,7 @@ export function encodeText(text:string,codec:TextCodec){
   const result=encodeHTML(text);if(result.length>maxOutput)throw Error('编码结果超过 10 MB 上限');return result;
  }
  const bytes=new TextEncoder().encode(text);
+ if(codec==='quoted-printable')return quotedPrintable(bytes);
  const estimated=codec==='hex'?bytes.length*2:codec==='base32'?Math.ceil(bytes.length/5)*8:Math.ceil(bytes.length/3)*4;
  if(estimated>maxOutput)throw Error('编码结果超过 10 MB 上限');
  if(codec==='hex')return Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -128,5 +162,5 @@ export function decodeBytes(text:string,codec:BinaryCodec){
 export function decodeText(text:string,codec:TextCodec){
  if(codec==='unicode')return fromUnicodeEscape(text);
  if(codec==='html')return decodeHTML(text);
- try{return new TextDecoder('utf-8',{fatal:true}).decode(decodeBytes(text,codec));}catch(error){if(error instanceof TypeError)throw Error('解码后的字节不是有效 UTF-8 文本');throw error;}
+ try{return new TextDecoder('utf-8',{fatal:true}).decode(codec==='quoted-printable'?fromQuotedPrintable(text):decodeBytes(text,codec));}catch(error){if(error instanceof TypeError)throw Error('解码后的字节不是有效 UTF-8 文本');throw error;}
 }
