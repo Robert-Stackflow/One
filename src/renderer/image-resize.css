@@ -12,4 +12,3 @@
 .image-resize-note,.image-resize-actions span{font-size:12px}
 .image-resize-results{border-color:var(--line);border-radius:var(--field-radius)}
 @container (max-width:850px){.image-resize-layout{grid-template-columns:1fr}}
-.image-resize-presets>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}.image-resize-presets .custom-select,.image-resize-presets input{flex:1 1 150px;min-width:0}.image-resize-presets button{flex:none}
