@@ -35,6 +35,6 @@ export function setupBase64(){
  };
  mode.onchange=update;codec.onchange=update;choose.onclick=()=>file.click();file.onchange=()=>{name.textContent=file.files?.[0]?.name||'';};run.onclick=()=>void perform();cancel.onclick=()=>{revision++;stop();status.textContent='已取消';};
  copy.onclick=()=>void api.copyText(output.value).then(()=>toast('已复制结果')).catch(toast);
- save.onclick=()=>void api.saveText(output.value,'utf-8').then(path=>{if(path)status.textContent='已导出文本';}).catch(toast);
+ save.onclick=()=>void api.saveText(output.value,'UTF-8').then(path=>{if(path)status.textContent='已导出文本';}).catch(toast);
  update();return {activate(value:boolean){if(!value&&worker){revision++;stop();status.textContent='已取消';}},dispose(){revision++;stop();}};
 }

@@ -7,4 +7,7 @@
 .regex-actions{margin-top:18px}
 .regex-columns{grid-template-columns:repeat(2,minmax(0,1fr))}
 .regex-results h3{font-size:14px;font-weight:600}
+.regex-input-heading,.regex-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.regex-input-heading{justify-content:space-between}.regex-nav{font-size:12px;color:var(--muted)}.regex-nav button{padding:4px 8px;min-height:28px}
+.regex-match{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;color:var(--fg);text-align:left;font:inherit;cursor:pointer}.regex-match:last-child{border-bottom:0}.regex-match:hover,.regex-match[data-selected=true]{background:var(--soft)}.regex-match:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}.regex-match-groups{display:flex;gap:12px;flex-wrap:wrap;font-size:13px}
+.regex-highlights{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:var(--field-radius);background:var(--soft);padding:10px 12px}.regex-highlights pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}.regex-highlights mark{padding:1px 0;border-radius:2px;background:#ffdf75;color:#242424;cursor:pointer}.regex-highlights mark[data-selected=true]{background:#f59636;outline:2px solid var(--accent)}
 @container (max-width:700px){.regex-columns{grid-template-columns:1fr}}

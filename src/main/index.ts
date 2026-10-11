@@ -923,7 +923,7 @@ function registerIPC() {
   handle('open-text', async (_event, encoding) => { const path = await pickPath('file','打开文本文件'); if (!path) return null; return { path, text: await readText(path, textValue(encoding, 20)) }; });
   handle('read-text-path',async(_event,value,encoding)=>{const path=filePath(value);return{path,text:await readText(path,textValue(encoding,20))};});
   handle('drop-path-kinds',async(_event,values)=>{if(!Array.isArray(values)||values.length>64)throw new Error('拖入项目过多');return Promise.all(values.map(async value=>{const path=filePath(value);const info=await stat(path);return{path,kind:info.isDirectory()?'directory':info.isFile()?'file':'other'};}));});
-  handle('save-text', async (_event, text, encoding) => { textValue(text); const path = await pickPath('save','保存处理结果','处理结果.txt'); if (!path) return null; await saveText(path, text, textValue(encoding, 20)); return path; });
+  handle('save-text', async (_event, text, encoding, suggestedName) => { textValue(text); const name=typeof suggestedName==='string'&&/^[^\\/:*?"<>|\x00-\x1f]{1,80}\.(?:txt|json)$/i.test(suggestedName)?suggestedName:'处理结果.txt';const path = await pickPath('save','保存处理结果',name); if (!path) return null; await saveText(path, text, textValue(encoding, 20)); return path; });
   handle('pick-file', (event,path) => pickPath('file','选择文件','',path === undefined ? undefined : filePath(path),BrowserWindow.fromWebContents(event.sender)||main));
   handle('picker-data', (event, path) => pickerData(event.sender.id, path === undefined ? undefined : filePath(path)), ['picker']);
   handle('picker-places', event => pickerPlaces(event.sender.id), ['picker']);
