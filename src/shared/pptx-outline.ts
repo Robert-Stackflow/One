@@ -34,7 +34,9 @@ const noteColor=(hex:string,model:Element):string=>{
   if(item.localName==='tint'&&amount>=0&&amount<=1){rgb=rgb.map(value=>value*amount+1-amount);changed=true;}
   else if(item.localName==='shade'&&amount>=0&&amount<=1){rgb=rgb.map(value=>value*amount);changed=true;}
   else if((item.localName==='lumMod'||item.localName==='lumOff')&&amount>=-1&&amount<=2){const color=hsl();fromHsl(color.hue,color.saturation,clamp(item.localName==='lumMod'?color.lightness*amount:color.lightness+amount));changed=true;}
+  else if((item.localName==='sat'&&amount>=0&&amount<=1)||(item.localName==='satMod'&&amount>=0&&amount<=2)||(item.localName==='satOff'&&amount>=-1&&amount<=1)){const color=hsl();fromHsl(color.hue,clamp(item.localName==='sat'?amount:item.localName==='satMod'?color.saturation*amount:color.saturation+amount),color.lightness);changed=true;}
   else if(item.localName==='alpha'&&amount>=0&&amount<=1){alpha=amount;changed=true;}
+  else if((item.localName==='alphaMod'&&amount>=0&&amount<=2)||(item.localName==='alphaOff'&&amount>=-1&&amount<=1)){alpha=clamp(item.localName==='alphaMod'?alpha*amount:alpha+amount);changed=true;}
  }
  if(!changed)return hex;
  const channels=rgb.map(value=>Math.round(clamp(value)*255+1e-9));
