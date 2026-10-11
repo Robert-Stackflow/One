@@ -3,4 +3,5 @@
 .timestamp-now.settings-card,.timestamp-grid .settings-card{margin:0;border-color:var(--line);border-radius:var(--panel-radius);padding:20px;min-width:0}
 .timestamp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .timestamp-grid h3{font-size:14px;font-weight:600}
+.timestamp-now-main{display:grid;gap:4px;min-width:0;flex:1}.timestamp-now-heading{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:6px}.timestamp-now-heading strong{font-size:14px}.timestamp-now-heading label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}.timestamp-now-heading select{width:250px;max-width:100%;font-size:12px}.timestamp-now>button{flex:none}.timestamp-grid .tool-card-head{margin:0!important}.timestamp-grid section>pre{margin-top:2px}
 @container (max-width:760px){.timestamp-grid{grid-template-columns:1fr}.timestamp-head{display:grid}}

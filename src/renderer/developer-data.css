@@ -17,6 +17,8 @@
 .developer-data-settings.settings-card,.developer-data-panel.settings-card{margin:0;padding:20px;min-width:0}
 .developer-data-settings h3{font-size:14px;font-weight:600;margin:0 0 16px}
 .developer-data-status{margin-top:12px;line-height:1.5;overflow-wrap:anywhere}
+.developer-data-status:empty{display:none}
+.developer-data-columns .tool-card-head{flex:none}.developer-data-columns textarea{flex:1}
 .developer-data-columns textarea{min-height:300px}
 @container (max-width:700px){.developer-data-columns{grid-template-columns:1fr}.developer-data-columns textarea{min-height:220px}}
 @media(max-width:760px){.developer-data{padding:16px}}

@@ -3,6 +3,7 @@
 .developer-hash-heading h2{font-size:20px;margin:0 0 6px}
 .developer-hash-heading p{margin:0;color:var(--muted)}
 .developer-hash-layout{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:16px;align-items:start}
+.developer-hash-layout{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
 .developer-hash-panel.settings-card{margin:0;padding:20px;min-width:0}
 .developer-hash-panel h3{font-size:14px;font-weight:600;margin:0 0 18px}
 .developer-hash-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -17,6 +18,8 @@
 #developer-hash-status{display:block;margin-top:12px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 #developer-hash-status:empty{display:none}
 .developer-hash-result{display:grid;gap:12px;align-content:start;min-height:250px}
+.developer-hash-result{display:flex;flex-direction:column;gap:12px}
+.developer-hash-panel>.tool-card-head:first-child{flex:none}
 .developer-hash-result header{justify-content:space-between}
 .developer-hash-result header h3{margin:0}
 .developer-hash-tabs{display:flex;gap:6px;flex-wrap:wrap}

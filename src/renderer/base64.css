@@ -8,6 +8,7 @@
 .base64-toolbar span,#base64-status{color:var(--muted);font-size:12px}
 #base64-file-codec-field[hidden]+#base64-file-codec{display:none}
 .base64-codecs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 2px}
+.base64-settings .base64-codecs{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .base64-codecs[hidden]{display:none}
 .base64-codecs button{min-height:30px;padding:4px 10px;font-size:12px;border-radius:8px}
 .base64-codecs button[aria-selected=true]{border-color:var(--accent);color:var(--accent);background:var(--soft)}
@@ -20,6 +21,7 @@
 .base64-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .base64-columns:has(>section[hidden]){grid-template-columns:1fr}
 .base64-columns section{display:grid;gap:10px}
+.base64-columns section{align-content:stretch}
 .base64-columns textarea{min-height:260px;width:100%;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .base64-columns section[hidden]{display:none}
 .base64-page [hidden]{display:none!important}

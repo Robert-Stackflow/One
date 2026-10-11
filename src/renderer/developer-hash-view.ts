@@ -12,7 +12,7 @@ export function developerHashPage(){return `<div class="developer-hash-page">
  <label id="developer-hash-text-field" class="developer-hash-text">文本内容<textarea id="developer-hash-text" spellcheck="false" maxlength="2097152" placeholder="输入后自动计算全部摘要"></textarea></label>
  <div id="developer-hash-file-field" class="developer-hash-file" hidden><input id="developer-hash-file" aria-label="文件路径" readonly placeholder="选择或拖入文件"><button id="developer-hash-pick" type="button">选择文件</button></div>
  <div class="developer-hash-actions"><button id="developer-hash-cancel" type="button" hidden>取消</button></div><span id="developer-hash-status" role="status" aria-live="polite"></span></section>
- <section class="settings-card developer-hash-panel developer-hash-result" aria-label="哈希结果"><header><h3>摘要</h3><button id="developer-hash-copy" type="button" disabled>复制摘要</button></header>
+ <section class="settings-card developer-hash-panel developer-hash-result" aria-label="哈希结果"><header class="tool-card-head"><h3>摘要</h3><button id="developer-hash-copy" type="button" disabled>复制摘要</button></header>
  <div id="developer-hash-tabs" class="developer-hash-tabs" role="tablist" aria-label="哈希算法">${algorithms.map(([id,label],index)=>`<button type="button" role="tab" data-hash-algorithm="${id}" aria-selected="${index===0}" aria-controls="developer-hash-digest">${label}</button>`).join('')}</div>
  <code id="developer-hash-digest">输入文本或选择文件</code><label class="developer-hash-expected">预期摘要（可选）<input id="developer-hash-expected" spellcheck="false" placeholder="粘贴当前算法的十六进制摘要"></label><span id="developer-hash-match"></span></section></div></div>`;}
 
