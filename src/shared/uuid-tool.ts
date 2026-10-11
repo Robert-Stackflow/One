@@ -15,6 +15,24 @@ const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 const randomLimit=(1n<<74n)-1n;
 let lastTimestamp=-1,lastRandom=-1n;
 
+export interface UuidInspection {standard:string;version:number;variant:'NCS'|'RFC'|'Microsoft'|'Future';valid:boolean;special?:'Nil'|'Max'}
+
+export function inspectUuid(input:string):UuidInspection{
+ if(typeof input!=='string'||input.length>100)throw Error('UUID 长度无效');
+ const trimmed=input.trim(),value=trimmed.startsWith('{')&&trimmed.endsWith('}')?trimmed.slice(1,-1):trimmed;
+ if(value.includes('-')&&!uuidPattern.test(value)||!/^[0-9a-f]{32}$/i.test(value.replaceAll('-','')))throw Error('UUID 格式无效：需要 32 位十六进制、标准格式或花括号格式');
+ const hex=value.replaceAll('-','').toLowerCase(),octet=parseInt(hex.slice(16,18),16),version=parseInt(hex[12],16);
+ const variant=(octet&0x80)===0?'NCS':(octet&0xc0)===0x80?'RFC':(octet&0xe0)===0xc0?'Microsoft':'Future';
+ const special=/^0{32}$/.test(hex)?'Nil':/^f{32}$/.test(hex)?'Max':undefined;
+ return {standard:`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`,version,variant,valid:!!special||variant==='RFC'&&version>=1&&version<=8,special};
+}
+
+export function convertUuid(input:string,format:UuidFormat,uppercase:boolean){
+ if(!['standard','compact','braces'].includes(format)||typeof uppercase!=='boolean')throw Error('UUID 参数无效');
+ const hex=inspectUuid(input).standard.replaceAll('-','');
+ return formatUuid(Uint8Array.from({length:16},(_,index)=>parseInt(hex.slice(index*2,index*2+2),16)),format,uppercase);
+}
+
 function formatUuid(bytes:Uint8Array,format:UuidFormat,uppercase:boolean){
  const hex=Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
  let value=format==='compact'?hex:`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;

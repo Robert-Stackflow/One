@@ -8,7 +8,7 @@ test('UUID v3/v5 match RFC 9562 vectors and v4/v7 preserve variant, order and fo
  const root=resolve('work/current/developer-uuid-unit');mkdirSync(root,{recursive:true});
  try{
   const output=join(root,'uuid.cjs');buildSync({entryPoints:['src/shared/uuid-tool.ts'],outfile:output,bundle:true,platform:'node',target:'node22'});
-  const {generateUuids}=require(output),v4={version:'v4',count:1000,format:'standard',uppercase:false},values=generateUuids(v4);assert.equal(new Set(values).size,1000);
+  const {generateUuids,inspectUuid,convertUuid}=require(output),v4={version:'v4',count:1000,format:'standard',uppercase:false},values=generateUuids(v4);assert.equal(new Set(values).size,1000);
   for(const value of values)assert.match(value,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   const named={count:1,format:'standard',uppercase:false,name:'www.example.com',namespace:'dns'};
   assert.equal(generateUuids({...named,version:'v3'})[0],'5df41881-3aed-3515-88a7-2f4a814cf09e');
@@ -20,6 +20,13 @@ test('UUID v3/v5 match RFC 9562 vectors and v4/v7 preserve variant, order and fo
   const clock=Date.now;try{Date.now=()=>before-1;assert(generateUuids({version:'v7',count:1,format:'standard',uppercase:false})[0]>next);}finally{Date.now=clock;}
   assert.match(generateUuids({...v4,count:1,format:'compact',uppercase:true})[0],/^[0-9A-F]{12}4[0-9A-F]{3}[89AB][0-9A-F]{15}$/);
   assert.match(generateUuids({...named,version:'v5',format:'braces',uppercase:true})[0],/^\{[0-9A-F-]{36}\}$/);
+  assert.deepEqual(inspectUuid(' '+values[0]+' '),{standard:values[0],version:4,variant:'RFC',valid:true,special:undefined});
+  assert.equal(convertUuid(values[0],'compact',true),values[0].replaceAll('-','').toUpperCase());
+  assert.equal(convertUuid('{'+values[0].toUpperCase()+'}','standard',false),values[0]);
+  assert.equal(inspectUuid('0'.repeat(32)).special,'Nil');assert.equal(inspectUuid('f'.repeat(32)).special,'Max');
+  assert.equal(inspectUuid(values[0].slice(0,19)+'0'+values[0].slice(20)).valid,false);
+  assert.throws(()=>inspectUuid('12345678-1234-1234-1234-123456789ab'),/格式/);
+  assert.throws(()=>inspectUuid('123456781234-1234-1234-123456789abc'),/格式/);
   assert.throws(()=>generateUuids({...v4,count:1001}),/数量/);
   assert.throws(()=>generateUuids({...named,version:'v5',name:''}),/名称/);
   assert.throws(()=>generateUuids({...named,version:'v3',namespace:'custom',customNamespace:'not-a-uuid'}),/命名空间/);
