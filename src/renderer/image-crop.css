@@ -14,3 +14,4 @@
 .image-crop-results:not(:empty){margin-top:18px}
 @container (max-width:850px){.image-crop-layout{grid-template-columns:1fr}}
 @container (max-width:700px){.image-crop-preview-grid{grid-template-columns:1fr}}
+.image-crop-presets>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}.image-crop-presets .custom-select,.image-crop-presets input{flex:1 1 150px;min-width:0}.image-crop-presets button{flex:none}

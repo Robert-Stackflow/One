@@ -12,6 +12,9 @@ test('image color sampling reads original pixels, orientation and first animatio
   const {imageColorPreview,imageColorSample}=require(join(root,'image-color.cjs')),png=join(root,'pixels.png'),oriented=join(root,'oriented.jpg'),gif=join(root,'animated.gif');
   const pixels=Buffer.from([255,0,0,255,0,0,255,255,255,0,0,0,0,255,0,128]);await sharp(pixels,{raw:{width:2,height:2,channels:4}}).png().toFile(png);
   const preview=await imageColorPreview(png);assert.equal(preview.width,2);assert.equal(preview.height,2);assert.match(preview.url,/^data:image\/png;base64,/);
+  const compact=await imageColorPreview(png,true);assert.equal(compact.width,2);assert.equal(compact.height,2);assert.deepEqual(await sharp(Buffer.from(compact.url.split(',')[1],'base64')).metadata().then(value=>[value.width,value.height]),[2,2]);
+  const wide=join(root,'wide.png');await sharp({create:{width:600,height:400,channels:3,background:'blue'}}).png().toFile(wide);
+  const compactWide=await imageColorPreview(wide,true);assert.deepEqual([compactWide.width,compactWide.height],[600,400]);assert.deepEqual(await sharp(Buffer.from(compactWide.url.split(',')[1],'base64')).metadata().then(value=>[value.width,value.height]),[240,160]);
   assert.equal((await imageColorSample(png,0,0)).hex,'#FF0000');assert.equal((await imageColorSample(png,1,0)).hex,'#0000FF');
   assert.deepEqual(await imageColorSample(png,0,1),{hex:'#FFFFFF',alpha:0,x:0,y:1});
   const blended=await imageColorSample(png,1,1);assert.equal(blended.alpha,50);assert.equal(blended.hex,'#7FFF7F');

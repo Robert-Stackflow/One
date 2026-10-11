@@ -175,7 +175,7 @@ export interface OneAPI {
   imageMetadataCancel():Promise<boolean>;
   onImageMetadataProgress(callback:(progress:import('./image-metadata').ImageMetadataProgress)=>void):()=>void;
   imageCropPreview(path:string):Promise<import('./image-convert').ImageCropPreview>;
-  imageColorPreview(path:string):Promise<import('./image-color').ImageColorPreview>;
+  imageColorPreview(path:string,compact?:boolean):Promise<import('./image-color').ImageColorPreview>;
   imageColorSample(path:string,x:number,y:number):Promise<import('./image-color').ImagePixelSample>;
   codecExportFile(value:string,codec:import('./text-codecs').BinaryCodec):Promise<string|null>;
   developerHashStart(request:import('./developer-hash').HashRequest):Promise<import('./developer-hash').HashResult>;

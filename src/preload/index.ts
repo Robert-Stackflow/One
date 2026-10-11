@@ -65,7 +65,7 @@ const api: OneAPI = {
   imageRepairModelStatus:()=>invoke('image-repair-model-status'),imageRepairStart:(source,directory,mask)=>invoke('image-repair-start',source,directory,mask),onImageRepairProgress:callback=>listen('image-repair-progress',callback),
   imageMetadataStart:(paths,directory,options)=>invoke('image-metadata-start',paths,directory,options),imageMetadataCancel:()=>invoke('image-metadata-cancel'),onImageMetadataProgress:callback=>listen('image-metadata-progress',callback),
   imageCropPreview:path=>invoke('image-crop-preview',path),
-  imageColorPreview:path=>invoke('image-color-preview',path),imageColorSample:(path,x,y)=>invoke('image-color-sample',path,x,y),
+  imageColorPreview:(path,compact)=>invoke('image-color-preview',path,compact),imageColorSample:(path,x,y)=>invoke('image-color-sample',path,x,y),
   codecExportFile:(value,codec)=>invoke('codec-export-file',value,codec),
   developerHashStart:request=>invoke('developer-hash-start',request),developerHashCancel:()=>invoke('developer-hash-cancel'),onDeveloperHashProgress:callback=>listen('developer-hash-progress',callback),
   developerQrGenerate:request=>invoke('developer-qr-generate',request),developerQrCopy:()=>invoke('developer-qr-copy'),developerQrExport:()=>invoke('developer-qr-export'),

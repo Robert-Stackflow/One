@@ -11,8 +11,9 @@ async function source(path:string){
  const swapped=[5,6,7,8].includes(metadata.orientation||1);
  return {width:swapped?metadata.height:metadata.width,height:swapped?metadata.width:metadata.height,pages:metadata.pages||1,format:metadata.format||''};
 }
-export async function imageColorPreview(path:string):Promise<ImageColorPreview>{
- const info=await source(path),bytes=await sharp(path,{pages:1,limitInputPixels:50_000_000,failOn:'error'}).rotate().resize({width:960,height:640,fit:'inside',withoutEnlargement:true}).png().toBuffer();
+export async function imageColorPreview(path:string,compact=false):Promise<ImageColorPreview>{
+ if(typeof compact!=='boolean')throw Error('预览尺寸参数无效');
+ const info=await source(path),bytes=await sharp(path,{pages:1,limitInputPixels:50_000_000,failOn:'error'}).rotate().resize({width:compact?256:960,height:compact?160:640,fit:'inside',withoutEnlargement:true}).png().toBuffer();
  return {...info,url:`data:image/png;base64,${bytes.toString('base64')}`};
 }
 export async function imageColorSample(path:string,x:unknown,y:unknown):Promise<ImagePixelSample>{

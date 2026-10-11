@@ -796,7 +796,7 @@ function registerIPC() {
   handle('image-metadata-start',(event,paths,directory,options)=>imageMetadata.start(event.sender.id,paths,directory,options,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:image-metadata-progress',progress);}),['main']);
   handle('image-metadata-cancel',event=>imageMetadata.cancel(event.sender.id),['main']);
   handle('image-crop-preview',(_event,path)=>imageCropPreview(filePath(path)),['main']);
-  handle('image-color-preview',(_event,path)=>imageColorPreview(filePath(path)),['main']);
+  handle('image-color-preview',(_event,path,compact)=>imageColorPreview(filePath(path),compact===undefined?false:compact),['main']);
   handle('image-color-sample',(_event,path,x,y)=>imageColorSample(filePath(path),x,y),['main']);
   handle('codec-export-file',async(_event,value,codec)=>{const text=textValue(value,10_000_000);if(typeof codec!=='string'||!['base64','base64url','hex','base32'].includes(codec))throw Error('编码类型无效');const bytes=decodeBytes(text,codec as BinaryCodec);if(!bytes.length||bytes.length>maxBase64FileBytes)throw Error('解码后的文件不能超过 6 MB');const path=await pickPath('save','保存解码文件','解码文件.bin');if(!path)return null;await writeFile(path,bytes);return path;},['main']);
   handle('developer-hash-start',(event,request)=>developerHash.start(event.sender.id,request,progress=>{if(!event.sender.isDestroyed())event.sender.send('one:developer-hash-progress',progress);}),['main']);
