@@ -1,0 +1,70 @@
+.audio-test-control {
+  min-width: 0;
+  margin-top: 10px;
+}
+.audio-test-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+html body .audio-test-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.audio-test-button > .icon {
+  width: 13px;
+  height: 13px;
+}
+.audio-level {
+  position: relative;
+  flex: 1;
+  min-width: 40px;
+  height: 12px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--soft);
+  mask-image: repeating-linear-gradient(to right, #000 0 4px, transparent 4px 7px);
+}
+.audio-level-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--audio-level, 0%);
+  background: #668e81;
+  transition:
+    width 0.09s ease-out,
+    background 0.15s;
+}
+.audio-level[data-loud='true'] .audio-level-fill {
+  background: #c59144;
+}
+.audio-level-value {
+  flex: 0 0 42px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.audio-test-message {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.audio-test-control[data-status='error'] .audio-test-message {
+  color: var(--danger, #ba4d4d);
+}
+@media (prefers-reduced-motion: reduce) {
+  .audio-level-fill {
+    transition: none;
+  }
+}

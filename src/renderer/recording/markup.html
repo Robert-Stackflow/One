@@ -1,0 +1,349 @@
+<div class="recording-page record-workbench">
+      <div id="recording-toast" class="feedback-toast" role="status" aria-live="polite" hidden></div>
+      <button id="recording-cancel-import" class="quiet" hidden>取消视频导入</button>
+      <section id="recording-setup">
+        <div class="record-heading">
+          <div id="recording-record-source-tabs" class="tabs" role="tablist" aria-label="录制方式">
+            <button id="recording-screens" class="selected" role="tab" aria-selected="true">屏幕</button>
+            <button id="recording-windows" role="tab" aria-selected="false">窗口</button>
+            <button id="recording-camera-source" role="tab" aria-selected="false">摄像头</button>
+            <button id="recording-record-audio" role="tab" aria-selected="false">录音</button>
+          </div>
+          <button id="recording-record-video" hidden>画面与声音</button>
+          <p id="recording-mode-description" class="sr-only">选择录制来源与声音。</p>
+        </div>
+        <div class="record-setup-scroll">
+          <div class="record-source-pane">
+            <section id="recording-video-settings" class="record-panel record-source-card">
+              <div class="record-card-heading">
+                <h2 id="recording-source-heading">画面来源</h2>
+                <div id="recording-region-controls" class="region-row">
+                  <span id="recording-region-label"></span>
+                  <span id="recording-region-entry"></span>
+                  <button id="recording-clear-region" class="quiet" hidden>恢复整屏</button>
+                </div>
+                <button id="recording-refresh" class="quiet">刷新来源</button>
+              </div>
+              <div id="recording-sources" role="group" aria-label="录制来源"></div>
+              <div id="recording-primary-camera-options" hidden>
+                <div hidden>
+                  <select id="recording-camera-source-device" aria-label="录制摄像头来源">
+                    <option value="">请选择摄像头</option>
+                  </select>
+                </div>
+                <div id="recording-camera-sources" role="group" aria-label="摄像头来源"></div>
+                <p id="recording-camera-source-feedback" class="help" role="status"></p>
+              </div>
+            </section>
+            <section id="recording-audio-placeholder" class="record-audio-placeholder" hidden>
+              <span id="recording-audio-placeholder-icon" aria-hidden="true"></span>
+              <h2>录音</h2>
+              <p>在右侧选择声音来源，准备好后开始录音。</p>
+            </section>
+          </div>
+          <aside class="record-options-column" aria-label="录制设置">
+            <div
+              id="recording-record-config-tabs"
+              class="tabs compact"
+              role="tablist"
+              aria-label="录制参数分类"
+            >
+              <button
+                type="button"
+                class="selected"
+                role="tab"
+                aria-selected="true"
+                data-config-tab="basic"
+                aria-controls="recording-config-basic"
+              >
+                基本
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-tab="quality"
+                aria-controls="recording-config-quality"
+              >
+                画质
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-tab="input"
+                aria-controls="recording-config-input"
+              >
+                键鼠
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-tab="camera"
+                aria-controls="recording-config-camera"
+              >
+                画中画
+              </button>
+            </div>
+            <div class="record-options-scroll">
+              <div
+                id="recording-config-basic"
+                class="record-config-panel"
+                role="tabpanel"
+                aria-label="基本设置"
+              >
+                <section class="record-panel record-output-card" aria-labelledby="recording-output-heading">
+                  <h2 id="recording-output-heading" class="sr-only">基本设置</h2>
+                  <div class="record-output-fields">
+                    <label class="field"
+                      >格式<select id="recording-record-container">
+                        <option value="mp4">MP4</option>
+                        <option value="webm">WebM</option>
+                        <option value="wav" disabled>WAV</option>
+                      </select></label
+                    >
+                    <label class="field" id="recording-record-delay-field"
+                      >开始前延迟<select id="recording-record-delay" aria-label="开始前延迟">
+                        <option value="0">立即开始</option>
+                        <option value="3" selected>3 秒</option>
+                        <option value="5">5 秒</option>
+                        <option value="10">10 秒</option>
+                      </select></label
+                    >
+                  </div>
+                </section>
+                <section class="record-panel record-sound-card" aria-labelledby="recording-sound-heading">
+                  <div class="record-card-heading">
+                    <h2 id="recording-sound-heading">声音来源</h2>
+                    <span class="record-caption">可同时开启</span>
+                  </div>
+                  <p id="recording-audio-settings" class="record-audio-note" hidden>
+                    选择至少一种声音来源，使用同一套暂停、预览和保存操作。
+                  </p>
+                  <div class="sounds">
+                    <div class="sound-source" id="recording-system-sound-source">
+                      <label class="sound-toggle" for="recording-system-audio"
+                        ><span id="recording-system-sound-icon" aria-hidden="true"></span
+                        ><strong>系统声音</strong
+                        ><span class="switch"
+                          ><input id="recording-system-audio" type="checkbox" role="switch" /><span
+                            class="switch-track"
+                          ></span></span
+                      ></label>
+                      <label class="field" id="recording-system-device-field" hidden
+                        ><span class="sr-only">声音输出设备</span
+                        ><select id="recording-system-device" aria-label="声音输出设备" disabled>
+                          <option value="">默认声音输出</option>
+                        </select></label
+                      >
+                      <p id="recording-system-sound-status" class="record-caption">未录制系统声音</p>
+                    </div>
+                    <div class="sound-source" id="recording-microphone-sound-source">
+                      <label class="sound-toggle" for="recording-microphone"
+                        ><span id="recording-microphone-sound-icon" aria-hidden="true"></span
+                        ><strong>麦克风</strong
+                        ><span class="switch"
+                          ><input id="recording-microphone" type="checkbox" role="switch" /><span
+                            class="switch-track"
+                          ></span></span
+                      ></label>
+                      <label class="field"
+                        ><span class="sr-only">麦克风设备</span
+                        ><select id="recording-microphone-device" aria-label="麦克风设备">
+                          <option value="">默认麦克风</option>
+                        </select></label
+                      >
+                      <p id="recording-microphone-sound-status" class="record-caption">未录制麦克风</p>
+                    </div>
+                  </div>
+                </section>
+                <section id="recording-audio-drafts" class="record-panel audio-drafts" hidden>
+                  <h2>未完成的录音</h2>
+                  <p>恢复为 WAV 后可预览、另存为。丢弃会删除该草稿。</p>
+                  <div id="recording-audio-draft-list"></div>
+                </section>
+              </div>
+              <div
+                id="recording-config-quality"
+                class="record-config-panel"
+                role="tabpanel"
+                aria-label="画质与编码"
+                hidden
+              >
+                <section id="recording-quality-settings" class="record-panel record-input-settings">
+                  <div class="record-card-heading">
+                    <h2 id="recording-quality-title">画质与编码</h2>
+                    <span class="record-caption sr-only"></span>
+                  </div>
+                  <p id="recording-quality-empty" class="help" hidden></p>
+                  <div class="record-advanced-fields">
+                    <div class="fields" id="recording-video-quality">
+                      <label class="field"
+                        >帧率<select id="recording-fps">
+                          <option value="15">15 fps</option>
+                          <option value="30" selected>30 fps</option>
+                          <option value="60">60 fps</option>
+                        </select></label
+                      >
+                    </div>
+                    <label class="field" id="recording-resolution-field"
+                      >分辨率<select id="recording-resolution">
+                        <option value="1920">1920 像素</option>
+                        <option value="2560">2560 像素</option>
+                      </select></label
+                    >
+
+                    <div class="fields" id="recording-native-video-quality">
+                      <label class="field"
+                        >视频码率<select id="recording-video-bitrate">
+                          <option value="2000000">2 Mbps</option>
+                          <option value="6000000" selected>6 Mbps</option>
+                          <option value="12000000">12 Mbps</option>
+                          <option value="20000000">20 Mbps</option>
+                        </select></label
+                      >
+                      <label class="field"
+                        >编码器<select id="recording-video-encoder">
+                          <option value="auto">自动选择</option>
+                          <option value="software">软件 H.264</option>
+                        </select></label
+                      >
+                      <label class="record-cursor-field"
+                        ><span>录制鼠标指针</span
+                        ><span class="switch"
+                          ><input id="recording-record-cursor" type="checkbox" role="switch" checked /><span
+                            class="switch-track"
+                          ></span></span
+                      ></label>
+                    </div>
+                    <label class="field" id="recording-audio-bitrate-field" hidden
+                      >音频质量<select id="recording-audio-bitrate">
+                        <option value="128000">128 kbps</option>
+                      </select></label
+                    >
+                  </div>
+                </section>
+              </div>
+              <div
+                id="recording-config-input"
+                class="record-config-panel"
+                role="tabpanel"
+                aria-label="键鼠回显"
+                hidden
+              >
+                <section id="recording-input-settings" class="record-panel record-input-settings">
+                  <h2 class="record-form-title">键鼠回显</h2>
+                  <p class="help">
+                    按需开启。仅快捷键会过滤普通字母输入；全部按键会记录每个按下的键。
+                  </p>
+                  <div id="recording-input-setup-controls"></div>
+                </section>
+              </div>
+              <div
+                id="recording-config-camera"
+                class="record-config-panel"
+                role="tabpanel"
+                aria-label="摄像头画中画"
+                hidden
+              >
+                <section id="recording-camera-settings" class="record-panel record-input-settings">
+                  <h2 class="record-form-title">摄像头画中画</h2>
+                  <label class="camera-enable"
+                    ><span>录制摄像头</span
+                    ><span class="switch"
+                      ><input id="recording-camera-enabled" type="checkbox" role="switch" /><span
+                        class="switch-track"
+                      ></span></span
+                  ></label>
+                  <div id="recording-camera-options" hidden>
+                    <div class="camera-device-row">
+                      <label
+                        >摄像头<select id="recording-camera-device" aria-label="摄像头">
+                          <option value="">请选择摄像头</option>
+                        </select></label
+                      ><button id="recording-camera-refresh" class="quiet">刷新设备</button>
+                    </div>
+                    <p id="recording-camera-feedback" class="help" role="status"></p>
+                    <p class="help">录制时可直接拖动、缩放画中画。</p>
+                    <div id="recording-camera-setup-controls"></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </aside>
+        </div>
+        <footer class="record-startbar sr-only" aria-live="polite">
+          <div class="record-start-copy">
+            <strong id="recording-start-summary">选择录制来源</strong
+            ><span id="recording-start-hint">停止后可预览并保存录制结果。</span>
+          </div>
+        </footer>
+      </section>
+      <section id="recording-active" hidden>
+        <img id="recording-camera-live" class="camera-live" alt="摄像头实时画面" hidden />
+        <div class="record-session-overview">
+          <div class="record-session-info">
+            <div class="record-status">
+              <span class="record-dot" aria-hidden="true"></span
+              ><strong id="recording-phase-label">正在准备</strong>
+            </div>
+            <div class="record-session-details">
+              <span id="recording-record-kind">录制画面</span
+              ><span class="record-meta-dot" aria-hidden="true">·</span><span id="recording-size">0 MB</span>
+            </div>
+          </div>
+          <div id="recording-elapsed" role="timer">00:00</div>
+        </div>
+        <div class="meter-row" id="recording-record-meter">
+          <span id="recording-meter-icon" aria-hidden="true"></span
+          ><meter id="recording-level" min="0" max="1" value="0" aria-label="当前音量"></meter
+          ><span id="recording-level-label">声音</span>
+        </div>
+        <fieldset id="recording-audio-mixer" class="audio-mixer" hidden>
+          <legend>声音控制</legend>
+          <div class="audio-channel" id="recording-system-channel">
+            <div class="audio-channel-heading">
+              <label for="recording-system-gain">系统声音</label
+              ><button id="recording-system-mute" class="quiet" aria-pressed="false">静音</button>
+            </div>
+            <meter id="recording-system-level" min="0" max="1" value="0" aria-label="系统声音电平"></meter>
+            <div class="audio-channel-volume">
+              <input
+                id="recording-system-gain"
+                type="range"
+                min="0"
+                max="200"
+                step="1"
+                value="100"
+                aria-label="系统声音音量"
+              /><output id="recording-system-gain-value" for="recording-system-gain">100%</output>
+            </div>
+          </div>
+          <div class="audio-channel" id="recording-microphone-channel">
+            <div class="audio-channel-heading">
+              <label for="recording-microphone-gain">麦克风</label
+              ><button id="recording-microphone-mute" class="quiet" aria-pressed="false">静音</button>
+            </div>
+            <meter id="recording-microphone-level" min="0" max="1" value="0" aria-label="麦克风电平"></meter>
+            <div class="audio-channel-volume">
+              <input
+                id="recording-microphone-gain"
+                type="range"
+                min="0"
+                max="200"
+                step="1"
+                value="100"
+                aria-label="麦克风音量"
+              /><output id="recording-microphone-gain-value" for="recording-microphone-gain">100%</output>
+            </div>
+          </div>
+        </fieldset>
+        <div class="controls">
+          <button id="recording-discard" class="quiet">放弃</button>
+          <div class="record-primary-actions">
+            <button id="recording-pause">暂停</button><button id="recording-stop" class="primary">停止并预览</button>
+          </div>
+        </div>
+      </section>
+    </div>

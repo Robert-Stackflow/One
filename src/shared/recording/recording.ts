@@ -107,6 +107,8 @@ export interface AudioTestState {
   message?: string;
 }
 export interface RecorderAPI {
+  /** Visibility of the One settings page; active capture remains owned by the client. */
+  pageActive(value: boolean): Promise<void>;
   audioTest(channel: RecordingAudioSource, enabled: boolean, device: string): Promise<void>;
   onAudioTest(callback: (state: AudioTestState) => void): () => void;
   cursorEvents(token: string, after: number): Promise<CursorEvent[]>;

@@ -1,5 +1,6 @@
 import { AppWindow, Monitor, Check, Camera } from 'lucide';
 import { icon, registerIcons } from '../ui';
+import './source-card.css';
 
 registerIcons({ monitor: Monitor, window: AppWindow, check: Check, camera: Camera });
 const escape = (value: string | number) =>

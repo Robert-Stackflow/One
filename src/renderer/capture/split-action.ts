@@ -4,8 +4,8 @@ import {openAnchoredPopover,closeAnchoredPopover} from '../anchored-popover';
 import {onRemoval} from '../dom-lifecycle';
 import './split-action.css';
 
-export function splitAction(id:string,label:string,glyph:string,primary=false){
-  return `<div class="action-split${primary?' is-primary':''}"><button type="button" id="${id}" class="split-action">${icon(glyph)}${label}</button><button type="button" id="${id}-menu" class="split-chevron" aria-label="${label}选项" aria-haspopup="menu" aria-expanded="false" aria-controls="${id}-options">${icon('chevron-down')}</button></div><div id="${id}-options" class="select-popup capture-entry-menu" popover="manual" role="menu" aria-label="${label}选项"><button type="button" data-preserve-window role="menuitem">${icon('lucide:camera')}保留主窗口截图</button><button type="button" id="${id}-hide" role="menuitem">${icon('lucide:window')}隐藏主窗口后截图</button></div>`;
+export function splitAction(id:string,label:string,glyph:string,primary=false,choices={primary:'保留主窗口截图',secondary:'隐藏主窗口后截图',primaryIcon:'lucide:camera',secondaryIcon:'lucide:window'}){
+  return `<div class="action-split${primary?' is-primary':''}"><button type="button" id="${id}" class="split-action">${icon(glyph)}${label}</button><button type="button" id="${id}-menu" class="split-chevron" aria-label="${label}选项" aria-haspopup="menu" aria-expanded="false" aria-controls="${id}-options">${icon('chevron-down')}</button></div><div id="${id}-options" class="select-popup capture-entry-menu" popover="manual" role="menu" aria-label="${label}选项"><button type="button" data-preserve-window role="menuitem">${icon(choices.primaryIcon)}${choices.primary}</button><button type="button" id="${id}-hide" role="menuitem">${icon(choices.secondaryIcon)}${choices.secondary}</button></div>`;
 }
 export function bindSplitAction(root:HTMLElement,id:string,work:(hideMainWindow:boolean)=>void){
   const button=root.querySelector<HTMLButtonElement>('#'+id+'-menu')!,menu=root.querySelector<HTMLElement>('#'+id+'-options')!,primary=root.querySelector<HTMLButtonElement>('#'+id)!;
