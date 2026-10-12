@@ -3,8 +3,9 @@ import type {TrayMenuView} from './tray-menu';
 
 const width=296,height=356;
 const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
-export function trayMenuBounds(anchor:Rectangle,area:Rectangle):Rectangle{
- const menuWidth=Math.min(width,area.width),menuHeight=Math.min(height,area.height);
+export function trayMenuBounds(anchor:Rectangle,area:Rectangle,items=7):Rectangle{
+ // Expanded menus include the 66px heading, section padding and fractional-DPI rounding.
+ const menuWidth=Math.min(width,area.width),menuHeight=Math.min(items>7?102+items*37:height,area.height);
  const x=clamp(Math.round(anchor.x+anchor.width/2-menuWidth/2),area.x,area.x+area.width-menuWidth);
  const below=anchor.y+anchor.height+8,above=anchor.y-menuHeight-8;
  const y=below+menuHeight<=area.y+area.height?below:above>=area.y?above:clamp(Math.round(anchor.y+anchor.height/2-menuHeight/2),area.y,area.y+area.height-menuHeight);
@@ -26,7 +27,7 @@ export class TrayMenuPanel{
  open(anchor?:Rectangle){
   this.close();clearTimeout(this.idleTimer);this.idleTimer=undefined;this.opened=true;
   const point=screen.getCursorScreenPoint(),target=anchor&&anchor.width>0&&anchor.height>0?anchor:{...point,width:1,height:1};
-  const area=screen.getDisplayNearestPoint({x:target.x+target.width/2,y:target.y+target.height/2}).workArea,bounds=trayMenuBounds(target,area);
+  const area=screen.getDisplayNearestPoint({x:target.x+target.width/2,y:target.y+target.height/2}).workArea,bounds=trayMenuBounds(target,area,this.state().entries.filter(entry=>entry.id!=='pause').length);
   if(this.window&&!this.window.isDestroyed()){this.window.setBounds(bounds);if(this.loaded)this.show();return;}
   const window=this.create();this.window=window;this.loaded=false;window.setBounds(bounds);
   window.on('blur',()=>{if(this.opened)this.close();});

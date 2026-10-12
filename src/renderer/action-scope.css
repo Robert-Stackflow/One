@@ -1,0 +1,38 @@
+/* One information-spin: same refresh glyph, timing and reduced-motion behavior. */
+button.action-pending {
+  position: relative;
+  color: transparent !important;
+  transition-property: background, border-color, box-shadow;
+}
+button.action-pending > * {
+  opacity: 0;
+}
+button.action-pending:disabled {
+  opacity: 0.75;
+}
+button.action-pending::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16px;
+  height: 16px;
+  background: var(--fg);
+  pointer-events: none;
+  mask: center/contain no-repeat
+    url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/%3E%3Cpath d="M21 3v5h-5"/%3E%3C/svg%3E');
+  animation: one-action-spin 1.4s linear infinite;
+}
+button.primary.action-pending::after {
+  background: var(--on-accent);
+}
+@keyframes one-action-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button.action-pending::after {
+    animation: none;
+  }
+}

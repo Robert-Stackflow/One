@@ -1,0 +1,267 @@
+body:is([data-view=pin],[data-view=pin-controls]) #app,
+body:is([data-view=pin],[data-view=pin-controls]) {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #pin-stage {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  padding: 0;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #pin-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #pin-content:active {
+  cursor: grabbing;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #pin-content > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-text,
+body:is([data-view=pin],[data-view=pin-controls]) .pin-files {
+  background: var(--surface);
+  color: var(--fg);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-text pre {
+  padding: 20px;
+  margin: 0;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 16px/24px var(--ui-font-family);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-files-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 62px;
+  padding: 0 16px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-files-heading small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-file-list {
+  height: calc(100% - 62px);
+  padding: 0 10px 10px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 64px;
+  border-top: 1px solid var(--line);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-file .quiet {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-file .icon {
+  flex-shrink: 0;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-load-error {
+  padding: 12px;
+  background: var(--surface);
+}
+body[data-view=pin-controls] {
+  background: var(--surface);
+  color: var(--fg);
+  overflow: auto;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #pin-tools {
+  box-sizing: border-box;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding-left: 16px;
+  box-sizing: border-box;
+  background: var(--surface);
+  app-region: drag;
+  user-select: none;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-heading h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-body {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--line);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-display-section {
+  padding: 12px 0;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-display-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #pin-status {
+  margin: 0;
+  text-align: right;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-transform-tools {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 8px 0 10px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-transform-action {
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  height: 54px;
+  min-width: 0;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 16px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-transform-action .icon {
+  width: 18px;
+  height: 18px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-transform-action[aria-pressed='true'] {
+  background: var(--selected);
+  color: var(--fg);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  min-height: 36px;
+  font-size: 13px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-row > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-unit {
+  color: var(--muted);
+  font-size: 12px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-row .number-control {
+  width: 136px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-tool-row .custom-select {
+  width: min(180px, 70%);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-group-row {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--line);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-operation-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-menu-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  justify-content: flex-start;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-menu-action > .icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-menu-action > span {
+  flex: 1;
+  text-align: left;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-menu-action kbd {
+  color: var(--muted);
+  font: 11px var(--ui-font-family);
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-window-actions {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) .pin-recovery {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  margin: 10px 4px 0;
+}
+body[data-view=pin-controls] .select-popup {
+  max-height: 280px;
+}
+body:is([data-view=pin],[data-view=pin-controls]) #toast[popover] {
+  position: fixed;
+  inset: auto auto 12px 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #303030;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+body[data-view=pin-controls]{overflow:auto}
+body[data-view=pin-controls] #app{overflow:visible}

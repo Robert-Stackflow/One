@@ -1,4 +1,4 @@
-export type TrayMenuAction='open'|'search'|'preview'|'disk'|'pause'|'startup'|'restart'|'quit';
+export type TrayMenuAction='open'|'search'|'preview'|'disk'|'pins'|'pins-restore'|'pins-toggle'|'pins-next-group'|'pause'|'startup'|'restart'|'quit';
 export interface TrayMenuState {paused:boolean;launchAtLogin:boolean}
 export interface TrayMenuEntry {id:TrayMenuAction;label:string;group:'primary'|'tools'|'system';icon:string;active?:boolean;tone?:'danger'}
 export interface TrayMenuView {entries:TrayMenuEntry[];paused:boolean}
@@ -9,6 +9,10 @@ export function trayMenuEntries(state:TrayMenuState):TrayMenuEntry[]{
   {id:'search',label:'文件搜索',group:'primary',icon:'search'},
   {id:'preview',label:'快速预览',group:'tools',icon:'preview'},
   {id:'disk',label:'空间分析',group:'tools',icon:'disk'},
+  {id:'pins',label:'管理贴图',group:'tools',icon:'pin'},
+  {id:'pins-restore',label:'恢复贴图交互',group:'tools',icon:'mouse'},
+  {id:'pins-toggle',label:'隐藏 / 显示全部贴图',group:'tools',icon:'preview'},
+  {id:'pins-next-group',label:'切换贴图分组',group:'tools',icon:'refresh'},
   {id:'pause',label:state.paused?'恢复操作增强':'暂停操作增强',group:'system',icon:state.paused?'play':'pause',active:state.paused},
   {id:'startup',label:'开机自启动',group:'system',icon:'power',active:state.launchAtLogin},
   {id:'restart',label:'重启 One',group:'system',icon:'refresh'},

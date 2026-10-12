@@ -14,7 +14,7 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
-  onCapturePreferences:callback=>listen('capture-preferences',callback),materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
+  onCapturePreferences:callback=>listen('capture-preferences',callback),pinsState:()=>invoke('pins-state'),pinsOpenMaterial:id=>invoke('pins-material',id),pinsClipboard:()=>invoke('pins-clipboard'),pinsFiles:()=>invoke('pins-files'),pinsAction:(id,action)=>invoke('pins-action',id,action),pinsGroup:(id,action)=>invoke('pins-group',id,action),pinsToggle:()=>invoke('pins-toggle'),pinsNextGroup:()=>invoke('pins-next-group'),pinsPreview:id=>invoke('pins-preview',id),onPinsChanged:callback=>listen('pins-changed',callback),materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
   materialsImageURL:id=>invoke('materials-image-url',id),materialsRecordingURL:id=>invoke('materials-recording-url',id),
   materialsCopyImage:id=>invoke('materials-copy-image',id),materialsExportImage:id=>invoke('materials-export-image',id),
   materialsRemoveImage:id=>invoke('materials-remove-image',id),materialsRemoveRecording:id=>invoke('materials-remove-recording',id),

@@ -6,4 +6,4 @@ icons.developer=Braces;icons.images=ImageIcon;icons.home=House;icons.tools=Folde
 icons.ai=Sparkles;icons.attach=Paperclip;icons.clipboard=Clipboard;
 export function registerIcons(catalog:Record<string,IconNode>){for(const [name,node]of Object.entries(catalog))icons['lucide:'+name]=node;}
 document.documentElement.style.setProperty('--check-icon',`url("data:image/svg+xml,${encodeURIComponent(icon('check'))}")`);
-icons.alert=CircleAlert;icons.materials=Images;
+icons.alert=CircleAlert;icons.materials=Images;icons.pins=Pin;
