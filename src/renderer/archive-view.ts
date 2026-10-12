@@ -21,11 +21,13 @@ export function archivePage(){return `<div class="archive-workspace">
  <div id="archive-header-utilities" class="archive-header-utilities"><button id="archive-edit-sessions-open" class="quiet" type="button">${icon('rename')}外部编辑</button><button id="archive-recovery-open" class="quiet" type="button">${icon('history')}恢复资料</button></div>
  <div class="archive-toolbar"><div class="archive-mode tabs" role="tablist" aria-label="压缩与解压"><button type="button" data-archive-mode="create" class="selected" aria-selected="true">创建压缩包</button><button type="button" data-archive-mode="browse" aria-selected="false">浏览与解压</button></div><label class="archive-open-completed"><input id="archive-open-completed" type="checkbox">完成后打开文件夹</label></div>
  <div class="archive-work-area">
- <section class="archive-layout archive-create-layout archive-explorer" data-archive-pane="create">
-  <div class="archive-panel archive-source-panel"><div class="archive-card-heading"><div><h2>压缩内容</h2><span id="archive-source-count">尚未添加内容</span></div><div class="archive-heading-actions"><button id="archive-add-file" type="button">${icon('plus')}添加文件</button><button id="archive-add-folder" type="button">${icon('folder')}添加文件夹</button><button id="archive-sources-clear" class="icon-button quiet" type="button" aria-label="清空待压缩内容" title="清空" hidden>${icon('trash')}</button></div></div>
+ <section class="archive-create-pane" data-archive-pane="create">
+  <div class="archive-explorer">
+   <div class="archive-open-bar archive-create-bar"><span class="archive-create-bar-label">添加内容</span><div class="archive-create-bar-actions"><button id="archive-sources-open" class="quiet" type="button">${icon('text')}粘贴或编辑路径</button><button id="archive-add-file" type="button">${icon('plus')}添加文件</button><button id="archive-add-folder" type="button">${icon('folder')}添加文件夹</button></div></div>
+   <div class="archive-layout archive-create-layout">
+  <div class="archive-panel archive-source-panel"><div class="archive-card-heading"><div><h2>压缩内容</h2><span id="archive-source-count">尚未添加内容</span></div><button id="archive-sources-clear" class="icon-button quiet" type="button" aria-label="清空待压缩内容" title="清空" hidden>${icon('trash')}</button></div>
    <div id="archive-source-items" class="archive-source-items" aria-label="待压缩内容"></div>
-   <div id="archive-source-empty" class="archive-drop-hint">${icon('archive')}<strong>拖入文件或文件夹</strong></div>
-   <div class="archive-source-footer"><button id="archive-sources-open" class="quiet" type="button">${icon('text')}粘贴或编辑路径</button></div>
+   <div id="archive-source-empty" class="archive-placeholder">${icon('archive')}<span class="archive-placeholder-label">拖入文件或文件夹</span></div>
   </div>
   <aside class="archive-panel archive-rail" aria-label="创建设置"><h2>保存压缩包</h2>
    <label class="archive-field">压缩格式<select id="archive-format"><option value="zip">ZIP</option><option value="7z">7Z</option><option value="tar">TAR</option><option value="tar.gz">TAR.GZ</option><option value="tar.xz">TAR.XZ</option><option value="gz">GZ（单文件）</option><option value="xz">XZ（单文件）</option></select></label>
@@ -44,6 +46,8 @@ export function archivePage(){return `<div class="archive-workspace">
    </div>`,actions:'<button id="archive-advanced-done" class="primary" type="button">完成</button>'})}
    <div class="archive-rail-action"><div id="archive-status" class="archive-feedback" role="status" hidden><span id="archive-status-icon" class="archive-feedback-icon">${icon('info')}</span><div class="archive-feedback-copy"><span id="archive-status-text"></span><details id="archive-status-details" hidden><summary>错误详情</summary><pre id="archive-status-detail"></pre></details></div><button id="archive-feedback-dismiss" class="icon-button quiet" type="button" aria-label="关闭任务结果">${icon('close')}</button></div><button id="archive-create" class="primary" type="button">${icon('archive')}创建压缩包</button></div>
   </aside>
+   </div>
+  </div>
  </section>
  <section class="archive-browse-pane" data-archive-pane="browse" hidden>
   <div class="archive-explorer">

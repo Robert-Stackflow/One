@@ -16,8 +16,6 @@
 .archive-card-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;min-width:0}
 .archive-card-heading>div:first-child{min-width:0;display:grid;gap:5px}
 .archive-card-heading span,.archive-panel-title span{font-size:12px;color:var(--muted)}
-.archive-heading-actions{display:flex;gap:8px;flex-shrink:0}
-.archive-heading-actions button{font-size:12px}
 .archive-source-panel{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:0}
 .archive-source-panel .archive-card-heading{padding:20px 22px;border-bottom:1px solid var(--line)}
 .archive-source-panel .archive-card-heading,.archive-content-panel>.archive-card-heading,.archive-browser-actions,.archive-browser-footer,.archive-table-heading{flex:none}
@@ -30,13 +28,9 @@
 .archive-source-item strong{font-size:13px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .archive-source-item small{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .archive-source-rest{padding:12px 22px;font-size:12px;color:var(--muted)}
-.archive-drop-hint{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;color:var(--muted);padding:28px}
-.archive-drop-hint>.icon{width:36px;height:36px;margin-bottom:4px;opacity:.7}
-.archive-drop-hint strong{color:var(--fg);font-size:14px;font-weight:400}
-.archive-drop-hint span{font-size:12px}
-.archive-source-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 18px;border-top:1px solid var(--line);flex:none}
-.archive-source-footer button{font-size:11px;padding-inline:6px}
-.archive-source-footer>span{font-size:11px;color:var(--muted)}
+.archive-placeholder{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--muted);font-size:12px;line-height:1.5}
+.archive-placeholder>.icon{width:28px;height:28px;opacity:.7}
+.archive-placeholder[hidden]{display:none}
 .archive-rail{display:flex;flex-direction:column;gap:14px;min-height:0}
 .archive-rail h2{margin-bottom:2px}
 .archive-field,.archive-fields>label{display:grid;gap:8px;font-size:12px;color:var(--muted);min-width:0;font-weight:400}
@@ -59,13 +53,15 @@
 .archive-options-dialog p{font-size:11px;line-height:1.7;margin-top:6px}
 .archive-sources-dialog{width:560px}
 .archive-sources-dialog textarea{width:100%;height:220px;resize:vertical;font-size:12px;line-height:1.8}
-.archive-browse-pane,.archive-create-layout{flex:1;min-width:0;min-height:0}
-.archive-browse-pane>.archive-explorer{height:100%;display:flex;flex-direction:column;min-height:0}
+.archive-browse-pane,.archive-create-pane,.archive-browse-layout,.archive-create-layout{flex:1;min-width:0;min-height:0}
+.archive-browse-pane>.archive-explorer,.archive-create-pane>.archive-explorer{height:100%;display:flex;flex-direction:column;min-height:0}
 .archive-explorer{border:1px solid var(--line);border-radius:var(--panel-radius);overflow:hidden;background:var(--surface);min-width:0}
-.archive-open-bar{display:flex;flex:none;gap:8px;align-items:center;min-width:0;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--soft)}
+.archive-open-bar{display:flex;flex:none;gap:8px;align-items:center;min-width:0;height:calc(var(--control-height) + 29px);padding:14px 18px;border-bottom:1px solid var(--line);background:var(--soft)}
 .archive-open-bar label{font-size:12px;color:var(--muted);flex-shrink:0;margin-right:4px}
 .archive-open-bar input{flex:1;min-width:0}
-.archive-open-bar button{font-size:12px}
+.archive-open-bar button{font-size:12px;white-space:nowrap}
+.archive-create-bar-label{font-size:12px;color:var(--muted);white-space:nowrap;margin-right:4px}
+.archive-create-bar-actions{display:flex;justify-content:flex-end;gap:8px;min-width:0;margin-left:auto}
 .archive-layout.archive-browse-layout,.archive-layout.archive-create-layout{gap:0;align-items:stretch;min-height:0}
 .archive-browse-layout{flex:1}
 .archive-browse-layout>.archive-panel,.archive-create-layout>.archive-panel{border:0;border-radius:0}
