@@ -1,0 +1,121 @@
+html:has(body[data-view='scroll-capture']),
+body[data-view='scroll-capture'] {
+  height: 100%;
+  overflow: hidden;
+}
+body[data-view='scroll-capture'] {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--fg);
+}
+body[data-view='scroll-capture'] .media-header {
+  flex: 0 0 52px;
+  padding-left: 20px;
+}
+body[data-view='scroll-capture'] #app > main {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 18px 18px;
+}
+body[data-view='scroll-capture'] #message {
+  min-height: 40px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+body[data-view='scroll-capture'] .scroll-settings {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+body[data-view='scroll-capture'] .scroll-settings label,
+body[data-view='scroll-capture'] .scroll-pending label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  min-width: 0;
+}
+body[data-view='scroll-capture'] .field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+body[data-view='scroll-capture'] .scroll-settings summary {
+  font-size: 13px;
+  cursor: pointer;
+}
+body[data-view='scroll-capture'] .help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+body[data-view='scroll-capture'] .scroll-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+body[data-view='scroll-capture'] .scroll-preview {
+  margin-top: 14px;
+  min-height: 160px;
+  display: flex;
+  justify-content: center;
+  background: var(--soft);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+body[data-view='scroll-capture'] .scroll-preview img {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  align-self: flex-start;
+}
+body[data-view='scroll-capture'] .scroll-preview #empty {
+  margin: auto;
+  max-width: 240px;
+  text-align: center;
+}
+body[data-view='scroll-capture'] .scroll-pending {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+body[data-view='scroll-capture'] .scroll-pending button {
+  margin-top: 8px;
+}
+body[data-view='scroll-capture'] #app > footer {
+  flex: none;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+}
+body[data-view='scroll-capture'] .scroll-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+body[data-view='scroll-capture'] #app > footer > .scroll-actions {
+  justify-content: flex-end;
+}
+@media (prefers-reduced-motion: no-preference) {
+  body[data-view='scroll-capture'] .scroll-preview {
+    transition: background 160ms ease;
+  }
+}
+
+body[data-view='scroll-capture'] #app{height:100%;display:flex;flex-direction:column}
+body[data-view='scroll-capture'] .media-header{display:flex;align-items:center;border-bottom:1px solid var(--line);-webkit-app-region:drag}
+body[data-view='scroll-capture'] .media-header .window-controls{position:static;margin-left:auto;align-self:stretch;-webkit-app-region:no-drag}

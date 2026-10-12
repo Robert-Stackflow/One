@@ -11,6 +11,7 @@ export function captureOptions(value:unknown):CaptureOptions{
 export interface CaptureScreen {id:number;name:string;width:number;height:number}
 export interface CaptureWindowChoice {token:string;name:string;thumbnail:string;bounds:Rectangle}
 export interface CaptureCommands {
+  captureScroll(displayId?:number,options?:CaptureOptions):Promise<void>;
   captureState():Promise<{screens:CaptureScreen[];displayId:number;active:boolean}>;
   captureDisplays():Promise<{id:number;thumbnail:string}[]>;
   captureTake(mode:CaptureMode,displayId?:number,options?:CaptureOptions):Promise<CaptureResult|null>;

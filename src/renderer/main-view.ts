@@ -80,7 +80,7 @@ export function renderMain() {
     const work=(async()=>{
     const page=q<HTMLElement>('page-'+id);
     if(id==='tools'){const {fileToolsPage,setupFileTools}=await import('./file-tools-view');const {arrangeRenameLayout,wireRenameScopeMode}=await import('./rename-layout');const {arrangeLocksmithLayout}=await import('./locksmith-view');const {setupRenameSidebar}=await import('./rename-sidebar');page.innerHTML=fileToolsPage();page.classList.add('embedded-rename');const refresh=setupRenameSidebar(true);arrangeRenameLayout(page,false);arrangeLocksmithLayout(q('tool-pane-locksmith'));toolsController=setupFileTools();wireRenameScopeMode();refresh();}
-    else if(id==='capture'){const {capturePage,setupCapture}=await import('./capture-view');page.innerHTML=capturePage();captureController=setupCapture(page,q('capture-heading-actions'));}
+    else if(id==='capture'){const {capturePage,setupCapture}=await import('./capture-view');page.innerHTML=capturePage();captureController=setupCapture(page,q('capture-heading-actions'),{scroll:(displayId,options)=>api.captureScroll(displayId,options)});}
     else if(id==='pins'){const {pinsPage,setupPins}=await import('./pins-view');page.innerHTML=pinsPage();pinsController=setupPins(page,q('pins-heading-actions'));}
     else if(id==='materials'){const {materialsPage,setupMaterials}=await import('./materials-view');page.innerHTML=materialsPage();materialsController=setupMaterials(page,q('materials-heading-actions'),{pin:id=>api.pinsOpenMaterial(id)});}
     else if(id==='ai'){const {aiPage,setupAIPage}=await import('./ai-view');page.innerHTML=aiPage();setupAIPage(page);}

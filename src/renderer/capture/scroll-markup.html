@@ -1,0 +1,71 @@
+
+    <header class="media-header"><strong>长截图</strong></header>
+    <main>
+      <p id="message" class="feedback-inline" role="status" aria-live="polite"></p>
+      <section id="setup" class="scroll-settings">
+        <label
+          >滚动方向<select id="axis">
+            <option value="vertical">向下</option>
+            <option value="horizontal">向右</option>
+          </select></label
+        >
+        <div class="field-pair">
+          <label
+            >排除开头固定栏<input id="trim-start" type="number" value="0" min="0" step="1" /></label
+          ><label
+            >排除末尾固定栏<input id="trim-end" type="number" value="0" min="0" step="1"
+          /></label>
+        </div>
+        <details>
+          <summary>匹配区域</summary>
+          <p class="help">
+            只影响匹配，完整宽度仍保留。可避开侧栏或滚动条；横向模式对应上、下边缘。
+          </p>
+          <div class="field-pair">
+            <label
+              >忽略左侧 / 上侧<input
+                id="ignore-start"
+                type="number"
+                value="0"
+                min="0"
+                step="1" /></label
+            ><label
+              >忽略右侧 / 下侧<input id="ignore-end" type="number" value="0" min="0" step="1"
+            /></label>
+          </div>
+        </details>
+      </section>
+      <div class="scroll-actions">
+        <button id="sample" type="button" class="primary">采集首帧</button
+        ><button id="auto" type="button" class="quiet">自动滚动</button
+        ><button id="pause" type="button" class="quiet" hidden>暂停</button>
+      </div>
+      <div id="pending" class="scroll-pending" hidden>
+        <label
+          >本次向前移动距离（像素）<input
+            id="offset"
+            type="number"
+            min="1"
+            step="1"
+            value="1" /></label
+        ><button id="join" type="button" class="quiet">按此距离拼接</button>
+        <p class="help">仅在你确定移动距离时使用。错误距离会产生重复或缺失内容。</p>
+      </div>
+      <section class="scroll-preview" aria-label="长截图预览">
+        <img id="preview" alt="拼接结果预览" hidden />
+        <p id="empty" class="help">
+          确认选区后手动滚动原页面，或开始自动滚动。建议每次移动不超过半屏。
+        </p>
+      </section>
+    </main>
+    <footer>
+      <div class="scroll-status">
+        <span id="dimensions">尚未采集</span
+        ><button id="undo" type="button" class="quiet" disabled>撤销拼接</button>
+      </div>
+      <div class="scroll-actions">
+        <button id="cancel" type="button" class="quiet">取消</button
+        ><button id="finish" type="button" class="quiet" disabled>确认已有结果</button
+        ><button id="edit" type="button" class="primary" disabled>编辑结果</button>
+      </div>
+    </footer>

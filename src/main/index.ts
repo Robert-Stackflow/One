@@ -2,6 +2,7 @@ import {previewArchive} from './preview-archive';
 import {MaterialsService} from './materials/service';
 import {PinsHost} from './pins/host';
 import {CaptureHost} from './capture/host';
+import {ScrollCaptureHost} from './capture/scroll-host';
 import {CAPTURE_URL} from './capture/service';
 import {ImageEditorHost} from './capture/image-editor-host';
 import {IMAGE_EDITOR_URL} from './capture/image-editor';
@@ -318,13 +319,14 @@ let materials:MaterialsService|undefined;
 let imageEditor:ImageEditorHost|undefined;
 let pins:PinsHost|undefined;
 let capture:CaptureHost|undefined;
+let scrollCapture:ScrollCaptureHost|undefined;
 let settings: Settings = defaultSettings(); let input: InputService; let quitting = false;let finishingQuit:Promise<unknown>|undefined;let pickerQuitReady=false;
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 function windowFor(view: string, options: Electron.BrowserWindowConstructorOptions = {},query='',load=true) {
   const a=themeAutomation?.appearance()||settings.appearance;const dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;
   const window = new BrowserWindow({ width: 1240, height: 840, minWidth: 840, minHeight: 620, backgroundColor: dark?a.darkBackground:a.lightBackground, title: 'One', show: false,
     ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
-    webPreferences: { preload: join(__dirname, view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:view!=='capture' } });
+    webPreferences: { preload: join(__dirname, view==='scroll-capture'?'../preload/scroll-capture.cjs':view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:view!=='capture' } });
   const windowId = window.webContents.id; roles.set(windowId, view);
   if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-created',`role=${view} id=${windowId}`);
   // The open-with submenu is cheap to recreate and rarely reopened after a pause.
@@ -521,7 +523,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortc
     if(changed('utilities')){if(JSON.stringify(previous.utilities.awake)!==JSON.stringify(next.utilities.awake))awake?.update(next.utilities.awake);if(JSON.stringify(previous.utilities.topmost)!==JSON.stringify(next.utilities.topmost))topmost?.update(next.utilities.topmost);if(JSON.stringify(previous.utilities.clicker)!==JSON.stringify(next.utilities.clicker))clicker?.update(next.utilities.clicker);}
     if(changed('diskMonitor'))diskMonitor?.configure(next.diskMonitor);
     if(changed('archive')&&main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:archive-preferences',next.archive);
-    if(previous.capture.uiScale!==next.capture.uiScale){capture?.service.preferencesChanged();pins?.service.preferencesChanged();for(const window of [main,imageEditor?.editor.window])if(window&&!window.isDestroyed())window.webContents.send('one:capture-preferences',{uiScale:next.capture.uiScale});}
+    if(previous.capture.uiScale!==next.capture.uiScale){scrollCapture?.service.preferencesChanged();capture?.service.preferencesChanged();pins?.service.preferencesChanged();for(const window of [main,imageEditor?.editor.window])if(window&&!window.isDestroyed())window.webContents.send('one:capture-preferences',{uiScale:next.capture.uiScale});}
     if(changed('appearance')){refreshWindowAppearance();if(JSON.stringify(previous.appearance.popupPlacement)!==JSON.stringify(next.appearance.popupPlacement))echoes?.reposition();}
     if(changed('colorWheelZoom'))colorWorker?.postMessage({wheelZoomEnabled:next.colorWheelZoom});
     if(['colorHistory','colorVisibleFormats','colorFormat','colorShowEditor','colorWheelZoom'].some(key=>changed(key as keyof Settings)))for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()&&['main','color-editor','color-picker'].includes(roles.get(w.webContents.id)||''))w.webContents.send('one:color-settings');
@@ -610,7 +612,7 @@ function openScreenRuler(mode:ScreenRulerMode='live'){
 }
 async function acceptColor(hex:string,fromScreen=false){clipboard.writeText(colorFormats(hex)[settings.colorFormat]);closeColors(false);colorEditor.remember(hex);await saveSettings(current=>({...current,colorHistory:[hex,...current.colorHistory.filter(c=>c.toUpperCase()!==hex)].slice(0,20)}));if(quitting||finishingQuit)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed())w.webContents.send('one:color',hex);if(fromScreen&&settings.colorShowEditor)colorEditor.show(hex);}
 async function pickColor(mode:'live'|'frozen'='live'){
-  if(capture?.service.active)throw Error('请先完成当前截图');
+  if(capture?.service.active||scrollCapture?.service.active)throw Error('请先完成当前截图');
   if(colorWorker||quitting||finishingQuit)return;if(rulerWindows.length)closeScreenRuler();colorSession++;colorZoomActive=false;colorEditor?.startPicking();input?.setModalActive(true);
   const point=screen.getCursorScreenPoint();const window=windowFor('color-picker',{x:point.x+24,y:point.y+24,width:216,height:276,minWidth:1,minHeight:1,resizable:false,movable:false,focusable:false,transparent:true,backgroundColor:'#00000000',alwaysOnTop:true,skipTaskbar:true,hasShadow:false,thickFrame:false},settings.colorWheelZoom?'&wheelZoom=1':'');
   colorWindow=window;window.setIgnoreMouseEvents(true);window.setAlwaysOnTop(true,'screen-saver');window.on('closed',()=>{if(colorWindow===window)closeColors();});
@@ -692,6 +694,7 @@ function registerIPC() {
   handle('materials-remove-image',(event,id)=>{if(imageEditor?.usesMaterial(id))throw Error('请先关闭当前图片编辑，再删除素材');return materials!.removeImage(event.sender.id,id);});
   handle('materials-remove-recording',(event,id)=>materials!.removeRecording(event.sender.id,id));
   handle('materials-open-directory',event=>materials!.openDirectory(event.sender.id));
+  handle('capture-scroll',(_event,displayId,options)=>scrollCapture!.open(displayId,options));
   handle('capture-state',()=>capture!.state());
   handle('capture-displays',()=>capture!.displays());
   handle('capture-take',(_event,mode,displayId,options)=>capture!.take(mode,displayId,options));
@@ -750,7 +753,7 @@ function registerIPC() {
   handle('diagnostics-delete',(_event,ids)=>diagnosticsDelete(app.getPath('userData'),app.getPath('crashDumps'),ids),['main']);
   handle('diagnostics-export',async(_event,ids)=>{if(!Array.isArray(ids)||ids.length>100)throw new Error('导出列表无效');const target=await pickPath('directory','选择诊断资料保存位置');return target?diagnosticsExport(app.getPath('userData'),app.getPath('crashDumps'),target,ids):null;},['main']);
   handle('diagnostics-open',()=>shell.openPath(join(app.getPath('userData'),'logs')),['main']);
-  handle('diagnostics-report',(_event,kind,detail)=>{if(typeof kind!=='string'||kind.length>60||typeof detail!=='string'||detail.length>16*1024)throw new Error('错误报告无效');runtimeError(app.getPath('userData'),`renderer:${kind}`,detail);},['main','image-editor','pin','pin-controls','capture']);
+  handle('diagnostics-report',(_event,kind,detail)=>{if(typeof kind!=='string'||kind.length>60||typeof detail!=='string'||detail.length>16*1024)throw new Error('错误报告无效');runtimeError(app.getPath('userData'),`renderer:${kind}`,detail);},['main','image-editor','pin','pin-controls','capture','scroll-capture']);
   handle('explorer-menu-state',()=>explorerMenuState());
   handle('explorer-menu-set',(_event,value)=>setExplorerMenu(value));
   handle('file-action-data',event=>{const target=fileActions.get(event.sender.id);if(!target)throw Error('文件操作窗口无效');return target;});
@@ -897,8 +900,8 @@ function registerIPC() {
   handle('inspect-locks',(_event,value)=>{const path=filePath(value);showMain();main.webContents.send('one:lock-target',path);},['main','preview','search']);
   handle('lock-state',event=>locksFor(event.sender.id).state());handle('lock-scan',(event,paths)=>locksFor(event.sender.id).scan(paths));handle('lock-cancel',event=>locksFor(event.sender.id).cancel());handle('lock-end',(event,token)=>locksFor(event.sender.id).end(token));
   handle('utility-state',()=>utilityState());handle('topmost-windows',()=>topmost.list());handle('topmost-toggle',(_event,id)=>topmost.toggle(id));handle('topmost-clear',()=>topmost.clear());handle('clicker-state',()=>clicker.state());handle('clicker-start',()=>clicker.start());handle('clicker-stop',()=>clicker.stop());handle('clicker-capture',()=>clicker.capture());
-  handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','pin','pin-controls']);
-  handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','ai-chat','image-editor','pin','pin-controls']);
+  handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','pin','pin-controls','scroll-capture']);
+  handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','ai-chat','image-editor','pin','pin-controls','scroll-capture']);
   handle('brightness-status', () => brightness.status());
   handle('settings', () => settings);
   handle('tray-menu-state',event=>trayMenuPanel?.view(event.sender),['tray-menu']);
@@ -928,7 +931,7 @@ function registerIPC() {
   handle('restart',()=>restartOne());
   handle('settings-backup-export',()=>exportSettingsBackup());
   handle('settings-backup-import',()=>importSettingsBackup());
-  handle('appearance',()=>themeAutomation?.appearance()||settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','ai-chat','image-editor','pin','pin-controls','capture']);
+  handle('appearance',()=>themeAutomation?.appearance()||settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','ai-chat','image-editor','pin','pin-controls','capture','scroll-capture']);
   handle('installed-fonts',(_event,refresh)=>{if(refresh===true)fontSources.clear();return installedFonts(refresh===true);});
   handle('ui-font-source',async(event,family)=>{
     if(roles.get(event.sender.id)!=='main'&&family!==settings.appearance.font.slice(10)&&!imageEditor?.editor.allowsFont(event.sender.id,family)&&!capture?.service.allowsFont(event.sender.id,family))throw new Error('字体未被选择');
@@ -936,7 +939,7 @@ function registerIPC() {
     let pending=fontSources.get(family);
     if(!pending){pending=fontSource(family).then(source=>{if(!source)return null;let url:string|undefined;if(source.path){const token=randomUUID();fontAssets.set(token,{path:source.path,mime:extname(source.path).toLowerCase()==='.otf'?'font/otf':'font/ttf'});url=`one-file://asset/${token}/font`;}return{url,local:source.local};}).catch(error=>{fontSources.delete(family);throw error;});fontSources.set(family,pending);}
     return pending;
-  },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','image-editor','pin','pin-controls','capture']);
+  },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','image-editor','pin','pin-controls','capture','scroll-capture']);
   handle('pick-color',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='frozen')throw new Error('取色模式无效');return pickColor(mode);},['main','color-editor']);
   handle('color-frozen-status',()=>colorFreezeWindows.length>0,['color-picker']);
   handle('screen-ruler-open',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='static')throw new Error('屏幕尺模式无效');return openScreenRuler(mode);},['main']);
@@ -978,7 +981,7 @@ function registerIPC() {
   handle('developer-qr-copy',event=>{const png=qrImages.get(event.sender.id);if(!png)throw Error('请先生成二维码');return clipboard.write([new ClipboardItem({'image/png':new Blob([new Uint8Array(png)],{type:'image/png'})})]);},['main']);
   handle('developer-qr-export',async event=>{const png=qrImages.get(event.sender.id);if(!png)throw Error('请先生成二维码');const owner=BrowserWindow.fromWebContents(event.sender)||main;const selected=await dialog.showSaveDialog(owner,{title:'导出二维码 PNG',defaultPath:join(app.getPath('pictures'),'One-QR.png'),filters:[{name:'PNG 图片',extensions:['png']}],properties:['showOverwriteConfirmation']});if(selected.canceled||!selected.filePath)return null;const target=selected.filePath.toLowerCase().endsWith('.png')?selected.filePath:`${selected.filePath}.png`;await writeFile(target,png);return target;},['main']);
   handle('barcode-clipboard',()=>barcodeClipboard());
-  handle('barcode-capture',()=>{if(capture?.service.active)throw Error('请先完成当前截图');return barcodeCapture.start(main);});
+  handle('barcode-capture',()=>{if(capture?.service.active||scrollCapture?.service.active)throw Error('请先完成当前截图');return barcodeCapture.start(main);});
   handle('barcode-cancel-capture',event=>barcodeCapture.cancel(event.sender.id));
   handle('barcode-capture-data',event=>barcodeCapture.data(event.sender.id),['barcode-capture']);
   handle('barcode-capture-choose',(event,rect)=>barcodeCapture.choose(event.sender.id,rect),['barcode-capture']);
@@ -1189,9 +1192,21 @@ async function start() {
     register:(name,handler)=>handle(name,(event,...args)=>{if(event.senderFrame?.url!==CAPTURE_URL)throw Error('截图窗口来源无效');return handler(event,...args);},['capture']),
     fonts:()=>installedFonts(),settings:()=>settings.capture,mainWindow:()=>main,blocked:()=>quitting,
     saveWatermark:async watermark=>{await saveSettings(current=>mergeSettings(current,{capture:{watermark}}));},
-    assertAvailable:()=>{if(colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前屏幕取色或条码框选');},
+    assertAvailable:()=>{if(scrollCapture?.service.active)throw Error('请先完成当前长截图');if(colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前屏幕取色或条码框选');},
     failed:error=>runtimeError(app.getPath('userData'),'capture',error),timing:value=>runtimeLog(app.getPath('userData'),'capture-ready',JSON.stringify(value)),
   },materials,pins);
+  scrollCapture=new ScrollCaptureHost({
+    createWindow:options=>windowFor('scroll-capture',{roundedCorners:true,...options},'',false),
+    register:(name,handler)=>handle(name,handler,['scroll-capture']),blocked:()=>quitting,
+    uiScale:()=>settings.capture.uiScale,remoteCompatible:()=>settings.capture.remoteCompatible,
+    preferredDisplay:()=>capture!.state().displayId,
+    choose:(id,hide)=>capture!.service.choose(id,hide&&main&&!main.isDestroyed()?[main]:[],'scroll'),
+    cancelSelection:()=>capture!.service.cancel(),
+    windows:hide=>hide&&main&&!main.isDestroyed()?[main]:[],
+    assertAvailable:()=>{if(capture?.service.active||colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前截图、取色或条码框选');if(imageEditor?.editor.window&&!imageEditor.editor.window.isDestroyed())throw Error('请先关闭当前图片编辑，再开始长截图');},
+    edit:async(png,title)=>{await materials!.initialized();const item=await materials!.library.images.add(png,title,'capture');if(!main||main.isDestroyed())throw Error('One 主窗口已关闭');await imageEditor!.openMaterial(main,item.id);},
+    failed:error=>runtimeError(app.getPath('userData'),'scroll-capture',error),
+  });
   // Upgrade existing login items without changing an entry disabled in Windows settings.
   if(app.isPackaged&&!testMode&&settings.general.launchAtLogin&&app.getLoginItemSettings().openAtLogin&&!app.getLoginItemSettings({args:[loginStartupArg]}).openAtLogin)
     app.setLoginItemSettings({openAtLogin:true,args:[loginStartupArg]});
@@ -1280,5 +1295,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   if(!testMode)void repairExplorerMenu().catch(error=>runtimeLog(app.getPath('userData'),'explorer-menu-repair',String(error)));
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(imageEditor&&(imageEditor.editor.window||imageEditor.pendingTasks)){event.preventDefault();finishingQuit=imageEditor.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();},error=>{finishingQuit=undefined;runtimeError(app.getPath('userData'),'editor-quit',error);});return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageAi.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks||materials?.pendingTasks||pins?.pendingTasks||capture?.pendingTasks){event.preventDefault();finishingQuit=(capture?.stop()||Promise.resolve()).then(()=>Promise.all([pins?.stop(),materials?.stop(),fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageAi.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]));void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;imageEditor?.stop();void pins?.stop();void materials?.stop();aiService?.dispose();nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(scrollCapture?.needsQuitPreparation){event.preventDefault();finishingQuit=scrollCapture.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();},error=>{finishingQuit=undefined;runtimeError(app.getPath('userData'),'scroll-quit',error);});return;}if(imageEditor&&(imageEditor.editor.window||imageEditor.pendingTasks)){event.preventDefault();finishingQuit=imageEditor.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();else scrollCapture?.resetQuitApproval();},error=>{finishingQuit=undefined;scrollCapture?.resetQuitApproval();runtimeError(app.getPath('userData'),'editor-quit',error);});return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageAi.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks||materials?.pendingTasks||pins?.pendingTasks||capture?.pendingTasks||scrollCapture?.pendingTasks){event.preventDefault();finishingQuit=(scrollCapture?.stop()||Promise.resolve()).then(()=>capture?.stop()).then(()=>Promise.all([pins?.stop(),materials?.stop(),fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageAi.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]));void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;imageEditor?.stop();void pins?.stop();void materials?.stop();aiService?.dispose();nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });

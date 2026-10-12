@@ -1,0 +1,251 @@
+import { imageDimensions } from './image-limits';
+import { scrollOptions, type ScrollOptions, type ScrollMatch } from './scroll-capture';
+export interface PixelFrame {
+  width: number;
+  height: number;
+  pixels: Uint8Array;
+}
+interface Strip {
+  pixels: Uint8Array;
+  rows: number;
+  previous?: Uint8Array;
+}
+const BUDGET = 256 * 1024 * 1024;
+/** Original BGRA bytes, append-only strips, bounded undo and explicit uncertain joins.
+ * Horizontal capture uses the same matching algorithm on a transposed view.
+ * This module runs in a worker, never on Electron's main/renderer thread. */
+export class ScrollStitch {
+  private strips: Strip[] = [];
+  private previous?: Uint8Array;
+  private candidate?: Uint8Array;
+  private axis = 0;
+  private cross = 0;
+  private rows = 0;
+  private options?: ScrollOptions;
+  private source?: { width: number; height: number };
+  private count = 0;
+  private offset = 0;
+  private match: ScrollMatch = 'first';
+  configure(options: ScrollOptions, source: { width: number; height: number }) {
+    imageDimensions(source.width, source.height);
+    if (source.width * source.height > 10000000)
+      throw Error('长截图单帧最多 1,000 万像素，请缩小选区');
+    this.options = scrollOptions(options, source.width, source.height);
+    this.source = source;
+    this.strips = [];
+    this.previous = this.candidate = undefined;
+    this.axis = this.cross = this.rows = this.count = this.offset = 0;
+    this.match = 'first';
+    return this.status();
+  }
+  private normalize(frame: PixelFrame) {
+    if (
+      !this.options ||
+      !this.source ||
+      frame.width !== this.source.width ||
+      frame.height !== this.source.height ||
+      frame.pixels.byteLength !== frame.width * frame.height * 4
+    )
+      throw Error('采集帧尺寸已改变');
+    const vertical = this.options.axis === 'vertical';
+    this.axis =
+      (vertical ? frame.height : frame.width) - this.options.trimStart - this.options.trimEnd;
+    this.cross = vertical ? frame.width : frame.height;
+    const pixels = new Uint8Array(this.axis * this.cross * 4);
+    if (vertical)
+      pixels.set(
+        frame.pixels.subarray(
+          this.options.trimStart * this.cross * 4,
+          (frame.height - this.options.trimEnd) * this.cross * 4,
+        ),
+      );
+    else
+      for (let y = 0; y < this.axis; y++)
+        for (let x = 0; x < this.cross; x++) {
+          const from = (x * frame.width + y + this.options.trimStart) * 4;
+          pixels.set(frame.pixels.subarray(from, from + 4), (y * this.cross + x) * 4);
+        }
+    return pixels;
+  }
+  private score(a: Uint8Array, b: Uint8Array, shift: number, precise = false) {
+    const start = Math.max(0, -shift),
+      end = Math.min(this.axis, this.axis - shift),
+      left = this.options!.ignoreStart,
+      right = this.cross - this.options!.ignoreEnd,
+      stepY = Math.max(1, Math.floor((end - start) / (precise ? 96 : 22))),
+      stepX = Math.max(1, Math.floor((right - left) / (precise ? 30 : 12)));
+    // Per-column scores prevent one changing caret/animation/scrollbar from
+    // dominating. Never discard more than 10% of the sampled width.
+    const columns: number[] = [];
+    for (let x = left; x < right; x += stepX) {
+      let sum = 0,
+        n = 0;
+      for (let y = start; y < end; y += stepY) {
+        const i = ((y + shift) * this.cross + x) * 4,
+          j = (y * this.cross + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          sum += Math.abs(a[i + c] - b[j + c]);
+          n++;
+        }
+      }
+      columns.push(sum / n);
+    }
+    columns.sort((x, y) => x - y);
+    const keep = Math.ceil(columns.length * 0.9);
+    return columns.slice(0, keep).reduce((s, v) => s + v, 0) / keep;
+  }
+  sample(frame: PixelFrame) {
+    if (this.candidate) throw Error('请先处理上一帧的拼接位置');
+    const pixels = this.normalize(frame);
+    if (!this.previous) {
+      this.previous = pixels;
+      this.strips = [{ pixels, rows: this.axis }];
+      this.rows = this.axis;
+      this.count = 1;
+      this.match = 'first';
+      return this.status();
+    }
+    if (this.count >= 200) throw Error('本次长截图已达到 200 帧，请确认已有结果');
+    if (this.score(this.previous, pixels, 0, true) < 0.4) {
+      this.match = 'unchanged';
+      this.offset = 0;
+      return this.status();
+    }
+    const minOverlap = Math.max(32, Math.ceil(this.axis * 0.22)),
+      maxShift = this.axis - minOverlap;
+    const guesses: { shift: number; score: number }[] = [];
+    for (let shift = -maxShift; shift <= maxShift; shift++) {
+      if (!shift) continue;
+      guesses.push({ shift, score: this.score(this.previous, pixels, shift) });
+    }
+    guesses.sort((a, b) => a.score - b.score);
+    // Refine separated hypotheses; adjacent shifts belong to the same peak.
+    const refined: typeof guesses = [];
+    for (const guess of guesses) {
+      if (refined.some((v) => Math.abs(v.shift - guess.shift) <= 3)) continue;
+      refined.push({
+        shift: guess.shift,
+        score: this.score(this.previous, pixels, guess.shift, true),
+      });
+      if (refined.length === 12) break;
+    }
+    refined.sort((a, b) => a.score - b.score);
+    const best = refined[0],
+      runner = refined[1];
+    this.offset = Math.max(1, best.shift);
+    const confident =
+      best.score <= 3 &&
+      (!runner || runner.score > best.score + 2 || (best.score < 0.15 && runner.score > 0.5));
+    if (!confident) {
+      this.candidate = pixels;
+      this.match = 'ambiguous';
+      return this.status();
+    }
+    if (best.shift < 0) {
+      this.match = 'backwards';
+      return this.status();
+    }
+    return this.append(pixels, best.shift);
+  }
+  join(offset: number) {
+    if (!this.candidate) throw Error('没有待确认的采集帧');
+    if (!Number.isSafeInteger(offset) || offset < 1 || offset > this.axis - 32)
+      throw Error('拼接位移无效');
+    return this.append(this.candidate, offset);
+  }
+  private append(pixels: Uint8Array, shift: number) {
+    const rows = this.rows + shift;
+    imageDimensions(
+      this.options!.axis === 'vertical' ? this.cross : rows,
+      this.options!.axis === 'vertical' ? rows : this.cross,
+    );
+    const tail = pixels.slice((this.axis - shift) * this.cross * 4);
+    this.strips.push({ pixels: tail, rows: shift, previous: this.previous });
+    this.rows = rows;
+    this.previous = pixels;
+    this.candidate = undefined;
+    this.count++;
+    this.offset = shift;
+    this.match = 'accepted';
+    // Keep up to eight previous frames when the memory budget permits it.
+    const start = Math.max(1, this.strips.length - 8);
+    for (let i = 1; i < start; i++) this.strips[i].previous = undefined;
+    let bytes = this.strips.reduce(
+      (s, p) => s + p.pixels.byteLength + (p.previous?.byteLength || 0),
+      pixels.byteLength,
+    );
+    for (let i = 1; bytes > BUDGET && i < this.strips.length - 1; i++) {
+      bytes -= this.strips[i].previous?.byteLength || 0;
+      this.strips[i].previous = undefined;
+    }
+    return this.status();
+  }
+  discard() {
+    this.candidate = undefined;
+    return this.status();
+  }
+  undo() {
+    const last = this.strips.at(-1);
+    if (!last?.previous) throw Error('没有可撤销的拼接');
+    this.strips.pop();
+    this.previous = last.previous;
+    this.rows -= last.rows;
+    this.candidate = undefined;
+    this.count--;
+    this.offset = 0;
+    this.match = 'first';
+    return this.status();
+  }
+  status() {
+    const vertical = this.options?.axis !== 'horizontal';
+    return {
+      width: vertical ? this.cross : this.rows,
+      height: vertical ? this.rows : this.cross,
+      count: this.count,
+      undo: !!this.strips.at(-1)?.previous,
+      pending: !!this.candidate,
+      offset: this.offset,
+      match: this.match,
+    };
+  }
+  output(): PixelFrame {
+    if (!this.previous) throw Error('还没有采集图像');
+    const { width, height } = this.status(),
+      pixels = new Uint8Array(width * height * 4);
+    let offset = 0;
+    for (const strip of this.strips) {
+      if (this.options!.axis === 'vertical') pixels.set(strip.pixels, offset * this.cross * 4);
+      else
+        for (let y = 0; y < strip.rows; y++)
+          for (let x = 0; x < this.cross; x++) {
+            const from = (y * this.cross + x) * 4;
+            pixels.set(strip.pixels.subarray(from, from + 4), (x * width + offset + y) * 4);
+          }
+      offset += strip.rows;
+    }
+    return { width, height, pixels };
+  }
+  preview(): PixelFrame | null {
+    if (!this.previous) return null;
+    const size = this.status(),
+      scale = Math.min(1, 300 / size.width, 700 / size.height),
+      width = Math.max(1, Math.round(size.width * scale)),
+      height = Math.max(1, Math.round(size.height * scale)),
+      pixels = new Uint8Array(width * height * 4);
+    const limits = this.strips
+      .map((s) => s.rows)
+      .reduce<number[]>((a, n) => [...a, (a.at(-1) || 0) + n], []);
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        const sx = Math.min(size.width - 1, Math.floor(x / scale)),
+          sy = Math.min(size.height - 1, Math.floor(y / scale)),
+          axis = this.options!.axis === 'vertical' ? sy : sx,
+          cross = this.options!.axis === 'vertical' ? sx : sy,
+          index = limits.findIndex((n) => axis < n),
+          strip = this.strips[index],
+          from = ((axis - (limits[index - 1] || 0)) * this.cross + cross) * 4;
+        pixels.set(strip.pixels.subarray(from, from + 4), (y * width + x) * 4);
+      }
+    return { width, height, pixels };
+  }
+}

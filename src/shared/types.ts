@@ -46,6 +46,7 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   pin?:import('./pins').PinAPI;
   imageEditor?:import('./capture/image-editor-api').ImageEditorAPI;
   capture?:import('./capture/capture-session').CaptureAPI;
+  scrollCapture?:import('./capture/scroll-capture').ScrollAPI;
   searchSuggest(engineId:string,query:string):Promise<string[]>;
   aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
   aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;
