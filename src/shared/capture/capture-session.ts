@@ -40,6 +40,7 @@ export interface CaptureData {
   origin?: Point;
   capturedAt: number;
   watermark: WatermarkPreset;
+  uiScale:import('./settings').CapturePreferences['uiScale'];
 }
 export interface CaptureRequest {
   token: string;
@@ -62,6 +63,8 @@ export interface CaptureAPI extends SensitiveAPI {
   moveCursor(token: string, point: Point): Promise<void>;
   copyColor(token: string, value: string): Promise<void>;
   fonts(): Promise<import('../fonts').InstalledFont[]>;
+  selectFont(token:string,family:string):Promise<boolean>;
+  onPreferences(callback:(value:Pick<import('./settings').CapturePreferences,'uiScale'>)=>void):()=>void;
   saveWatermark(token: string, preset: WatermarkPreset): Promise<void>;
   chooseWatermarkImage(token: string): Promise<import('./watermark').WatermarkImage | null>;
   onCandidates(callback: (update: CandidateUpdate) => void): () => void;

@@ -1,4 +1,4 @@
-body[data-view="image-editor"] .inline-annotation-editor {
+body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-editor {
   position: absolute;
   z-index: 2;
   padding: 0;
@@ -7,7 +7,7 @@ body[data-view="image-editor"] .inline-annotation-editor {
   background: transparent;
   transform-origin: 0 0;
 }
-body[data-view="image-editor"] .inline-annotation-editor textarea {
+body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-editor textarea {
   display: block;
   padding: 0;
   margin: 0;
@@ -27,7 +27,7 @@ body[data-view="image-editor"] .inline-annotation-editor textarea {
   cursor: text;
   caret-color: currentColor;
 }
-body[data-view="image-editor"] .inline-annotation-editor textarea::placeholder {
+body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-editor textarea::placeholder {
   color: #767676;
   opacity: 1;
 }

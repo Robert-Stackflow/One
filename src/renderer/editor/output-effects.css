@@ -1,12 +1,12 @@
-body[data-view="image-editor"] .output-effects {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effects {
   min-width: 0;
 }
-body[data-view="image-editor"] .output-effect-fields {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
 }
-body[data-view="image-editor"] .output-effect-fields > label {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-fields > label {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -15,27 +15,27 @@ body[data-view="image-editor"] .output-effect-fields > label {
   font-size: 12px;
   font-weight: 400;
 }
-body[data-view="image-editor"] .output-effect-fields input[type='number'] {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-fields input[type='number'] {
   width: 70px;
   min-height: 30px;
 }
-body[data-view="image-editor"] .output-effect-fields .number-control {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-fields .number-control {
   max-width: 112px;
 }
-body[data-view="image-editor"] .output-effect-fields input[type='color'] {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-fields input[type='color'] {
   width: 34px;
   height: 30px;
   padding: 3px;
 }
-body[data-view="image-editor"] .output-effect-fields .color-field {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-fields .color-field {
   min-width: 0;
   max-width: 122px;
 }
-body[data-view="image-editor"] .output-effect-reset {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-reset {
   margin-top: 12px;
   font-size: 12px;
 }
-body[data-view="image-editor"] .output-effect-preview {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-preview {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -45,80 +45,80 @@ body[data-view="image-editor"] .output-effect-preview {
   padding: 10px;
   background: repeating-conic-gradient(#80808020 0% 25%, transparent 0% 50%) 50%/12px 12px;
 }
-body[data-view="image-editor"] .output-effect-preview canvas {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-preview canvas {
   max-width: 100%;
   object-fit: contain;
 }
-body[data-view="image-editor"] .output-effect-size {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-size {
   color: var(--muted);
   font-size: 11px;
 }
-body[data-view="image-editor"] .editor-tools .output-effect-fields {
+body:is([data-view="image-editor"],[data-view="capture"]) .editor-tools .output-effect-fields {
   grid-template-columns: minmax(0, 1fr);
 }
-body[data-view="image-editor"] .output-effect-panel {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-panel {
   margin-top: 18px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-body[data-view="image-editor"] .output-effect-panel > summary {
+body:is([data-view="image-editor"],[data-view="capture"]) .output-effect-panel > summary {
   cursor: pointer;
   font-size: 12px;
   padding: 4px 0 10px;
 }
-body[data-view="image-editor"] #capture-effects {
+body:is([data-view="image-editor"],[data-view="capture"]) #capture-effects {
   width: 100%;
 }
-body[data-view="image-editor"] #capture-output-effects {
+body:is([data-view="image-editor"],[data-view="capture"]) #capture-output-effects {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(160px, 220px);
   align-items: start;
   gap: 8px 16px;
 }
-body[data-view="image-editor"] #capture-output-effects .output-effect-reset {
+body:is([data-view="image-editor"],[data-view="capture"]) #capture-output-effects .output-effect-reset {
   justify-self: start;
   grid-column: 1;
   margin-top: 0;
 }
-body[data-view="image-editor"] #capture-output-effects .output-effect-preview {
+body:is([data-view="image-editor"],[data-view="capture"]) #capture-output-effects .output-effect-preview {
   grid-column: 2;
   grid-row: 1 / span 2;
   margin-top: 0;
 }
 @media (max-width: 620px) {
-  body[data-view="image-editor"] #capture-output-effects {
+  body:is([data-view="image-editor"],[data-view="capture"]) #capture-output-effects {
     display: block;
   }
-  body[data-view="image-editor"] #capture-output-effects .output-effect-reset,
-  body[data-view="image-editor"] #capture-output-effects .output-effect-preview {
+  body:is([data-view="image-editor"],[data-view="capture"]) #capture-output-effects .output-effect-reset,
+  body:is([data-view="image-editor"],[data-view="capture"]) #capture-output-effects .output-effect-preview {
     margin-top: 12px;
   }
 }
-body[data-view="image-editor"] #capture-workflow {
+body:is([data-view="image-editor"],[data-view="capture"]) #capture-workflow {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
-body[data-view="image-editor"] .capture-workflow-choice {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-workflow-choice {
   display: flex;
   gap: 8px;
   align-items: center;
 }
-body[data-view="image-editor"] .capture-workflow-choice select {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-workflow-choice select {
   max-width: 200px;
 }
-body[data-view="image-editor"] .capture-workflow-order {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-workflow-order {
   margin: 6px 0;
   font-size: 11px;
   color: var(--muted);
 }
-body[data-view="image-editor"] .capture-workflow-receipts {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-workflow-receipts {
   margin: 6px 0 0;
   padding: 0;
   list-style: none;
   font-size: 11px;
 }
-body[data-view="image-editor"] .capture-workflow-receipts li {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-workflow-receipts li {
   display: flex;
   justify-content: space-between;
   gap: 12px;

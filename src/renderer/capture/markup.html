@@ -1,0 +1,310 @@
+<img id="screen" alt="原始截图" hidden /><canvas
+      id="capture-preview"
+      aria-label="截图选区与标注"
+    ></canvas>
+    <canvas id="selection-outline" hidden aria-hidden="true"></canvas>
+    <section id="capture-selection-mode" hidden aria-label="选区方式">
+      <button
+        type="button"
+        data-selection-mode="rectangle"
+        aria-keyshortcuts="Control+1"
+        title="矩形选区 · Ctrl+1"
+      >
+        <span>矩形</span><kbd aria-hidden="true">Ctrl 1</kbd>
+      </button>
+      <button
+        type="button"
+        data-selection-mode="free"
+        aria-keyshortcuts="Control+2"
+        title="自由选区 · Ctrl+2"
+      >
+        <span>自由</span><kbd aria-hidden="true">Ctrl 2</kbd>
+      </button>
+      <button
+        type="button"
+        data-selection-mode="polygon"
+        aria-keyshortcuts="Control+3"
+        title="折线选区 · Ctrl+3"
+      >
+        <span>折线</span><kbd aria-hidden="true">Ctrl 3</kbd>
+      </button>
+      <span id="selection-draft-actions" hidden>
+        <button type="button" id="selection-back">回退</button>
+        <button type="button" id="selection-finish">完成选区</button>
+        <button type="button" id="selection-cancel">取消绘制</button>
+      </span>
+    </section>
+    <div id="selection" hidden>
+      <span id="dimensions"></span>
+      <div id="selection-handles"></div>
+    </div>
+    <div id="annotation-selection" hidden aria-label="选中的标注">
+      <div id="annotation-handles"></div>
+    </div>
+    <div id="brush-cursor" hidden></div>
+    <div id="capture-candidate" hidden><span id="candidate-label"></span></div>
+    <div id="capture-loupe" hidden>
+      <div class="loupe-heading"><span>像素预览</span><span>7×</span></div>
+      <canvas id="loupe-image" width="147" height="147" aria-label="鼠标位置的放大像素"></canvas>
+      <div class="loupe-color"><i id="loupe-swatch"></i><span id="loupe-color"></span></div>
+      <span id="loupe-position"></span>
+      <div class="loupe-shortcuts">
+        <span><kbd>Shift</kbd> 颜色格式</span><span><kbd>C</kbd> 复制颜色</span
+        ><span><kbd>P</kbd> 全局 / 相对坐标</span>
+      </div>
+    </div>
+    <aside id="capture-hint" aria-label="截图快捷操作"></aside>
+    <section id="capture-actions" class="capture-panel" hidden aria-label="截图工具栏">
+      <div class="capture-main-row">
+        <button
+          id="capture-drag"
+          type="button"
+          title="拖动工具栏 · 双击恢复自动位置"
+          aria-label="拖动工具栏；方向键移动，双击或 Enter 恢复自动位置"
+        ></button>
+        <div id="annotation-tools" class="capture-tool-row" aria-label="标注工具"></div>
+        <span class="capture-divider" role="separator"></span>
+        <div class="capture-tool-row">
+          <button id="undo" type="button" title="撤销 · Ctrl+Z" aria-label="撤销"></button>
+          <button id="redo" type="button" title="重做 · Ctrl+Y" aria-label="重做"></button>
+        </div>
+        <span class="capture-divider" role="separator"></span>
+        <div class="capture-output-row">
+          <button id="pin" type="button" title="贴图" aria-label="贴图"></button>
+          <button id="save" type="button" title="保存" aria-label="保存"></button>
+          <button
+            id="capture-more"
+            type="button"
+            title="更多操作"
+            aria-label="更多操作"
+            aria-haspopup="dialog"
+            aria-controls="capture-more-menu"
+            aria-expanded="false"
+          ></button>
+          <button id="cancel" type="button" title="取消截图" aria-label="取消截图"></button>
+          <button
+            id="copy"
+            type="button"
+            class="primary"
+            title="复制并完成"
+            aria-label="复制并完成"
+          ></button>
+          <button
+            id="region-confirm"
+            type="button"
+            class="primary"
+            hidden
+            title="确认区域"
+            aria-label="确认区域"
+          ></button>
+        </div>
+      </div>
+    </section>
+    <section
+      id="capture-more-menu"
+      class="capture-panel capture-menu"
+      hidden
+      role="dialog"
+      aria-label="更多操作"
+    >
+      <button id="library" type="button" class="capture-menu-action">
+        <span data-menu-icon="library"></span><span>存入素材</span>
+      </button>
+      <button id="ocr" type="button" class="capture-menu-action">
+        <span data-menu-icon="ocr"></span><span>识别文字</span>
+      </button>
+      <div id="capture-workflow">
+        <label class="capture-menu-heading" for="capture-workflow-choice">捕获后流程</label>
+        <div class="capture-workflow-choice">
+          <select id="capture-workflow-choice" aria-label="输出流程"></select>
+          <button
+            id="run-workflow"
+            type="button"
+            class="primary"
+            title="执行流程"
+            aria-label="执行流程"
+          ></button>
+        </div>
+        <p id="capture-workflow-order" class="capture-workflow-order"></p>
+        <p id="capture-receipts-title" class="capture-menu-heading" hidden>上次执行结果</p>
+        <ol
+          id="capture-workflow-receipts"
+          class="capture-workflow-receipts"
+          aria-live="polite"
+        ></ol>
+      </div>
+    </section>
+    <p id="capture-message" role="status" aria-live="polite"></p>
+    <section
+      id="capture-properties"
+      class="capture-panel capture-tool-row"
+      hidden
+      aria-label="标注属性"
+    >
+      <label id="mark-font-field" hidden
+        >字号<input id="mark-font" type="number" min="8" max="240" value="24" aria-label="文字字号"
+      /></label>
+      <label id="mark-filled-field" hidden
+        >填充<input id="mark-filled" type="checkbox" aria-label="图形填充"
+      /></label>
+      <div id="mark-color-field" class="capture-property">
+        <span class="capture-property-name">颜色</span>
+        <div id="mark-palette" role="group" aria-label="预置标注颜色"></div>
+        <input id="mark-color" type="color" value="#e34e4e" aria-label="标注颜色" />
+      </div>
+      <label id="mark-width-field"
+        >线宽<input id="mark-width" type="range" min="1" max="12" value="3" aria-label="标注线宽"
+      /></label>
+      <label id="mark-stroke-field" hidden
+        >线型<select id="mark-stroke" aria-label="标注线型"></select
+      ></label>
+      <label id="mark-strength-field"
+        >强度<input
+          id="mark-strength"
+          type="range"
+          min="2"
+          max="48"
+          value="12"
+          aria-label="模糊与马赛克强度"
+      /></label>
+      <label id="mark-size-field" hidden
+        >笔刷<input id="mark-size" type="range" min="6" max="80" value="24" aria-label="笔刷大小"
+      /></label>
+      <label id="mark-mode-field" hidden
+        >方式<select id="mark-mode" aria-label="遮盖方式">
+          <option value="brush">笔刷</option>
+          <option value="rectangle">矩形</option>
+        </select></label
+      >
+      <label id="mark-family-field" hidden
+        >字体<select id="mark-family" aria-label="标注字体">
+          <option value="Segoe UI">Segoe UI</option>
+          <option value="Microsoft YaHei">微软雅黑</option>
+          <option value="Arial">Arial</option>
+        </select></label
+      >
+      <label id="mark-weight-field" hidden
+        >字重<select id="mark-weight" aria-label="标注字重">
+          <option value="400">常规</option>
+          <option value="600">中粗</option>
+          <option value="700">粗体</option>
+        </select></label
+      >
+      <div id="watermark-image-controls" hidden></div>
+      <label id="watermark-text-field" hidden
+        >文字<textarea
+          id="watermark-text"
+          rows="2"
+          maxlength="500"
+          aria-label="水印文字"
+          title="日期变量：$yyyy-MM-dd HH:mm:ss$"
+          placeholder="水印文字 / $yyyy-MM-dd$"
+        >
+One</textarea
+        ><button id="watermark-date" type="button" title="插入截图日期和时间">时间</button></label
+      >
+      <label id="watermark-position-field" hidden
+        >布局<select id="watermark-position" aria-label="水印布局">
+          <option value="tile">平铺</option>
+          <option value="top-left">左上</option>
+          <option value="top">顶部居中</option>
+          <option value="top-right">右上</option>
+          <option value="left">左侧居中</option>
+          <option value="center">居中</option>
+          <option value="right">右侧居中</option>
+          <option value="bottom-left">左下</option>
+          <option value="bottom">底部居中</option>
+          <option value="bottom-right">右下</option>
+          <option value="custom">自由位置</option>
+        </select></label
+      >
+      <label id="watermark-opacity-field" hidden
+        >透明度<input
+          id="watermark-opacity"
+          type="range"
+          min="0"
+          max="100"
+          value="25"
+          aria-label="水印透明度"
+      /></label>
+      <label id="watermark-angle-field" hidden
+        >角度<input
+          id="watermark-angle"
+          type="range"
+          min="-90"
+          max="90"
+          value="-30"
+          aria-label="水印角度"
+      /></label>
+      <label id="watermark-spacing-field" hidden
+        >间距<input
+          id="watermark-spacing"
+          type="range"
+          min="8"
+          max="240"
+          value="60"
+          aria-label="水印间距"
+      /></label>
+      <div class="text-emphasis" data-text-emphasis hidden>
+        <input id="mark-italic" type="checkbox" hidden /><input
+          id="mark-outline"
+          type="checkbox"
+          hidden
+        />
+      </div>
+      <div id="mosaic-controls" hidden></div>
+      <div id="sensitive-controls" hidden></div>
+    </section>
+    <aside id="capture-side" class="capture-panel" hidden aria-label="区域设置">
+      <button
+        id="capture-side-drag"
+        type="button"
+        title="拖动区域工具栏 · 双击复位"
+        aria-label="移动区域工具栏"
+      ></button>
+      <button id="retry" type="button" title="重新选区" aria-label="重新选区"></button>
+      <button
+        id="aspect"
+        type="button"
+        title="比例：自由 · 点击切换"
+        aria-label="比例：自由 · 点击切换"
+        aria-pressed="false"
+      ></button>
+      <button
+        id="refresh"
+        type="button"
+        title="刷新底图，保留选区和标注 · F5"
+        aria-label="刷新截图"
+      ></button>
+      <button
+        id="capture-effects"
+        type="button"
+        title="区域效果"
+        aria-label="区域效果"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        aria-controls="capture-effects-menu"
+      ></button>
+    </aside>
+    <section
+      id="capture-effects-menu"
+      class="capture-panel capture-menu"
+      hidden
+      role="dialog"
+      aria-label="区域效果"
+    >
+      <div id="capture-effects-heading" class="capture-menu-header">
+        <h3 class="capture-menu-heading">区域效果</h3>
+      </div>
+      <div id="capture-output-effects"></div>
+    </section>
+    <form id="capture-text" class="inline-annotation-editor" hidden novalidate>
+      <textarea
+        id="capture-text-value"
+        maxlength="2000"
+        aria-label="标注文字"
+        wrap="off"
+        placeholder="输入文字"
+      ></textarea>
+      <button id="text-cancel" type="button" hidden>取消文字编辑</button>
+    </form>

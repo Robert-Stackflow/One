@@ -895,8 +895,9 @@ void api
       throw Error('原图尺寸不符');
     history = new ImageHistory(initial.width, initial.height, true);
     if (initial.document) history.restore(initial.document, initial.history);
+    // Publish the scene only after font loading; resize callbacks can paint while awaiting fonts.
+    await loadSceneFonts(history.value);
     scene = history.value;
-    await loadSceneFonts(scene);
     saved = fingerprint();
     annotations = new AnnotationEditor({
       history,

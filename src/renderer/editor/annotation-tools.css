@@ -1,5 +1,5 @@
 /* The screenshot overlay and image editor use the same split tool buttons and menus. */
-body[data-view="image-editor"] .capture-tool-family {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-family {
   display: flex;
   flex: 0 0 auto;
   border: 1px solid var(--line);
@@ -7,10 +7,10 @@ body[data-view="image-editor"] .capture-tool-family {
   overflow: hidden;
   background: var(--surface);
 }
-body[data-view="image-editor"] .capture-tool-family:has([aria-pressed='true']) {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-family:has([aria-pressed='true']) {
   border-color: color-mix(in srgb, var(--fg) 30%, var(--line));
 }
-body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture-tool-family > button {
+body:is([data-view="image-editor"],[data-view="capture"]) :is(#capture-actions, #annotation-tools) .capture-tool-family > button {
   display: grid;
   place-items: center;
   justify-content: center;
@@ -26,32 +26,32 @@ body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture
   color: var(--fg);
   box-shadow: none;
 }
-body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture-tool-family > button:hover {
+body:is([data-view="image-editor"],[data-view="capture"]) :is(#capture-actions, #annotation-tools) .capture-tool-family > button:hover {
   background: var(--hover);
 }
-body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture-tool-family > button[aria-pressed='true'] {
+body:is([data-view="image-editor"],[data-view="capture"]) :is(#capture-actions, #annotation-tools) .capture-tool-family > button[aria-pressed='true'] {
   background: var(--selected);
 }
-body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture-tool-family > button > svg {
+body:is([data-view="image-editor"],[data-view="capture"]) :is(#capture-actions, #annotation-tools) .capture-tool-family > button > svg {
   width: 19px;
   height: 19px;
   stroke-width: 1.7;
 }
-body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture-tool-family > .capture-tool-chevron {
+body:is([data-view="image-editor"],[data-view="capture"]) :is(#capture-actions, #annotation-tools) .capture-tool-family > .capture-tool-chevron {
   flex-basis: 20px;
   width: 20px;
   min-width: 20px;
   border-left: 1px solid var(--line);
 }
-body[data-view="image-editor"] :is(#capture-actions, #annotation-tools) .capture-tool-family > .capture-tool-chevron > svg {
+body:is([data-view="image-editor"],[data-view="capture"]) :is(#capture-actions, #annotation-tools) .capture-tool-family > .capture-tool-chevron > svg {
   width: 13px;
   height: 13px;
   stroke-width: 1.8;
 }
-body[data-view="image-editor"] .capture-tool-menu {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu {
   width: 184px;
 }
-body[data-view="image-editor"] .capture-tool-menu button {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -65,10 +65,10 @@ body[data-view="image-editor"] .capture-tool-menu button {
   font-size: 13px;
   text-align: left;
 }
-body[data-view="image-editor"] .capture-tool-menu button[aria-checked='true'] {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu button[aria-checked='true'] {
   background: var(--selected);
 }
-body[data-view="image-editor"] .capture-tool-menu button[aria-checked='true']::after {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu button[aria-checked='true']::after {
   content: '';
   width: 5px;
   height: 9px;
@@ -77,11 +77,11 @@ body[data-view="image-editor"] .capture-tool-menu button[aria-checked='true']::a
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
-body[data-view="image-editor"] .capture-tool-menu button:hover {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu button:hover {
   background: var(--hover);
 }
 
-body[data-view="image-editor"] .capture-tool-menu[popover] {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu[popover] {
   width: 184px;
   position: fixed;
   inset: auto;
@@ -102,20 +102,20 @@ body[data-view="image-editor"] .capture-tool-menu[popover] {
     0 8px 24px #0003,
     0 1px 4px #0001;
 }
-body[data-view="image-editor"] .capture-tool-menu::backdrop {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu::backdrop {
   background: transparent;
   pointer-events: none;
 }
-body[data-view="image-editor"] .capture-tool-menu svg {
+body:is([data-view="image-editor"],[data-view="capture"]) .capture-tool-menu svg {
   width: 18px;
   height: 18px;
   stroke-width: 1.7;
   flex-shrink: 0;
 }
-body[data-view="image-editor"] #annotation-tools {
+body:is([data-view="image-editor"],[data-view="capture"]) #annotation-tools {
   gap: 5px;
 }
-body[data-view="image-editor"] #annotation-tools .capture-divider {
+body:is([data-view="image-editor"],[data-view="capture"]) #annotation-tools .capture-divider {
   display: block;
   width: 1px;
   height: 22px;

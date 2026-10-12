@@ -31,6 +31,7 @@ export class PinsHost {
   toggle(){return this.run(()=>this.service.toggleAll());}
   nextGroup(){return this.run(()=>this.service.nextGroup());}
   material(id:string){return this.run(async()=>{await this.materials.initialized();const item=this.materials.library.images.get(id);return this.service.open({title:item.title.slice(0,120),png:await this.materials.library.images.read(id)});});}
+  image(title:string,png:Buffer){return this.run(()=>this.service.open({title,png}));}
   clipboard(){return this.run(async()=>{
     const files=readClipboardFiles();if(files.length)return this.service.open({title:files.length===1?basename(files[0]).slice(0,120):`${files.length} 个文件`,files});
     const png=await readClipboardPng();if(png)return this.service.open({title:'剪贴板图片',png});

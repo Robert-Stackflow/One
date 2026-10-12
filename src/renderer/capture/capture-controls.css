@@ -1,0 +1,250 @@
+/* Screenshot surfaces: a compact action strip, a separate property strip,
+   and anchored menus. Icon hit targets stay square at every window size. */
+body[data-view='capture'] .capture-panel {
+  position: absolute;
+  z-index: 4;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, var(--surface));
+  border-radius: 9px;
+  box-shadow:
+    0 5px 18px #0002,
+    0 1px 4px #0001;
+  cursor: default;
+  animation: capture-panel-in 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+body[data-view='capture'] #capture-properties {
+  max-height: min(45vh, 360px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+body[data-view='capture'] .capture-main-row,
+body[data-view='capture'] .capture-tool-row,
+body[data-view='capture'] .capture-output-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+body[data-view='capture'] .capture-main-row {
+  gap: 4px;
+}
+body[data-view='capture'] .capture-output-row {
+  flex-wrap: nowrap;
+}
+body[data-view='capture'] .capture-divider {
+  flex: 0 0 1px;
+  height: 24px;
+  background: var(--line);
+  margin: 0 4px;
+}
+body[data-view='capture'] #capture-actions button,
+body[data-view='capture'] #capture-side > button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  box-shadow: none;
+}
+body[data-view='capture'] .capture-panel svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.7;
+  flex-shrink: 0;
+}
+body[data-view='capture'] #capture-actions button:hover,
+body[data-view='capture'] #capture-side > button:hover {
+  background: var(--hover);
+}
+body[data-view='capture'] #capture-actions #capture-drag {
+  cursor: grab;
+  touch-action: none;
+  color: var(--muted);
+}
+body[data-view='capture'] #capture-actions #capture-drag:hover,
+body[data-view='capture'] #capture-actions.is-dragging #capture-drag {
+  color: var(--fg);
+  background: var(--hover);
+}
+body[data-view='capture'] #capture-actions.is-dragging,
+body[data-view='capture'] #capture-actions.is-dragging #capture-drag {
+  cursor: grabbing;
+}
+body[data-view='capture'] #capture-actions button[aria-pressed='true'],
+body[data-view='capture'] #capture-side > button[aria-pressed='true'],
+body[data-view='capture'] #capture-actions button[aria-expanded='true'],
+body[data-view='capture'] #capture-side > button[aria-expanded='true'] {
+  background: var(--selected);
+  color: var(--fg);
+}
+body[data-view='capture'] #capture-actions #copy,
+body[data-view='capture'] #capture-actions #region-confirm {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+body[data-view='capture'] #capture-actions #copy:hover,
+body[data-view='capture'] #capture-actions #region-confirm:hover {
+  opacity: 0.85;
+}
+body[data-view='capture'] #capture-actions #cancel:hover {
+  background: #df494916;
+  color: #d34545;
+}
+body[data-view='capture'] #capture-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+body[data-view='capture'] #capture-side > button + button {
+  margin-top: 0;
+}
+body[data-view='capture'] #capture-side #capture-side-drag {
+  min-height: 20px;
+  height: 20px;
+  cursor: grab;
+  touch-action: none;
+  color: var(--muted);
+}
+body[data-view='capture'] #capture-side.is-dragging,
+body[data-view='capture'] #capture-side.is-dragging #capture-side-drag {
+  cursor: grabbing;
+}
+body[data-view='capture'] .capture-menu[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 6px;
+  z-index: 10;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 28%, transparent) transparent;
+  box-shadow:
+    0 8px 24px #0003,
+    0 1px 4px #0001;
+}
+body[data-view='capture'] .capture-menu::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+/* Shared tool-menu rows live in editor/annotation-tools.css. */
+body[data-view='capture'] .capture-menu-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 11px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+body[data-view='capture'] .capture-menu-action:hover {
+  background: var(--hover);
+}
+body[data-view='capture'] #capture-more-menu {
+  width: 290px;
+}
+body[data-view='capture'] .capture-menu-heading {
+  display: block;
+  margin: 0 0 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+body[data-view='capture'] #capture-more-menu #capture-workflow {
+  margin: 6px 2px 2px;
+  padding: 12px 5px 4px;
+}
+body[data-view='capture'] .capture-workflow-choice {
+  gap: 6px;
+}
+body[data-view='capture'] .capture-workflow-choice .custom-select {
+  flex: 1;
+  min-width: 0;
+}
+body[data-view='capture'] .capture-workflow-choice .custom-select {
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 5px;
+}
+body[data-view='capture'] #run-workflow {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 5px;
+}
+body[data-view='capture'] .capture-workflow-order {
+  margin: 8px 0 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+body[data-view='capture'] #capture-receipts-title {
+  margin-top: 14px;
+}
+body[data-view='capture'] .capture-workflow-receipts li {
+  min-height: 27px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+body[data-view='capture'] .capture-workflow-receipts li:last-child {
+  border: 0;
+}
+body[data-view='capture'] .capture-workflow-receipts li > :last-child {
+  color: var(--muted);
+}
+body[data-view='capture'] #capture-effects-menu {
+  width: 310px;
+  padding: 14px;
+}
+body[data-view='capture'] #capture-effects-menu #capture-output-effects {
+  display: block;
+}
+body[data-view='capture'] #capture-effects-menu .output-effect-preview {
+  margin-top: 12px;
+}
+body[data-view='capture'] #capture-effects-menu .output-effect-reset {
+  margin: 0;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 6px;
+  border-radius: 5px;
+}
+body[data-view='capture'] .capture-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px -3px 8px 0;
+}
+body[data-view='capture'] .capture-menu-header .capture-menu-heading {
+  margin: 0;
+}
+body[data-view='capture'] #capture-effects-menu .output-effect-fields {
+  grid-template-columns: 1fr;
+}
+body[data-view='capture'] #capture-effects-menu .output-effect-fields > label {
+  min-height: 32px;
+}
+body[data-view='capture'] #capture-effects-menu .output-effect-fields input[type='number'] {
+  width: 42px;
+}

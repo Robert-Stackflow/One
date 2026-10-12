@@ -1,28 +1,28 @@
-body[data-view="image-editor"] .annotation-step-order {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-step-order {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: nowrap;
   font-size: 12px;
 }
-body[data-view="image-editor"] .annotation-step-order label {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-step-order label {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-body[data-view="image-editor"] .annotation-step-order input {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-step-order input {
   box-sizing: border-box;
   width: 54px;
   padding: 4px;
 }
-body[data-view="image-editor"] .annotation-step-order > button {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-step-order > button {
   min-width: 40px;
   padding: 5px 8px;
   font-size: 12px;
 }
-body[data-view="image-editor"] .annotation-step-order #step-count {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-step-order #step-count {
   color: var(--muted, #b5b5b5);
 }
-body[data-view="image-editor"] .annotation-step-order[hidden] {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-step-order[hidden] {
   display: none !important;
 }

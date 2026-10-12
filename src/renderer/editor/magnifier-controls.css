@@ -1,31 +1,31 @@
-body[data-view="image-editor"] .magnifier-controls {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-controls {
   display: grid;
   gap: 8px;
   max-width: 280px;
   font-size: 12px;
 }
-body[data-view="image-editor"] .magnifier-controls[hidden] {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-controls[hidden] {
   display: none !important;
 }
-body[data-view="image-editor"] .magnifier-parts {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-parts {
   display: flex;
   gap: 6px;
 }
-body[data-view="image-editor"] .magnifier-parts button {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-parts button {
   flex: 1;
   padding: 5px 8px;
   font-size: 12px;
 }
-body[data-view="image-editor"] .magnifier-parts button[aria-pressed='true'] {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-parts button[aria-pressed='true'] {
   background: var(--fg, #efefef);
   color: var(--bg, #181818);
 }
-body[data-view="image-editor"] .magnifier-fields {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
-body[data-view="image-editor"] .magnifier-controls .magnifier-fields label {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-controls .magnifier-fields label {
   display: flex;
   flex-direction: row;
   gap: 4px;
@@ -36,10 +36,10 @@ body[data-view="image-editor"] .magnifier-controls .magnifier-fields label {
   font-size: 12px;
   font-weight: 400;
 }
-body[data-view="image-editor"] .magnifier-fields label > span {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-fields label > span {
   min-width: 14px;
 }
-body[data-view="image-editor"] .magnifier-fields input[type='number'] {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-fields input[type='number'] {
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -48,14 +48,14 @@ body[data-view="image-editor"] .magnifier-fields input[type='number'] {
   appearance: textfield;
   font-size: 12px;
 }
-body[data-view="image-editor"] .magnifier-fields input::-webkit-inner-spin-button {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-fields input::-webkit-inner-spin-button {
   appearance: none;
 }
-body[data-view="image-editor"] .image-workbench .options .magnifier-controls .magnifier-fields label {
+body:is([data-view="image-editor"],[data-view="capture"]) .image-workbench .options .magnifier-controls .magnifier-fields label {
   padding: 0;
   border: 0;
 }
-body[data-view="image-editor"] .magnifier-hint {
+body:is([data-view="image-editor"],[data-view="capture"]) .magnifier-hint {
   margin: 0;
   line-height: 1.5;
   color: var(--muted, #b5b5b5);

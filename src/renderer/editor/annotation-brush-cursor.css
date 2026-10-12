@@ -1,4 +1,4 @@
-body[data-view="image-editor"] .annotation-brush-cursor {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-brush-cursor {
   position: absolute;
   pointer-events: none;
   border: 1px solid #fff;
@@ -6,6 +6,6 @@ body[data-view="image-editor"] .annotation-brush-cursor {
   border-radius: 50%;
   z-index: 3;
 }
-body[data-view="image-editor"] .annotation-brush-cursor[hidden] {
+body:is([data-view="image-editor"],[data-view="capture"]) .annotation-brush-cursor[hidden] {
   display: none !important;
 }

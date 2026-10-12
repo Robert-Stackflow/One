@@ -1,3 +1,4 @@
+import type {CaptureCommands} from './capture/api';
 import type {PinsAPI} from './pins';
 import type {MaterialsAPI} from './materials';
 export type Operation = 'clean' | 'unique' | 'sort' | 'simple' | 'traditional' | 'half' | 'full' | 'replace' | 'trim'|'trimEnd'|'empty'|'paragraphSpace'|'joinParagraph'|'indent'|'layout'|'punctuation'|'vertical'|'upper'|'lower'|'reverse'|'natural'|'removeLetters'|'removeDigits'|'removePunctuation'|'normalize'|'wrap'|'brackets';
@@ -41,9 +42,10 @@ export interface FileEntry { name: string; path: string; directory: boolean; siz
 export interface PreviewData { photoLocation?:import('./photo-metadata').PhotoLocation; animated?:boolean; motionPhotoNotice?:string; motionPhoto?:{url:string;source:string;presentationTime?:number;paired?:boolean}; name: string; path: string; size: number; type: 'text' | 'markdown' | 'html' | 'json' | 'yaml' | 'csv' | 'image' | 'pdf' | 'media' | 'folder' | 'archive' | 'docx' | 'pptx' | 'workbook' | 'xlsx' | 'epub' | 'font' | 'notebook' | 'unsupported' | 'native-office'; nativeOfficeToken?:string; workbook?:import('./workbook').WorkbookData; workbookToken?:string; text?: string; textURL?:string; cover?:string; lyrics?:import('./preview').LyricLine[]; url?: string; error?: string; siblings: string[]; navigation?:import('./directory').DirectoryInfo;directory?:import('./directory').DirectoryInfo; entries?: FileEntry[]; nativeArchive?:boolean; metadata?: Record<string,string>; modified?: number; created?: number; truncated?: boolean }
 export interface LinkCard {domain:string;title:string;description:string;image?:string}
 export type { PickerData } from './picker';
-export interface OneAPI extends PinsAPI,MaterialsAPI {
+export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   pin?:import('./pins').PinAPI;
   imageEditor?:import('./capture/image-editor-api').ImageEditorAPI;
+  capture?:import('./capture/capture-session').CaptureAPI;
   searchSuggest(engineId:string,query:string):Promise<string[]>;
   aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
   aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;
