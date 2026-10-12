@@ -82,6 +82,7 @@ export class SearchService {
  // The helper compiles current priority rules without invalidating the file cache.
  configure(settings:SearchSettings){this.settings=settings;}
  state(){return this.value;}
+ async recentPaths(){await this.historyReady;return [...this.recent];}
  rebuild(settings:SearchSettings){this.settings=settings;this.startWatch();this.fullCheckPending=true;this.value={...this.value,running:true};this.changed(this.value);this.send({type:'rebuild',settings});}
  cancel(){this.send({type:'cancel'});}
  async query(query:unknown,foldersOnly:unknown=false,currentFolder='',scope=0,includeLaunchers=false,progress?:(r:SearchResult)=>void,rootScope=''){if(typeof query!=='string'||query.length>1000||typeof foldersOnly!=='boolean')throw new Error('搜索条件无效');await this.historyReady;const id=++this.serial;return new Promise<SearchResult>((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error('搜索超时，请缩小条件后重试'));},15000);this.pending.set(id,{resolve,reject,timer,progress});try{this.send({type:'query',id,query,scope,includeLaunchers:includeLaunchers&&!rootScope,foldersOnly,currentFolder:rootScope||currentFolder,rootScope,progressive:!!progress,priorities:this.settings.priorities??[],recent:this.recent,fuzzy:this.settings.fuzzy,pinyin:this.settings.pinyin});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}});}

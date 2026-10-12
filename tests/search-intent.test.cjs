@@ -22,7 +22,7 @@ test('One commands match Chinese, full pinyin, initials and a small pinyin typo'
  assert.equal(commandMatches('wenjainsousuo',6,{pinyin:true,fuzzy:false}).length,0);
 });
 test('shortcut activation requires a space and extension unions normalize each member',async()=>{
- const {parseSearchShortcut,validateSearchEngines,searchEngineUrl}=await load('src/shared/search-shortcuts.ts');
+ const {parseSearchShortcut,validateSearchEngines,validateDisabledSearchCommands,builtinSearchCommands,mediaSearchExtensions,searchEngineUrl}=await load('src/shared/search-shortcuts.ts');
  const custom=validateSearchEngines([{id:'custom',shortcut:'site',name:'站内搜索',url:'https://example.com/search?q={query}'}]);
  assert.equal(parseSearchShortcut('g'),null);
  assert.equal(parseSearchShortcut('g ',custom)?.kind,'engine');
@@ -36,6 +36,24 @@ test('shortcut activation requires a space and extension unions normalize each m
  assert.equal(parseSearchShortcut('.zip| ',custom),null);
  assert.equal(parseSearchShortcut('> ',custom)?.kind,'one');
  assert.equal(parseSearchShortcut('> ',custom)?.showFilters,false);
+ for(const id of ['app','cfg','dir','file','doc','img','vid','aud','arc','mm','recent','fav']){
+  const command=builtinSearchCommands.find(item=>item.id===id);
+  assert.equal(parseSearchShortcut(command.shortcut+' ',custom)?.command?.id,id);
+ }
+ assert.equal(parseSearchShortcut('mm ',custom)?.showFilters,true);
+ assert.equal(parseSearchShortcut('app ',custom,['app'])?.kind,undefined);
+ const legacy=validateSearchEngines([{id:'legacy',shortcut:'app',name:'旧搜索引擎',url:'https://example.com/?q={query}'}]);
+ assert.equal(parseSearchShortcut('app ',legacy)?.kind,'category');
+ assert.equal(parseSearchShortcut('app ',legacy,['app'])?.kind,'engine');
+ assert.equal(parseSearchShortcut('.zip ',custom,['extension']),null);
+ assert.equal(parseSearchShortcut('> ',custom,['one']),null);
+ assert.deepEqual(validateDisabledSearchCommands(['app','app','one']),['app','one']);
+ assert.throws(()=>validateDisabledSearchCommands(['missing']));
+ const {searchMatcher,defaultSearch,validateSearch}=await load('src/shared/search.ts');
+ const media=searchMatcher('file: ext:'+mediaSearchExtensions.join(';'));
+ for(const name of ['cover.png','movie.mp4','song.mp3'])assert.ok(media({path:name,name,directory:false,size:0,modified:0})>=0);
+ assert.equal(media({path:'report.pdf',name:'report.pdf',directory:false,size:0,modified:0}),-1);
+ assert.deepEqual(validateSearch({...defaultSearch(),shortcutDisabled:['app']}).shortcutDisabled,['app']);
  assert.equal(searchEngineUrl(custom[0].url,'a b'),'https://example.com/search?q=a%20b');
  assert.throws(()=>validateSearchEngines([{id:'bad',shortcut:'g',name:'冲突',url:'https://example.com/?q={query}'}]));
  assert.throws(()=>searchEngineUrl('http://example.com/?q={query}','a'));

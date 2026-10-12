@@ -46,7 +46,7 @@ import {SearchService} from './search-service';
 import {SearchBridge} from './search-bridge';
 import {ShortcutCapture} from './shortcut-capture';
 import {locateHotkeyOwner,cancelHotkeyOwner} from './hotkey-owner';
-import type {SearchContext} from '../shared/search';
+import {searchMatcher,type SearchContext,type SearchEntry} from '../shared/search';
 import {builtinSearchEngines,searchEngineUrl} from '../shared/search-shortcuts';
 import {AwakeService} from './awake';
 import {TopmostService} from './topmost';
@@ -726,6 +726,16 @@ function registerIPC() {
   handle('file-menu-close',(event,focus,childOnly)=>fileMenu.close(event.sender.id,focus===true,childOnly===true),['file-context']);
   handle('file-menu-action',(_e,session,action,value)=>fileMenu.run(textValue(session,100),action,value===undefined?undefined:textValue(value,32768)),['file-context']);
   handle('search-state',()=>searchState(),['main','search']);handle('search-preferences',()=>settings.search,['main','search']);
+  handle('search-collection',async(_event,kind,query)=>{
+    if(kind!=='recent'&&kind!=='fav'||typeof query!=='string'||query.length>1000)throw new Error('快捷命令搜索条件无效');
+    const start=performance.now(),paths=kind==='recent'?await search.recentPaths():settings.search.bookmarks,match=searchMatcher(query),seen=new Set<string>();
+    const entries=await Promise.all(paths.map(async(path,index)=>{
+      const key=path.toLowerCase();if(seen.has(key))return null;seen.add(key);
+      try{const info=await stat(path),item:SearchEntry={path,name:basename(path)||path,directory:info.isDirectory(),size:info.isDirectory()?0:info.size,modified:info.mtimeMs};const score=match(item);return score<0?null:{item,index,score};}catch{return null;}
+    }));
+    const found=entries.filter((item):item is NonNullable<typeof item>=>item!==null).sort((a,b)=>query.trim()?b.score-a.score||a.index-b.index:a.index-b.index);
+    return {items:found.map(item=>item.item),total:found.length,elapsed:Math.round(performance.now()-start)};
+  },['search']);
   handle('port-snapshot',(_event,refresh)=>{if(refresh!==undefined&&typeof refresh!=='boolean')throw Error('端口扫描参数无效');return ports.snapshot(refresh===true);},['main']);
   handle('search-saved-query',async(_event,operation,value)=>{
     if(operation!=='add'&&operation!=='remove')throw Error('搜索条件操作无效');

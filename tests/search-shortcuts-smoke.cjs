@@ -5,16 +5,17 @@ async function run(){
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'one-search-shortcuts-'));
  const profile=path.join(root,'profile'),files=path.join(root,'files');
  await fs.mkdir(profile);await fs.mkdir(files);
- for(const name of ['report.zip','report.7z','report.txt'])await fs.writeFile(path.join(files,name),'sample');
+ for(const name of ['report.zip','report.7z','report.txt','cover.png','movie.mp4','song.mp3'])await fs.writeFile(path.join(files,name),'sample');
  await fs.mkdir(path.join(files,'.zip'));
+ await fs.writeFile(path.join(profile,'file-search-history.json'),JSON.stringify([path.join(files,'report.txt'),files]));
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch({args:[path.resolve('.')],env});
  const errors=[];
  try{
   const main=await app.firstWindow();main.on('pageerror',error=>errors.push(String(error)));
   await main.waitForSelector('[data-page=search]');
-  await main.evaluate(async files=>{const settings=await window.one.settings();settings.search.roots=[files];settings.search.shortcut='';settings.search.programShortcut='';await window.one.saveSettings(settings);},files);
-  await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).count),{timeout:20000}).toBeGreaterThanOrEqual(4);
+  await main.evaluate(async files=>{const settings=await window.one.settings();settings.search.roots=[files];settings.search.bookmarks=[files];settings.search.shortcut='';settings.search.programShortcut='';await window.one.saveSettings(settings);},files);
+  await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).count),{timeout:20000}).toBeGreaterThanOrEqual(7);
   await main.evaluate(()=>window.one.showSearch());
   await expect.poll(()=>app.windows().some(window=>/[?&]view=search(?:$|&)/.test(window.url())&&!window.url().includes('embedded')),{timeout:15000}).toBe(true);
   const search=app.windows().find(window=>/[?&]view=search(?:$|&)/.test(window.url())&&!window.url().includes('embedded'));
@@ -30,6 +31,7 @@ async function run(){
   await input.fill('sample words');await expect(search.locator('[data-search-web]')).toBeEnabled();
   if(process.env.ONE_TEST_SCREENSHOTS){await fs.mkdir('work/current/search-shortcuts',{recursive:true});await expect(search.locator('#search-mode-tag img')).toBeVisible({timeout:8000});await search.screenshot({path:'work/current/search-shortcuts/web.png'});}
   await search.locator('[data-mode-exit]').click();
+  await expect(search.locator('#search-mode-tag')).toBeHidden();
   await activate('> ');
   await expect(input).toHaveAttribute('placeholder','搜索 One 的功能和操作');
   await expect(search.locator('#search-filters')).toBeHidden();
@@ -54,6 +56,11 @@ async function run(){
   await main.locator('[data-page=search]').click();
   await main.locator('#search-tab-shortcuts').click();
   await expect(main.locator('[data-search-panel="shortcuts"]')).toBeVisible();
+  await expect(main.locator('#search-command-list .search-command-row')).toHaveCount(14);
+  await expect(main.locator('#search-command-list .search-shortcut-trigger')).toHaveCount(14);
+  await expect(main.locator('#search-web-engine-list .search-shortcut-trigger')).toHaveCount(4);
+  await main.locator('[data-search-command="app"]').uncheck();
+  await expect.poll(()=>main.evaluate(async()=>(await window.one.settings()).search.shortcutDisabled)).toContain('app');
   await main.locator('#search-web-engine-add').click();
   await main.locator('#engine-name').fill('Example');
   await main.locator('#engine-shortcut').fill('ex');
@@ -65,6 +72,37 @@ async function run(){
   await main.evaluate(()=>window.one.showSearch());
   await activate('ex ');
   await expect(search.locator('#search-mode-tag strong')).toHaveText('Example');
+  await search.locator('[data-mode-exit]').click();
+  await activate('app ');
+  await expect(search.locator('#search-mode-tag')).toBeHidden();
+  await input.fill('');
+  await main.locator('[data-search-command="app"]').check();
+  await expect.poll(()=>main.evaluate(async()=>(await window.one.settings()).search.shortcutDisabled)).not.toContain('app');
+  await activate('app ');
+  await expect(search.locator('#search-mode-tag strong')).toHaveText('应用');
+  await expect(search.locator('#search-filters')).toBeHidden();
+  await search.locator('[data-mode-exit]').click();
+  await activate('mm ');
+  await expect(search.locator('#search-filters')).toBeVisible();
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['cover.png','movie.mp4','song.mp3']);
+  await search.locator('[data-filter="pic:"]').click();
+  await expect(search.locator('#search-mode-tag strong')).toHaveText('媒体文件');
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['cover.png']);
+  await search.locator('[data-mode-exit]').click();
+  await activate('fav ');
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual([path.basename(files)]);
+  await search.locator('[data-mode-exit]').click();
+  await activate('recent ');
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['report.txt',path.basename(files)]);
+  await main.locator('[data-search-command="one"]').uncheck();
+  await main.locator('[data-search-command="extension"]').uncheck();
+  await expect.poll(()=>main.evaluate(async()=>(await window.one.settings()).search.shortcutDisabled)).toEqual(['one','extension']);
+  await search.locator('[data-mode-exit]').click();
+  await activate('> ');
+  await expect(search.locator('#search-mode-tag')).toBeHidden();
+  await input.fill('');
+  await activate('.zip ');
+  await expect(search.locator('#search-mode-tag')).toBeHidden();
   assert.equal((await main.evaluate(async()=>(await window.one.settings()).search.webEngines))[0].shortcut,'ex');
   assert.deepEqual(errors,[]);
  }finally{await app.close().catch(()=>{});}
