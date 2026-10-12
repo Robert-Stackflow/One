@@ -25,7 +25,7 @@ export function archivePage(){return `<div class="archive-workspace">
   <div class="archive-explorer">
    <div class="archive-open-bar archive-create-bar"><span class="archive-create-bar-label">添加内容</span><div class="archive-create-bar-actions"><button id="archive-sources-open" class="quiet" type="button">${icon('text')}粘贴或编辑路径</button><button id="archive-add-file" type="button">${icon('plus')}添加文件</button><button id="archive-add-folder" type="button">${icon('folder')}添加文件夹</button></div></div>
    <div class="archive-layout archive-create-layout">
-  <div class="archive-panel archive-source-panel"><div class="archive-card-heading"><div><h2>压缩内容</h2><span id="archive-source-count">尚未添加内容</span></div><button id="archive-sources-clear" class="icon-button quiet" type="button" aria-label="清空待压缩内容" title="清空" hidden>${icon('trash')}</button></div>
+  <div class="archive-panel archive-source-panel"><div class="archive-card-heading"><div class="archive-content-title"><h2>压缩内容</h2><strong id="archive-source-count">尚未添加内容</strong></div><button id="archive-sources-clear" class="icon-button quiet" type="button" aria-label="清空待压缩内容" title="清空" hidden>${icon('trash')}</button></div>
    <div id="archive-source-items" class="archive-source-items" aria-label="待压缩内容"></div>
    <div id="archive-source-empty" class="archive-placeholder">${icon('archive')}<span class="archive-placeholder-label">拖入文件或文件夹</span></div>
   </div>

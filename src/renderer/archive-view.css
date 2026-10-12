@@ -19,8 +19,8 @@
 .archive-source-panel{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:0}
 .archive-create-layout .archive-source-panel .archive-card-heading{padding:6px 16px;border-bottom:1px solid var(--line)}
 .archive-source-panel .archive-card-heading,.archive-browser-actions{height:calc(var(--control-height) + 25px)}
-.archive-source-panel .archive-card-heading>div:first-child{gap:2px}
-.archive-source-panel .archive-card-heading h2{font-size:14px}
+.archive-source-panel .archive-card-heading>.archive-content-title{display:flex;gap:8px}
+.archive-source-panel .archive-content-title strong{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .archive-source-panel .archive-card-heading,.archive-content-panel>.archive-card-heading,.archive-browser-actions,.archive-browser-footer,.archive-table-heading{flex:none}
 .archive-source-items{flex:1;min-height:0;overflow:auto;min-width:0}
 .archive-source-items:empty{display:none}
