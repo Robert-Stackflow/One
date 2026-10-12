@@ -22,10 +22,21 @@ export const formats=[
 export const sizes=[16,20,24,32,40,48,64,96,128,256];
 const glyphs={A:['010','101','111','101','101'],R:['110','101','110','101','101'],C:['011','100','100','100','011'],Z:['111','001','010','100','111'],I:['111','010','010','010','111'],P:['110','101','110','100','100'],'7':['111','001','010','010','010'],'0':['111','101','101','101','111'],'1':['010','110','010','010','111'],'2':['110','001','010','100','111'],T:['111','010','010','010','010'],G:['011','100','101','101','011'],X:['101','101','010','101','101'],B:['110','101','110','101','110'],H:['101','101','111','101','101'],L:['100','100','100','100','111'],M:['101','111','111','101','101'],S:['011','100','010','001','110'],W:['101','101','111','111','101'],D:['110','101','101','101','110'],U:['101','101','101','101','111'],F:['111','100','110','100','100'],Q:['010','101','101','111','011'],E:['111','100','110','100','111'],J:['001','001','001','101','010'],K:['101','101','110','101','101'],N:['101','111','111','111','101']};
 glyphs.O=['010','101','101','101','010'];
-function pixelLabel(label){const text=label.slice(0,3),unit=16,start=Math.round((256-(text.length*4-1)*unit)/32)*16;return [...text].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>pixel==='1'?`<rect x="${start+(i*4+x)*unit}" y="${96+y*unit}" width="${unit}" height="${unit}" fill="#FFFFFF"/>`:''))).join('');}
+function pixelLabel(label,size){
+ const text=label.slice(0,3),unit=16,start=Math.round((256-(text.length*4-1)*unit)/32)*16;
+ const snap=value=>Math.round(value*size/256)*256/size;
+ return [...text].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>{
+  if(pixel!=='1')return '';
+  const x0=snap(start+(i*4+x)*unit),y0=snap(96+y*unit);
+  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(96+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
+ }))).join('');
+}
 export function artwork(label,color,size=256){
  const small=size<=20;
- if(small)return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="8" y="8" width="240" height="240" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${pixelLabel(label)}</svg>`;
+ if(small){
+  const edge=256/size; // Remove the half-pixel halo around 16/20px Explorer icons.
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${pixelLabel(label,size)}</svg>`;
+ }
  const zip=/^(ZIP|ZIPX|JAR|WAR|APK|IPA|XPI)$/.test(label),seven=/^(7Z|ZPAQ|001)$/.test(label),disc=/^(ISO|IMG|ISZ|UDF|WIM|BIN|I00)$/.test(label),stack=/^(RAR|R00|ALZ|EGG|ACE|ARJ|LHA|LZH|PMA)$/.test(label);
  const motif=zip?`<rect x="97" y="48" width="62" height="94" rx="14" fill="none" stroke="${color}" stroke-width="12"/>${Array.from({length:5},(_,i)=>`<path d="M${i%2?128:110} ${63+i*15}h18" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>`).join('')}<rect x="118" y="122" width="20" height="28" rx="5" fill="#FFFFFF"/>`:
   seven?`<path d="M78 60h96l-17 24H95zm13 34h83l-17 24H74zm-13 34h96l-17 24H95z" fill="${color}" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>`:
