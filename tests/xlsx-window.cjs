@@ -11,7 +11,7 @@ const {build:bundle}=require('esbuild'),{_electron:electron,expect}=require('@pl
   await require('./xlsx-preview-fixtures.cjs')(files);await fs.writeFile(path.join(files,'plain.txt'),'PLAIN_FILE_MARKER');
   const {mainOptions,preloadOptions}=await import('../scripts/bundle-options.mjs');
   await bundle({...mainOptions,entryPoints:mainOptions.entryPoints.map(f=>path.join(source,f)),outdir:main,logLevel:'silent'});
-  await bundle({...preloadOptions,entryPoints:preloadOptions.entryPoints.map(f=>path.join(source,f)),outfile:path.join(root,'preload/index.cjs'),logLevel:'silent'});
+  await bundle({...preloadOptions,entryPoints:preloadOptions.entryPoints.map(f=>path.join(source,f)),outdir:path.join(root,'preload'),logLevel:'silent'});
   const vite=await import('vite');await vite.build({root:path.join(source,'src/renderer'),base:'./',build:{outDir:renderer,emptyOutDir:true,minify:false},logLevel:'silent'});
   for(const name of ['native','icons'])await fs.cp(path.join(repository,'dist',name),path.join(root,name),{recursive:true});
   await fs.cp(path.join(repository,'assets/file-icons'),path.join(renderer,'file-icons'),{recursive:true});
