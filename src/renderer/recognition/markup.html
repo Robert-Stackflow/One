@@ -1,0 +1,131 @@
+<header class="media-header">
+      <span id="brand"></span><strong>文字识别</strong><span id="source-name"></span>
+    </header>
+    <main>
+      <div class="tabs" role="tablist" aria-label="识别结果处理">
+        <button id="text-tab" type="button" role="tab" aria-selected="true" class="selected">
+          文字</button
+        ><button id="translation-tab" type="button" role="tab" aria-selected="false">翻译</button
+        ><button id="table-tab" type="button" role="tab" aria-selected="false">表格</button
+        ><button id="formula-tab" type="button" role="tab" aria-selected="false">公式</button>
+      </div>
+      <div id="ocr-tools" class="recognition-tools">
+        <label
+          >识别语言<select id="language">
+            <option value="chi_sim+eng">简体中文和英文</option>
+            <option value="eng">英文</option>
+          </select></label
+        ><button id="run" class="primary" disabled>识别文字</button
+        ><button id="cancel" class="quiet" hidden>取消识别</button>
+      </div>
+      <div id="translation-tools" class="recognition-tools" hidden>
+        <label>译为<select id="translation-language"></select></label
+        ><button id="translate" class="primary" disabled>翻译原文</button
+        ><button id="translation-cancel" class="quiet" hidden>取消翻译</button
+        ><button id="translation-configure" class="quiet">配置服务</button>
+      </div>
+      <p id="translation-destination" hidden></p>
+      <div id="formula-tools" class="recognition-tools" hidden>
+        <button id="formula-recognize" class="primary" disabled>识别公式（发送图片）</button
+        ><button id="formula-cancel" class="quiet" hidden>取消识别</button
+        ><button id="formula-configure" class="quiet">配置视觉服务</button>
+      </div>
+      <p id="formula-destination" hidden></p>
+      <div id="table-tools" class="recognition-tools" hidden>
+        <button id="table-rebuild" class="quiet" disabled>重建表格</button>
+        <button id="table-new" class="quiet">新建空表格</button>
+        <select id="table-operation" aria-label="表格校正操作" disabled>
+          <option value="merge">合并选区</option>
+          <option value="split">拆分单元格</option>
+          <option value="insert-row">后插一行</option>
+          <option value="insert-column">后插一列</option>
+          <option value="delete-row">删除当前行</option>
+          <option value="delete-column">删除当前列</option></select
+        ><button id="table-apply" class="quiet" disabled>应用</button
+        ><button id="table-undo" class="quiet" disabled>撤销</button>
+      </div>
+      <section id="models" class="model-note" hidden>
+        <p>
+          首次使用需下载中文和英文语言包（6.3 MiB）。语言包来自 Tesseract
+          官方项目，图片仅在本机处理。
+        </p>
+        <div>
+          <button id="install" class="quiet">下载语言包</button
+          ><button id="cancel-install" class="quiet" hidden>取消下载</button>
+        </div>
+      </section>
+      <p id="message" role="status" aria-live="polite"></p>
+      <progress id="progress" max="1" hidden></progress>
+      <div class="recognition-content">
+        <section class="source-preview" aria-label="识别图片">
+          <img id="source" alt="待识别图片" />
+        </section>
+        <section id="text-result" class="text-result">
+          <label id="result-label" for="result">识别结果</label
+          ><textarea
+            id="result"
+            dir="auto"
+            spellcheck="false"
+            placeholder="识别后可在这里修正文字"
+          ></textarea>
+        </section>
+        <section id="table-panel" hidden aria-label="表格识别结果">
+          <p id="table-empty">
+            点击“识别表格”在本机重建行列，也可新建空表格校正。建议先裁剪到单个表格，识别结果请对照原图核对。
+          </p>
+          <div id="table-workspace" hidden>
+            <div
+              id="table-grid"
+              tabindex="0"
+              aria-label="可选择的表格，方向键移动，Shift 扩选"
+            ></div>
+            <label id="table-selection" for="table-cell-text"></label>
+            <textarea
+              id="table-cell-text"
+              rows="2"
+              spellcheck="false"
+              placeholder="校正当前单元格文字，离开输入框后保存"
+            ></textarea>
+          </div>
+        </section>
+        <section id="formula-panel" hidden aria-label="公式识别结果">
+          <label for="formula-text">LaTeX · 可校正</label
+          ><textarea
+            id="formula-text"
+            spellcheck="false"
+            placeholder="例如 \frac{a}{b}，输入后在本机预览"
+          ></textarea>
+          <p id="formula-preview-status" role="status">输入或识别公式后显示预览</p>
+          <div id="formula-preview" aria-label="本机公式预览"></div>
+        </section>
+        <section id="translation-result" class="text-result" hidden>
+          <label for="translated">译文</label
+          ><textarea
+            id="translated"
+            dir="auto"
+            spellcheck="false"
+            placeholder="译文将在这里显示，可核对和修正"
+          ></textarea>
+        </section>
+      </div>
+      <footer>
+        <span id="summary">识别结果请核对后使用</span>
+        <div class="result-actions">
+          <button id="copy" class="primary" disabled>复制文字</button
+          ><button id="translation-copy" class="primary" disabled hidden>复制译文</button>
+          <button id="table-copy" class="quiet" disabled hidden>复制表格</button>
+          <button id="table-save" class="primary" disabled hidden>导出 Excel</button>
+          <button id="formula-copy" class="primary" disabled hidden>复制 LaTeX</button>
+        </div>
+      </footer>
+    </main>
+    <dialog
+      id="translation-settings"
+      class="one-dialog one-form-dialog"
+      aria-labelledby="modal-title"
+    ></dialog>
+    <dialog
+      id="formula-settings"
+      class="one-dialog one-form-dialog"
+      aria-labelledby="formula-modal-title"
+    ></dialog>

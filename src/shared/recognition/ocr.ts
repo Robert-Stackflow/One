@@ -19,6 +19,7 @@ export interface OCRResult {
   language: OCRLanguage;
 }
 export interface OCRState {
+  uiScale:100|110|125|150;
   workflow?: OCRWorkflowState;
   token: string;
   name: string;

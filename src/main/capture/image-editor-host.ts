@@ -14,6 +14,8 @@ interface Context {
   saveWatermark(value:WatermarkPreset):Promise<unknown>;
   fonts():Promise<InstalledFont[]>;
   blocked():boolean;dark():boolean;
+  sensitive?:import('../../shared/recognition/sensitive-api').SensitiveAPI;
+  recognize?(png:Buffer,title:string):Promise<void>;
 }
 /** One owns this adapter's windows, registration, settings, and exit sequencing. */
 export class ImageEditorHost {

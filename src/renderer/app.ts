@@ -17,7 +17,8 @@ window.addEventListener('error',event=>{void api.diagnosticsReport('uncaught-err
 window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
 if(['main','file-action','preview','picker','search','color-editor','dialog-bar','archive-task'].includes(view))setupWindowVisibility();
 const render=async()=>{
-  if(view==='scroll-capture')(await import('./scroll-capture-view')).renderScrollCapture();
+  if(view==='recognition')await (await import('./recognition-view')).renderRecognition();
+  else if(view==='scroll-capture')(await import('./scroll-capture-view')).renderScrollCapture();
   else if(view==='capture')(await import('./capture-window-view')).renderCapture();
   else if(view==='native-tooltip')(await import('./native-tooltip-view')).renderNativeTooltip();
   else if(view==='echo')(await import('./hud')).renderHUD();
