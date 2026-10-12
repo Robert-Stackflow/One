@@ -12,6 +12,7 @@ import type {SetOutline} from './preview-outline';
 
 const codeAliases:Record<string,string>={js:'javascript',ts:'typescript',py:'python',sh:'bash',shell:'bash',yml:'yaml',html:'xml',md:'markdown',csharp:'cs',cxx:'cpp'};
 const textSizeLimit=300_000;
+const markdownDividerStyles='.markdown-content hr{height:1px;border:0;background:linear-gradient(90deg,transparent,color-mix(in srgb,currentColor 16%,transparent) 12%,color-mix(in srgb,currentColor 16%,transparent) 88%,transparent);margin:28px 0}';
 
 function frontmatter(text:string){
   const match=/^(?:\uFEFF)?---[ \t]*\r?\n([\s\S]{0,65536}?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
@@ -163,7 +164,7 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
   await rewriteImages(doc);
   const headings=Array.from(doc.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')).slice(0,1000);
   headings.forEach((heading,i)=>heading.id='one-heading-'+i);
-  const frame=isolatedFrame(host,doc.body.innerHTML,markdownStyles()+markdownExtraStyles()+interactionStyles()+lightboxStyles()+lightboxLayout(),[katexStylesheet]);
+  const frame=isolatedFrame(host,doc.body.innerHTML,markdownStyles()+markdownExtraStyles()+interactionStyles()+markdownDividerStyles+lightboxStyles()+lightboxLayout(),[katexStylesheet]);
   outline(headings.map((heading,i)=>({label:heading.textContent||'标题',depth:Number(heading.tagName[1])-1,activate:()=>frame.contentDocument?.getElementById('one-heading-'+i)?.scrollIntoView({behavior:'smooth',block:'start'})})));
   let hoverTimer:ReturnType<typeof setTimeout>|undefined,hideTimer:ReturnType<typeof setTimeout>|undefined,hoverRevision=0,releaseImages:()=>void=()=>{};
   const onLoad=()=>{

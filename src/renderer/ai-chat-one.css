@@ -5,6 +5,7 @@ html,body,#app{height:100%;min-height:0}body{margin:0}.chat-shell{height:100vh}.
 .model-picker.clip-popover[popover]{margin:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:0 16px 38px #0002}
 .chat-shell .chat-history-item>button:first-child{border:0!important;box-shadow:none!important;background:transparent!important;width:100%}.chat-shell .chat-history-item{width:100%;padding-right:56px}.chat-shell .chat-history-item.active{background:var(--soft)}.chat-shell .chat-empty{gap:0}.chat-shell .chat-empty h1{font-size:18px;font-weight:550}
 .chat-shell .chat-message .message-body.markdown{white-space:normal}
+.chat-shell .chat-message .message-body.markdown hr{height:1px;border:0;background:linear-gradient(90deg,transparent,var(--line) 12%,var(--line) 88%,transparent);margin:24px 0}
 .chat-shell .chat-message[data-role=assistant][data-status=running] .message-actions{display:none}
 .chat-shell .chat-message[data-role=assistant]:is([data-status=complete],[data-status=failed],[data-status=cancelled]) .message-actions{opacity:0;pointer-events:none;transition:opacity .12s}
 .chat-shell .chat-message[data-role=assistant]:is([data-status=complete],[data-status=failed],[data-status=cancelled]):is(:hover,:focus-within) .message-actions{opacity:1;pointer-events:auto}
