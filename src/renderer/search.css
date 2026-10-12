@@ -69,11 +69,12 @@
 .search-ai-answer li{padding-left:2px;margin:3px 0}
 .search-ai-answer blockquote{margin:12px 0;padding:2px 0 2px 12px;border-left:2px solid var(--line);color:var(--muted)}
 .search-ai-answer a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
-.search-ai-answer :not(pre)>code{padding:2px 5px;border-radius:4px;background:var(--soft);font-size:.92em}
+.search-ai-answer :is(pre,code){font-family:Consolas,'Cascadia Code',monospace}
+.search-ai-answer :not(pre)>code{padding:1px 4px;border-radius:4px;background:var(--soft);font-size:.95em}
 .search-ai-answer .chat-code{margin:14px 0;border:1px solid var(--line);border-radius:10px;background:var(--soft);overflow:hidden}
 .search-ai-answer .chat-code-heading{display:flex;align-items:center;justify-content:space-between;min-height:32px;padding:4px 8px 4px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px}
 .search-ai-answer .chat-code-heading .icon-button{width:25px;height:25px;min-height:25px;padding:5px}
-.search-ai-answer .chat-code pre{margin:0;padding:12px;overflow:auto;background:transparent;font-size:12px;line-height:1.65;white-space:pre}
+.search-ai-answer .chat-code pre{margin:0;padding:12px 14px 14px;overflow:auto;background:transparent;font-size:12px;line-height:1.7;white-space:pre}
 .search-ai-answer .syntax-keyword{color:#9550a0}.search-ai-answer .syntax-string{color:#52805a}.search-ai-answer .syntax-number{color:#986326}.search-ai-answer .syntax-comment{color:#929292}.search-ai-answer .syntax-property{color:#3b779e}.search-ai-answer .syntax-type{color:#267e82}.search-ai-answer .syntax-function{color:#927329}
 [data-theme=dark] .search-ai-answer .syntax-keyword{color:#c992d5}[data-theme=dark] .search-ai-answer .syntax-string{color:#a1bc8c}[data-theme=dark] .search-ai-answer .syntax-number{color:#d6ad7b}[data-theme=dark] .search-ai-answer .syntax-property{color:#8eb9d5}[data-theme=dark] .search-ai-answer .syntax-type{color:#80c9c0}[data-theme=dark] .search-ai-answer .syntax-function{color:#d5c28a}
 .search-ai-answer .chat-table{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:auto}
