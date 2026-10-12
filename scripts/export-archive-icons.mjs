@@ -3,7 +3,7 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chromium} from '@playwright/test';
 
-// Original One document/zipper artwork. Bandizip is a design reference only;
+// Original One black format-badge artwork. Bandizip is a design reference only;
 // none of its images or other resources are included in these files.
 export const formats=[
  ['archive','ARC','#203329'],['zip','ZIP','#3376BB'],['7z','7Z','#338267'],
@@ -23,27 +23,21 @@ export const sizes=[16,20,24,32,40,48,64,96,128,256];
 const glyphs={A:['010','101','111','101','101'],R:['110','101','110','101','101'],C:['011','100','100','100','011'],Z:['111','001','010','100','111'],I:['111','010','010','010','111'],P:['110','101','110','100','100'],'7':['111','001','010','010','010'],'0':['111','101','101','101','111'],'1':['010','110','010','010','111'],'2':['110','001','010','100','111'],T:['111','010','010','010','010'],G:['011','100','101','101','011'],X:['101','101','010','101','101'],B:['110','101','110','101','110'],H:['101','101','111','101','101'],L:['100','100','100','100','111'],M:['101','111','111','101','101'],S:['011','100','010','001','110'],W:['101','101','111','111','101'],D:['110','101','101','101','110'],U:['101','101','101','101','111'],F:['111','100','110','100','100'],Q:['010','101','101','111','011'],E:['111','100','110','100','111'],J:['001','001','001','101','010'],K:['101','101','110','101','101'],N:['101','111','111','111','101']};
 glyphs.O=['010','101','101','101','010'];
 function pixelLabel(label,size){
- const text=label.slice(0,3),unit=16,start=Math.round((256-(text.length*4-1)*unit)/32)*16;
+ const small=size<=20,text=small?label.slice(0,3):label;
+ const unit=small?16:text.length===1?20:text.length===2?14:text.length===3?11:text.length===4?9:7;
+ const start=small?Math.round((256-(text.length*4-1)*unit)/32)*16:(256-(text.length*4-1)*unit)/2;
+ const top=small?96:(256-5*unit)/2;
  const snap=value=>Math.round(value*size/256)*256/size;
- return [...text].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>{
+ return [...text].flatMap((letter,i)=>(letter==='P'&&!small?['111','101','111','100','100']:glyphs[letter]).flatMap((row,y)=>[...row].map((pixel,x)=>{
   if(pixel!=='1')return '';
-  const x0=snap(start+(i*4+x)*unit),y0=snap(96+y*unit);
-  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(96+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
+  const x0=snap(start+(i*4+x)*unit),y0=snap(top+y*unit);
+  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(top+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
  }))).join('');
 }
 export function artwork(label,color,size=256){
  const small=size<=20;
- if(small){
-  const edge=256/size; // Remove the half-pixel halo around 16/20px Explorer icons.
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${pixelLabel(label,size)}</svg>`;
- }
- const zip=/^(ZIP|ZIPX|JAR|WAR|APK|IPA|XPI)$/.test(label),seven=/^(7Z|ZPAQ|001)$/.test(label),disc=/^(ISO|IMG|ISZ|UDF|WIM|BIN|I00)$/.test(label),stack=/^(RAR|R00|ALZ|EGG|ACE|ARJ|LHA|LZH|PMA)$/.test(label);
- const motif=zip?`<rect x="97" y="48" width="62" height="94" rx="14" fill="none" stroke="${color}" stroke-width="12"/>${Array.from({length:5},(_,i)=>`<path d="M${i%2?128:110} ${63+i*15}h18" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>`).join('')}<rect x="118" y="122" width="20" height="28" rx="5" fill="#FFFFFF"/>`:
-  seven?`<path d="M78 60h96l-17 24H95zm13 34h83l-17 24H74zm-13 34h96l-17 24H95z" fill="${color}" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>`:
-  disc?`<circle cx="128" cy="100" r="51" fill="none" stroke="${color}" stroke-width="15"/><circle cx="128" cy="100" r="15" fill="none" stroke="#FFFFFF" stroke-width="9"/><path d="M128 49v22m0 58v22" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>`:
-  stack?`<rect x="77" y="55" width="102" height="26" rx="7" fill="${color}"/><rect x="69" y="87" width="118" height="26" rx="7" fill="#FFFFFF"/><rect x="77" y="119" width="102" height="26" rx="7" fill="${color}"/>`:
-  `<path d="M75 81h106v67H75z" fill="none" stroke="${color}" stroke-width="12" stroke-linejoin="round"/><path d="m75 81 27-29h52l27 29m-53-29v54m-53 0h106" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>`;
- return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="12" y="12" width="232" height="232" rx="48" fill="#203329"/><circle cx="49" cy="49" r="12" fill="none" stroke="#FFFFFF" stroke-width="7"/>${motif}<path d="M48 164h160" stroke="${color}" stroke-width="5" stroke-linecap="round"/><text x="128" y="222" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="${label.length>4?31:label.length>3?39:51}" font-weight="800" letter-spacing="1" fill="#FFFFFF">${label}</text></svg>`;
+ const edge=small?256/size:256*Math.max(1,Math.round(size/32))/size;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${pixelLabel(label,size)}</svg>`;
 }
 function ico(images){
  const header=Buffer.alloc(6+images.length*16);header.writeUInt16LE(1,2);header.writeUInt16LE(images.length,4);let offset=header.length;
