@@ -23,21 +23,20 @@ export const sizes=[16,20,24,32,40,48,64,96,128,256];
 const glyphs={A:['010','101','111','101','101'],R:['110','101','110','101','101'],C:['011','100','100','100','011'],Z:['111','001','010','100','111'],I:['111','010','010','010','111'],P:['110','101','110','100','100'],'7':['111','001','010','010','010'],'0':['111','101','101','101','111'],'1':['010','110','010','010','111'],'2':['110','001','010','100','111'],T:['111','010','010','010','010'],G:['011','100','101','101','011'],X:['101','101','010','101','101'],B:['110','101','110','101','110'],H:['101','101','111','101','101'],L:['100','100','100','100','111'],M:['101','111','111','101','101'],S:['011','100','010','001','110'],W:['101','101','111','111','101'],D:['110','101','101','101','110'],U:['101','101','101','101','111'],F:['111','100','110','100','100'],Q:['010','101','101','111','011'],E:['111','100','110','100','111'],J:['001','001','001','101','010'],K:['101','101','110','101','101'],N:['101','111','111','111','101']};
 glyphs.O=['010','101','101','101','010'];
 function pixelLabel(label,size){
- const small=size<=20,text=small?label.slice(0,3):label;
- const unit=small?16:text.length===1?20:text.length===2?14:text.length===3?11:text.length===4?9:7;
- const start=small?Math.round((256-(text.length*4-1)*unit)/32)*16:(256-(text.length*4-1)*unit)/2;
- const top=small?96:(256-5*unit)/2;
+ const text=label.slice(0,3),unit=16,start=Math.round((256-(text.length*4-1)*unit)/32)*16;
  const snap=value=>Math.round(value*size/256)*256/size;
- return [...text].flatMap((letter,i)=>(letter==='P'&&!small?['111','101','111','100','100']:glyphs[letter]).flatMap((row,y)=>[...row].map((pixel,x)=>{
+ return [...text].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>{
   if(pixel!=='1')return '';
-  const x0=snap(start+(i*4+x)*unit),y0=snap(top+y*unit);
-  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(top+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
+  const x0=snap(start+(i*4+x)*unit),y0=snap(96+y*unit);
+  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(96+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
  }))).join('');
 }
 export function artwork(label,color,size=256){
  const small=size<=20;
  const edge=small?256/size:256*Math.max(1,Math.round(size/32))/size;
- return `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${pixelLabel(label,size)}</svg>`;
+ const fontSize=Math.round((size===24?1.1:1)*(label.length===1?104:label.length===2?94:label.length===3?80:label.length===4?66:54));
+ const lettering=small?pixelLabel(label,size):`<text x="128" y="160" text-anchor="middle" font-family="Arial,Segoe UI,sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="1" fill="#FFFFFF">${label}</text>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="${small?256:size}" height="${small?256:size}" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${lettering}</svg>`;
 }
 function ico(images){
  const header=Buffer.alloc(6+images.length*16);header.writeUInt16LE(1,2);header.writeUInt16LE(images.length,4);let offset=header.length;
