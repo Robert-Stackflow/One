@@ -25,18 +25,23 @@ glyphs.O=['010','101','101','101','010'];
 function pixelLabel(label,size){
  const text=label.slice(0,3),unit=16,start=Math.round((256-(text.length*4-1)*unit)/32)*16;
  const snap=value=>Math.round(value*size/256)*256/size;
- return [...text].flatMap((letter,i)=>glyphs[letter].flatMap((row,y)=>[...row].map((pixel,x)=>{
+ return [...text].flatMap((letter,i)=>{
+  // Six rows keep the bowl of P readable in Explorer's smallest icon frames.
+  const rows=letter==='P'?['111','101','101','111','100','100']:glyphs[letter].flatMap((row,y)=>y===2?[row,row]:[row]);
+  return rows.flatMap((row,y)=>[...row].map((pixel,x)=>{
   if(pixel!=='1')return '';
-  const x0=snap(start+(i*4+x)*unit),y0=snap(96+y*unit);
-  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(96+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
- }))).join('');
+  const x0=snap(start+(i*4+x)*unit),y0=snap(80+y*unit);
+  return `<rect x="${x0}" y="${y0}" width="${snap(start+(i*4+x+1)*unit)-x0}" height="${snap(80+(y+1)*unit)-y0}" fill="#FFFFFF"/>`;
+  }));
+ }).join('');
 }
 export function artwork(label,color,size=256){
  const small=size<=20;
  const edge=small?256/size:256*Math.max(1,Math.round(size/32))/size;
- const fontSize=Math.round((size===24?1.1:1)*(label.length===1?104:label.length===2?94:label.length===3?80:label.length===4?66:54));
- const lettering=small?pixelLabel(label,size):`<text x="128" y="160" text-anchor="middle" font-family="Arial,Segoe UI,sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="1" fill="#FFFFFF">${label}</text>`;
- return `<svg xmlns="http://www.w3.org/2000/svg" width="${small?256:size}" height="${small?256:size}" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${lettering}</svg>`;
+ const text=small?label.slice(0,3):label;
+ const fontSize=Math.round((size===24?1.1:1)*(text.length===1?104:text.length===2?94:text.length===3?80:text.length===4?66:54));
+ const lettering=small?pixelLabel(label,size):`<text x="128" y="160" text-anchor="middle" font-family="Arial,Segoe UI,sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="1" fill="#FFFFFF">${text}</text>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256"><title>One ${label} archive</title><rect x="${edge}" y="${edge}" width="${256-2*edge}" height="${256-2*edge}" rx="36" fill="#203329"/><rect x="32" y="32" width="192" height="16" rx="8" fill="${color}"/>${lettering}</svg>`;
 }
 function ico(images){
  const header=Buffer.alloc(6+images.length*16);header.writeUInt16LE(1,2);header.writeUInt16LE(images.length,4);let offset=header.length;
