@@ -4,6 +4,7 @@ import './build-theme.mjs';
 import './build-location.mjs';
 import './build-display.mjs';
 import './build-preview.mjs';
+import './build-capture.mjs';
 import {promisify} from 'node:util';
 import {mkdir,writeFile,copyFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
