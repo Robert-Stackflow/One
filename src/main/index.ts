@@ -47,6 +47,7 @@ import {SearchBridge} from './search-bridge';
 import {ShortcutCapture} from './shortcut-capture';
 import {locateHotkeyOwner,cancelHotkeyOwner} from './hotkey-owner';
 import type {SearchContext} from '../shared/search';
+import {builtinSearchEngines,searchEngineUrl} from '../shared/search-shortcuts';
 import {AwakeService} from './awake';
 import {TopmostService} from './topmost';
 import {PortService} from './port-service';
@@ -757,6 +758,24 @@ function registerIPC() {
   handle('dialog-bar-settings',()=>{showMain();main.webContents.send('one:search-settings','entry');},['dialog-bar']);
   handle('search-context',()=>searchContext,['search']);handle('search-ready',(event)=>{const window=BrowserWindow.fromWebContents(event.sender);if(window){searchReadyWindows.add(event.sender.id);if(window===searchWindow)replaySearchInput(window,searchRevision);}},['search']);
   handle('search-choose',(_e,value)=>chooseSearch(value),['search']);
+  handle('search-web',async(_event,id,query)=>{
+    if(typeof id!=='string'||typeof query!=='string'||!query.trim()||query.length>2000)throw Error('请输入搜索内容');
+    const engine=[...builtinSearchEngines,...settings.search.webEngines].find(item=>item.id===id);
+    if(!engine)throw Error('搜索引擎不存在');
+    await shell.openExternal(searchEngineUrl(engine.url,query.trim()));
+  },['search']);
+  handle('search-web-icon',async(_event,template)=>{
+    const origin=new URL(searchEngineUrl(template,'test')).origin;
+    try{
+      const response=await fetch(origin+'/favicon.ico',{signal:AbortSignal.timeout(4000)});
+      if(!response.ok||new URL(response.url).origin!==origin||Number(response.headers.get('content-length')||0)>262144)return '';
+      const bytes=Buffer.from(await response.arrayBuffer());
+      if(bytes.length>262144||bytes.length<8)return '';
+      const mime=response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+      if(!mime||!['image/png','image/jpeg','image/gif','image/webp','image/x-icon','image/vnd.microsoft.icon'].includes(mime))return '';
+      return `data:${mime};base64,${bytes.toString('base64')}`;
+    }catch{return '';}
+  },['search','main']);
   handle('search-action',async(_event,id)=>{
     const pages=['home','tools','archive','text','search','input','disk','locksmith','system','hardware','ports','services','preview','color','settings'];
     if(typeof id!=='string'||!['preview','diff','rename','locksmith','disk','integrity','tasks',...pages.map(page=>'page:'+page)].includes(id))throw Error('搜索动作无效');

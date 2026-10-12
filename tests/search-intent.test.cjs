@@ -21,3 +21,22 @@ test('One commands match Chinese, full pinyin, initials and a small pinyin typo'
  assert.equal(commandMatches('wenjiansousuo',6,{pinyin:false,fuzzy:true}).length,0);
  assert.equal(commandMatches('wenjainsousuo',6,{pinyin:true,fuzzy:false}).length,0);
 });
+test('shortcut activation requires a space and extension unions normalize each member',async()=>{
+ const {parseSearchShortcut,validateSearchEngines,searchEngineUrl}=await load('src/shared/search-shortcuts.ts');
+ const custom=validateSearchEngines([{id:'custom',shortcut:'site',name:'站内搜索',url:'https://example.com/search?q={query}'}]);
+ assert.equal(parseSearchShortcut('g'),null);
+ assert.equal(parseSearchShortcut('g ',custom)?.kind,'engine');
+ assert.equal(parseSearchShortcut('g ',custom)?.placeholder,'使用 Google 搜索网页');
+ assert.equal(parseSearchShortcut('g ',custom)?.showFilters,false);
+ assert.equal(parseSearchShortcut('site 中文',custom)?.query,'中文');
+ assert.deepEqual(parseSearchShortcut('.zip|.7z ',custom)?.extensions,['zip','7z']);
+ assert.equal(parseSearchShortcut('.zip|.7z ',custom)?.placeholder,'搜索 .zip、.7z 文件');
+ assert.equal(parseSearchShortcut('.zip|.7z ',custom)?.showFilters,true);
+ assert.deepEqual(parseSearchShortcut('.zip|7z 报告',custom)?.extensions,['zip','7z']);
+ assert.equal(parseSearchShortcut('.zip| ',custom),null);
+ assert.equal(parseSearchShortcut('> ',custom)?.kind,'one');
+ assert.equal(parseSearchShortcut('> ',custom)?.showFilters,false);
+ assert.equal(searchEngineUrl(custom[0].url,'a b'),'https://example.com/search?q=a%20b');
+ assert.throws(()=>validateSearchEngines([{id:'bad',shortcut:'g',name:'冲突',url:'https://example.com/?q={query}'}]));
+ assert.throws(()=>searchEngineUrl('http://example.com/?q={query}','a'));
+});

@@ -1,0 +1,72 @@
+const {_electron:electron,expect}=require('@playwright/test');
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+
+async function run(){
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'one-search-shortcuts-'));
+ const profile=path.join(root,'profile'),files=path.join(root,'files');
+ await fs.mkdir(profile);await fs.mkdir(files);
+ for(const name of ['report.zip','report.7z','report.txt'])await fs.writeFile(path.join(files,name),'sample');
+ await fs.mkdir(path.join(files,'.zip'));
+ const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+ const app=await electron.launch({args:[path.resolve('.')],env});
+ const errors=[];
+ try{
+  const main=await app.firstWindow();main.on('pageerror',error=>errors.push(String(error)));
+  await main.waitForSelector('[data-page=search]');
+  await main.evaluate(async files=>{const settings=await window.one.settings();settings.search.roots=[files];settings.search.shortcut='';settings.search.programShortcut='';await window.one.saveSettings(settings);},files);
+  await expect.poll(()=>main.evaluate(async()=>(await window.one.searchState()).count),{timeout:20000}).toBeGreaterThanOrEqual(4);
+  await main.evaluate(()=>window.one.showSearch());
+  await expect.poll(()=>app.windows().some(window=>/[?&]view=search(?:$|&)/.test(window.url())&&!window.url().includes('embedded')),{timeout:15000}).toBe(true);
+  const search=app.windows().find(window=>/[?&]view=search(?:$|&)/.test(window.url())&&!window.url().includes('embedded'));
+  search.on('pageerror',error=>errors.push(String(error)));
+  const input=search.locator('#file-query');
+  const activate=async value=>input.evaluate((element,next)=>{element.value=next;element.dispatchEvent(new Event('input',{bubbles:true}));},value);
+  await activate('g ');
+  await expect(search.locator('#search-mode-tag strong')).toHaveText('Google');
+  await expect(input).toHaveValue('');
+  await expect(input).toHaveAttribute('placeholder','使用 Google 搜索网页');
+  await expect(search.locator('#search-filters')).toBeHidden();
+  await expect(search.locator('[data-filter="shortcut:"]')).toHaveCount(0);
+  await input.fill('sample words');await expect(search.locator('[data-search-web]')).toBeEnabled();
+  if(process.env.ONE_TEST_SCREENSHOTS){await fs.mkdir('work/current/search-shortcuts',{recursive:true});await expect(search.locator('#search-mode-tag img')).toBeVisible({timeout:8000});await search.screenshot({path:'work/current/search-shortcuts/web.png'});}
+  await search.locator('[data-mode-exit]').click();
+  await activate('> ');
+  await expect(input).toHaveAttribute('placeholder','搜索 One 的功能和操作');
+  await expect(search.locator('#search-filters')).toBeHidden();
+  await search.locator('[data-mode-exit]').click();
+  await activate('.zip|7z ');
+  await expect(search.locator('#search-mode-tag strong')).toHaveText('.zip | .7z');
+  await expect(input).toHaveAttribute('placeholder','搜索 .zip、.7z 文件');
+  await expect(search.locator('#search-filters')).toBeVisible();
+  await expect(search.locator('[data-filter="app:"]')).toBeHidden();
+  await expect(search.locator('#search-mode-tag .search-mode-icon .icon')).toBeVisible();
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['report.7z','report.zip']);
+  await search.locator('[data-filter="archive:"]').click();
+  await expect(search.locator('#search-mode-tag strong')).toHaveText('.zip | .7z');
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['report.7z','report.zip']);
+  if(process.env.ONE_TEST_SCREENSHOTS)await search.screenshot({path:'work/current/search-shortcuts/extensions.png'});
+  await input.fill('report');await expect.poll(()=>search.locator('.result-name strong').count()).toBe(2);
+  await search.waitForTimeout(180);
+  await expect(search.locator('#search-summary')).toHaveText(/^2 项 · \d+ ms$/);
+  const flicker=search.evaluate(()=>new Promise(resolve=>{const status=document.querySelector('#search-summary'),changes=[];const observer=new MutationObserver(()=>{changes.push(status.textContent);});observer.observe(status,{childList:true,characterData:true,subtree:true});setTimeout(()=>{observer.disconnect();resolve(changes);},1700);}));
+  await main.evaluate(()=>window.one.rebuildSearch());
+  const changes=await flicker;assert.equal(changes.some(text=>text.includes('正在搜索')),false,'后台索引刷新不应使状态栏反复显示正在搜索：'+JSON.stringify(changes));
+  await main.locator('[data-page=search]').click();
+  await main.locator('#search-tab-shortcuts').click();
+  await expect(main.locator('[data-search-panel="shortcuts"]')).toBeVisible();
+  await main.locator('#search-web-engine-add').click();
+  await main.locator('#engine-name').fill('Example');
+  await main.locator('#engine-shortcut').fill('ex');
+  await main.locator('#engine-url').fill('https://example.com/search?q={query}');
+  await main.locator('[data-engine-save]').click();
+  await expect(main.locator('#search-engine-editor')).toBeHidden();
+  await expect(main.locator('[data-web-edit]')).toBeVisible();
+  if(process.env.ONE_TEST_SCREENSHOTS)await main.screenshot({path:'work/current/search-shortcuts/main-tab.png'});
+  await main.evaluate(()=>window.one.showSearch());
+  await activate('ex ');
+  await expect(search.locator('#search-mode-tag strong')).toHaveText('Example');
+  assert.equal((await main.evaluate(async()=>(await window.one.settings()).search.webEngines))[0].shortcut,'ex');
+  assert.deepEqual(errors,[]);
+ }finally{await app.close().catch(()=>{});}
+}
+run().catch(error=>{console.error(error);process.exitCode=1;});
