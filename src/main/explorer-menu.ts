@@ -22,18 +22,18 @@ export async function repairExplorerMenu(){
  const marker=join(root,'registration-hash.txt');
  let previous='';try{previous=(await readFile(marker,'utf8')).trim();}catch{}
  if(previous===stamp&&state.classic)return;
- const repaired=await setExplorerMenu(state);
+ const repaired=await setExplorerMenu(state,true);
  if(repaired.error||!repaired.classic)throw Error(repaired.error||'系统右键菜单注册未完成');
  await writeFile(marker,stamp);
 }
-export function setExplorerMenu(value:unknown):Promise<ExplorerMenuState>{
+export function setExplorerMenu(value:unknown,force=false):Promise<ExplorerMenuState>{
  if(!value||typeof value!=='object'||typeof(value as any).locksmith!=='boolean'||typeof(value as any).rename!=='boolean')return Promise.reject(Error('右键菜单设置无效'));
  if(pending)return Promise.reject(Error('正在更新右键菜单'));
  const input=value as Partial<ExplorerMenuState>;
  if(input.archiveCreate!==undefined&&typeof input.archiveCreate!=='boolean'||input.archiveExtract!==undefined&&typeof input.archiveExtract!=='boolean')return Promise.reject(Error('右键菜单设置无效'));
- pending=install({locksmith:input.locksmith!,rename:input.rename!,archiveCreate:input.archiveCreate??false,archiveExtract:input.archiveExtract??false}).finally(()=>pending=undefined);return pending;
+ pending=install({locksmith:input.locksmith!,rename:input.rename!,archiveCreate:input.archiveCreate??false,archiveExtract:input.archiveExtract??false},force).finally(()=>pending=undefined);return pending;
 }
-async function install(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean}){
+async function install(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean},force:boolean){
  const root=join(app.getPath('userData'),'explorer-menu');await mkdir(root,{recursive:true});
  const menus=[
   {tool:'locksmith',key:'locksmith',packageName:'One.ExplorerMenu.Locksmith',title:'文件占用',verb:'OneLocks',clsid:'49A8359C-85B9-4E7A-905E-6A724911750A'},
@@ -56,5 +56,5 @@ async function install(value:{locksmith:boolean;rename:boolean;archiveCreate:boo
    await writeFile(join(menu.root,'AppxManifest.template.xml'),manifest);menu.manifestHash=createHash('sha256').update(manifest).digest('hex');
   }
  }
- const config=join(root,'config.json');await writeFile(config,JSON.stringify({menus:configured,root,executable:process.execPath,appPath:app.isPackaged?'':resolve(app.getAppPath()),profile:app.getPath('userData')}));return run('set',config);
+ const config=join(root,'config.json');await writeFile(config,JSON.stringify({menus:configured,root,force,executable:process.execPath,appPath:app.isPackaged?'':resolve(app.getAppPath()),profile:app.getPath('userData')}));return run('set',config);
 }

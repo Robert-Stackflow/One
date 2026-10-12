@@ -728,7 +728,7 @@ function registerIPC() {
   handle('search-context',()=>searchContext,['search']);handle('search-ready',(event)=>{const window=BrowserWindow.fromWebContents(event.sender);if(window){searchReadyWindows.add(event.sender.id);if(window===searchWindow)replaySearchInput(window,searchRevision);}},['search']);
   handle('search-choose',(_e,value)=>chooseSearch(value),['search']);
   handle('search-action',async(_event,id)=>{
-    const pages=['home','tools','archive','text','search','input','disk','locksmith','system','hardware','ports','preview','color','settings'];
+    const pages=['home','tools','archive','text','search','input','disk','locksmith','system','hardware','ports','services','preview','color','settings'];
     if(typeof id!=='string'||!['preview','diff','rename','locksmith','disk','integrity','tasks',...pages.map(page=>'page:'+page)].includes(id))throw Error('搜索动作无效');
     const selected=(searchContext.selected||[]).slice(0,32).map(filePath),folder=searchContext.currentFolder;
     searchWindow?.hide();showMain();

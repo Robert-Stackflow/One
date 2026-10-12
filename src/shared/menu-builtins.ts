@@ -1,4 +1,4 @@
-export type OneMenuPage='home'|'tools'|'archive'|'text'|'disk'|'system'|'hardware'|'locksmith'|'settings'|'preview'|'barcode'|'developer'|'images';
+export type OneMenuPage='home'|'tools'|'archive'|'text'|'disk'|'system'|'ports'|'services'|'hardware'|'locksmith'|'settings'|'preview'|'barcode'|'developer'|'images';
 export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'|'archive'|'barcode'>}|{page:'barcode';path?:string}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]}|{page:'archive';action?:import('./archive-actions').ArchiveOpenAction;paths?:string[]};
 export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'|'screen-ruler'}
 export const menuBuiltins:readonly MenuBuiltin[]=[
