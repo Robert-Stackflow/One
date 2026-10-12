@@ -48,6 +48,14 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   capture?:import('./capture/capture-session').CaptureAPI;
   scrollCapture?:import('./capture/scroll-capture').ScrollAPI;
   recognition?:import('./recognition/ocr').OCRAPI;
+  recordingToolbar?:import('./recording/recording-toolbar').RecordingToolbarAPI;
+  recordingInput?:import('./recording/recording-input-overlay').InputOverlayAPI;
+  recordingCamera?:import('./recording/recording-camera-overlay').CameraOverlayAPI;
+  recordingAnnotation?:import('./recording/recording-annotations').RecordingAnnotationAPI;
+  recordingRegion?:import('./recording/recording-region').RecordingRegionAPI;
+  recordingCountdown?:import('./recording/recording-countdown').RecordingCountdownAPI;
+  recordingPlayer?:import('./recording/recording-playback').RecordingPlayerAPI;
+  recordingExport?:import('./recording/recording-export').RecordingExportRendererAPI;
   searchSuggest(engineId:string,query:string):Promise<string[]>;
   aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
   aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;

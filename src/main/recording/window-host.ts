@@ -9,9 +9,12 @@ export type RecordingWindowRole =
   | 'recording-camera-overlay'
   | 'recording-annotation-overlay'
   | 'recording-region-overlay'
+  | 'recording-region-outline'
   | 'recording-countdown';
 
-/** One chooses the role's preload, permissions and window policy. The caller loads its own route. */
+/** One chooses the role's preload, permissions and window policy. The caller loads its own route.
+ * recording-region-outline is display-only and must have no preload or IPC API.
+ */
 export interface RecordingWindowHost {
   createWindow(role: RecordingWindowRole, options: Omit<BrowserWindowConstructorOptions, 'webPreferences'>): BrowserWindow;
   register(name: string, handler: (event: IpcMainInvokeEvent, ...args: any[]) => unknown, roles: readonly RecordingWindowRole[]): void;
