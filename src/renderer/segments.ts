@@ -1,12 +1,17 @@
+import {onRemoval} from './dom-lifecycle';
+export interface SegmentController {refresh():void;dispose():void}
+const controllers=new WeakMap<HTMLElement,SegmentController>();
 /** A shared sliding indicator and roving keyboard focus for segmented controls. */
-export function setupSegments(){
- const root=document.querySelector<HTMLElement>('#app')!;
+export function setupSegments(root:HTMLElement|null=document.querySelector<HTMLElement>('#app')):SegmentController{
+ if(!root)return{refresh(){},dispose(){}};
+ const existing=controllers.get(root);if(existing)return existing;
+ const host=root;
  const groups=new Map<HTMLElement,HTMLButtonElement[]>(),observers=new Map<HTMLElement,MutationObserver>(),dirty=new Set<HTMLElement>();
- let frame=0;
+ let frame=0,disposed=false;
  const buttons=(group:HTMLElement)=>Array.from(group.children).filter((node):node is HTMLButtonElement=>node instanceof HTMLButtonElement);
  const eligible=(button:HTMLButtonElement)=>!button.disabled&&!button.hidden;
  const selected=(items:HTMLButtonElement[])=>items.find(b=>eligible(b)&&(b.classList.contains('selected')||b.getAttribute('aria-selected')==='true'||b.getAttribute('aria-pressed')==='true'))||items.find(eligible);
- const schedule=(group:HTMLElement)=>{dirty.add(group);if(!frame)frame=requestAnimationFrame(flush);};
+ const schedule=(group:HTMLElement)=>{if(disposed)return;dirty.add(group);if(!frame)frame=requestAnimationFrame(flush);};
  const resize=new ResizeObserver(entries=>{for(const {target}of entries){const group=target instanceof HTMLElement&&target.classList.contains('tabs')?target:target.parentElement;if(group instanceof HTMLElement&&groups.has(group))schedule(group);}});
  const register=(group:HTMLElement)=>{
   const previous=groups.get(group)||[],items=buttons(group);
@@ -29,7 +34,7 @@ export function setupSegments(){
   // Read every affected control before writing any styles, avoiding layout thrashing.
   const updates: {group:HTMLElement;items:HTMLButtonElement[];button:HTMLButtonElement|undefined;geometry:number[]|undefined}[]=[];
   for(const group of dirty){
-   if(!group.isConnected){resize.unobserve(group);for(const button of groups.get(group)||[])resize.unobserve(button);observers.get(group)?.disconnect();observers.delete(group);groups.delete(group);continue;}
+   if(!group.isConnected||!host.contains(group)){resize.unobserve(group);for(const button of groups.get(group)||[])resize.unobserve(button);observers.get(group)?.disconnect();observers.delete(group);groups.delete(group);continue;}
    if(!group.classList.contains('tabs')){group.classList.remove('segment-ready');continue;}
    const items=groups.get(group)||[],button=selected(items);
    updates.push({group,items,button,geometry:button&&group.offsetWidth?[button.offsetLeft,button.offsetTop,button.offsetWidth,button.offsetHeight]:undefined});
@@ -44,15 +49,16 @@ export function setupSegments(){
  }
  // Long result lists change classes frequently. Watch their child additions for
  // new controls, but leave selection attributes to each registered segment.
- new MutationObserver(records=>{
+ const discovery=new MutationObserver(records=>{
   for(const record of records){
    const node=record.target;if(!(node instanceof HTMLElement))continue;
    if(node.matches('.tabs'))register(node);
    for(const added of record.addedNodes)discover(added);
-   if(record.removedNodes.length)for(const group of groups.keys())if(!group.isConnected)schedule(group);
+   if(record.removedNodes.length)for(const group of groups.keys())if(!host.contains(group))schedule(group);
   }
- }).observe(root,{subtree:true,childList:true});
- document.addEventListener('keydown',event=>{
+ });
+ discovery.observe(host,{subtree:true,childList:true});
+ const keydown=(event:KeyboardEvent)=>{
   if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)||!(event.target instanceof HTMLButtonElement)||event.altKey||event.ctrlKey||event.metaKey)return;
   const group=event.target.parentElement;if(!group?.matches('.tabs'))return;
   const items=buttons(group).filter(eligible),at=items.indexOf(event.target);if(at<0||!items.length)return;
@@ -62,8 +68,17 @@ export function setupSegments(){
   const left=button.offsetLeft,right=left+button.offsetWidth;
   if(left<group.scrollLeft)group.scrollLeft=left;
   else if(right>group.scrollLeft+group.clientWidth)group.scrollLeft=right-group.clientWidth;
- });
- const refresh=()=>{for(const group of groups.keys())schedule(group);};
+ };
+ host.addEventListener('keydown',keydown);
+ const refresh=()=>{if(!disposed)for(const group of groups.keys())schedule(group);};
+ let releaseRemoval:()=>void=()=>{};
+ const controller:SegmentController={refresh,dispose(){
+  if(disposed)return;disposed=true;cancelAnimationFrame(frame);frame=0;
+  discovery.disconnect();resize.disconnect();for(const observer of observers.values())observer.disconnect();
+  observers.clear();groups.clear();dirty.clear();host.removeEventListener('keydown',keydown);
+  document.fonts.removeEventListener('loadingdone',refresh);releaseRemoval();controllers.delete(host);
+ }};
+ controllers.set(host,controller);releaseRemoval=onRemoval(host,()=>controller.dispose());
  document.fonts.addEventListener('loadingdone',refresh);void document.fonts.ready.then(refresh);
- discover(root);
+ discover(host);return controller;
 }

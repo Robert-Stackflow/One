@@ -1,9 +1,10 @@
+import {onRemoval} from './dom-lifecycle';
 type Side='above'|'below';
 interface Placement {preferred:Side;gap:number;edge?:number}
 
 /** Keep an anchored popover and its arrow inside the viewport. */
 export function positionAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,{preferred,gap,edge=8}:Placement):boolean {
- if(!anchor.isConnected||!popup.isConnected)return false;
+ if(!anchor.isConnected||!popup.isConnected||!anchor.getClientRects().length||getComputedStyle(anchor).visibility==='hidden')return false;
  const box=anchor.getBoundingClientRect();
  if(box.bottom<=0||box.top>=innerHeight||box.right<=0||box.left>=innerWidth)return false;
  const width=popup.offsetWidth,height=popup.offsetHeight;
@@ -21,9 +22,12 @@ export function positionAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,{pr
 /** Reposition on resize or scroll, and release observers when dismissed. */
 export function trackAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,placement:Placement,onDetach:()=>void):()=>void {
  let frame=0,stopped=false;
- const update=()=>{frame=0;if(!stopped&&!positionAnchoredPopover(anchor,popup,placement))onDetach();};
+ const detach=()=>{if(stopped)return;stop();onDetach();};
+ const update=()=>{frame=0;if(!stopped&&!positionAnchoredPopover(anchor,popup,placement))detach();};
  const schedule=()=>{if(!stopped&&!frame)frame=requestAnimationFrame(update);};
  const observer=new ResizeObserver(schedule);observer.observe(anchor);observer.observe(popup);
  window.addEventListener('resize',schedule);document.addEventListener('scroll',schedule,true);
- return()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener('resize',schedule);document.removeEventListener('scroll',schedule,true);};
+ const releaseAnchor=onRemoval(anchor,detach),releasePopup=onRemoval(popup,detach);
+ const stop=()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();releaseAnchor();releasePopup();window.removeEventListener('resize',schedule);document.removeEventListener('scroll',schedule,true);};
+ schedule();return stop;
 }
