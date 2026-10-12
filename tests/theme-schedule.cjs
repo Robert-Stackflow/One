@@ -40,8 +40,9 @@ async function main(){
  bundle();
  const {defaultThemeSchedule,validateThemeSchedule,evaluateThemeSchedule,solarDay}=require(path.join(output,'shared.cjs'));
  const {ThemeScheduleService}=require(path.join(output,'service.cjs'));
- equal(defaultThemeSchedule().enabled,false);equal(defaultThemeSchedule().targets,{one:true,windowsApps:false,windowsSystem:false});
+ equal(defaultThemeSchedule().enabled,false);equal(defaultThemeSchedule().targets,{one:true,windowsApps:false,windowsSystem:false,manageStartTaskbarAccent:false,startTaskbarAccentLight:false,startTaskbarAccentDark:true,manageTitleBarAccent:false,titleBarAccentLight:false,titleBarAccentDark:true});
  equal(validateThemeSchedule(undefined),defaultThemeSchedule());
+ equal(validateThemeSchedule({...defaultThemeSchedule(),targets:{one:true,windowsApps:false,windowsSystem:false}}).targets,defaultThemeSchedule().targets,'Older settings keep Windows accent controls unmanaged');
  for(const patch of [{lightAt:'25:00'},{darkAt:'07:00'},{latitude:100,longitude:0},{latitude:0},{latitude:null,longitude:0},{sunsetOffset:181},{source:'bad'},{targets:{one:false,windowsApps:false,windowsSystem:false,other:true}},{shortcut:'A'},{shortcut:'Ctrl+Something'}]){
   assert.throws(()=>validateThemeSchedule({...defaultThemeSchedule(),...patch}));checks++;
  }
@@ -89,7 +90,7 @@ async function main(){
   await service.configure({...p,source:'sun'});equal(service.state().phase,'unavailable');const before=writes.length;await service.sync();equal(writes.length,before,'Missing location does not change the theme');
   await service.manual('dark');equal(current,'dark');
   now=new Date('2026-10-11T08:00:00');applyGate=barrier();const old=service.configure(p);await turn();const latest=service.configure({...p,lightAt:'12:00'});applyGate.resolve();await Promise.all([old,latest]);applyGate=undefined;equal(current,'dark','Latest config wins over an in-flight application');
-  const scoped={...p,targets:{one:false,windowsApps:true,windowsSystem:false}};await service.configure(scoped);equal(writes.at(-1).targets,{one:false,windowsApps:true,windowsSystem:false});scoped.targets.windowsSystem=true;await service.sync();equal(writes.at(-1).targets.windowsSystem,false,'Caller mutation cannot widen the write scope');
+  const scoped={...p,targets:{...p.targets,one:false,windowsApps:true}};await service.configure(scoped);equal(writes.at(-1).targets,scoped.targets);scoped.targets.windowsSystem=true;await service.sync();equal(writes.at(-1).targets.windowsSystem,false,'Caller mutation cannot widen the write scope');
   const beforeError=writes.length;readNight=async()=>{throw Error('Night state unavailable');};await service.configure({...p,source:'night-light'});equal(service.state().phase,'unavailable');equal(writes.length,beforeError);await service.manual('dark');equal(current,'dark','Read exceptions cannot block explicit manual switching');
   await service.resumeSchedule();
   readNight=async()=>false;await service.sync();equal(service.state().phase,'automatic');equal(current,'light','Source recovers without restart');

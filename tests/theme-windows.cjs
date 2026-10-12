@@ -37,10 +37,25 @@ async function main(){
  };
  try{
   let state=await bridge.read(signal);eq(state.apps,undefined);eq(state.nightLight,undefined);check(!!state.detail);
-  await bridge.apply('dark',{windowsApps:true,windowsSystem:false},signal);state=await bridge.read(signal);eq(state.apps,'dark');eq(state.system,undefined,'Apps-only does not create the system theme value');
-  await bridge.apply('light',{windowsApps:false,windowsSystem:true},signal);state=await bridge.read(signal);eq(state.apps,'dark');eq(state.system,'light','System-only leaves apps untouched');
-  await bridge.apply('light',{windowsApps:true,windowsSystem:true},signal);state=await bridge.read(signal);eq([state.apps,state.system],['light','light']);
-  await bridge.apply('dark',{windowsApps:false,windowsSystem:false},signal);state=await bridge.read(signal);eq([state.apps,state.system],['light','light'],'Empty Windows scope is a no-op');
+  const target={windowsApps:false,windowsSystem:false,manageStartTaskbarAccent:false,startTaskbarAccentLight:false,startTaskbarAccentDark:true,manageTitleBarAccent:false,titleBarAccentLight:false,titleBarAccentDark:true};
+  await bridge.apply('dark',{...target,windowsApps:true},signal);state=await bridge.read(signal);eq(state.apps,'dark');eq(state.system,undefined,'Apps-only does not create the system theme value');
+  await bridge.apply('light',{...target,windowsSystem:true},signal);state=await bridge.read(signal);eq(state.apps,'dark');eq(state.system,'light','System-only leaves apps untouched');
+  await bridge.apply('light',{...target,windowsApps:true,windowsSystem:true},signal);state=await bridge.read(signal);eq([state.apps,state.system],['light','light']);
+  await bridge.apply('dark',target,signal);state=await bridge.read(signal);eq([state.apps,state.system],['light','light'],'Empty Windows scope is a no-op');
+  const registryValue=(subkey)=>{const result=cp.spawnSync('reg.exe',['query',root+'\\'+subkey,'/v','ColorPrevalence'],{windowsHide:true,encoding:'utf8'});return result.status===0?Number.parseInt(result.stdout.match(/REG_DWORD\s+0x([0-9a-f]+)/i)?.[1]||'',16):undefined;};
+  eq(registryValue('Personalize'),undefined,'Default does not manage Start/taskbar accent');
+  eq(registryValue('DWM'),undefined,'Default does not manage title bar accent');
+  await bridge.apply('dark',{...target,windowsSystem:true,manageStartTaskbarAccent:true,manageTitleBarAccent:true},signal);
+  eq(registryValue('Personalize'),1,'Dark mode enables Start/taskbar accent');eq(registryValue('DWM'),1,'Dark title bar preference enables accent');
+  await bridge.apply('light',{...target,windowsSystem:true,manageStartTaskbarAccent:true,manageTitleBarAccent:true},signal);
+  eq(registryValue('Personalize'),0,'Light Start/taskbar preference disables accent');eq(registryValue('DWM'),0,'Light title bar preference disables accent');
+  await bridge.apply('light',{...target,windowsSystem:true,manageStartTaskbarAccent:true,startTaskbarAccentLight:true,manageTitleBarAccent:true,titleBarAccentLight:true},signal);
+  eq(registryValue('Personalize'),1,'Light Start/taskbar preference can force accent on');
+  eq(registryValue('DWM'),1,'Light title bar preference can enable accent');
+  await bridge.apply('dark',{...target,windowsSystem:true,manageStartTaskbarAccent:true,startTaskbarAccentDark:false,manageTitleBarAccent:true,titleBarAccentDark:false},signal);
+  eq(registryValue('Personalize'),0,'Dark Start/taskbar preference can disable accent');
+  eq(registryValue('DWM'),0,'Dark title bar preference can disable accent');
+  eq(cp.spawnSync(helper,['apply','light','apps','start-on','--test-id',id],{windowsHide:true}).status,2,'Accent options require system scope');
   const invalid=cp.spawnSync(helper,['apply','invalid','both','--test-id',id],{windowsHide:true,encoding:'utf8'});eq(invalid.status,2);eq(native(['read']).apps,'light');
   for(const [data,expected] of [[envelope(innerOn),true],[envelope(innerOff),false],[Buffer.from('434201000a0201002a06000000','hex'),undefined]]){setData(data);state=await bridge.read(signal);eq(state.nightLight,expected);}
   setData(Buffer.alloc(65537));const bounded=native(['read']);eq(bounded.nightError,234);eq(bounded.nightData,'','Oversized native values never enter JSON');

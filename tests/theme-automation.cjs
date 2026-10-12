@@ -8,7 +8,7 @@ const {defaultThemeSchedule,validateThemeSchedule}=require(path.join(output,'sha
 let checks=0;const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};const ok=(a,m)=>{assert.ok(a,m);checks++;};
 async function main(){
  const legacy=defaultSettings();delete legacy.themeSchedule;eq(validateSettings(legacy).themeSchedule,defaultThemeSchedule(),'Legacy settings default to off');
- const p={...defaultThemeSchedule(),enabled:true,latitude:31.2,longitude:121.5,shortcut:'Ctrl+Alt+T',targets:{one:true,windowsApps:true,windowsSystem:false}};
+ const p={...defaultThemeSchedule(),enabled:true,latitude:31.2,longitude:121.5,shortcut:'Ctrl+Alt+T',targets:{...defaultThemeSchedule().targets,windowsApps:true}};
  const restored=validateSettings(JSON.parse(JSON.stringify(mergeSettings(defaultSettings(),{themeSchedule:p}))));eq(restored.themeSchedule,p,'Settings roundtrip includes every preference');
  for(const key of ['Space','Home','PageDown','ArrowRight']){eq(validateThemeSchedule({...p,shortcut:'Ctrl+Alt+'+key}).shortcut,'Ctrl+Alt+'+key);}
  let baseline=defaultSettings().appearance,now=new Date(2026,9,10,8),windows={apps:'light',system:'dark',nightLight:undefined,detail:'夜间状态尚未初始化'},readError=false,writeError=false,changes=0,reads=0,stalled=false;
@@ -21,7 +21,7 @@ async function main(){
   await service.resume();eq(service.appearance().mode,'system');eq(service.state().phase,'off');
   await service.configure(p);eq(service.appearance().mode,'light');eq(windows.apps,'light');eq(windows.system,'dark','Unselected system interface stays unchanged');
   await service.manual('dark');eq(windows.apps,'dark');eq(service.state().phase,'manual');
-  const windowsOnly={...p,targets:{one:false,windowsApps:true,windowsSystem:false}};
+  const windowsOnly={...p,targets:{...p.targets,one:false}};
   await service.configure(windowsOnly);eq(service.appearance().mode,'system');eq(windows.apps,'dark','Leaving One management preserves the Windows manual theme');eq(service.state().phase,'manual');
   const before=writes.length;await service.configure({...windowsOnly,shortcut:'Ctrl+Alt+Y'});eq(service.state().phase,'manual');eq(writes.length,before,'Changing a hotkey never reapplies Windows themes');
   service.registerShortcut('Ctrl+Alt+Y');eq(service.state().shortcutActive,true);ok(registered.has('Control+Alt+Y'));

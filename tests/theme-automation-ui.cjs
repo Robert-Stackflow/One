@@ -20,7 +20,14 @@ async function main(){
   const shot=async name=>{const clip=await page.evaluate(()=>({x:260,y:55,width:innerWidth-260,height:innerHeight-55}));await page.screenshot({path:path.join(output,name),clip});};
 eq(await page.locator('#theme-enabled').isChecked(),false);eq(await page.locator('#theme-source').getAttribute('role'),'combobox','Uses the existing custom dropdown');
   eq(await page.locator('#theme-schedule select').count(),0,'No native selection control remains');
-  const initial=await page.evaluate(()=>window.one.settings());eq(initial.themeSchedule.targets,{one:true,windowsApps:false,windowsSystem:false});
+  const initial=await page.evaluate(()=>window.one.settings());eq(initial.themeSchedule.targets,{one:true,windowsApps:false,windowsSystem:false,manageStartTaskbarAccent:false,startTaskbarAccentLight:false,startTaskbarAccentDark:true,manageTitleBarAccent:false,titleBarAccentLight:false,titleBarAccentDark:true});
+  await expect(page.locator('#theme-manageStartTaskbarAccent')).toBeDisabled();await expect(page.locator('#theme-manageTitleBarAccent')).toBeDisabled();
+  await page.locator('#theme-windowsSystem').check();await expect(page.locator('#theme-manageStartTaskbarAccent')).toBeEnabled();await expect(page.locator('#theme-manageTitleBarAccent')).toBeEnabled();
+  await page.locator('#theme-manageStartTaskbarAccent').check();await expect(page.locator('#theme-startTaskbarAccentLight')).toBeEnabled();await expect(page.locator('#theme-startTaskbarAccentDark')).toBeEnabled();
+  await page.locator('#theme-manageTitleBarAccent').check();await expect(page.locator('#theme-titleBarAccentLight')).toBeEnabled();await expect(page.locator('#theme-titleBarAccentDark')).toBeEnabled();
+  await page.locator('#theme-startTaskbarAccentLight').check();await page.locator('#theme-titleBarAccentLight').check();await settle();
+  eq((await page.evaluate(()=>window.one.settings())).themeSchedule.targets,{one:true,windowsApps:false,windowsSystem:true,manageStartTaskbarAccent:true,startTaskbarAccentLight:true,startTaskbarAccentDark:true,manageTitleBarAccent:true,titleBarAccentLight:true,titleBarAccentDark:true},'Accent choices save automatically');
+  await page.locator('#theme-windowsSystem').uncheck();await settle();await expect(page.locator('#theme-manageStartTaskbarAccent')).toBeDisabled();
   const times=await page.evaluate(()=>{const d=new Date(),mins=d.getHours()*60+d.getMinutes(),fmt=n=>`${String(Math.floor((n+1440)%1440/60)).padStart(2,'0')}:${String((n+1440)%60).padStart(2,'0')}`;return {light:fmt(mins-360),dark:fmt(mins+360)};});
   await pick('theme-lightAt',times.light);await pick('theme-darkAt',times.dark);await page.locator('#theme-enabled').check();await expect.poll(()=>page.evaluate(()=>window.one.settings().then(s=>s.themeSchedule.enabled))).toBe(true);await settle();
   await expect(page.locator('html')).toHaveAttribute('data-theme','light');await expect(page.locator('#theme-next')).toContainText('下次');

@@ -5,15 +5,16 @@
 #include <vector>
 
 static std::wstring personalization=L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
+static std::wstring titlePath=L"Software\\Microsoft\\Windows\\DWM";
 static std::wstring nightPath=L"Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction.bluelightreductionstate\\windows.data.bluelightreduction.bluelightreductionstate";
 static const char* theme(const wchar_t* name){
  DWORD value=0,size=sizeof(value);
  const auto result=RegGetValueW(HKEY_CURRENT_USER,personalization.c_str(),name,RRF_RT_REG_DWORD,nullptr,&value,&size);
  return result==ERROR_SUCCESS&&value<=1?(value?"\"light\"":"\"dark\""):"null";
 }
-static LSTATUS writeTheme(const wchar_t* name,DWORD value){
+static LSTATUS writeTheme(const std::wstring& path,const wchar_t* name,DWORD value){
  HKEY key=nullptr;
- auto result=RegCreateKeyExW(HKEY_CURRENT_USER,personalization.c_str(),0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr);
+ auto result=RegCreateKeyExW(HKEY_CURRENT_USER,path.c_str(),0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr);
  if(result==ERROR_SUCCESS){result=RegSetValueExW(key,name,0,REG_DWORD,reinterpret_cast<const BYTE*>(&value),sizeof(value));RegCloseKey(key);}
  return result;
 }
@@ -35,24 +36,36 @@ int wmain(int argc,wchar_t** argv){
  if(argc>=3&&std::wstring(argv[argc-2])==L"--test-id"){
   const std::wstring id=argv[argc-1];
   if(id.empty()||id.size()>80||id.find_first_not_of(L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")!=std::wstring::npos)return 2;
-  const auto root=L"Software\\One.ThemeTests\\"+id;personalization=root+L"\\Personalize";nightPath=root+L"\\NightState";argc-=2;
+  const auto root=L"Software\\One.ThemeTests\\"+id;personalization=root+L"\\Personalize";titlePath=root+L"\\DWM";nightPath=root+L"\\NightState";argc-=2;
  }else return 2;
 #endif
  if(argc==2&&std::wstring(argv[1])==L"read"){read();return 0;}
- if(argc!=4||std::wstring(argv[1])!=L"apply")return 2;
+ if((argc<4||argc>6)||std::wstring(argv[1])!=L"apply")return 2;
  const std::wstring mode=argv[2],scope=argv[3];
  if((mode!=L"light"&&mode!=L"dark")||(scope!=L"apps"&&scope!=L"system"&&scope!=L"both"))return 2;
+ bool startOn=false,startOff=false,titleOn=false,titleOff=false;
+ for(int i=4;i<argc;i++){
+  const std::wstring option=argv[i];
+  if(option==L"start-on"&&!startOn&&!startOff)startOn=true;
+  else if(option==L"start-off"&&!startOn&&!startOff)startOff=true;
+  else if(option==L"title-on"&&!titleOn&&!titleOff)titleOn=true;
+  else if(option==L"title-off"&&!titleOn&&!titleOff)titleOff=true;
+  else return 2;
+ }
+ if(((startOn||startOff)||(titleOn||titleOff))&&scope==L"apps")return 2;
  const DWORD value=mode==L"light"?1:0;
  const bool apps=scope==L"apps"||scope==L"both",system=scope==L"system"||scope==L"both";
- const auto appsError=apps?writeTheme(L"AppsUseLightTheme",value):ERROR_SUCCESS;
- const auto systemError=system?writeTheme(L"SystemUsesLightTheme",value):ERROR_SUCCESS;
+ const auto appsError=apps?writeTheme(personalization,L"AppsUseLightTheme",value):ERROR_SUCCESS;
+ const auto systemError=system?writeTheme(personalization,L"SystemUsesLightTheme",value):ERROR_SUCCESS;
+ const auto accentError=(startOn||startOff)&&systemError==ERROR_SUCCESS?writeTheme(personalization,L"ColorPrevalence",startOn?1:0):ERROR_SUCCESS;
+ const auto titleError=(titleOn||titleOff)&&systemError==ERROR_SUCCESS?writeTheme(titlePath,L"ColorPrevalence",titleOn?1:0):ERROR_SUCCESS;
  DWORD notifyError=ERROR_SUCCESS;
 #ifndef ONE_THEME_TEST
- if((apps&&appsError==ERROR_SUCCESS)||(system&&systemError==ERROR_SUCCESS)){
+ if((apps&&appsError==ERROR_SUCCESS)||(system&&systemError==ERROR_SUCCESS)||((startOn||startOff)&&accentError==ERROR_SUCCESS)||((titleOn||titleOff)&&titleError==ERROR_SUCCESS)){
   DWORD_PTR ignored=0;
   if(!SendMessageTimeoutW(HWND_BROADCAST,WM_SETTINGCHANGE,0,reinterpret_cast<LPARAM>(L"ImmersiveColorSet"),SMTO_ABORTIFHUNG,500,&ignored))notifyError=GetLastError()?GetLastError():ERROR_TIMEOUT;
   if(!SendMessageTimeoutW(HWND_BROADCAST,WM_THEMECHANGED,0,0,SMTO_ABORTIFHUNG,500,&ignored))notifyError=GetLastError()?GetLastError():ERROR_TIMEOUT;
  }
 #endif
- std::cout<<"{\"appsError\":"<<appsError<<",\"systemError\":"<<systemError<<",\"notifyError\":"<<notifyError<<"}\n";return 0;
+ std::cout<<"{\"appsError\":"<<appsError<<",\"systemError\":"<<systemError<<",\"accentError\":"<<accentError<<",\"titleError\":"<<titleError<<",\"notifyError\":"<<notifyError<<"}\n";return 0;
 }

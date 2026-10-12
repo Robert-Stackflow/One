@@ -8,7 +8,7 @@ export interface ThemeSchedulePreferences {
  longitude:number|null;
  sunriseOffset:number;
  sunsetOffset:number;
- targets:{one:boolean;windowsApps:boolean;windowsSystem:boolean};
+ targets:{one:boolean;windowsApps:boolean;windowsSystem:boolean;manageStartTaskbarAccent:boolean;startTaskbarAccentLight:boolean;startTaskbarAccentDark:boolean;manageTitleBarAccent:boolean;titleBarAccentLight:boolean;titleBarAccentDark:boolean};
  shortcut:string;
 }
 export interface ThemeTransition {at:number;mode:ScheduledTheme}
@@ -28,7 +28,7 @@ export interface ThemeAutomationStatus extends ThemeScheduleStatus {
  shortcutActive:boolean;
  shortcutError:string;
 }
-export const defaultThemeSchedule=():ThemeSchedulePreferences=>({enabled:false,source:'fixed',lightAt:'07:00',darkAt:'19:00',latitude:null,longitude:null,sunriseOffset:0,sunsetOffset:0,targets:{one:true,windowsApps:false,windowsSystem:false},shortcut:''});
+export const defaultThemeSchedule=():ThemeSchedulePreferences=>({enabled:false,source:'fixed',lightAt:'07:00',darkAt:'19:00',latitude:null,longitude:null,sunriseOffset:0,sunsetOffset:0,targets:{one:true,windowsApps:false,windowsSystem:false,manageStartTaskbarAccent:false,startTaskbarAccentLight:false,startTaskbarAccentDark:true,manageTitleBarAccent:false,titleBarAccentLight:false,titleBarAccentDark:true},shortcut:''});
 const validTime=(value:unknown)=>typeof value==='string'&&/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 export function validateThemeSchedule(value:unknown):ThemeSchedulePreferences {
  if(value===undefined)return defaultThemeSchedule();
@@ -38,9 +38,9 @@ export function validateThemeSchedule(value:unknown):ThemeSchedulePreferences {
  if(v.latitude!==null&&(typeof v.latitude!=='number'||!Number.isFinite(v.latitude)||Math.abs(v.latitude)>90)||v.longitude!==null&&(typeof v.longitude!=='number'||!Number.isFinite(v.longitude)||Math.abs(v.longitude)>180))throw Error('纬度需在 -90 至 90，经度需在 -180 至 180');
  if((v.latitude===null)!==(v.longitude===null))throw Error('请同时填写经度和纬度');
  if(!Number.isInteger(v.sunriseOffset)||Math.abs(v.sunriseOffset)>180||!Number.isInteger(v.sunsetOffset)||Math.abs(v.sunsetOffset)>180)throw Error('日出和日落偏移需在前后 180 分钟内');
- if(!v.targets||['one','windowsApps','windowsSystem'].some(key=>typeof v.targets[key as keyof typeof v.targets]!=='boolean')||!['one','windowsApps','windowsSystem'].some(key=>v.targets[key as keyof typeof v.targets]))throw Error('请至少选择一个主题应用范围');
+ if(!v.targets||['one','windowsApps','windowsSystem'].some(key=>typeof v.targets[key as keyof typeof v.targets]!=='boolean')||['manageStartTaskbarAccent','startTaskbarAccentLight','startTaskbarAccentDark','manageTitleBarAccent','titleBarAccentLight','titleBarAccentDark'].some(key=>v.targets[key as keyof typeof v.targets]!==undefined&&typeof v.targets[key as keyof typeof v.targets]!=='boolean')||!['one','windowsApps','windowsSystem'].some(key=>v.targets[key as keyof typeof v.targets]))throw Error('请至少选择一个主题应用范围');
  if(typeof v.shortcut!=='string'||v.shortcut.length>100||v.shortcut&&!/^(?:(?:Control|Ctrl|Alt|Shift|Super|Meta|Win)\+)+(?:[A-Z0-9]|F(?:[1-9]|1\d|2[0-4])|Space|Tab|Enter|Escape|Backspace|Delete|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight)$/i.test(v.shortcut))throw Error('主题切换快捷键格式无效');
- return {enabled:v.enabled,source:v.source,lightAt:v.lightAt,darkAt:v.darkAt,latitude:v.latitude,longitude:v.longitude,sunriseOffset:v.sunriseOffset,sunsetOffset:v.sunsetOffset,targets:{one:v.targets.one,windowsApps:v.targets.windowsApps,windowsSystem:v.targets.windowsSystem},shortcut:v.shortcut};
+ return {enabled:v.enabled,source:v.source,lightAt:v.lightAt,darkAt:v.darkAt,latitude:v.latitude,longitude:v.longitude,sunriseOffset:v.sunriseOffset,sunsetOffset:v.sunsetOffset,targets:{one:v.targets.one,windowsApps:v.targets.windowsApps,windowsSystem:v.targets.windowsSystem,manageStartTaskbarAccent:v.targets.manageStartTaskbarAccent??false,startTaskbarAccentLight:v.targets.startTaskbarAccentLight??false,startTaskbarAccentDark:v.targets.startTaskbarAccentDark??true,manageTitleBarAccent:v.targets.manageTitleBarAccent??false,titleBarAccentLight:v.targets.titleBarAccentLight??false,titleBarAccentDark:v.targets.titleBarAccentDark??true},shortcut:v.shortcut};
 }
 
 const minute=60000,day=86400000,rad=Math.PI/180;

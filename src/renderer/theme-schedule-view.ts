@@ -18,6 +18,10 @@ export function themeSchedulePage(){return `<div class="theme-schedule" id="them
  ${row('夜间模式','夜间模式开启时用深色，关闭时用浅色。无法读取时保留主题，并显示原因。','<span class="muted">跟随 Windows 当前状态</span>','night-light')}
  </div><div class="settings-card"><h3 class="theme-section-title">应用范围与快捷键</h3>
  ${row('应用范围','在“外观”页选择 One 模式会退出 One 的自动管理，其余范围继续生效。',`<div class="theme-targets"><label><input type="checkbox" id="theme-one">One</label><label><input type="checkbox" id="theme-windowsApps">Windows 应用</label><label><input type="checkbox" id="theme-windowsSystem">系统界面</label></div>`)}
+ ${row('开始和任务栏显示强调色','选择“系统界面”后可随主题切换此 Windows 开关；默认不接管。',switchControl('theme-manageStartTaskbarAccent','随主题管理开始和任务栏强调色'))}
+ ${row('开始和任务栏强调色规则','分别决定浅色和深色时是否显示强调色。',`<div class="theme-targets"><label><input type="checkbox" id="theme-startTaskbarAccentLight">浅色时开启</label><label><input type="checkbox" id="theme-startTaskbarAccentDark">深色时开启</label></div>`)}
+ ${row('标题栏和窗口边框显示强调色','选择“系统界面”后可随主题切换此 Windows 开关；默认不接管。',switchControl('theme-manageTitleBarAccent','随主题管理标题栏强调色'))}
+ ${row('标题栏强调色规则','分别决定浅色和深色时是否显示强调色。',`<div class="theme-targets"><label><input type="checkbox" id="theme-titleBarAccentLight">浅色时开启</label><label><input type="checkbox" id="theme-titleBarAccentDark">深色时开启</label></div>`)}
  ${row('切换快捷键','切换所选范围的深浅色；自动切换关闭时也可使用。','<div class="theme-shortcut"><input id="theme-shortcut" aria-label="主题切换快捷键"></div>')}
  </div></fieldset></div>`;}
 
@@ -60,8 +64,18 @@ export function setupThemeSchedule(){
  const fill=(p:ThemeSchedulePreferences)=>{
   if(!changes.has('enabled'))input('enabled').checked=p.enabled;if(!changes.has('source')){if(source.value!==p.source)autoLocated=false;source.value=p.source;}
   for(const key of ['lightAt','darkAt','latitude','longitude','sunriseOffset','sunsetOffset'] as const)if(!changes.has(key))input(key).value=p[key]===null?'':String(p[key]);
-  for(const key of ['one','windowsApps','windowsSystem'] as const)if(!changes.has(key))input(key).checked=p.targets[key];
+  for(const key of ['one','windowsApps','windowsSystem','manageStartTaskbarAccent','startTaskbarAccentLight','startTaskbarAccentDark','manageTitleBarAccent','titleBarAccentLight','titleBarAccentDark'] as const)if(!changes.has(key))input(key).checked=p.targets[key];
+  updateAccentControls();
   if(!changes.has('shortcut'))shortcut.value=p.shortcut;sources();
+ };
+ const updateAccentControls=()=>{
+  const system=input('windowsSystem').checked;
+  input('manageStartTaskbarAccent').disabled=!system;
+  input('startTaskbarAccentLight').disabled=!system||!input('manageStartTaskbarAccent').checked;
+  input('startTaskbarAccentDark').disabled=!system||!input('manageStartTaskbarAccent').checked;
+  input('manageTitleBarAccent').disabled=!system;
+  input('titleBarAccentLight').disabled=!system||!input('manageTitleBarAccent').checked;
+  input('titleBarAccentDark').disabled=!system||!input('manageTitleBarAccent').checked;
  };
  const shortcutControl=setupShortcut(shortcut,error,{onRetry:()=>void run(()=>api.themeShortcutRetry())});
  const status=(value:ThemeAutomationStatus)=>{
@@ -74,7 +88,7 @@ export function setupThemeSchedule(){
  };
  const read=()=>{
   const number=(key:string)=>input(key).value.trim()===''?null:Number(input(key).value);
-  return {enabled:input('enabled').checked,source:source.value,lightAt:input('lightAt').value,darkAt:input('darkAt').value,latitude:number('latitude'),longitude:number('longitude'),sunriseOffset:number('sunriseOffset'),sunsetOffset:number('sunsetOffset'),one:input('one').checked,windowsApps:input('windowsApps').checked,windowsSystem:input('windowsSystem').checked,shortcut:shortcut.value};
+  return {enabled:input('enabled').checked,source:source.value,lightAt:input('lightAt').value,darkAt:input('darkAt').value,latitude:number('latitude'),longitude:number('longitude'),sunriseOffset:number('sunriseOffset'),sunsetOffset:number('sunsetOffset'),one:input('one').checked,windowsApps:input('windowsApps').checked,windowsSystem:input('windowsSystem').checked,manageStartTaskbarAccent:input('manageStartTaskbarAccent').checked,startTaskbarAccentLight:input('startTaskbarAccentLight').checked,startTaskbarAccentDark:input('startTaskbarAccentDark').checked,manageTitleBarAccent:input('manageTitleBarAccent').checked,titleBarAccentLight:input('titleBarAccentLight').checked,titleBarAccentDark:input('titleBarAccentDark').checked,shortcut:shortcut.value};
  };
  const preview=()=>{
   const output=q('theme-solar-preview');
@@ -94,7 +108,7 @@ export function setupThemeSchedule(){
   const p=read(),snapshot=new Map(changes),patch:Record<string,unknown>={},accepted=new Set<string>();let invalid:unknown,base=preferences!;
   // Always allow stopping automation, even while another field is incomplete.
   if(snapshot.has('enabled')&&!p.enabled){await api.patchSettings({themeSchedule:{enabled:false}});if(changes.get('enabled')===snapshot.get('enabled'))changes.delete('enabled');snapshot.delete('enabled');status(await api.themeStatus());base=preferences!;}
-  const groups=[['latitude','longitude'],['lightAt','darkAt'],['one','windowsApps','windowsSystem'],['enabled'],['source'],['sunriseOffset'],['sunsetOffset'],['shortcut']];
+  const groups=[['latitude','longitude'],['lightAt','darkAt'],['one','windowsApps','windowsSystem','manageStartTaskbarAccent','startTaskbarAccentLight','startTaskbarAccentDark','manageTitleBarAccent','titleBarAccentLight','titleBarAccentDark'],['enabled'],['source'],['sunriseOffset'],['sunsetOffset'],['shortcut']];
   for(const group of groups){
    if(!group.some(key=>snapshot.has(key)))continue;
    const values=Object.fromEntries(group.map(key=>[key,p[key as keyof typeof p]])),delta=group.includes('one')?{targets:values}:values;
@@ -118,6 +132,7 @@ export function setupThemeSchedule(){
   const target=event.target as HTMLElement;if(!target.closest('fieldset')||!target.id.startsWith('theme-'))return;
   if(['theme-latitude','theme-longitude'].includes(target.id)){cancelLocation();locationNotice.textContent='使用手动填写的位置';}
   if(target.id==='theme-source'){cancelLocation();autoLocated=false;if(source.value==='sun'&&panelActive)void locate();}
+  if(['theme-windowsSystem','theme-manageStartTaskbarAccent','theme-manageTitleBarAccent'].includes(target.id))updateAccentControls();
   changes.set(target.id.slice(6),++revision);error('');sources();preview();clearTimeout(timer);
   const delay=event.type==='input'||['theme-lightAt','theme-darkAt','theme-latitude','theme-longitude','theme-sunriseOffset','theme-sunsetOffset'].includes(target.id)?350:0;
   timer=setTimeout(()=>void flush().catch(error),delay);

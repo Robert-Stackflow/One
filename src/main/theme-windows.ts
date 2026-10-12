@@ -10,20 +10,24 @@ export class WindowsThemeBridge {
  private async invoke(args:string[],signal:AbortSignal){
   signal.throwIfAborted();
   try{const result=await run(this.helper,[...args,...this.extra],{windowsHide:true,timeout:8000,maxBuffer:192*1024,encoding:'utf8',signal});return JSON.parse(result.stdout);}
-  catch{signal.throwIfAborted();throw Error('Windows 主题服务暂时不可用，请重试');}
+  catch(error){signal.throwIfAborted();if((error as {code?:number}).code===2)throw Error('Windows 主题辅助程序与当前版本不匹配，请重启 One');throw Error('Windows 主题服务暂时不可用，请重试');}
  }
  async read(signal:AbortSignal):Promise<WindowsThemeState>{
   const result=await this.invoke(['read'],signal);
   const night=typeof result.nightData==='string'&&result.nightError===0&&/^(?:[0-9a-f]{2}){4,65536}$/.test(result.nightData)?parseNightLight(Buffer.from(result.nightData,'hex')):{detail:'暂时无法读取 Windows 夜间模式；请在 Windows 设置中配置后重试'};
   return {apps:['light','dark'].includes(result.apps)?result.apps:undefined,system:['light','dark'].includes(result.system)?result.system:undefined,nightLight:night.active,detail:night.detail};
  }
- async apply(mode:ScheduledTheme,targets:{windowsApps:boolean;windowsSystem:boolean},signal:AbortSignal){
-  if(!['light','dark'].includes(mode)||typeof targets.windowsApps!=='boolean'||typeof targets.windowsSystem!=='boolean')throw Error('Windows 主题请求无效');
+ async apply(mode:ScheduledTheme,targets:{windowsApps:boolean;windowsSystem:boolean;manageStartTaskbarAccent:boolean;startTaskbarAccentLight:boolean;startTaskbarAccentDark:boolean;manageTitleBarAccent:boolean;titleBarAccentLight:boolean;titleBarAccentDark:boolean},signal:AbortSignal){
+  if(!['light','dark'].includes(mode)||['windowsApps','windowsSystem','manageStartTaskbarAccent','startTaskbarAccentLight','startTaskbarAccentDark','manageTitleBarAccent','titleBarAccentLight','titleBarAccentDark'].some(key=>typeof targets[key as keyof typeof targets]!=='boolean'))throw Error('Windows 主题请求无效');
   if(!targets.windowsApps&&!targets.windowsSystem)return;
   const scope=targets.windowsApps&&targets.windowsSystem?'both':targets.windowsApps?'apps':'system';
-  const result=await this.invoke(['apply',mode,scope],signal),errors:string[]=[];
+  const accent=targets.windowsSystem&&targets.manageStartTaskbarAccent?(mode==='light'?targets.startTaskbarAccentLight:targets.startTaskbarAccentDark):undefined;
+  const title=targets.windowsSystem&&targets.manageTitleBarAccent?(mode==='light'?targets.titleBarAccentLight:targets.titleBarAccentDark):undefined;
+  const result=await this.invoke(['apply',mode,scope,...(accent===undefined?[]:[accent?'start-on':'start-off']),...(title===undefined?[]:[title?'title-on':'title-off'])],signal),errors:string[]=[];
   if(targets.windowsApps&&result.appsError!==0)errors.push('Windows 应用主题');
   if(targets.windowsSystem&&result.systemError!==0)errors.push('Windows 系统界面');
+  if(accent!==undefined&&result.accentError!==0)errors.push('开始和任务栏强调色');
+  if(title!==undefined&&result.titleError!==0)errors.push('标题栏和窗口边框强调色');
   if(errors.length)throw Error(`${errors.join('、')}未能应用；其他已选择范围可能已切换，请检查权限后重试`);
   if(result.notifyError!==0)throw Error('Windows 主题值已更新，但窗口刷新未完成，请稍后重试');
  }
