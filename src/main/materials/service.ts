@@ -34,7 +34,10 @@ export class MaterialsService {
   private owner(id:number){const window=this.context.window(id);if(this.closing||!window||window.isDestroyed()||window.webContents.isDestroyed())throw Error('素材窗口已关闭');return window;}
   private run<T>(owner:number,work:()=>Promise<T>):Promise<T>{
     this.owner(owner);
-    const task=this.queue.catch(()=>{}).then(async()=>{await this.ready;this.owner(owner);return work();});
+    const task=this.queue.catch(()=>{}).then(async()=>{await this.ready;this.owner(owner);return work();}).catch(error=>{
+      const message:Record<string,string>={ENOENT:'素材文件不存在，可能已被移动或删除',EACCES:'无法访问素材文件，请检查文件权限',EPERM:'无法访问素材文件，请检查文件权限或占用情况',ENOSPC:'磁盘空间不足，请释放空间后重试'};
+      if(message[error?.code])throw new Error(message[error.code],{cause:error});throw error;
+    });
     this.queue=task;this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;
   }
   async state(owner:number):Promise<MaterialsState>{

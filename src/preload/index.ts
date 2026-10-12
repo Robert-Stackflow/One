@@ -14,7 +14,7 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
-  materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
+  onCapturePreferences:callback=>listen('capture-preferences',callback),materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
   materialsImageURL:id=>invoke('materials-image-url',id),materialsRecordingURL:id=>invoke('materials-recording-url',id),
   materialsCopyImage:id=>invoke('materials-copy-image',id),materialsExportImage:id=>invoke('materials-export-image',id),
   materialsRemoveImage:id=>invoke('materials-remove-image',id),materialsRemoveRecording:id=>invoke('materials-remove-recording',id),

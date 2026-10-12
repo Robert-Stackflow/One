@@ -137,6 +137,7 @@ export interface OneAPI extends MaterialsAPI {
   inspectLocks(path:string):Promise<void>;onLockTarget(callback:(path:string)=>void):()=>void;
   lockState():Promise<import('./locksmith').LocksmithState>;scanLocks(paths:string[]):Promise<import('./locksmith').LocksmithState>;cancelLocks():Promise<void>;endLockProcess(token:string):Promise<void>;onLocks(callback:(value:import('./locksmith').LocksmithState)=>void):()=>void;
   utilityState():Promise<import('./utilities').UtilityState>; topmostWindows():Promise<import('./utilities').WindowEntry[]>; toggleTopmost(id:number):Promise<void>;clearTopmost():Promise<void>;clickerState():Promise<import('./utilities').ClickerState>;clickerStart():Promise<import('./utilities').ClickerState>;clickerStop():Promise<import('./utilities').ClickerState>;clickerCapture():Promise<{x:number;y:number}>;onUtilityState(callback:(value:import('./utilities').UtilityState)=>void):()=>void;
+  onCapturePreferences(callback:(value:Pick<import('./capture/settings').CapturePreferences,'uiScale'>)=>void):()=>void;
   settings(): Promise<Settings>; saveSettings(value: Settings): Promise<Settings>;
   transform(request: TextRequest): Promise<string>; openText(encoding: string): Promise<{ path: string; text: string } | null>; readTextPath(path:string,encoding:string):Promise<{path:string;text:string}>;
   saveText(text: string, encoding: string, suggestedName?: string): Promise<string | null>; copyText(text: string): Promise<void>;
