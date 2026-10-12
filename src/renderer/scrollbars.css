@@ -1,0 +1,7 @@
+/* Shared visible scrollbars for every renderer window and isolated document frame. */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:9px;background:color-mix(in srgb,var(--scrollbar-foreground,var(--fg,#252525)) 18%,transparent);background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--scrollbar-foreground,var(--fg,#252525)) 28%,transparent)}
+::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-button{display:none}

@@ -21,7 +21,7 @@ const api: OneAPI = {
   aiCommandSave:value=>invoke('ai-command-save',value),aiCommandRemove:id=>invoke('ai-command-remove',id),aiShortcut:value=>invoke('ai-shortcut',value),
   aiChatOpen:id=>invoke('ai-chat-open',id),aiChatCreate:seed=>invoke('ai-chat-create',seed),aiChatRemove:id=>invoke('ai-chat-remove',id),aiChatRename:(id,title)=>invoke('ai-chat-rename',id,title),aiChatSend:(id,text,profileId,commandId,modelId,reasoningEffort,images)=>invoke('ai-chat-send',id,text,profileId,commandId,modelId,reasoningEffort,images),
   aiChatCancel:id=>invoke('ai-chat-cancel',id),aiChatRetry:(id,profileId)=>invoke('ai-chat-retry',id,profileId),
-  aiChatConfigure:value=>invoke('ai-chat-configure',value),aiChatHide:()=>invoke('ai-chat-hide'),aiChatSidebar:open=>invoke('ai-chat-sidebar',open),aiChatClipboard:()=>invoke('ai-chat-clipboard'),
+  aiChatConfigure:value=>invoke('ai-chat-configure',value),aiChatHide:()=>invoke('ai-chat-hide'),aiChatSidebar:open=>invoke('ai-chat-sidebar',open),
   aiInline:(query,requestId)=>invoke('ai-inline',query,requestId),aiCancel:id=>invoke('ai-cancel',id),aiOpenLink:url=>invoke('ai-open-link',url),searchHistoryAdd:(query,command,result,engineId)=>invoke('search-history-add',query,command,result,engineId),searchHistoryClear:()=>invoke('search-history-clear'),searchHistoryRemove:id=>invoke('search-history-remove',id),
   archiveAssociation:operation=>invoke('archive-association',operation),onArchivePreferences:callback=>listen('archive-preferences',callback),
   trayMenuState:()=>invoke('tray-menu-state'),trayMenuAction:id=>invoke('tray-menu-action',id),trayMenuReady:()=>invoke('tray-menu-ready'),trayMenuHide:()=>invoke('tray-menu-hide'),onTrayMenuChanged:callback=>listen('tray-menu-changed',callback),

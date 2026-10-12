@@ -21,6 +21,7 @@ async function main(){
   try{
     let preview=await open(path.join(files,'sample.md'));
     const frame=preview.frameLocator('iframe');
+    const frameScrollbar=await frame.locator('body').evaluate(node=>getComputedStyle(node,'::-webkit-scrollbar').width),windowScrollbar=await preview.evaluate(()=>getComputedStyle(document.body,'::-webkit-scrollbar').width);assert.equal(frameScrollbar,windowScrollbar);
     await expect(frame.locator('.frontmatter')).toContainText('Example');
     await expect(frame.locator('.frontmatter-toggle svg')).toHaveCount(1);
     await frame.locator('.frontmatter-toggle').click();await expect(frame.locator('.frontmatter-toggle')).toHaveAttribute('aria-expanded','false');

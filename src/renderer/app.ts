@@ -1,5 +1,6 @@
 import './search.css';
 import './styles.css';
+import './scrollbars.css';
 import './refinement.css';
 import './selection.css';
 import './interface-refinement.css';

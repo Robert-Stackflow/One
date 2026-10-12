@@ -46,7 +46,7 @@ export interface OneAPI {
   aiCommandSave(value:Partial<import('./ai').AICommand>):Promise<string>;aiCommandRemove(id:string):Promise<void>;aiShortcut(value:string):Promise<import('./ai').AIState>;
   aiChatOpen(id?:string):Promise<void>;aiChatCreate(seed?:{query:string;answer:string}):Promise<string>;aiChatRemove(id:string):Promise<void>;aiChatRename(id:string,title:string):Promise<void>;aiChatSend(id:string,text:string,profileId:string,commandId?:string,modelId?:string,reasoningEffort?:string,images?:import('./ai').AIImage[]):Promise<import('./ai').AIMessage>;
   aiChatCancel(id:string):Promise<void>;aiChatRetry(id:string,profileId:string):Promise<import('./ai').AIMessage>;
-  aiChatConfigure(value:Partial<import('./ai').AIState['chatOptions']>):Promise<import('./ai').AIState['chatOptions']>;aiChatHide():Promise<void>;aiChatSidebar(open:boolean):Promise<void>;aiChatClipboard():Promise<{text:string;images:import('./ai').AIImage[]}>;
+  aiChatConfigure(value:Partial<import('./ai').AIState['chatOptions']>):Promise<import('./ai').AIState['chatOptions']>;aiChatHide():Promise<void>;aiChatSidebar(open:boolean):Promise<void>;
   aiInline(query:string,requestId:string):Promise<{text:string;model:string}>;aiCancel(requestId:string):Promise<void>;
   aiOpenLink(url:string):Promise<void>;
   searchHistoryAdd(query:string,command:string,result?:string,engineId?:string):Promise<void>;searchHistoryClear():Promise<void>;searchHistoryRemove(id:string):Promise<void>;
