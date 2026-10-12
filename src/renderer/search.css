@@ -79,6 +79,7 @@
 .search-ai-answer .chat-table{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:auto}
 .search-ai-answer .chat-table table{border-collapse:collapse;min-width:100%;margin:0;font-size:12px}
 .search-ai-answer .chat-table :is(th,td){padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+.search-ai-answer .chat-table :is(tbody,tfoot) tr:last-child > :is(th,td){border-bottom:0}
 .search-ai-answer .chat-table th{background:var(--soft)}
 .search-ai-answer .chat-math-display{display:block;overflow:auto;padding:8px 0}
 .search-history-heading button{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:3px 7px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:11px}
