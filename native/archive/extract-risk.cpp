@@ -41,7 +41,8 @@ void ExtractionRisk::check()const{
     // Solid archives may report packed sizes only on the first file. Unknown
     // values are not treated as an infinite compression ratio.
     const bool ratio=packed&&bytes>=64ull*1024*1024&&bytes/packed>=1000;
-    const bool risky=count>=100000||bytes>=64ull*1024*1024*1024||ratio||nested;
+    // Nested archives are written as ordinary files, never extracted recursively.
+    const bool risky=count>=100000||bytes>=64ull*1024*1024*1024||ratio;
     if(bytes>limits.bytes&&!limits.revision.empty())fail("声明展开量超过本次解压上限，请提高上限后重试。","safety");
     if(risky&&limits.revision.empty()){
         emit("{\"type\":\"risk\",\"revision\":"+json(revision)+",\"entries\":"+std::to_string(count)+",\"bytes\":"+std::to_string(bytes)+",\"compressed\":"+std::to_string(packed)+",\"nested\":"+std::to_string(nested)+",\"highRatio\":"+(ratio?"true":"false")+"}");

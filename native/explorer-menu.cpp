@@ -18,13 +18,18 @@ static const CLSID archiveFolder={0x7b9110e7,0x3a40,0x4cff,{0xa1,0x37,0x55,0x6a,
 static const CLSID archiveChoose={0x36754430,0x70d1,0x4f19,{0x86,0xca,0x4c,0x28,0xc7,0xe5,0x91,0x83}};
 static const CLSID archiveZip={0xb8f1470d,0x6f45,0x42a7,{0x93,0x09,0x82,0xd6,0xed,0x24,0x79,0xa1}};
 static const CLSID archiveSeven={0xc5d4196f,0x632a,0x46d1,{0xaf,0x23,0x9b,0x16,0xd2,0x8a,0x01,0x95}};
+static const CLSID archiveTar={0xd1528b1c,0x2504,0x4b0e,{0x84,0x73,0x5c,0x6e,0x42,0xa2,0x7b,0x11}};
+static const CLSID archiveTarGz={0x9d6d49a8,0xbe50,0x4c6f,{0xb1,0x80,0x22,0xa2,0x88,0xd4,0x76,0x13}};
+static const CLSID archiveTarXz={0x458d4b24,0xa3e7,0x4932,{0x97,0x66,0x35,0xe8,0x79,0x69,0xa1,0x12}};
+static const CLSID archiveGz={0x1221d322,0xb2d2,0x4e9d,{0x91,0x36,0xb0,0x90,0x67,0x92,0x4d,0x11}};
+static const CLSID archiveXz={0x933b90e1,0x00e4,0x4d0e,{0x81,0xc2,0xc9,0x39,0x28,0x20,0x96,0x10}};
 static const CLSID archiveConfigure={0x5bb2c95e,0xe30a,0x471b,{0x8a,0x87,0x74,0xed,0x9c,0x41,0x72,0xe3}};
-enum class Action {locksmith,rename,archiveCreate,archiveZip,archiveSeven,archiveConfigure,archiveExtract,archiveSmart,archiveHere,archiveFolder,archiveChoose};
+enum class Action {locksmith,rename,archiveCreate,archiveZip,archiveSeven,archiveTar,archiveTarGz,archiveTarXz,archiveGz,archiveXz,archiveConfigure,archiveExtract,archiveSmart,archiveHere,archiveFolder,archiveChoose};
 static bool extraction(Action action){return action>=Action::archiveExtract;}
-static const wchar_t* flag(Action action){switch(action){case Action::locksmith:return L"Locksmith";case Action::rename:return L"Rename";case Action::archiveCreate:case Action::archiveZip:case Action::archiveSeven:case Action::archiveConfigure:return L"ArchiveCreate";default:return L"ArchiveExtract";}}
+static const wchar_t* flag(Action action){switch(action){case Action::locksmith:return L"Locksmith";case Action::rename:return L"Rename";case Action::archiveCreate:case Action::archiveZip:case Action::archiveSeven:case Action::archiveTar:case Action::archiveTarGz:case Action::archiveTarXz:case Action::archiveGz:case Action::archiveXz:case Action::archiveConfigure:return L"ArchiveCreate";default:return L"ArchiveExtract";}}
 static const wchar_t* title(Action action){switch(action){case Action::locksmith:return L"文件占用";case Action::rename:return L"批量重命名";case Action::archiveCreate:return L"创建压缩包";case Action::archiveZip:return L"压缩为 ZIP";case Action::archiveSeven:return L"压缩为 7Z";case Action::archiveConfigure:return L"创建压缩包…";case Action::archiveSmart:return L"智能解压";case Action::archiveHere:return L"解压到当前文件夹";case Action::archiveFolder:return L"解压到同名文件夹";case Action::archiveChoose:return L"选择解压路径…";default:return L"解压压缩包";}}
-static const char* tool(Action action){switch(action){case Action::locksmith:return "locksmith";case Action::rename:return "rename";case Action::archiveCreate:case Action::archiveConfigure:return "archive-create";case Action::archiveZip:return "archive-create-zip";case Action::archiveSeven:return "archive-create-7z";case Action::archiveSmart:return "archive-smart";case Action::archiveHere:return "archive-here";case Action::archiveFolder:return "archive-folder";case Action::archiveChoose:return "archive-choose";default:return "archive-extract";}}
-static const CLSID& canonical(Action action){switch(action){case Action::locksmith:return locks;case Action::rename:return renameCommand;case Action::archiveCreate:return archiveCreate;case Action::archiveZip:return archiveZip;case Action::archiveSeven:return archiveSeven;case Action::archiveConfigure:return archiveConfigure;case Action::archiveSmart:return archiveSmart;case Action::archiveHere:return archiveHere;case Action::archiveFolder:return archiveFolder;case Action::archiveChoose:return archiveChoose;default:return archiveExtract;}}
+static const char* tool(Action action){switch(action){case Action::locksmith:return "locksmith";case Action::rename:return "rename";case Action::archiveCreate:case Action::archiveConfigure:return "archive-create";case Action::archiveZip:return "archive-create-zip";case Action::archiveSeven:return "archive-create-7z";case Action::archiveTar:return "archive-create-tar";case Action::archiveTarGz:return "archive-create-tar-gz";case Action::archiveTarXz:return "archive-create-tar-xz";case Action::archiveGz:return "archive-create-gz";case Action::archiveXz:return "archive-create-xz";case Action::archiveSmart:return "archive-smart";case Action::archiveHere:return "archive-here";case Action::archiveFolder:return "archive-folder";case Action::archiveChoose:return "archive-choose";default:return "archive-extract";}}
+static const CLSID& canonical(Action action){switch(action){case Action::locksmith:return locks;case Action::rename:return renameCommand;case Action::archiveCreate:return archiveCreate;case Action::archiveZip:return archiveZip;case Action::archiveSeven:return archiveSeven;case Action::archiveTar:return archiveTar;case Action::archiveTarGz:return archiveTarGz;case Action::archiveTarXz:return archiveTarXz;case Action::archiveGz:return archiveGz;case Action::archiveXz:return archiveXz;case Action::archiveConfigure:return archiveConfigure;case Action::archiveSmart:return archiveSmart;case Action::archiveHere:return archiveHere;case Action::archiveFolder:return archiveFolder;case Action::archiveChoose:return archiveChoose;default:return archiveExtract;}}
 static DWORD limit(Action action){switch(action){case Action::locksmith:return 32;case Action::rename:return 4096;default:return 128;}}
 static bool archive_path(std::wstring path){std::transform(path.begin(),path.end(),path.begin(),[](wchar_t c){return std::towlower(c);});if(path.size()>=4){const auto end=path.substr(path.size()-4);if(end[0]==L'.'&&((end[1]>=L'a'&&end[1]<=L'k')||end[1]==L'z')&&end[2]>=L'0'&&end[2]<=L'9'&&end[3]>=L'0'&&end[3]<=L'9')return true;}for(const auto extension:{L".zip",L".7z",L".7z.001",L".rar",L".r00",L".tar",L".tar.gz",L".tgz",L".gz",L".tar.xz",L".txz",L".xz",L".zipx",L".jar",L".apk",L".bz2",L".bzip2",L".tbz",L".tbz2",L".zst",L".zstd",L".tzst",L".cab",L".lha",L".lzh",L".iso",L".wim",L".alz",L".egg"})if(path.ends_with(extension))return true;return false;}
 static std::atomic<long> objects=0;
@@ -48,10 +53,11 @@ public:explicit Command(Action a):action(a){objects++;}~Command(){objects--;}
  HRESULT __stdcall QueryInterface(REFIID id,void** out) override{if(!out)return E_POINTER;*out=nullptr;if(id==IID_IUnknown||id==IID_IExplorerCommand){*out=static_cast<IExplorerCommand*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
  ULONG __stdcall AddRef() override{return ++refs;}ULONG __stdcall Release() override{ULONG n=--refs;if(!n)delete this;return n;}
  HRESULT __stdcall GetTitle(IShellItemArray* items,PWSTR* out) override{
-  if(action!=Action::archiveZip&&action!=Action::archiveSeven)return SHStrDupW(title(action),out);
+  if(action<Action::archiveZip||action>Action::archiveXz)return SHStrDupW(title(action),out);
   std::wstring stem=L"选中项";DWORD count=0;
-  if(items&&SUCCEEDED(items->GetCount(&count))&&count==1){IShellItem* item=nullptr;if(SUCCEEDED(items->GetItemAt(0,&item))&&item){PWSTR path=nullptr;if(SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH,&path))&&path){std::wstring name=path;const auto slash=name.find_last_of(L"\\/");if(slash!=std::wstring::npos)name.erase(0,slash+1);const auto dot=name.find_last_of(L'.');if(dot!=std::wstring::npos&&dot>0)name.erase(dot);if(!name.empty())stem=name.substr(0,32);CoTaskMemFree(path);}item->Release();}}
-  return SHStrDupW((L"压缩为 "+stem+(action==Action::archiveZip?L".zip":L".7z")).c_str(),out);
+  if(items&&SUCCEEDED(items->GetCount(&count))&&count==1){IShellItem* item=nullptr;if(SUCCEEDED(items->GetItemAt(0,&item))&&item){PWSTR path=nullptr;if(SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH,&path))&&path){std::wstring name=path;const auto slash=name.find_last_of(L"\\/");if(slash!=std::wstring::npos)name.erase(0,slash+1);if(action!=Action::archiveGz&&action!=Action::archiveXz){const auto dot=name.find_last_of(L'.');if(dot!=std::wstring::npos&&dot>0)name.erase(dot);}if(!name.empty())stem=name.substr(0,32);CoTaskMemFree(path);}item->Release();}}
+  const wchar_t* suffix=action==Action::archiveZip?L".zip":action==Action::archiveSeven?L".7z":action==Action::archiveTar?L".tar":action==Action::archiveTarGz?L".tar.gz":action==Action::archiveTarXz?L".tar.xz":action==Action::archiveGz?L".gz":L".xz";
+  return SHStrDupW((L"压缩为 "+stem+suffix).c_str(),out);
  }
  HRESULT __stdcall GetIcon(IShellItemArray*,PWSTR* out) override{const auto icon=setting(L"Icon");return icon.empty()?E_NOTIMPL:SHStrDupW(icon.c_str(),out);}
  HRESULT __stdcall GetToolTip(IShellItemArray*,PWSTR* out) override{if(!out)return E_POINTER;*out=nullptr;return E_NOTIMPL;}
@@ -60,6 +66,7 @@ public:explicit Command(Action a):action(a){objects++;}~Command(){objects--;}
   // Explorer may query the command before supplying the selection. Validate the actual items in Invoke.
   if(!items){*out=ECS_ENABLED;return S_OK;}
   if(FAILED(items->GetCount(&count))||!count||count>limit(action))return S_OK;
+  if(action==Action::archiveGz||action==Action::archiveXz){if(count!=1)return S_OK;IShellItem* item=nullptr;if(FAILED(items->GetItemAt(0,&item))||!item)return S_OK;SFGAOF attributes=SFGAO_FOLDER;const auto hr=item->GetAttributes(SFGAO_FOLDER,&attributes);item->Release();if(FAILED(hr)||(attributes&SFGAO_FOLDER))return S_OK;}
   if(extraction(action))for(DWORD i=0;i<count;i++){IShellItem* item=nullptr;if(FAILED(items->GetItemAt(i,&item))||!item)return S_OK;PWSTR path=nullptr;HRESULT hr=item->GetDisplayName(SIGDN_FILESYSPATH,&path);item->Release();if(FAILED(hr)||!path){CoTaskMemFree(path);return S_OK;}const DWORD attributes=GetFileAttributesW(path);bool supported=archive_path(path)&&(attributes==INVALID_FILE_ATTRIBUTES||!(attributes&FILE_ATTRIBUTE_DIRECTORY));CoTaskMemFree(path);if(!supported)return S_OK;}
   *out=ECS_ENABLED;return S_OK;}
  HRESULT __stdcall GetFlags(EXPCMDFLAGS* out) override{if(!out)return E_POINTER;*out=action==Action::archiveExtract||action==Action::archiveCreate?ECF_HASSUBCOMMANDS:ECF_DEFAULT;return S_OK;}
@@ -74,8 +81,8 @@ public:explicit Command(Action a):action(a){objects++;}~Command(){objects--;}
 class Commands final:public IEnumExplorerCommand {
  std::atomic<ULONG> refs{1};ULONG position=0;const bool create;
  static constexpr Action extractActions[]={Action::archiveSmart,Action::archiveHere,Action::archiveFolder,Action::archiveChoose};
- static constexpr Action createActions[]={Action::archiveZip,Action::archiveSeven,Action::archiveConfigure};
- ULONG length() const{return create?3:4;}
+ static constexpr Action createActions[]={Action::archiveZip,Action::archiveSeven,Action::archiveTar,Action::archiveTarGz,Action::archiveTarXz,Action::archiveGz,Action::archiveXz,Action::archiveConfigure};
+ ULONG length() const{return create?8:4;}
 public:explicit Commands(bool create,ULONG start=0):position(start),create(create){objects++;}~Commands(){objects--;}
  HRESULT __stdcall QueryInterface(REFIID id,void** out) override{if(!out)return E_POINTER;*out=nullptr;if(id==IID_IUnknown||id==IID_IEnumExplorerCommand){*out=static_cast<IEnumExplorerCommand*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
  ULONG __stdcall AddRef() override{return ++refs;}ULONG __stdcall Release() override{ULONG n=--refs;if(!n)delete this;return n;}

@@ -24,6 +24,5 @@ export function archiveRiskReasons(risk:ArchiveRisk):string[]{
  if(risk.entries>=100000)reasons.push(`包含 ${risk.entries.toLocaleString()} 个项目`);
  if(risk.bytes>=extractionDefaults.maxBytes)reasons.push(`声明展开量 ${(risk.bytes/1024**3).toFixed(1)} GiB`);
  if(risk.highRatio)reasons.push('声明压缩比达到 1000∶1');
- if(risk.nested)reasons.push(`包含 ${risk.nested.toLocaleString()} 个疑似压缩包`);
  return reasons;
 }

@@ -1,3 +1,4 @@
-export interface FileMenuTarget{session:string;path:string;name:string;directory:boolean;launchKind?:'app'|'setting';submenu?:'apps'}
+export type FileMenuSubmenu='apps'|'archive-create'|'archive-extract';
+export interface FileMenuTarget{session:string;path:string;name:string;directory:boolean;launchKind?:'app'|'setting';submenu?:FileMenuSubmenu}
 export type FileMenuAction='open'|'preview'|'reveal'|'copy-path'|'copy-relative'|'copy-name'|'copy-quoted'|'copy'|'cut'|'rename'|'trash'|'open-with'|'native'|import('./archive-actions').ArchiveShellAction;
 export function renameDestinationName(value:unknown){if(typeof value!=='string'||!value||value.length>255||/[\\/:*?"<>|\x00-\x1f]/.test(value)||/[ .]$/.test(value)||/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(value)||value==='.'||value==='..')throw new Error('请输入有效的文件名');return value;}

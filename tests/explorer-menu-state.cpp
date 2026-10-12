@@ -51,15 +51,16 @@ int wmain(){
  assert(commands->Next(5,children,&fetched)==S_FALSE&&fetched==4);for(unsigned i=0;i<fetched;i++)children[i]->Release();commands->Release();
  assert(create.GetFlags(&flags)==S_OK&&flags==ECF_HASSUBCOMMANDS);
  IEnumExplorerCommand* createCommands=nullptr;assert(create.EnumSubCommands(&createCommands)==S_OK);
- IExplorerCommand* createChildren[3]{};assert(createCommands->Next(3,createChildren,&fetched)==S_OK&&fetched==3);
- const wchar_t* createTitles[]={L"压缩为 中文.zip",L"压缩为 中文.7z",L"创建压缩包…"};Items singleArchive({L"D:\\中文.ZIP"});
- for(unsigned i=0;i<3;i++){assert(createChildren[i]->GetTitle(&singleArchive,&name)==S_OK&&wcscmp(name,createTitles[i])==0);CoTaskMemFree(name);createChildren[i]->Release();}
+ IExplorerCommand* createChildren[8]{};assert(createCommands->Next(8,createChildren,&fetched)==S_OK&&fetched==8);
+ const wchar_t* createTitles[]={L"压缩为 中文.zip",L"压缩为 中文.7z",L"压缩为 中文.tar",L"压缩为 中文.tar.gz",L"压缩为 中文.tar.xz",L"压缩为 中文.ZIP.gz",L"压缩为 中文.ZIP.xz",L"创建压缩包…"};Items singleArchive({L"D:\\中文.ZIP"});
+ for(unsigned i=0;i<8;i++){assert(createChildren[i]->GetTitle(&singleArchive,&name)==S_OK&&wcscmp(name,createTitles[i])==0);CoTaskMemFree(name);createChildren[i]->Release();}
  createCommands->Release();
  assert(std::string(tool(Action::archiveZip))=="archive-create-zip");assert(std::string(tool(Action::archiveSeven))=="archive-create-7z");
+ assert(std::string(tool(Action::archiveTar))=="archive-create-tar");assert(std::string(tool(Action::archiveTarGz))=="archive-create-tar-gz");assert(std::string(tool(Action::archiveTarXz))=="archive-create-tar-xz");assert(std::string(tool(Action::archiveGz))=="archive-create-gz");assert(std::string(tool(Action::archiveXz))=="archive-create-xz");
  assert(std::string(tool(Action::archiveSmart))=="archive-smart");assert(std::string(tool(Action::archiveHere))=="archive-here");assert(std::string(tool(Action::archiveFolder))=="archive-folder");assert(std::string(tool(Action::archiveChoose))=="archive-choose");
  {const wchar_t* fields[]={L"",L"",L"",L"",L"0",L"0",L"1",L"0"};std::ofstream stream(file,std::ios::binary);for(auto value:fields)stream.write((const char*)value,(wcslen(value)+1)*sizeof(wchar_t));}
- Command createZip(Action::archiveZip),createSeven(Action::archiveSeven),configure(Action::archiveConfigure),smart(Action::archiveSmart);
- assert(create.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createZip.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createSeven.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(configure.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(smart.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
+ Command createZip(Action::archiveZip),createSeven(Action::archiveSeven),createGz(Action::archiveGz),createXz(Action::archiveXz),configure(Action::archiveConfigure),smart(Action::archiveSmart);
+ assert(create.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createZip.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createSeven.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createGz.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(createGz.GetState(&folder,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(createGz.GetState(&mixed,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(createXz.GetState(&folder,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(configure.GetState(&one,FALSE,&state)==S_OK&&state==ECS_ENABLED);assert(smart.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
  config(false);assert(locks.GetState(nullptr,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(rename.GetState(&one,FALSE,&state)==S_OK&&state==ECS_HIDDEN);assert(archive.GetState(&formats,FALSE,&state)==S_OK&&state==ECS_HIDDEN);
  }
  assert(DllCanUnloadNow()==S_OK);DeleteFileW(file.c_str());DeleteFileW(zipPath.c_str());RemoveDirectoryW(folderPath.c_str());return 0;

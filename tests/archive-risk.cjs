@@ -25,30 +25,26 @@ async function main(){
   for(const format of ['zip','7z','tar','tar.gz','tar.xz']){
    const archive=path.join(root,'nested.'+format);await run({operation:'create',path:archive,sources:[inner,safe],level:1});
    const listing=await run({operation:'list',path:archive});assert.equal(listing.total,2,'a normal compound wrapper does not require approval');
-   const request={operation:'extract',path:archive,parent};const historyCount=(await history.overview()).recent.length;const result=await run(request);assert.equal((await history.overview()).recent.length,historyCount,'preflight confirmation does not create failed/completed history');assert.equal((await history.overview()).active.length,0);assert.equal(result.risk.nested,1);assert.equal(result.risk.entries,2);
-   assert.deepEqual(await fs.readdir(parent),['keep.txt']);
-   const approval=approve(result);await assert.rejects(run({...request,riskApproval:{...approval,maxBytes:1}}),error=>error.code==='safety');assert.deepEqual(await fs.readdir(parent),['keep.txt']);
-   const extracted=await run({...request,riskApproval:approval});assert(!extracted.risk);assert.equal(await fs.readFile(path.join(extracted.path,'safe.txt'),'utf8'),'selected safe item');assert.deepEqual(await fs.readFile(path.join(extracted.path,'inner.zip')),await fs.readFile(inner));await fs.rm(extracted.path,{recursive:true});
+   const request={operation:'extract',path:archive,parent};const result=await run(request);assert(!result.risk,'nested entries alone do not require approval');assert.equal(await fs.readFile(path.join(result.path,'safe.txt'),'utf8'),'selected safe item');assert.deepEqual(await fs.readFile(path.join(result.path,'inner.zip')),await fs.readFile(inner));await fs.rm(result.path,{recursive:true});
+   await assert.rejects(run({...request,extractionLimits:{maxBytes:1,maxMilliseconds:60000}}),error=>error.code==='safety');assert.deepEqual(await fs.readdir(parent),['keep.txt']);
    // Selecting an ordinary file must not warn about unrelated entries.
    const index=listing.entries.find(entry=>entry.name==='safe.txt').index;
    const selected=await run({...request,selected:[index]});assert(!selected.risk);assert.deepEqual(await fs.readdir(selected.path),['safe.txt']);await fs.rm(selected.path,{recursive:true});
    if(['zip','7z'].includes(format)){
     const nestedIndex=listing.entries.find(entry=>entry.name==='inner.zip').index;
-    const drag={operation:'drag',path:archive,revision:listing.revision,selected:[nestedIndex]};const warning=await run(drag);assert.equal(warning.risk.nested,1);
-    const copied=await run({...drag,riskApproval:approve(warning)});assert.equal(copied.count,1);assert(!copied.risk);
+    const drag={operation:'drag',path:archive,revision:listing.revision,selected:[nestedIndex]};const copied=await run(drag);assert.equal(copied.count,1);assert(!copied.risk);
    }
-   // Reusing an approved compound cache must not authorize a new caller.
-   const again=await run(request);assert.equal(again.risk.nested,1);assert.deepEqual(await fs.readdir(parent),['keep.txt']);
+   const again=await run(request);assert(!again.risk);await fs.rm(again.path,{recursive:true});
   }
   for(const format of ['gz','xz']){
-   const archive=path.join(root,'inner.zip.'+format);await run({operation:'create',path:archive,sources:[inner]});const request={operation:'extract',path:archive,parent};const warning=await run(request);assert.equal(warning.risk.nested,1);const extracted=await run({...request,riskApproval:approve(warning)});assert.deepEqual(await fs.readFile(path.join(extracted.path,'inner.zip')),await fs.readFile(inner));await fs.rm(extracted.path,{recursive:true});
+   const archive=path.join(root,'inner.zip.'+format);await run({operation:'create',path:archive,sources:[inner]});const extracted=await run({operation:'extract',path:archive,parent});assert(!extracted.risk);assert.deepEqual(await fs.readFile(path.join(extracted.path,'inner.zip')),await fs.readFile(inner));await fs.rm(extracted.path,{recursive:true});
   }
   const random=path.join(root,'random.bin');await fs.writeFile(random,randomBytes(2500000));
   for(const format of ['zip','7z']){
-   const target=path.join(root,'split.'+format),created=await run({operation:'create',path:target,sources:[random,inner],volumeBytes:1024**2}),archive=created.path;const request={operation:'extract',path:archive,parent};const warning=await run(request);assert.equal(warning.risk.nested,1);const extracted=await run({...request,riskApproval:approve(warning)});assert.deepEqual(await fs.readFile(path.join(extracted.path,'random.bin')),await fs.readFile(random));await fs.rm(extracted.path,{recursive:true});
+   const target=path.join(root,'split.'+format),created=await run({operation:'create',path:target,sources:[random,inner],volumeBytes:1024**2}),archive=created.path;const extracted=await run({operation:'extract',path:archive,parent});assert(!extracted.risk);assert.deepEqual(await fs.readFile(path.join(extracted.path,'random.bin')),await fs.readFile(random));await fs.rm(extracted.path,{recursive:true});
   }
   const subtree=new JSZip();for(let i=0;i<205;i++)subtree.file('picked/item-'+i+'.txt','child',{createFolders:false});subtree.file('picked/zzz.zip','nested',{createFolders:false});subtree.file('outside.txt','safe');const folderArchive=path.join(root,'subtree.zip');await fs.writeFile(folderArchive,await subtree.generateAsync({type:'nodebuffer'}));
-  const folderResult=await run({operation:'extract',path:folderArchive,parent,selectedFolders:['picked/']});assert.equal(folderResult.risk.nested,1);assert.equal(folderResult.risk.entries,206,'implicit selected folders include off-page descendants');
+  const folderResult=await run({operation:'extract',path:folderArchive,parent,selectedFolders:['picked/']});assert(!folderResult.risk);assert.equal(folderResult.count,206,'implicit selected folders include off-page descendants');await fs.rm(folderResult.path,{recursive:true});
   const high=path.join(root,'high.zip'),highZip=new JSZip();highZip.file('zeros.bin',Buffer.alloc(80*1024**2));
   await fs.writeFile(high,await highZip.generateAsync({type:'nodebuffer',compression:'DEFLATE',compressionOptions:{level:9}}));
   let request={operation:'extract',path:high,parent},result=await run(request);assert.equal(result.risk.highRatio,true);assert.equal(result.risk.nested,0);assert.equal(result.risk.bytes,80*1024**2);
@@ -71,7 +67,8 @@ async function main(){
   result=await run({operation:'extract',path:crowded,parent});assert.equal(result.risk.entries,100000);assert.equal(result.risk.bytes,0);assert.deepEqual(await fs.readdir(parent),['keep.txt']);
   for(const value of [null,{}, {revision:approved.revision,maxBytes:0,maxMilliseconds:1},{revision:approved.revision,maxBytes:64*1024**3,maxMilliseconds:86400001},{...approved,maxBytes:'100'}])await assert.rejects(run({...request,riskApproval:value}));
   const cli=async args=>{const lines=[];const command=parseCli(args,root);const code=await runCli(command,service,{out:async line=>lines.push(...line.trim().split('\n').filter(Boolean).map(JSON.parse)),err:async()=>{},signal:new AbortController().signal,password:async()=>''});return {code,lines};};
-  const archive=path.join(root,'nested.zip');const denied=await cli(['extract','--json','--output',parent,archive]);assert.equal(denied.code,13);assert.equal(denied.lines.find(line=>line.type==='error').risk.nested,1);assert(!denied.lines.some(line=>line.type==='result'));
+  const nestedArchive=path.join(root,'nested.zip');const direct=await cli(['extract','--json','--output',parent,nestedArchive]);assert.equal(direct.code,0);await fs.rm(direct.lines.find(line=>line.type==='result').path,{recursive:true});
+  const archive=wrapper;const denied=await cli(['extract','--json','--output',parent,archive]);assert.equal(denied.code,13);assert.equal(denied.lines.find(line=>line.type==='error').risk.highRatio,true);assert(!denied.lines.some(line=>line.type==='result'));
   const accepted=await cli(['extract','--json','--allow-risk','--max-extract-gib','1','--max-extract-minutes','1','--output',parent,archive]);assert.equal(accepted.code,0);assert(accepted.lines.some(line=>line.type==='risk-approved'));const published=accepted.lines.find(line=>line.type==='result');await fs.rm(published.path,{recursive:true});
   assert.throws(()=>parseCli(['extract','--max-extract-gib','1','--output',parent,archive],root));assert.throws(()=>parseCli(['extract','--allow-risk','--max-extract-minutes','1441','--output',parent,archive],root));
   const impossible=await cli(['extract','--json','--allow-risk','--max-extract-gib','1','--output',parent,huge]);assert.equal(impossible.code,7);
@@ -80,7 +77,7 @@ async function main(){
   if(process.env.ONE_ARCHIVE_RISK_CLI){
    const executable=path.resolve(process.env.ONE_ARCHIVE_RISK_CLI),profile=path.join(root,'actual-cli-profile');
    const actual=(args,status)=>{const result=spawnSync(executable,['archive','extract','--json','--output',parent,...args,archive],{encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1024**2,env:{...process.env,ONE_DATA_DIR:profile,ONE_ARCHIVE_CLI_PROFILE:profile}});assert.equal(result.status,status,result.stdout+'\n'+result.stderr+'\n'+result.error);return result.stdout.trim().split(/\r?\n/).map(JSON.parse);};
-   assert.equal(actual([],13).find(line=>line.type==='error').risk.nested,1);const confirmed=actual(['--allow-risk','--max-extract-gib','1'],0);assert(confirmed.some(line=>line.type==='risk-approved'));await fs.rm(confirmed.find(line=>line.type==='result').path,{recursive:true});assert.deepEqual(await fs.readdir(path.join(profile,'archive-cli/temp')),[]);
+   assert.equal(actual([],13).find(line=>line.type==='error').risk.highRatio,true);const confirmed=actual(['--allow-risk','--max-extract-gib','1'],0);assert(confirmed.some(line=>line.type==='risk-approved'));await fs.rm(confirmed.find(line=>line.type==='result').path,{recursive:true});assert.deepEqual(await fs.readdir(path.join(profile,'archive-cli/temp')),[]);
    console.log('Actual standalone CLI risk refusal, explicit approval, native extraction and temporary cleanup passed.');
   }
   console.log('Extraction risks passed: ZIP/7Z/TAR/GZ/XZ/composites/split, nested and off-page selection/drag, task history, 100,000 directories, ZIP64 declared size, real high-ratio expansion, explicit budgets/deadlines, stale approvals, cache isolation, CLI refusal/approval and unpublished cleanup.');

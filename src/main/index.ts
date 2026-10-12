@@ -365,9 +365,9 @@ async function shellInvocation(args:string[],source='launch'){
 const archiveTaskWindows=new Map<number,{action:ArchiveOpenAction;paths:string[];suggestedPath:string;conflict:import('../shared/archive').ArchiveConflict}>();
 function openArchiveTask(action:ArchiveOpenAction,paths:string[]){
  if(quitting||finishingQuit||!paths.length)throw Error('无法打开压缩任务');
- const first=paths[0],name=basename(first),stem=paths.length===1?name.replace(/\.[^.]+$/,'')||name:'选中项';
- const suffix=action==='quick-7z'?'.7z':'.zip',suggestedPath=action==='choose'?dirname(first):join(dirname(first),stem+suffix);
- const window=windowFor('archive-task',{width:action==='create'?900:600,height:action==='create'?620:action==='choose'?380:action==='quick-zip'||action==='quick-7z'?340:400,minWidth:action==='create'?720:500,minHeight:action==='create'?480:320,title:'压缩与解压 · One',frame:true,titleBarStyle:'hidden',hasShadow:true});
+ const first=paths[0],name=basename(first),stem=paths.length===1?(['quick-gz','quick-xz'].includes(action)?name:name.replace(/\.[^.]+$/,'')||name):'选中项';
+ const suffix=action.startsWith('quick-')?'.'+action.slice(6).replaceAll('-','.'):'.zip',suggestedPath=action==='choose'?dirname(first):join(dirname(first),stem+suffix);
+ const window=windowFor('archive-task',{width:action==='create'?900:600,height:action==='create'?620:action==='choose'?380:action.startsWith('quick-')?340:400,minWidth:action==='create'?720:500,minHeight:action==='create'?480:320,title:'压缩与解压 · One',frame:true,titleBarStyle:'hidden',hasShadow:true});
  const id=window.webContents.id;archiveTaskWindows.set(id,{action,paths,suggestedPath,conflict:settings.archive.conflict});
  window.once('ready-to-show',()=>{if(!window.isDestroyed()){window.show();window.focus();}});
  window.on('closed',()=>archiveTaskWindows.delete(id));
@@ -694,7 +694,7 @@ function registerIPC() {
   handle('menu-settings',()=>{hideMenus();showMain();main.webContents.send('one:search-settings');},['search-menu']);
   handle('search-context-menu',(event,value,point,directory)=>{const owner=BrowserWindow.fromWebContents(event.sender);if(!owner||!point||![point.x,point.y].every(Number.isFinite))throw new Error('右键菜单位置无效');const item=typeof value==='string'?launcher.get(value):undefined,path=item?item.path:filePath(value),b=owner.getContentBounds();fileMenu.show(owner,path,{x:Math.max(0,Math.min(b.width,point.x)),y:Math.max(0,Math.min(b.height,point.y))},directory===true,item?.launchKind==='action'?undefined:item?.launchKind,item?launcher.enrich(item).name:undefined);},['search']);
   handle('file-menu-data',event=>fileMenu.data(event.sender.id),['file-context']);
-  handle('file-menu-submenu',(_e,session,top,focus)=>fileMenu.submenu(textValue(session,100),top,focus===true),['file-context']);
+  handle('file-menu-submenu',(_e,session,top,focus,kind)=>fileMenu.submenu(textValue(session,100),top,focus===true,kind),['file-context']);
   handle('file-menu-apps',(_e,session)=>fileMenu.apps(textValue(session,100)),['file-context']);
   handle('file-menu-size',(event,session,height)=>fileMenu.resize(textValue(session,100),height,event.sender.id),['file-context']);
   handle('file-menu-close',(event,focus,childOnly)=>fileMenu.close(event.sender.id,focus===true,childOnly===true),['file-context']);

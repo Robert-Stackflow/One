@@ -65,7 +65,6 @@ async function main(){
    const picked=listing.entries.find(entry=>normalized(entry.name)===name);assert(picked,JSON.stringify({source,entries:listing.entries}));const index=picked.index;
    const details={operation:'details',path:source,password,index,revision};assert.equal(normalized((await run(details)).details.entry.name),name);
    let approval={revision,maxBytes:64*1024**3,maxMilliseconds:30*60000};
-   if(family.risk){const warning=await run({operation:'extract',path:source,password,parent});assert.equal(warning.risk.nested,1);assert.equal(warning.risk.revision,revision);approval.revision=warning.risk.revision;}
    // Identical bytes and identical write time, but a new file identity. The
    // entry volume is untouched: checking just that file cannot catch this.
    const before=await fs.stat(later,{bigint:true}),bytes=await fs.readFile(later),replacement=later+'.replacement';await fs.writeFile(replacement,bytes);await fs.utimes(replacement,fixed,fixed);await fs.rename(replacement,later);

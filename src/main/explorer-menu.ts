@@ -21,9 +21,9 @@ export async function repairExplorerMenu(){
  const stamp=createHash('sha256').update(await readFile(script())).update(await readFile(join(nativeRoot(),'One.Shell.dll'))).update(process.execPath).digest('hex');
  const marker=join(root,'registration-hash.txt');
  let previous='';try{previous=(await readFile(marker,'utf8')).trim();}catch{}
- if(previous===stamp&&state.modern)return;
+ if(previous===stamp&&state.classic)return;
  const repaired=await setExplorerMenu(state);
- if(repaired.error||!repaired.modern)throw Error(repaired.error||'系统右键菜单注册未完成');
+ if(repaired.error||!repaired.classic)throw Error(repaired.error||'系统右键菜单注册未完成');
  await writeFile(marker,stamp);
 }
 export function setExplorerMenu(value:unknown):Promise<ExplorerMenuState>{

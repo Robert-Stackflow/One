@@ -14,7 +14,7 @@ const message=(error:unknown)=>(error instanceof Error?error.message:String(erro
 
 export async function renderArchiveTask(){
  const data=await api.archiveTaskData();
- const manual=data.action==='create',choosing=data.action==='choose',creating=manual||data.action==='quick-zip'||data.action==='quick-7z';
+ const manual=data.action==='create',choosing=data.action==='choose',creating=manual||data.action.startsWith('quick-');
  const title=creating?'创建压缩包':'解压缩',label=data.paths.length===1?name(data.paths[0]):`${data.paths.length} 个项目`;
  document.body.classList.add('archive-task-window');
  q('app').innerHTML=`<div class="archive-task-shell">
@@ -70,7 +70,7 @@ export async function renderArchiveTask(){
  const run=async()=>{
   if(active||completed)return;
   if(!creating&&!passwordPanel.hidden&&!password.value.trim()){password.focus();return;}
-  let output=data.suggestedPath,format:string=data.action==='quick-7z'?'7z':'zip',createPassword='',volumeBytes=0,level:number|undefined;
+  let output=data.suggestedPath,format:string=data.action.startsWith('quick-')?data.action.slice(6).replaceAll('-','.'):'zip',createPassword='',volumeBytes=0,level:number|undefined;
   if(manual){
    if(!createSources.length){notice('请先添加文件或文件夹','error');return;}
    output=q<HTMLInputElement>('archive-task-path').value.trim();format=q<HTMLSelectElement>('archive-task-format').value;createPassword=q<HTMLInputElement>('archive-task-create-password').value;

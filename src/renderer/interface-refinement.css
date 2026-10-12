@@ -145,6 +145,9 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .file-context-item>.icon,.file-context-item>img{width:16px;height:16px;object-fit:contain;flex-shrink:0}
 .file-context-item>.icon:last-child{width:14px;height:14px;color:var(--muted)}
 .file-context-item>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:left;white-space:nowrap}
+.file-context-item>.file-context-format-label{display:flex;align-items:center;text-overflow:clip}
+.file-context-format-label .file-context-prefix,.file-context-format-label .file-context-suffix{flex:none}
+.file-context-format-label .file-context-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .file-context-item>kbd{font:10px var(--ui-font);color:var(--muted)}
 .file-context-item:focus-visible{background:transparent;outline:none}
 .file-context-item:hover,.keyboard-mode .file-context-item:focus{background:var(--hover)}

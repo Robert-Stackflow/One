@@ -44,7 +44,7 @@ async function main(){
   await assert.rejects(run({operation:'create',path:path.join(root,'not-created.alz'),sources:[methods]}),/不支持/);
   const editableCheck=await run({operation:'list',path:methods,browse});await assert.rejects(run({operation:'update',path:methods,revision:editableCheck.revision,changes:[{kind:'delete',indexes:[1]}]}),/ZIP 和 7Z/);checks+=2;
   const nested=new JSZip();nested.file('nested.alz','payload');const nestedPath=path.join(root,'nested.zip'),nestedOutput=path.join(root,'nested.out');await fs.writeFile(nestedPath,await nested.generateAsync({type:'nodebuffer'}));await fs.mkdir(nestedOutput);
-  const nestedRisk=await run({operation:'extract',path:nestedPath,parent:nestedOutput,destination:'here'});assert.equal(nestedRisk.count,0);assert.equal(nestedRisk.risk?.nested,1);assert.deepEqual(await fs.readdir(nestedOutput),[]);checks++;
+  const nestedResult=await run({operation:'extract',path:nestedPath,parent:nestedOutput,destination:'here'});assert.equal(nestedResult.count,1);assert(!nestedResult.risk);assert.equal(await fs.readFile(path.join(nestedOutput,'nested.alz'),'utf8'),'payload');checks++;
   // Structural failures must be rejected before output is created.
   const base=stored([['safe.txt',Buffer.from('hello')]]),mutations=[];
   for(const length of [0,1,4,7,8,12,20,28,base.length-1,base.length-8])mutations.push(['truncate-'+length,base.subarray(0,length)]);

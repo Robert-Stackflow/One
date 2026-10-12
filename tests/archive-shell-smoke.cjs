@@ -58,6 +58,9 @@ async function main(){
   await request('archive-create-7z',[source]);const quickSeven=await task();
   await expect(quickSeven.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});
   await fs.stat(path.join(sourceDir,'sample.7z'));await close(quickSeven);
+  for(const [tool,suffix] of [['archive-create-tar','.tar'],['archive-create-tar-gz','.tar.gz'],['archive-create-tar-xz','.tar.xz'],['archive-create-gz','.txt.gz'],['archive-create-xz','.txt.xz']]){
+   await request(tool,[source]);const quick=await task();await expect(quick.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});await fs.stat(path.join(sourceDir,'sample'+suffix));await close(quick);
+  }
 
   if(process.env.ONE_CAPTURE_ARCHIVE_TASK){
    const large=path.join(sourceDir,'progress.bin'),file=await fs.open(large,'w');
