@@ -49,7 +49,7 @@ export interface OneAPI {
   aiChatConfigure(value:Partial<import('./ai').AIState['chatOptions']>):Promise<import('./ai').AIState['chatOptions']>;aiChatHide():Promise<void>;aiChatSidebar(open:boolean):Promise<void>;aiChatClipboard():Promise<{text:string;images:import('./ai').AIImage[]}>;
   aiInline(query:string,requestId:string):Promise<{text:string;model:string}>;aiCancel(requestId:string):Promise<void>;
   aiOpenLink(url:string):Promise<void>;
-  searchHistoryAdd(query:string,command:string,result?:string,engineId?:string):Promise<void>;searchHistoryClear():Promise<void>;
+  searchHistoryAdd(query:string,command:string,result?:string,engineId?:string):Promise<void>;searchHistoryClear():Promise<void>;searchHistoryRemove(id:string):Promise<void>;
   trayMenuState():Promise<import('../main/tray-menu').TrayMenuView>;trayMenuAction(id:import('../main/tray-menu').TrayMenuAction):Promise<void>;trayMenuReady():Promise<void>;trayMenuHide():Promise<void>;onTrayMenuChanged(callback:()=>void):()=>void;
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;

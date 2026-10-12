@@ -46,14 +46,14 @@ async function main() {
     await main.evaluate(() => window.one.showSearch());
     await search.locator('#file-query').fill('sample');
     await search.evaluate(() => document.querySelector('#search-save').click());
-    await expect(search.locator('.search-saved-item')).toHaveCount(1);
+    await search.evaluate(() => document.querySelector('#search-clear').click());
+    await expect(search.locator('[data-idle-kind="saved"]')).toHaveCount(1);
     const saved = await main.evaluate(() => window.one.searchPreferences().then(settings => settings.savedQueries));
     assert.equal(saved[0].query, 'sample');
-    await search.evaluate(() => document.querySelector('#search-clear').click());
     await search.evaluate(() => document.querySelector('[data-saved-id]').click());
     await expect(search.locator('#file-query')).toHaveValue('sample');
     await search.evaluate(() => document.querySelector('[data-saved-remove]').click());
-    await expect(search.locator('.search-saved-item')).toHaveCount(0);
+    await expect(search.locator('[data-idle-kind="saved"]')).toHaveCount(0);
     const scoped = path.join(files, 'scoped');
     const outside = path.join(files, 'outside');
     await fs.mkdir(scoped);
@@ -63,7 +63,8 @@ async function main() {
     await main.evaluate(root => window.one.patchSettings({search: {roots: [root]}}), files);
     await expect.poll(() => main.evaluate(() => window.one.searchState().then(state => state.count)), {timeout: 20000}).toBeGreaterThanOrEqual(4);
     await search.evaluate(folder => window.one.searchSavedQuery('add', {id: crypto.randomUUID(), name: '当前目录', query: 'needle', filter: '', folder}), scoped);
-    await expect(search.locator('.search-saved-item')).toHaveCount(1);
+    await search.evaluate(() => document.querySelector('#search-clear').click());
+    await expect(search.locator('[data-idle-kind="saved"]')).toHaveCount(1);
     await search.evaluate(() => document.querySelector('[data-saved-id]').click());
     await expect(search.locator('.search-result')).toHaveCount(1, {timeout: 20000});
     await expect(search.locator('.search-result')).toContainText('needle-inside.txt');

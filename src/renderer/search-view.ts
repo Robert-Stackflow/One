@@ -8,8 +8,8 @@ import {SearchResults} from './search-results';
 import {commandMatches} from './search-commands';
 import {customControls,updateSelectOptions} from './controls';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
-import {defaultSearch,type SearchSettings,type SearchEntry,type SearchContext,type SearchState} from '../shared/search';
-import {builtinSearchCommands,builtinSearchEngines,mediaSearchExtensions,parseSearchShortcut,reservedSearchShortcuts,searchEngineUrl,type SearchWebEngine} from '../shared/search-shortcuts';
+import {defaultSearch,type SavedSearch,type SearchSettings,type SearchEntry,type SearchContext,type SearchState} from '../shared/search';
+import {builtinSearchCommands,builtinSearchEngines,mediaSearchExtensions,parseSearchShortcut,reservedSearchShortcuts,searchEngineUrl,type SearchShortcutMode,type SearchWebEngine} from '../shared/search-shortcuts';
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
 import type {AIHistoryEntry} from '../shared/ai';
 const searchSwitch=(key:string,title:string,description='')=>`<div class="setting-row"><div class="setting-copy"><h2>${title}</h2>${description?`<p>${description}</p>`:''}</div>${switchControl('search-'+key,title)}</div>`;
@@ -62,36 +62,67 @@ export async function renderSearch(){
  const embedded=new URLSearchParams(location.search).has('embedded');
  document.body.classList.add('search-window');if(embedded)document.body.classList.add('search-inline');
   const filters=[['','全部'],...(!embedded?[['app:','程序'],['setting:','设置']]:[]),['folder:','文件夹'],['doc:','文档'],['pic:','图片'],['video:','视频'],['audio:','音频'],['archive:','压缩包']];
-  document.querySelector('#app')!.innerHTML=`<div class="search-shell"><header class="search-input-row drag-region">${icon('search')}${embedded?'':'<span id="search-mode-tag" class="search-mode-tag" hidden></span>'}<input id="file-query" placeholder="搜索文件、应用与设置；输入 > 查找命令" aria-label="搜索文件与文件夹" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">${embedded?'<span id="search-inline-summary" role="status"></span>':iconButton('search-save','保存当前搜索','star')}${iconButton('search-clear','清空','close')}</header>${embedded?'':'<div id="search-saved-row" class="search-saved-row" hidden></div>'}<div class="search-filter-row" id="search-filters"><div class="tabs" role="tablist" aria-label="搜索类型">${filters.map(([filter,label],i)=>`<button data-filter="${filter}" role="tab" aria-selected="${i===0}" class="${i===0?'selected':''}">${label}</button>`).join('')}</div>${embedded?'':'<div class="search-scope-field"><select id="search-scope" aria-label="搜索范围"><option value="">全部索引</option></select></div>'}</div>${embedded?'':'<div id="search-shortcut-panel" class="search-shortcut-panel" hidden></div>'}<div id="search-results" class="search-results" role="listbox" aria-label="搜索结果" aria-busy="false"></div><footer class="search-footer"><span id="search-summary" role="status"></span><span id="search-keys">↑↓ 选择 · Enter 打开 · Alt+P 预览</span></footer></div><div id="toast" class="toast" role="status" hidden></div>`;
+  document.querySelector('#app')!.innerHTML=`<div class="search-shell"><header class="search-input-row drag-region">${icon('search')}${embedded?'':'<span id="search-mode-tag" class="search-mode-tag" hidden></span>'}<input id="file-query" placeholder="搜索文件、应用与设置；输入 > 查找命令" aria-label="搜索文件与文件夹" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">${embedded?'<span id="search-inline-summary" role="status"></span>':iconButton('search-save','收藏当前搜索','star')}${iconButton('search-clear','清空','close')}</header><div class="search-filter-row" id="search-filters"><div class="tabs" role="tablist" aria-label="搜索类型">${filters.map(([filter,label],i)=>`<button data-filter="${filter}" role="tab" aria-selected="${i===0}" class="${i===0?'selected':''}">${label}</button>`).join('')}</div>${embedded?'':'<div class="search-scope-field"><select id="search-scope" aria-label="搜索范围"><option value="">全部索引</option></select></div>'}</div>${embedded?'':'<div id="search-shortcut-panel" class="search-shortcut-panel" hidden></div>'}<div id="search-results" class="search-results" role="listbox" aria-label="搜索结果" aria-busy="false"></div><footer class="search-footer"><span id="search-summary" role="status"></span><span id="search-keys">↑↓ 选择 · Enter 打开 · Alt+P 预览</span></footer></div><div id="toast" class="toast" role="status" hidden></div>`;
  if(!embedded)customControls(q('search-filters'));
  const input=q<HTMLInputElement>('file-query'),list=q('search-results');
  let context:SearchContext={kind:'search',hwnd:0,pid:0,created:'',folders:[]},prefs:SearchSettings,filter='',scopeSelection='',selectedSaved='';
  let activeMode:ReturnType<typeof parseSearchShortcut>=null;
  const panel=embedded?null:q('search-shortcut-panel');
  let searchHistory:AIHistoryEntry[]=[],aiOutput='',aiError='',aiBusy=false,aiPrompt='',aiRequestId='',suggestions:string[]=[];
+ let idleMutation=0,idleRender=false,idleAction:Promise<void>=Promise.resolve();
  let suggestTimer:ReturnType<typeof setTimeout>|undefined,historyTimer:ReturnType<typeof setTimeout>|undefined,historyKey='';
  const iconCache=new Map<string,string>();
  const engines=()=>[...builtinSearchEngines,...(prefs?.webEngines||[])];
  const engineImage=(engine:SearchWebEngine)=>{const image=engine.icon||iconCache.get(engine.url);return image?`<img src="${esc(image)}" alt="">`:`<span class="search-engine-initial">${esc(engine.name.slice(0,1).toUpperCase())}</span>`;};
+ const modeName=(mode:SearchShortcutMode)=>mode.kind==='one'?'One 命令':mode.kind==='extension'?mode.extensions.map(ext=>'.'+ext).join(' | '):mode.kind==='category'?mode.command.name:mode.engine.name;
+ const modeIcon=(mode:SearchShortcutMode)=>mode.kind==='engine'?engineImage(mode.engine):mode.kind==='one'?'<span class="search-mode-command">&gt;</span>':icon(mode.kind==='extension'?'file':mode.command.icon);
+ let idleSelection=0;
+ const idleVisible=()=>!!panel&&!activeMode&&!input.value.trim()&&!filter&&!!(searchHistory.length||prefs?.savedQueries.length);
+ const idleSummary=()=>prefs?.savedQueries.length&&searchHistory.length?'收藏与最近搜索':prefs?.savedQueries.length?'收藏':searchHistory.length?'最近搜索':'';
+ const idleEntries=()=>[...(prefs?.savedQueries||[]).map(item=>({kind:'saved',id:item.id})),...searchHistory.slice(0,20).map(item=>({kind:'history',id:item.id}))];
+ const syncIdleSelection=(scroll=false)=>{if(!idleVisible())return;const rows=[...panel!.querySelectorAll<HTMLElement>('[data-idle-kind]')];if(!rows.length)return;idleSelection=Math.max(0,Math.min(rows.length-1,idleSelection));rows.forEach((row,i)=>{row.classList.toggle('selected',i===idleSelection);row.setAttribute('aria-selected',String(i===idleSelection));});input.setAttribute('aria-controls','search-idle-items');input.setAttribute('aria-expanded','true');input.setAttribute('aria-activedescendant',rows[idleSelection].id);if(scroll)rows[idleSelection].scrollIntoView({block:'nearest'});};
+ const historySubtitle=(item:AIHistoryEntry)=>{const date=new Date(item.time),time=Number.isNaN(date.getTime())?'':date.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});return item.command==='ai'&&item.result?`${time} · ${item.result.replace(/\s+/g,' ').slice(0,90)}`:time;};
+ const favoriteFor=(item:AIHistoryEntry)=>prefs?.savedQueries.find(saved=>saved.query===item.query&&(saved.command||saved.filter||'all')===item.command);
+ const storedCommandIcon=(command?:string)=>{if(!command||command==='all')return '';const mode=parseSearchShortcut(command+' ',prefs?.webEngines,[]);if(mode)return modeIcon(mode);const filters:Record<string,string>={'app:':'window','setting:':'settings','folder:':'folder','doc:':'text','pic:':'images','video:':'play','audio:':'music','archive:':'archive'};return filters[command]?icon(filters[command]):'';};
  let renderedModeKey='',renderedModeIcon='';
  const drawMode=()=>{if(embedded)return;
   input.placeholder=activeMode?.placeholder||(context.kind==='dialog'?'搜索要跳转的文件夹':'搜索文件、程序与设置');
-  q('search-filters').hidden=context.kind==='dialog'||!!activeMode&&!activeMode.showFilters;
+  q('search-filters').hidden=context.kind==='dialog'||!input.value.trim()||!!activeMode&&!activeMode.showFilters;
+  q('search-save').hidden=!input.value.trim();
   const tag=q('search-mode-tag');tag.hidden=!activeMode;if(!activeMode){renderedModeKey='';renderedModeIcon='';return;}
-  const name=activeMode.kind==='one'?'One 命令':activeMode.kind==='extension'?activeMode.extensions.map(ext=>'.'+ext).join(' | '):activeMode.kind==='category'?activeMode.command.name:activeMode.engine.name;
-  const modeIcon=activeMode.kind==='engine'?engineImage(activeMode.engine):activeMode.kind==='one'?'<span class="search-mode-command">&gt;</span>':icon(activeMode.kind==='extension'?'file':activeMode.command.icon);
+  const name=modeName(activeMode);
+  const currentIcon=modeIcon(activeMode);
   tag.dataset.kind=activeMode.kind;
   const modeKey=activeMode.kind+':'+name+(activeMode.kind==='engine'?':'+activeMode.engine.id:'');
-  if(modeKey!==renderedModeKey){tag.innerHTML=`<span class="search-mode-icon" aria-hidden="true">${modeIcon}</span><strong>${esc(name)}</strong><button type="button" data-mode-exit aria-label="退出快捷命令">${icon('close')}</button>`;renderedModeKey=modeKey;renderedModeIcon=modeIcon;}
-  else if(modeIcon!==renderedModeIcon){tag.querySelector('.search-mode-icon')!.innerHTML=modeIcon;renderedModeIcon=modeIcon;}
+  if(modeKey!==renderedModeKey){tag.innerHTML=`<span class="search-mode-icon" aria-hidden="true">${currentIcon}</span><strong>${esc(name)}</strong><button type="button" data-mode-exit aria-label="退出快捷命令">${icon('close')}</button>`;renderedModeKey=modeKey;renderedModeIcon=currentIcon;}
+  else if(currentIcon!==renderedModeIcon){tag.querySelector('.search-mode-icon')!.innerHTML=currentIcon;renderedModeIcon=currentIcon;}
  };
- const drawActivePanel=()=>{if(!panel)return;
+ const drawActivePanel=()=>{if(!panel||idleMutation&&!idleRender)return;
   const ai=activeMode?.kind==='category'&&activeMode.command.id==='ai',engine=activeMode?.kind==='engine',idle=!activeMode&&!input.value.trim()&&!filter;
-  panel.hidden=!ai&&!engine&&!(idle&&searchHistory.length>0);
+  const typed=input.value,hint=!activeMode&&!composing&&context.kind==='search'&&prefs&&typed&&!/\s/.test(typed)?parseSearchShortcut(typed+' ',prefs.webEngines,prefs.shortcutDisabled):null;
+  panel.hidden=!ai&&!engine&&!hint&&!idleVisible();panel.classList.toggle('is-idle',idleVisible());
+  if(!idleVisible()&&input.getAttribute('aria-controls')==='search-idle-items'){input.setAttribute('aria-controls','search-results');input.removeAttribute('aria-activedescendant');input.setAttribute('aria-expanded','false');}
   if(ai){panel.innerHTML=`<div class="search-ai-panel ${aiOutput?'has-answer':'is-empty'}">${aiError?`<p class="search-ai-error">${esc(aiError)}</p>`:''}<div class="search-ai-answer">${aiOutput?esc(aiOutput):aiBusy?'正在思考…':input.value.trim()?'按 Enter 提问':'输入问题后按 Enter'}</div>${aiBusy?'<div class="search-ai-actions"><button data-ai-stop>停止</button></div>':aiOutput?'<div class="search-ai-actions"><button data-ai-copy>复制回答</button><button class="primary" data-ai-chat>转为对话并追问</button></div>':''}</div>`;return;}
   if(activeMode?.kind==='engine'){panel.innerHTML=`<div class="search-web-action"><span class="search-shortcut-badge">${engineImage(activeMode.engine)}</span><div><strong>使用 ${esc(activeMode.engine.name)} 搜索</strong><small>${input.value.trim()?esc(input.value.trim()):'输入关键词后按 Enter'}</small></div><button class="primary" data-search-web ${input.value.trim()?'':'disabled'}>搜索</button></div>${suggestions.length?`<div class="search-suggestions">${suggestions.map((item,i)=>`<button data-suggestion="${i}">${icon('search')}<span>${esc(item)}</span></button>`).join('')}</div>`:''}`;return;}
-  panel.innerHTML=`<div class="search-history-heading"><strong>最近搜索</strong><small>输入关键词可继续搜索</small></div><div class="search-history-items">${searchHistory.slice(0,8).map(item=>`<button data-history-id="${esc(item.id)}"><span>${icon(item.command==='ai'?'ai':'history')}</span><strong>${esc(item.query)}</strong><small>${esc(item.command)}</small></button>`).join('')}</div>`;
+  if(hint){panel.innerHTML=`<div class="search-result search-shortcut-hint" role="status"><span class="result-icon" aria-hidden="true">${modeIcon(hint)}</span><div class="result-name"><strong>${esc(modeName(hint))}</strong><span>按空格进入快捷命令</span></div><kbd>空格</kbd></div>`;return;}
+  if(idle)q('search-summary').textContent=idleSummary();
+  const favorites=prefs?.savedQueries||[];
+  panel.innerHTML=`<div class="search-idle-items" id="search-idle-items" role="listbox" aria-label="收藏与最近搜索">${favorites.length?`<section class="search-idle-section" role="group" aria-label="收藏"><div class="search-history-heading" data-idle-heading="saved"><strong>收藏</strong><small>${favorites.length}</small></div><div class="search-tag-list">${favorites.map((item,i)=>`<div class="search-idle-tag" id="search-idle-${i}" data-idle-kind="saved" data-idle-id="${esc(item.id)}" role="option" aria-selected="false"><button class="search-tag-main" data-saved-id="${esc(item.id)}" title="${esc(item.query)}">${storedCommandIcon(item.command||item.filter)}<span>${esc(item.name)}</span>${item.command&&item.command!=='all'?`<small>${esc(item.command)}</small>`:''}</button><button class="search-tag-action" data-saved-remove="${esc(item.id)}" aria-label="取消收藏 ${esc(item.name)}" title="取消收藏">${icon('close')}</button></div>`).join('')}</div></section>`:''}${searchHistory.length?`<section class="search-idle-section" role="group" aria-label="最近搜索"><div class="search-history-heading" data-idle-heading="history"><strong>最近搜索</strong><button type="button" data-history-clear aria-label="清空搜索历史" title="清空搜索历史">${icon('trash')}</button></div><div class="search-tag-list">${searchHistory.slice(0,20).map((item,i)=>{const saved=favoriteFor(item);return `<div class="search-idle-tag" id="search-idle-${favorites.length+i}" data-idle-kind="history" data-idle-id="${esc(item.id)}" role="option" aria-selected="false"><button class="search-tag-main" data-history-id="${esc(item.id)}" title="${esc(historySubtitle(item))}">${storedCommandIcon(item.command)}<span>${esc(item.query)}</span>${item.command!=='all'?`<small>${esc(item.command)}</small>`:''}</button><button class="search-tag-action ${saved?'is-favorite':''}" data-history-favorite="${esc(item.id)}" aria-label="${saved?'取消收藏':'收藏'} ${esc(item.query)}" title="${saved?'取消收藏':'收藏'}">${icon('star')}</button><button class="search-tag-action" data-history-remove="${esc(item.id)}" aria-label="删除历史 ${esc(item.query)}" title="删除历史">${icon('close')}</button></div>`;}).join('')}</div></section>`:''}</div>`;
+  syncIdleSelection();
  };
+ const mutateIdle=(work:()=>Promise<void>,removed:string[]=[]):Promise<void>=>{const next=idleAction.then(async()=>{
+  idleMutation++;
+  try{
+   const targets=()=>[...panel!.querySelectorAll<HTMLElement>('[data-idle-kind],[data-idle-heading]')];
+   const key=(element:HTMLElement)=>element.dataset.idleKind?`${element.dataset.idleKind}:${element.dataset.idleId}`:`heading:${element.dataset.idleHeading}`;
+   const previous=new Map(targets().map(element=>[key(element),{rect:element.getBoundingClientRect(),favorite:!!element.querySelector('.is-favorite')}]));
+   await work();
+   const motion=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+   if(motion)await Promise.allSettled(targets().filter(element=>removed.includes(key(element))).map(element=>element.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.88)'}],{duration:160,easing:'ease-in',fill:'forwards'}).finished));
+   idleRender=true;drawActivePanel();idleRender=false;layout();
+   if(motion){const animations:Promise<Animation>[]=[];for(const element of targets()){const old=previous.get(key(element)),rect=element.getBoundingClientRect();if(old){const dx=old.rect.left-rect.left,dy=old.rect.top-rect.top;if(Math.abs(dx)>1||Math.abs(dy)>1)animations.push(element.animate([{transform:`translate(${dx}px,${dy}px)`},{transform:'translate(0,0)'}],{duration:260,easing:'cubic-bezier(.2,.8,.2,1)'}).finished);if(old.favorite!==!!element.querySelector('.is-favorite')){const star=element.querySelector<HTMLElement>('[data-history-favorite] .icon');if(star)animations.push(star.animate([{transform:'scale(.7)'},{transform:'scale(1.22)'},{transform:'scale(1)'}],{duration:260,easing:'ease-out'}).finished);}}else animations.push(element.animate([{opacity:0,transform:'translateY(7px) scale(.94)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:210,delay:100,easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'}).finished);}await Promise.allSettled(animations);}
+  }finally{idleRender=false;idleMutation--;drawActivePanel();layout();}
+ });idleAction=next.catch(()=>{});return next;};
  const loadIcons=()=>{if(embedded)return;for(const engine of engines()){if(engine.icon||iconCache.has(engine.url))continue;iconCache.set(engine.url,'');void api.searchWebIcon(engine.url).then(image=>{if(image)iconCache.set(engine.url,image);drawMode();drawActivePanel();}).catch(()=>{});}};
  let revision=0,navigation=0,shownKey='',composing=false,inputPending=false,backgroundPending=false;
  let inputTimer:ReturnType<typeof setTimeout>|undefined,refreshTimer:ReturnType<typeof setTimeout>|undefined;
@@ -124,9 +155,10 @@ export async function renderSearch(){
  // Enriching the same Explorer context only changes ranking, not user intent.
  const key=()=>JSON.stringify([input.value,filter,activeMode,scopePath(),context.kind,context.hwnd]);
  const layout=()=>{
-  const active=!!input.value.trim()||!!filter||!!activeMode||searchHistory.length>0;
+  if(idleMutation&&!idleRender)return;
+  const active=!!input.value.trim()||!!filter||!!activeMode||searchHistory.length>0||!!prefs?.savedQueries.length;
   document.body.classList.toggle('search-idle',!embedded&&!active);
-  document.body.classList.toggle('search-shortcut-only',!embedded&&(activeMode?.kind==='engine'||activeMode?.kind==='category'&&activeMode.command.id==='ai'||!activeMode&&!input.value.trim()&&!filter&&searchHistory.length>0));
+  document.body.classList.toggle('search-shortcut-only',!embedded&&(activeMode?.kind==='engine'||activeMode?.kind==='category'&&activeMode.command.id==='ai'||idleVisible()));
   document.body.classList.toggle('search-has-results',embedded&&(results.count>0||active));
   const next=embedded?`${results.count}:${active}`:String(active);
   if(next!==lastLayout){lastLayout=next;void api.searchSize(results.count,active);}
@@ -135,9 +167,11 @@ export async function renderSearch(){
   q('search-summary').textContent=text;lastInlineSummary=inline;if(embedded)q('search-inline-summary').textContent=inline;
  };
  const choose=async(index=results.selected)=>{const item=results.entry(index);if(item)try{const query=input.value.trim();if(query)await api.searchHistoryAdd(query,activeMode?.kind==='category'?activeMode.command.shortcut:activeMode?.kind==='extension'?activeMode.extensions.map(ext=>'.'+ext).join('|'):activeMode?.kind==='one'?'>':filter||'all');if(item.launchKind==='action')await api.searchAction(item.path.slice(7));else await api.searchChoose(item.path);}catch(e){toast(e);}};
- const drawSaved=()=>{if(embedded)return;const row=q('search-saved-row'),saved=prefs?.savedQueries||[];row.hidden=!saved.length;row.innerHTML=saved.map(item=>`<div class="search-saved-item ${selectedSaved===item.id?'selected':''}"><button data-saved-id="${esc(item.id)}" title="${esc(item.query+(item.folder?' · '+item.folder:''))}">${icon('search')}<span>${esc(item.name)}</span></button><button class="search-saved-remove" data-saved-remove="${esc(item.id)}" aria-label="删除 ${esc(item.name)}">${icon('close')}</button></div>`).join('');};
- if(!embedded){q('search-saved-row').addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest<HTMLElement>('[data-saved-id],[data-saved-remove]'):null;if(!target)return;const id=target.dataset.savedId||target.dataset.savedRemove,item=prefs?.savedQueries.find(saved=>saved.id===id);if(!item)return;if(target.dataset.savedRemove){void api.searchSavedQuery('remove',item.id).catch(toast);return;}activeMode=null;selectedSaved=item.id;scopeSelection=item.folder;input.value=item.query;filter=item.filter;syncFilters();drawMode();drawScope();drawSaved();input.focus();newQuery();});
-  q('search-save').onclick=()=>{const query=input.value.trim();if(!query||query.startsWith('>')||activeMode)return;const folder=scopePath();if(prefs.savedQueries.some(item=>item.query===query&&item.filter===filter&&item.folder===folder)){toast('已保存这个搜索');return;}const next={id:crypto.randomUUID(),name:query.slice(0,50),query,filter,folder};void api.searchSavedQuery('add',next).then(result=>{prefs=result;selectedSaved=next.id;scopeSelection=folder;drawScope();drawSaved();}).catch(toast);};}
+ const currentCommand=()=>activeMode?.kind==='category'?activeMode.command.shortcut:activeMode?.kind==='extension'?activeMode.extensions.map(ext=>'.'+ext).join('|'):activeMode?.kind==='one'?'>':activeMode?.kind==='engine'?activeMode.engine.shortcut:filter||'all';
+ const hasFavorite=(value:SavedSearch)=>prefs.savedQueries.some(item=>item.query===value.query&&item.filter===value.filter&&item.folder===value.folder&&(item.command||item.filter||'all')===(value.command||value.filter||'all'));
+ const addFavorite=async(value:SavedSearch)=>{if(hasFavorite(value)){toast('已收藏这个搜索');return;}await mutateIdle(async()=>{if(hasFavorite(value))return;prefs=await api.searchSavedQuery('add',value);selectedSaved=value.id;});};
+ const removeFavorite=(id:string)=>mutateIdle(async()=>{prefs=await api.searchSavedQuery('remove',id);if(selectedSaved===id)selectedSaved='';},['saved:'+id]);
+ if(!embedded)q('search-save').onclick=()=>{const query=input.value.trim();if(!query)return;const command=currentCommand(),next:SavedSearch={id:crypto.randomUUID(),name:query.slice(0,80),query,filter,folder:scopePath(),command,...(command==='ai'&&aiOutput?{result:aiOutput.slice(0,32768)}:{})};void addFavorite(next).catch(toast);};
  const stopTimers=()=>{clearTimeout(inputTimer);clearTimeout(refreshTimer);inputTimer=undefined;refreshTimer=undefined;};
  const invalidate=()=>{revision++;progressive=undefined;stopTimers();clearTimeout(suggestTimer);clearTimeout(historyTimer);backgroundPending=false;inputPending=false;list.setAttribute('aria-busy','false');};
  // Background indexing never cancels an in-flight query. Many notifications become
@@ -157,6 +191,7 @@ export async function renderSearch(){
   const update=(entries:SearchEntry[])=>{
    // Resolve identity at completion, after any arrows pressed during the request.
    results.update(entries,shownKey===request.key||navigation!==request.navigation,text?'没有匹配的项目':'输入名称开始搜索');
+   syncIdleSelection();
    shownKey=request.key;layout();
   };
   try{
@@ -168,7 +203,7 @@ export async function renderSearch(){
     const result=await api.searchCollection(activeMode.command.id as 'recent'|'fav',text);
     if(!current())return;update(result.items);summary(`${result.total} 项 · ${Math.round(result.elapsed)} ms`);return;
    }
-    if(!embedded&&!text&&!filter&&!activeMode){update([]);summary(searchHistory.length?'最近搜索':'');drawActivePanel();return;}
+    if(!embedded&&!text&&!filter&&!activeMode){update([]);summary(idleSummary());drawActivePanel();return;}
     if(!text&&!filter&&!activeMode){
     const seen=new Set<string>(),entries=[...(prefs?.bookmarks||[]),...context.folders.map(f=>f.path)].filter(p=>{const k=p.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;}).map(path=>({path,name:path.split(/[\\/]/).filter(Boolean).pop()||path,directory:true,size:0,modified:0}));
     update(entries);const s=await api.searchState();if(current())summary(results.count?'收藏与已打开的文件夹':s.count?'输入名称开始搜索':'请先在 One 中添加索引目录');return;
@@ -193,22 +228,30 @@ export async function renderSearch(){
   }
  };
  const newQuery=()=>{invalidate();results.select(0);void query();};
-  const enterMode=(mode:NonNullable<typeof activeMode>)=>{activeMode=mode;input.value=mode.query;filter='';selectedSaved='';syncFilters();drawScope();drawSaved();drawMode();input.focus();newQuery();};
+  const enterMode=(mode:NonNullable<typeof activeMode>)=>{activeMode=mode;input.value=mode.query;filter='';selectedSaved='';syncFilters();drawScope();drawMode();input.focus();newQuery();};
   const exitMode=()=>{activeMode=null;input.value='';syncFilters();drawMode();drawScope();input.focus();newQuery();};
+  const openStored=(item:{query:string;command?:string;filter?:string;folder?:string;result?:string},savedId='')=>{const command=item.command||item.filter||'all',mode=parseSearchShortcut(command+' ',prefs?.webEngines,prefs?.shortcutDisabled);activeMode=mode;input.value=item.query;filter=mode?'':item.filter||'';scopeSelection=item.folder||'';selectedSaved=savedId;aiPrompt=command==='ai'?item.query:'';aiOutput=command==='ai'?item.result||'':'';aiError='';syncFilters();drawMode();drawScope();newQuery();input.focus();};
+  const openHistory=(item:AIHistoryEntry)=>openStored({...item,filter:['app:','setting:','folder:','doc:','pic:','video:','audio:','archive:'].includes(item.command)?item.command:''});
   const runAI=async()=>{if(!(activeMode?.kind==='category'&&activeMode.command.id==='ai')||aiBusy)return;const text=input.value.trim();if(!text)return;aiPrompt=text;aiOutput='';aiError='';aiBusy=true;aiRequestId=crypto.randomUUID();const request=aiRequestId;drawActivePanel();summary('AI 正在回答');try{const result=await api.aiInline(text,request);if(request!==aiRequestId)return;aiOutput=result.text;searchHistory=(await api.aiState()).history;}catch(error){if(request===aiRequestId)aiError=errorMessage(error);}finally{if(request===aiRequestId){aiBusy=false;drawActivePanel();summary(aiError||'AI 回答已完成');}}};
-  if(panel)panel.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest<HTMLElement>('[data-search-web],[data-suggestion],[data-ai-stop],[data-ai-chat],[data-ai-copy],[data-history-id]'):null;if(!target)return;
+  if(panel)panel.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest<HTMLElement>('[data-search-web],[data-suggestion],[data-ai-stop],[data-ai-chat],[data-ai-copy],[data-history-id],[data-history-clear],[data-history-remove],[data-history-favorite],[data-saved-id],[data-saved-remove]'):null;if(!target)return;
    if(target.dataset.searchWeb!==undefined&&activeMode?.kind==='engine')void api.searchWeb(activeMode.engine.id,input.value).catch(toast);
    else if(target.dataset.suggestion!==undefined&&activeMode?.kind==='engine'){input.value=suggestions[Number(target.dataset.suggestion)]||input.value;suggestions=[];input.focus();newQuery();}
    else if(target.dataset.aiStop!==undefined){const request=aiRequestId;aiRequestId='';aiBusy=false;drawActivePanel();void api.aiCancel(request).catch(toast);}
    else if(target.dataset.aiCopy!==undefined&&aiOutput)void navigator.clipboard.writeText(aiOutput).catch(toast);
    else if(target.dataset.aiChat!==undefined&&aiOutput)void api.aiChatCreate({query:aiPrompt,answer:aiOutput}).then(id=>api.aiChatOpen(id)).catch(toast);
-   else if(target.dataset.historyId){const item=searchHistory.find(entry=>entry.id===target.dataset.historyId);if(!item)return;const mode=parseSearchShortcut(item.command+' ',prefs?.webEngines,prefs?.shortcutDisabled);activeMode=mode;input.value=item.query;filter=mode?'' :item.command==='all'?'':item.command;aiPrompt=item.command==='ai'?item.query:'';aiOutput=item.command==='ai'?item.result||'':'';aiError='';syncFilters();drawMode();drawScope();newQuery();input.focus();}
+   else if(target.dataset.historyClear!==undefined)void mutateIdle(async()=>{await api.searchHistoryClear();searchHistory=[];},searchHistory.slice(0,20).map(item=>'history:'+item.id)).catch(toast);
+   else if(target.dataset.historyRemove){const id=target.dataset.historyRemove;void mutateIdle(async()=>{await api.searchHistoryRemove(id);searchHistory=searchHistory.filter(item=>item.id!==id);},['history:'+id]).catch(toast);}
+   else if(target.dataset.historyFavorite){const item=searchHistory.find(entry=>entry.id===target.dataset.historyFavorite);if(!item)return;const saved=favoriteFor(item);if(saved)void removeFavorite(saved.id).catch(toast);else{const value:SavedSearch={id:crypto.randomUUID(),name:item.query.slice(0,80),query:item.query,filter:['app:','setting:','folder:','doc:','pic:','video:','audio:','archive:'].includes(item.command)?item.command:'',folder:'',command:item.command,...(item.result?{result:item.result}:{})};void addFavorite(value).catch(toast);} }
+   else if(target.dataset.savedRemove)void removeFavorite(target.dataset.savedRemove).catch(toast);
+   else if(target.dataset.savedId){const saved=prefs?.savedQueries.find(item=>item.id===target.dataset.savedId);if(saved)openStored(saved,saved.id);}
+   else if(target.dataset.historyId){const item=searchHistory.find(entry=>entry.id===target.dataset.historyId);if(item)openHistory(item);}
   });
  if(!embedded)q('search-mode-tag').addEventListener('click',event=>{if(event.target instanceof Element&&event.target.closest('[data-mode-exit]'))exitMode();});
  input.addEventListener('input',e=>{
    if(!embedded&&!activeMode&&!composing){const mode=parseSearchShortcut(input.value,prefs?.webEngines,prefs?.shortcutDisabled);if(mode){enterMode(mode);return;}}
+  if(!input.value.trim()&&!activeMode&&filter){filter='';syncFilters();}
   if(activeMode?.kind==='category'&&activeMode.command.id==='ai'&&input.value.trim()!==aiPrompt){if(aiBusy){const request=aiRequestId;aiRequestId='';aiBusy=false;void api.aiCancel(request).catch(()=>{});}aiOutput='';aiError='';}
-  invalidate();inputPending=true;results.select(0);layout();
+  invalidate();inputPending=true;results.select(0);drawMode();layout();
   if(composing||(e as InputEvent).isComposing)return;
   inputTimer=setTimeout(()=>void query(),75);
  });
@@ -241,9 +284,11 @@ export async function renderSearch(){
   if(e.target instanceof Element&&e.target.closest('#search-filters'))return;
   const item=results.entry();
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+   if(idleVisible()){e.preventDefault();idleSelection+=e.key==='ArrowDown'?1:-1;syncIdleSelection(true);return;}
    e.preventDefault();navigation++;results.select(results.selected+(e.key==='ArrowDown'?1:-1),true);
   }else if(e.ctrlKey&&/^[1-9]$/.test(e.key)&&embedded){e.preventDefault();void choose(Number(e.key)-1);}
   else if(e.key==='Enter'){
+   if(idleVisible()){e.preventDefault();const selected=idleEntries()[idleSelection];if(selected?.kind==='saved'){const saved=prefs.savedQueries.find(item=>item.id===selected.id);if(saved)openStored(saved,saved.id);}else if(selected){const history=searchHistory.find(item=>item.id===selected.id);if(history)openHistory(history);}return;}
    e.preventDefault();if(document.body.classList.contains('search-idle'))return;
     if(activeMode?.kind==='engine'){if(input.value.trim())void api.searchWeb(activeMode.engine.id,input.value).catch(toast);return;}
     if(activeMode?.kind==='category'&&activeMode.command.id==='ai'){void runAI();return;}
@@ -255,11 +300,11 @@ export async function renderSearch(){
   b.hidden=!!(fileMode&&['app:','setting:','folder:'].includes(value)||mediaMode&&!['','pic:','video:','audio:'].includes(value));
   const active=b.dataset.filter===filter;b.classList.toggle('selected',active);b.setAttribute('aria-selected',String(active));
  });
-  q('search-clear').onclick=()=>{if(!input.value&&!activeMode){void api.closeWindow();return;}input.value='';activeMode=null;selectedSaved='';syncFilters();drawMode();drawSaved();input.focus();newQuery();};
+  q('search-clear').onclick=()=>{if(!input.value&&!activeMode&&!filter){input.focus();return;}input.value='';activeMode=null;filter='';selectedSaved='';scopeSelection='';syncFilters();drawMode();drawScope();input.focus();newQuery();};
  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.onclick=event=>{
    if(activeMode&&activeMode.kind!=='extension'&&!(activeMode.kind==='category'&&['file','mm'].includes(activeMode.command.id))){activeMode=null;input.value='';drawMode();}filter=b.dataset.filter!;syncFilters();drawScope();if(event.detail)input.focus();newQuery();
  });
- if(!embedded)q<HTMLButtonElement&{value:string}>('search-scope').onchange=event=>{scopeSelection=(event.currentTarget as HTMLButtonElement&{value:string}).value;selectedSaved='';drawSaved();drawScope();newQuery();};
+ if(!embedded)q<HTMLButtonElement&{value:string}>('search-scope').onchange=event=>{scopeSelection=(event.currentTarget as HTMLButtonElement&{value:string}).value;selectedSaved='';drawScope();newQuery();};
  const applyContext=(c:SearchContext)=>{
   const previous=key(),previousFolder=context.currentFolder;context=c;
   document.title=(c.kind==='dialog'?'跳转文件夹':c.kind==='menu'?'文件夹菜单':'文件搜索')+' · One';
@@ -276,9 +321,9 @@ export async function renderSearch(){
  api.onSearchContext(applyContext);
  if(!embedded){api.onAIEvent(event=>{if(event.kind==='inline-delta'&&event.requestId===aiRequestId&&aiOutput.length===event.offset){aiOutput+=event.text;drawActivePanel();}else if(event.kind==='changed')void api.aiState().then(state=>{searchHistory=state.history;drawActivePanel();layout();}).catch(()=>{});});void api.aiState().then(state=>{searchHistory=state.history;drawActivePanel();layout();}).catch(()=>{});}
  api.onSearchReset(()=>{
-  invalidate();shownKey='';input.value='';activeMode=null;filter='';scopeSelection='';selectedSaved='';syncFilters();drawMode();drawSaved();drawScope();input.focus();
-  const reset=revision;void api.searchPreferences().then(p=>{prefs=p;drawScope();drawSaved();loadIcons();lastLayout='';layout();if(revision===reset)void query();});void api.searchReady();
+  invalidate();shownKey='';input.value='';activeMode=null;filter='';scopeSelection='';selectedSaved='';syncFilters();drawMode();drawActivePanel();drawScope();input.focus();
+  const reset=revision;void api.searchPreferences().then(p=>{prefs=p;drawScope();drawActivePanel();loadIcons();lastLayout='';layout();if(revision===reset)void query();});void api.searchReady();
  });
-  input.focus();void api.searchReady();await subscribeSnapshot(api.onSearchPreferences,api.searchPreferences,next=>{const changed=JSON.stringify(prefs?.bookmarks)!==JSON.stringify(next.bookmarks),ranking=JSON.stringify([prefs?.priorities,prefs?.fuzzy,prefs?.pinyin])!==JSON.stringify([next.priorities,next.fuzzy,next.pinyin]),oldScope=scopePath(),disabledChanged=JSON.stringify(prefs?.shortcutDisabled)!==JSON.stringify(next.shortcutDisabled);prefs=next;const modeId=activeMode?.kind==='one'?'one':activeMode?.kind==='extension'?'extension':activeMode?.kind==='category'?activeMode.command.id:'';const deactivated=!!modeId&&next.shortcutDisabled.includes(modeId);if(deactivated){activeMode=null;input.value='';filter='';syncFilters();}if(selectedSaved&&!next.savedQueries.some(item=>item.id===selectedSaved)){selectedSaved='';scopeSelection='';}drawScope();drawSaved();drawMode();loadIcons();lastLayout='';layout();if(deactivated||disabledChanged&&input.value.startsWith('>'))newQuery();else if(ranking||oldScope!==scopePath()||changed&&!input.value.trim()&&!filter)refresh();});
+  input.focus();void api.searchReady();await subscribeSnapshot(api.onSearchPreferences,api.searchPreferences,next=>{const changed=JSON.stringify(prefs?.bookmarks)!==JSON.stringify(next.bookmarks),ranking=JSON.stringify([prefs?.priorities,prefs?.fuzzy,prefs?.pinyin])!==JSON.stringify([next.priorities,next.fuzzy,next.pinyin]),oldScope=scopePath(),disabledChanged=JSON.stringify(prefs?.shortcutDisabled)!==JSON.stringify(next.shortcutDisabled);prefs=next;const modeId=activeMode?.kind==='one'?'one':activeMode?.kind==='extension'?'extension':activeMode?.kind==='category'?activeMode.command.id:'';const deactivated=!!modeId&&next.shortcutDisabled.includes(modeId);if(deactivated){activeMode=null;input.value='';filter='';syncFilters();}if(selectedSaved&&!next.savedQueries.some(item=>item.id===selectedSaved)){selectedSaved='';scopeSelection='';}drawScope();drawActivePanel();drawMode();loadIcons();lastLayout='';layout();if(deactivated||disabledChanged&&input.value.startsWith('>'))newQuery();else if(ranking||oldScope!==scopePath()||changed&&!input.value.trim()&&!filter)refresh();});
  if(context.hwnd===0)applyContext(await api.searchContext());else void query();
 }

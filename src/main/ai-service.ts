@@ -46,6 +46,7 @@ export class OneAIService{
  private conversation(id:string){const c=this.data.conversations.find(c=>c.id===id);if(!c)throw Error('对话已不存在');return c;}
  recordHistory(query:string,command:string,result?:string,engineId?:string){const q=requireText(query,2000);if(typeof command!=='string'||command.length>80)throw Error('搜索命令无效');const previous=this.data.history[0];if(previous?.query===q&&previous.command===command){previous.time=Date.now();if(result!==undefined)previous.result=result.slice(0,32768);if(engineId)previous.engineId=engineId;}else this.data.history.unshift({id:randomUUID(),query:q,command,time:Date.now(),...(result!==undefined?{result:result.slice(0,32768)}:{}),...(engineId?{engineId}:{})});this.data.history=this.data.history.slice(0,200);this.save();}
  clearHistory(){this.data.history=[];this.save();}
+ removeHistory(id:string){if(!/^[a-f0-9-]{36}$/i.test(id))throw Error('搜索历史标识无效');const count=this.data.history.length;this.data.history=this.data.history.filter(item=>item.id!==id);if(this.data.history.length!==count)this.save();}
  private async key(id:string){const encrypted=this.data.keys[id];if(!encrypted)return '';try{return safeStorage.decryptString(Buffer.from(encrypted,'base64'));}catch{throw Error('无法解密密钥，请重新填写 AI 服务密钥');}}
  async models(id:string){return (await this.modelCatalog(id)).map(model=>model.id);}
  async modelCatalog(id:string):Promise<AIModel[]>{const profile=this.data.profiles.find(p=>p.id===id);if(!profile)throw Error('AI 服务不存在');return this.queryModelCatalog(profile,await this.key(id));}

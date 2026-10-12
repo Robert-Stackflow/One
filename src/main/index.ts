@@ -703,6 +703,7 @@ function registerIPC() {
   handle('ai-open-link',async(_event,value:string)=>{if(typeof value!=='string'||value.length>8192)throw Error('链接无效');const url=new URL(value);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('只允许打开网页链接');await shell.openExternal(url.href);},['ai-chat']);
   handle('search-history-add',(_event,query:string,command:string,result?:string,engineId?:string)=>aiService.recordHistory(query,command,result,engineId),['search']);
   handle('search-history-clear',()=>aiService.clearHistory(),['main','search']);
+  handle('search-history-remove',(_event,id:string)=>aiService.removeHistory(id),['search']);
   handle('diagnostics-list',()=>diagnosticsList(app.getPath('userData'),app.getPath('crashDumps')),['main']);
   handle('diagnostics-recent',()=>diagnosticsRecent(app.getPath('userData'),app.getPath('crashDumps')),['main']);
   handle('diagnostics-delete',(_event,ids)=>diagnosticsDelete(app.getPath('userData'),app.getPath('crashDumps'),ids),['main']);
