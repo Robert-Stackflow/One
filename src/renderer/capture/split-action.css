@@ -1,0 +1,62 @@
+.capture-heading-actions .capture-entry-menu:not(:popover-open){display:none}
+.capture-heading-actions .action-split {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.capture-heading-actions .action-split > button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.capture-heading-actions .action-split > .split-chevron {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+  border-left: 1px solid var(--line);
+}
+.capture-heading-actions .action-split > .split-chevron .icon {
+  width: 14px;
+  height: 14px;
+}
+.capture-heading-actions .action-split > button:hover,
+.capture-heading-actions .action-split > button[aria-expanded='true'] {
+  background: var(--hover);
+}
+.capture-heading-actions .action-split.is-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.capture-heading-actions .action-split.is-primary > button {
+  color: var(--on-accent);
+}
+.capture-heading-actions .action-split.is-primary > .split-chevron {
+  border-left-color: color-mix(in srgb, var(--on-accent) 24%, transparent);
+}
+.capture-heading-actions .action-split.is-primary > button:hover,
+.capture-heading-actions .action-split.is-primary > button[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--on-accent) 14%, transparent);
+}
+.capture-heading-actions .capture-entry-menu {
+  width: 225px;
+  padding: 5px;
+  margin: 0;
+  inset: auto;
+}
+.capture-heading-actions .capture-entry-menu > button {
+  display: flex;
+  width: 100%;
+  padding: 9px 11px;
+  gap: 10px;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.capture-heading-actions .capture-entry-menu > button:hover {
+  background: var(--hover);
+}

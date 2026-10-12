@@ -1,0 +1,579 @@
+.content[data-current-page=capture]{display:flex;flex-direction:column;overflow:hidden}
+.content[data-current-page=capture]>.page-heading{flex:none;gap:16px;flex-wrap:wrap}
+#page-capture{flex:1;min-height:0}
+.capture-page{height:100%;min-height:0;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+.capture-page .capture-sources{display:flex;flex-direction:column;flex:1;min-height:0;gap:18px}
+.capture-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.capture-page .capture-error{display:flex;align-items:center;gap:12px;color:var(--danger);margin:0;white-space:pre-wrap}
+.capture-page .capture-error[hidden]{display:none}
+.capture-page .page-note{color:var(--muted)}
+.capture-page .filter-field input{width:0;min-width:0}
+.capture-page .filter-field .search-clear{width:26px;min-height:26px;padding:5px}
+.capture-page .capture-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 25px;
+  background: var(--soft);
+  margin-bottom: 22px;
+  width: max-content;
+  max-width: 100%;
+}
+.capture-page .capture-mode button {
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 16px;
+  min-height: 36px;
+}
+.capture-page .capture-mode button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 3px #0000000c;
+}
+@media (prefers-reduced-motion: no-preference) {
+}
+/* Page chrome is fixed; only the page's content owner may scroll. */
+.capture-page .capture-mode {
+  flex-shrink: 0;
+  align-self: flex-start;
+  flex-wrap: wrap;
+}
+/* Screenshot sources are direct cards on the page, with one optional list scrollbar. */
+.capture-page .capture-source-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+.capture-page .capture-source-heading h2 {
+  margin: 0;
+  font-size: calc(16px * var(--text-scale, 1));
+  font-weight: 500;
+}
+.capture-page .capture-source-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--control-font);
+  line-height: 1.6;
+}
+.capture-page .capture-source-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 8px 12px 2px;
+  scrollbar-gutter: stable;
+}
+.capture-page #capture-windows {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+  align-content: start;
+  overflow: visible;
+}
+.capture-page .capture-quick-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.capture-page .capture-quick-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+@media (max-width: 900px) {
+  .capture-page #capture-windows {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+  }
+}
+@media (max-height: 650px) {
+  .capture-page .capture-source-heading {
+    margin-top: 0;
+  }
+}
+
+/* Multi-window studio: one scrollable source column and a fixed free-placement canvas. */
+.capture-page .capture-source-scroll.composition-host {
+  overflow: hidden;
+  padding: 0;
+  scrollbar-gutter: auto;
+}
+.capture-page #capture-windows.window-composition-editor {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.38fr) minmax(0, 1fr);
+  gap: 24px;
+  height: 100%;
+  min-height: 0;
+  align-content: stretch;
+}
+.capture-page .composition-list,
+.capture-page .composition-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.capture-page .composition-list {
+  gap: 12px;
+  padding-right: 16px;
+  border-right: 1px solid var(--line);
+}
+.capture-page .composition-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--control-font);
+}
+.capture-page .composition-list-heading small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.capture-page .composition-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 32px;
+  min-width: 0;
+}
+.capture-page .composition-search-row > .filter-field {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  box-sizing: border-box;
+}
+.capture-page .composition-search-row > button {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 5px;
+}
+.capture-page .composition-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 6px 6px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.capture-page .composition-source {
+  position: relative;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 10px;
+  padding: 8px;
+  height: auto;
+  min-height: 64px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.capture-page .composition-source img {
+  width: 64px;
+  height: 44px;
+  object-fit: contain;
+  background: var(--soft);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.capture-page .composition-source > span:not(.composition-source-mark) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+.capture-page .composition-source strong {
+  font-size: 12px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.capture-page .composition-source small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.capture-page .composition-source.selected {
+  border-color: color-mix(in srgb, #668e81 72%, var(--surface));
+  background: color-mix(in srgb, #668e81 4%, var(--surface));
+}
+.capture-page .composition-source-mark {
+  display: grid;
+  place-items: center;
+  color: #668e81;
+  flex: 0 0 16px;
+}
+.capture-page .composition-source-mark > .icon {
+  width: 14px;
+  height: 14px;
+}
+.capture-page .composition-workspace {
+  gap: 10px;
+}
+.capture-page .composition-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+.capture-page .composition-heading strong {
+  white-space: nowrap;
+  font-size: var(--control-font);
+  font-weight: 500;
+}
+.capture-page #composition-size {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.capture-page .composition-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.capture-page .composition-actions > button {
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.capture-page .composition-stage {
+  flex: 1;
+  min-height: 100px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, var(--soft) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--soft) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--soft) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--soft) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  touch-action: none;
+}
+.capture-page .composition-stage.is-dragging {
+  border-color: #668e81;
+}
+.capture-page #composition-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.capture-page #composition-empty svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.3;
+  opacity: 0.7;
+}
+.capture-page #composition-empty strong {
+  font-size: var(--control-font);
+  font-weight: 400;
+}
+.capture-page #composition-empty p {
+  margin: 0;
+  font-size: 11px;
+}
+.capture-page #composition-layers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.capture-page .composition-layer {
+  position: absolute;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: 0;
+  margin: 0;
+  background: var(--surface);
+  box-shadow: 0 3px 12px #0002;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  overflow: hidden;
+}
+.capture-page .composition-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+.capture-page .composition-layer.selected {
+  outline: 1px solid #668e81;
+  outline-offset: 1px;
+}
+.capture-page .composition-layer-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px;
+  text-align: left;
+  background: #0008;
+  color: #fff;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.capture-page .composition-layer:is(:hover, :focus-visible, .selected) .composition-layer-label {
+  opacity: 1;
+}
+.capture-page .composition-inspector {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+.capture-page .composition-position {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.capture-page .composition-position label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.capture-page .composition-position .number-control {
+  width: 128px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.capture-page .composition-position .number-control input {
+  width: 0;
+  flex: 1;
+  min-width: 0;
+}
+.capture-page .composition-layer-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.capture-page .composition-layer-actions button {
+  padding: 4px 7px;
+  height: 28px;
+  min-height: 28px;
+  font-size: 11px;
+}
+.capture-page .composition-tip {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.capture-page .composition-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  width: 160px;
+  height: 100px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #668e81;
+  background: var(--surface);
+  box-shadow: 0 8px 24px #0003;
+  opacity: 0.85;
+}
+.capture-page .composition-drag-ghost img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+@media (max-width: 900px) {
+  .capture-page #capture-windows.window-composition-editor {
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 14px;
+  }
+  .capture-page .composition-list {
+    padding-right: 10px;
+  }
+  .capture-page .composition-source img {
+    width: 40px;
+    height: 34px;
+  }
+  .capture-page .composition-source {
+    gap: 6px;
+  }
+}
+
+.capture-page #composition-feedback:empty {
+  display: none;
+}
+.capture-page .composition-layer-actions button {
+  width: 28px;
+  padding: 4px;
+}
+@media (max-width: 1100px) {
+  .capture-page #composition-size {
+    display: none;
+  }
+  .capture-page .composition-heading {
+    gap: 4px;
+  }
+  .capture-page .composition-actions > button {
+    padding: 4px 6px;
+  }
+  .capture-page .composition-inspector {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .capture-page .composition-position .number-control {
+    width: 116px;
+  }
+  .capture-page .composition-position .number-control button {
+    width: 20px;
+    flex: 0 0 20px;
+    padding: 3px;
+  }
+}
+:is(.capture-page,.recording-page) .display-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  min-width: 0;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--fg);
+  text-align: left;
+  overflow: hidden;
+  transition:
+    border-color 0.16s,
+    box-shadow 0.16s;
+}
+:is(.capture-page,.recording-page) .display-card:hover {
+  border-color: color-mix(in srgb, var(--fg) 35%, var(--line));
+  background: var(--surface);
+}
+:is(.capture-page,.recording-page) .display-card.selected {
+  border-color: color-mix(in srgb, #668e81 72%, var(--surface));
+  background: color-mix(in srgb, #668e81 5%, var(--surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #668e81 10%, transparent);
+}
+:is(.capture-page,.recording-page) .display-card:disabled {
+  opacity: 1;
+  cursor: default;
+}
+:is(.capture-page,.recording-page) .display-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16/9;
+  width: 100%;
+  background: color-mix(in srgb, var(--fg) 3%, var(--surface));
+  overflow: hidden;
+}
+:is(.capture-page,.recording-page) .display-preview > .icon {
+  width: 48px;
+  height: 48px;
+  stroke-width: 1;
+  color: var(--muted);
+}
+:is(.capture-page,.recording-page) .display-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+:is(.capture-page,.recording-page) .display-card-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+:is(.capture-page,.recording-page) .display-card-caption > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+:is(.capture-page,.recording-page) .display-card-caption strong {
+  display: block;
+  font-size: var(--control-font);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:is(.capture-page,.recording-page) .display-card-caption small {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+:is(.capture-page,.recording-page) .source-check {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: transparent;
+  flex-shrink: 0;
+}
+:is(.capture-page,.recording-page) .selected .source-check {
+  background: #668e81;
+  color: #fff;
+  border-color: #668e81;
+}
+:is(.capture-page,.recording-page) .source-check > .icon {
+  width: 12px;
+  height: 12px;
+}
