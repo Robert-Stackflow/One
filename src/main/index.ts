@@ -9,6 +9,7 @@ import type {ArchiveRequest} from '../shared/archive';
 import {PopupLifecycle,PopupReadiness,deferPopupBlur} from './popup-lifecycle';
 import {FileToolsService} from './file-tools-service';
 import {ArchiveService} from './archive-service';
+import {archiveSourceSize} from './archive-source-size';
 import {ArchiveTasks} from './archive-tasks';
 import {archiveAssociation} from './archive-associations';
 import {archiveLaunchPath} from './archive-launch';
@@ -366,7 +367,7 @@ function openArchiveTask(action:ArchiveOpenAction,paths:string[]){
  if(quitting||finishingQuit||!paths.length)throw Error('无法打开压缩任务');
  const first=paths[0],name=basename(first),stem=paths.length===1?name.replace(/\.[^.]+$/,'')||name:'选中项';
  const suffix=action==='quick-7z'?'.7z':'.zip',suggestedPath=action==='choose'?dirname(first):join(dirname(first),stem+suffix);
- const window=windowFor('archive-task',{width:600,height:action==='create'?466:action==='choose'?380:action==='quick-zip'||action==='quick-7z'?340:400,minWidth:500,minHeight:320,title:'压缩与解压 · One',frame:true,titleBarStyle:'hidden',hasShadow:true});
+ const window=windowFor('archive-task',{width:action==='create'?900:600,height:action==='create'?620:action==='choose'?380:action==='quick-zip'||action==='quick-7z'?340:400,minWidth:action==='create'?720:500,minHeight:action==='create'?480:320,title:'压缩与解压 · One',frame:true,titleBarStyle:'hidden',hasShadow:true});
  const id=window.webContents.id;archiveTaskWindows.set(id,{action,paths,suggestedPath,conflict:settings.archive.conflict});
  window.once('ready-to-show',()=>{if(!window.isDestroyed()){window.show();window.focus();}});
  window.on('closed',()=>archiveTaskWindows.delete(id));
@@ -636,6 +637,7 @@ function registerIPC() {
   handle('file-action-open',(_event,tool,paths)=>{if(!['rename','locksmith'].includes(tool)||!Array.isArray(paths)||paths.length>(tool==='locksmith'?32:4096))throw Error('文件操作请求无效');openFileAction({tool,paths:paths.map(filePath)});});
   handle('file-tools-run',(event,task)=>fileTools.run(event.sender.id,task));
   handle('archive-task-data',event=>{const data=archiveTaskWindows.get(event.sender.id);if(!data)throw Error('压缩任务窗口无效');return {...data,closeOnComplete:settings.archive.closeOnComplete};},['archive-task']);
+  handle('archive-source-size',(event,source)=>{if(archiveTaskWindows.get(event.sender.id)?.action!=='create')throw Error('压缩任务窗口无效');return archiveSourceSize(source);},['archive-task']);
   handle('archive-task-auto-close',async(event,value)=>{if(!archiveTaskWindows.has(event.sender.id)||typeof value!=='boolean')throw Error('自动关闭设置无效');const next=await saveSettings(current=>mergeSettings(current,{archive:{closeOnComplete:value}}));return next.archive.closeOnComplete;},['archive-task']);
   handle('archive-run',(event,request:ArchiveRequest,id?:string)=>archiveService.run(event.sender.id,request,id),['main','archive-task']);
   handle('archive-edit-start',(event,request:import('../shared/archive-edit-session').ArchiveEditStart,id?:string)=>archiveService.edits.start(event.sender.id,request,id),['main']);

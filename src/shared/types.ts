@@ -43,6 +43,7 @@ export interface OneAPI {
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;
   archiveTaskData():Promise<{action:import('./archive-actions').ArchiveOpenAction;paths:string[];suggestedPath:string;conflict:import('./archive').ArchiveConflict;closeOnComplete:boolean}>;
+  archiveSourceSize(path:string):Promise<number|null>;
   archiveTaskAutoClose(value:boolean):Promise<boolean>;
   echoReady():Promise<void>;
   fileToolsRun(task:import('./file-tools').FileToolTask):Promise<import('./file-tools').FileToolReport>;

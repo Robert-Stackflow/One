@@ -14,18 +14,43 @@ async function main(){
  const source=path.join(sourceDir,'sample.txt'),other=path.join(sourceDir,'second.txt');
  await fs.writeFile(source,'Archive shell request\n');await fs.writeFile(other,'Second request\n');
  const request=async(tool,paths)=>{const file=path.join(inbox,crypto.randomUUID()+'.json');await fs.writeFile(file,JSON.stringify({tool,paths}));return file;};
- const capture=async(page,name)=>{if(!process.env.ONE_CAPTURE_ARCHIVE_TASK)return;const folder=path.resolve('work/current/archive-window-shots');await fs.mkdir(folder,{recursive:true});await page.screenshot({path:path.join(folder,name+'.png')});const geometry=await page.evaluate(()=>{const main=document.querySelector('.archive-task-main');return {header:document.querySelector('.archive-task-header')?.getBoundingClientRect().toJSON(),main:main?.getBoundingClientRect().toJSON(),overflow:(main?.scrollHeight||0)-(main?.clientHeight||0)}});console.log(`capture ${name} ${JSON.stringify(geometry)}`);};
- const initial=await request('archive-create',[source]);
+ const capture=async(page,name)=>{if(!process.env.ONE_CAPTURE_ARCHIVE_TASK&&!(process.env.ONE_CAPTURE_ARCHIVE_READY&&name==='compression-ready'))return;const folder=path.resolve('work/current/archive-window-shots');await fs.mkdir(folder,{recursive:true});await page.screenshot({path:path.join(folder,name+'.png')});const geometry=await page.evaluate(()=>{const main=document.querySelector('.archive-task-main');return {header:document.querySelector('.archive-task-header')?.getBoundingClientRect().toJSON(),main:main?.getBoundingClientRect().toJSON(),overflow:(main?.scrollHeight||0)-(main?.clientHeight||0)}});console.log(`capture ${name} ${JSON.stringify(geometry)}`);};
+ const initial=await request('archive-create',[source,other]);
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,TEMP:root,TMP:root};delete env.ELECTRON_RUN_AS_NODE;
  const app=await electron.launch({args:[path.resolve('.'),`--one-shell-request=${initial}`],env});
  const task=async(count=1)=>{await expect.poll(()=>app.windows().filter(page=>/[?&]view=archive-task(?:$|&)/.test(page.url())).length,{timeout:20000}).toBe(count);const page=app.windows().filter(page=>/[?&]view=archive-task(?:$|&)/.test(page.url())).at(-1);await page.waitForSelector('#archive-task-start',{state:'attached'});return page;};
  const close=async(page)=>{await page.locator('#archive-task-cancel').click({noWaitAfter:true}).catch(error=>{if(!page.isClosed())throw error;});await expect.poll(()=>app.windows().includes(page)).toBe(false);};
  const createFixture=(target,password='')=>{const bytes=Buffer.from(password),packet=Buffer.alloc(4+bytes.length);packet.writeUInt32LE(bytes.length);bytes.copy(packet,4);const result=spawnSync(path.resolve('dist/native/One.Archive.exe'),['create',target,source],{input:packet,encoding:'utf8',windowsHide:true,env});assert.equal(result.status,0,result.stdout+result.stderr);};
  try{
-  const manual=await task();await expect(manual.locator('#archive-task-path')).toHaveValue(path.join(sourceDir,'sample.zip'));await capture(manual,'compression-ready');
+  const manual=await task();await expect(manual.locator('#archive-task-path')).toHaveValue(path.join(sourceDir,'选中项.zip'));await expect(manual.locator('.archive-create-item')).toHaveCount(2);
+  await manual.locator('[data-remove-source="1"]').click();await expect(manual.locator('.archive-create-item')).toHaveCount(1);
+  await app.evaluate(({ipcMain},selected)=>{ipcMain.removeHandler('one:pick-file');ipcMain.handle('one:pick-file',()=>selected);},other);
+  await manual.locator('#archive-task-add-file').click();await expect(manual.locator('.archive-create-item')).toHaveCount(2);
+  await manual.locator('[data-remove-source="1"]').click();
+  const bundle=path.join(root,'bundle');await fs.mkdir(bundle);await fs.writeFile(path.join(bundle,'nested.txt'),'folder size');
+  await app.evaluate(({ipcMain},selected)=>{ipcMain.removeHandler('one:pick-directory');ipcMain.handle('one:pick-directory',()=>selected);},bundle);
+  await manual.locator('#archive-task-add-folder').click();await expect(manual.locator('.archive-create-item')).toHaveCount(2);
+  await expect(manual.locator('.archive-create-item-size').nth(1)).toHaveText('11 B');await expect(manual.locator('#archive-task-source-total')).toContainText('总大小 · 33 B');
+  await manual.locator('[data-remove-source="1"]').click();await expect(manual.locator('#archive-task-source-total')).toHaveText('总大小 · 22 B');
+  await manual.locator('#archive-task-format').click();await manual.getByRole('option',{name:'TAR.GZ'}).click();await expect(manual.locator('#archive-task-path')).toHaveValue(path.join(sourceDir,'选中项.tar.gz'));
+  await manual.locator('#archive-task-format').click();await manual.getByRole('option',{name:'ZIP',exact:true}).click();
+  await manual.locator('#archive-task-advanced summary').click();await manual.locator('#archive-task-volume').click();await manual.getByRole('option',{name:'自定义大小…'}).click();
+  await manual.locator('#archive-task-volume-custom').fill('0');await manual.locator('#archive-task-start').click();await expect(manual.locator('#archive-task-feedback.error')).toContainText('分卷大小');
+  await manual.locator('#archive-task-volume').click();await manual.getByRole('option',{name:'不分卷'}).click();await capture(manual,'compression-ready');
   const manualTarget=path.join(outputDir,'manual.zip');await manual.locator('#archive-task-path').fill(manualTarget);
   await manual.locator('#archive-task-start').click();await expect(manual.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});
   await capture(manual,'compression-complete');await fs.stat(manualTarget);await assert.rejects(fs.stat(initial),{code:'ENOENT'});await close(manual);
+
+  await request('archive-create',[source]);const tarTask=await task();
+  await tarTask.locator('#archive-task-format').click();await tarTask.getByRole('option',{name:'TAR.GZ'}).click();
+  const tarTarget=path.join(outputDir,'manual.tar.gz');await tarTask.locator('#archive-task-path').fill(tarTarget);
+  await tarTask.locator('#archive-task-start').click();await expect(tarTask.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});await fs.stat(tarTarget);await close(tarTask);
+
+  const splitSource=path.join(sourceDir,'split.bin');await fs.writeFile(splitSource,crypto.randomBytes(3*1024*1024));
+  await request('archive-create',[splitSource]);const splitTask=await task();
+  await splitTask.locator('#archive-task-advanced summary').click();await splitTask.locator('#archive-task-volume').click();await splitTask.getByRole('option',{name:'自定义大小…'}).click();
+  await splitTask.locator('#archive-task-volume-custom').fill('1');const splitTarget=path.join(outputDir,'split.zip');await splitTask.locator('#archive-task-path').fill(splitTarget);
+  await splitTask.locator('#archive-task-start').click();await expect(splitTask.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});await fs.stat(splitTarget);await fs.stat(path.join(outputDir,'split.z01'));await close(splitTask);
 
   await request('archive-create-zip',[other]);const quickZip=await task();
   await expect(quickZip.locator('#archive-task-feedback')).toContainText('已创建',{timeout:30000});
@@ -83,6 +108,9 @@ async function main(){
   await expect(main.locator('[data-page="archive"]')).toHaveClass(/active/,{timeout:20000});
   await expect(main.locator('#archive-source')).toHaveValue(manualTarget);
   await expect(main.locator('.archive-entry-name')).toHaveText('sample.txt',{timeout:20000});
+  await main.locator('[data-archive-mode="create"]').click();await main.locator('#archive-advanced-open').click();
+  await main.locator('#archive-volume').click();await main.getByRole('option',{name:'约 4.7 GB'}).click();await expect(main.locator('#archive-advanced-summary')).toContainText('约 4.7 GB');
+  await main.locator('#archive-volume').click();await main.getByRole('option',{name:'自定义大小…'}).click();await expect(main.locator('#archive-volume-custom-row')).toBeVisible();
   console.log('Archive shell passed: standalone manual and quick creation, extraction progress, password before extraction, and browse in main window.');
  }finally{await app.close();const relative=path.relative(base,root);assert(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));await fs.rm(root,{recursive:true,force:true});}
 }
