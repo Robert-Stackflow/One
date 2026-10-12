@@ -127,3 +127,8 @@ html.transparent-root,html.transparent-root body,html.transparent-root #app{back
 .select-popup-options{min-height:0;overflow:auto;overscroll-behavior:contain}
 .select-popup-search{width:100%;min-height:34px;flex:none;margin-bottom:5px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;outline:none}
 .select-popup-search:focus{border-color:color-mix(in srgb,var(--fg) 38%,var(--line))}
+.custom-select>span{display:flex;align-items:center;gap:6px;min-width:0}
+.custom-select .select-option-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.select-popup [role=option]{display:flex;align-items:center;gap:8px}.select-option-label{min-width:0}
+.select-popup [role=option][hidden]{display:none}
+.select-option-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex:none}.select-option-icon :is(.icon,img){display:block;width:16px;height:16px;flex:none}

@@ -2,11 +2,17 @@ import {fontPresets, fontStack, validFont, type InstalledFont, type UIFont} from
 import {openControl, releaseControl} from './controls';
 import {api, icon} from './ui';
 import './font-picker.css';
-import {loadUIFont,refreshUIFontCache} from './font-runtime';
+import {loadUIFont,refreshUIFontCache,releaseUIFont} from './font-runtime';
 import {focusOption,revealOption} from './option-list';
+import {onRemoval} from './dom-lifecycle';
 
 interface FontOption {value: UIFont; label: string; family: string; search: string; missing?: boolean}
+interface FontPickerController {dispose():void}
+const pickers=new WeakMap<HTMLButtonElement,FontPickerController>();
 export function setupFontPicker(button: HTMLButtonElement) {
+  const existing=pickers.get(button);if(existing)return existing;
+  const id=button.id||'font-'+crypto.randomUUID(),originalValue=Object.getOwnPropertyDescriptor(button,'value');
+  let disposed=false,loadRevision=0,previewFont:UIFont|undefined,modal:HTMLDialogElement|null=null;
   let value: UIFont = 'system';
   let fonts: InstalledFont[] = [];
   let loaded = false, loading = false, error = '';
@@ -21,7 +27,7 @@ export function setupFontPicker(button: HTMLButtonElement) {
     label.textContent = fontPresets.find(p => p.value === value)?.label || fonts.find(f => 'installed:' + f.family === value)?.label || value.slice(10);
     button.title = label.textContent;
   };
-  Object.defineProperty(button, 'value', {get: () => value, set: (next: string) => {if (validFont(next)) {value = next; display();}}});
+  Object.defineProperty(button, 'value', {configurable:true,get: () => value, set: (next: string) => {if (validFont(next)) {value = next; display();}}});
   display();
   const options = (): FontOption[] => {
     const result: FontOption[] = fontPresets.map(p => ({...p, family: '', search: p.label}));
@@ -31,6 +37,8 @@ export function setupFontPicker(button: HTMLButtonElement) {
   };
   const close = () => {
     clearTimeout(sampleTimer);cancelAnimationFrame(sampleFrame);sampleFrame=0;++sampleRevision;focused=null;
+    if(previewFont){releaseUIFont(previewFont);previewFont=undefined;}
+    modal?.removeEventListener('close',close);modal=null;
     menu?.remove(); menu = list = sample = status = null; search = null; refresh = null;
     button.setAttribute('aria-expanded', 'false'); button.removeAttribute('aria-controls');
     document.removeEventListener('pointerdown', outside, true); window.removeEventListener('resize', close);
@@ -39,6 +47,7 @@ export function setupFontPicker(button: HTMLButtonElement) {
   const outside = (event: PointerEvent) => {if (!button.contains(event.target as Node) && !menu?.contains(event.target as Node)) close();};
   const position = () => {
     if (!menu) return;
+    if(disposed||!button.isConnected||button.disabled||!button.getClientRects().length){close();return;}
     const rect = button.getBoundingClientRect(), width = Math.min(360, window.innerWidth - 16);
     menu.style.width = width + 'px';
     menu.style.left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)) + 'px';
@@ -53,11 +62,12 @@ export function setupFontPicker(button: HTMLButtonElement) {
     if (item && visible.length) {search?.setAttribute('aria-activedescendant', item.id); if (scroll&&list) revealOption(list,item);}
     else search?.removeAttribute('aria-activedescendant');
     const selected=visible[active]?.value||value,revision=++sampleRevision;
+    if(previewFont&&previewFont!==selected){releaseUIFont(previewFont);previewFont=undefined;}
     cancelAnimationFrame(sampleFrame);sampleFrame=requestAnimationFrame(()=>{sampleFrame=0;if(sample&&revision===sampleRevision)sample.style.fontFamily=fontStack(selected);});
-    clearTimeout(sampleTimer);sampleTimer=setTimeout(()=>{void loadUIFont(selected).then(stack=>{if(sample&&revision===sampleRevision)sample.style.fontFamily=stack;}).catch(()=>{});},160);
+    clearTimeout(sampleTimer);sampleTimer=setTimeout(()=>{previewFont=selected;void loadUIFont(selected).then(stack=>{if(sample&&revision===sampleRevision)sample.style.fontFamily=stack;}).catch(()=>{});},160);
   };
   const choose = (index: number) => {
-    const option = visible[index]; if (!option || option.missing) return;
+    const option = visible[index]; if (disposed||button.disabled||!button.isConnected||!option || option.missing) return;
     value = option.value; display(); close(); button.focus(); button.dispatchEvent(new Event('change', {bubbles: true}));
   };
   const draw = () => {
@@ -66,7 +76,7 @@ export function setupFontPicker(button: HTMLButtonElement) {
     visible = options().filter(o => tokens.every(token => o.search.includes(token)));
     const nodes = document.createDocumentFragment();
     visible.forEach((option, index) => {
-      const node = document.createElement('div'); node.className = 'font-option'; node.id = `appearance-font-option-${index}`;
+      const node = document.createElement('div'); node.className = 'font-option'; node.id = `${id}-option-${index}`;
       node.setAttribute('role', 'option'); node.setAttribute('aria-label', option.label); node.setAttribute('aria-selected', String(option.value === value));
       if (option.missing) node.setAttribute('aria-disabled', 'true');
       const text = document.createElement('span'); text.textContent = option.label; node.append(text);
@@ -84,28 +94,30 @@ export function setupFontPicker(button: HTMLButtonElement) {
     position(); activate(Math.max(0, visible.findIndex(o => o.value === value)));
   };
   const load = async (force: boolean) => {
-    if (loading) return;
+    if (loading||disposed) return;
+    const revision=++loadRevision;
     loading = true; error = ''; draw();
-    try {if(force)refreshUIFontCache();fonts = await api.installedFonts(force); loaded = true; display();}
-    catch {error = '无法读取系统字体，点击刷新重试。';}
-    finally {loading = false; draw();}
+    try {if(force)refreshUIFontCache();const next=await api.installedFonts(force);if(disposed||revision!==loadRevision)return;fonts=next;loaded = true; display();}
+    catch {if(!disposed&&revision===loadRevision)error = '无法读取系统字体，点击刷新重试。';}
+    finally {if(!disposed&&revision===loadRevision){loading = false; draw();}}
   };
   const open = () => {
-    if (menu) return;
+    if (menu||disposed||button.disabled||!button.isConnected||!button.getClientRects().length) return;
     openControl(close);
     menu = document.createElement('div'); menu.className = 'select-popup font-popup'; menu.popover = 'manual';
     const header = document.createElement('div'); header.className = 'font-search'; header.innerHTML = icon('search');
-    search = document.createElement('input'); search.type = 'text'; search.id = 'appearance-font-search'; search.placeholder = '搜索字体'; search.setAttribute('aria-label', '搜索已安装字体'); search.setAttribute('role', 'combobox'); search.setAttribute('aria-autocomplete', 'list'); search.setAttribute('aria-controls', 'appearance-font-options'); search.setAttribute('aria-expanded', 'true');
+    search = document.createElement('input'); search.type = 'text'; search.id = id+'-search'; search.placeholder = '搜索字体'; search.setAttribute('aria-label', '搜索已安装字体'); search.setAttribute('role', 'combobox'); search.setAttribute('aria-autocomplete', 'list'); search.setAttribute('aria-controls', id+'-options'); search.setAttribute('aria-expanded', 'true');
     refresh = document.createElement('button'); refresh.className = 'icon-button quiet'; refresh.type = 'button'; refresh.title = '刷新字体列表'; refresh.setAttribute('aria-label', refresh.title); refresh.innerHTML = icon('refresh'); refresh.onclick = () => void load(true);
-    header.append(search, refresh); list = document.createElement('div'); list.className = 'font-options'; list.id = 'appearance-font-options'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', '界面字体');
+    header.append(search, refresh); list = document.createElement('div'); list.className = 'font-options'; list.id = id+'-options'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', '界面字体');
     sample = document.createElement('div'); sample.className = 'font-sample'; sample.textContent = '字体预览 Aa 0123456789';
     status = document.createElement('div'); status.className = 'font-status'; status.setAttribute('role', 'status');
-    menu.append(header, list, status, sample); document.body.append(menu); menu.showPopover();
+    modal=button.closest('dialog');modal?.addEventListener('close',close);
+    menu.append(header, list, status, sample); (modal||document.body).append(menu); menu.showPopover();
     button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-controls', list.id);
     search.addEventListener('input', draw);
     menu.addEventListener('keydown', event => {
       if (event.isComposing) return;
-      if (event.key === 'Escape') {event.preventDefault(); close(); button.focus();}
+      if (event.key === 'Escape') {event.preventDefault();event.stopPropagation(); close(); button.focus();}
       else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {event.preventDefault(); activate(active + (event.key === 'ArrowDown' ? 1 : -1));}
       else if (event.key === 'Enter' && event.target === search) {event.preventDefault(); choose(active);}
       else if (event.key === 'Tab' && (event.shiftKey && event.target === search || !event.shiftKey && event.target === refresh)) {event.preventDefault(); close(); button.focus();}
@@ -113,6 +125,17 @@ export function setupFontPicker(button: HTMLButtonElement) {
     document.addEventListener('pointerdown', outside, true); window.addEventListener('resize', close); document.addEventListener('scroll', onScroll, true);
     draw(); search.focus(); void load(false);
   };
-  button.addEventListener('click', () => menu ? close() : open());
-  button.addEventListener('keydown', event => {if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {event.preventDefault(); open();}});
+  const toggle=()=>menu?close():open();
+  const keydown=(event:KeyboardEvent)=>{if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();open();}};
+  button.addEventListener('click',toggle);button.addEventListener('keydown',keydown);
+  const resize=new ResizeObserver(()=>{if(menu)position();});resize.observe(button);
+  const stateObserver=new MutationObserver(()=>{if(menu)position();});stateObserver.observe(button,{attributes:true,attributeFilter:['hidden','disabled']});
+  let releaseRemoval:()=>void=()=>{};
+  const controller:FontPickerController={dispose(){
+    if(disposed)return;disposed=true;++loadRevision;close();resize.disconnect();stateObserver.disconnect();releaseRemoval();
+    button.removeEventListener('click',toggle);button.removeEventListener('keydown',keydown);
+    if(originalValue)Object.defineProperty(button,'value',originalValue);else Reflect.deleteProperty(button,'value');
+    pickers.delete(button);
+  }};
+  pickers.set(button,controller);releaseRemoval=onRemoval(button,()=>controller.dispose());return controller;
 }
