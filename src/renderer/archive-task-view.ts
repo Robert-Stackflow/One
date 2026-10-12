@@ -3,13 +3,13 @@ import {windowControls,setupChrome} from './chrome';
 import {customControls} from './controls';
 import {archiveRiskRunner,ArchiveRiskNotice} from './archive-risk';
 import type {ArchiveRequest,ArchiveResult} from '../shared/archive';
-import {archiveFormatOptions,archiveVolumeOptions,archiveVolumeBytes} from './archive-create-options';
+import {archiveFormatOptions,archiveVolumeOptions,archiveVolumeBytes,archiveSizeText} from './archive-create-options';
 import {archiveLevelOptions,archiveZipMethodOptions,archiveZipEncryptionOptions,archiveSevenMethodOptions,archiveSolidOptions} from './archive-settings';
 import {archiveFormats} from '../shared/archive-preferences';
 import './archive-task-view.css';
 
 const name=(path:string)=>path.split(/[\\/]/).filter(Boolean).at(-1)||path;
-const sizeText=(bytes:number)=>{if(bytes<1024)return `${bytes} B`;const unit=bytes>=1024**3?'GB':bytes>=1024**2?'MB':'KB',divisor=unit==='GB'?1024**3:unit==='MB'?1024**2:1024;return `${(bytes/divisor).toFixed(bytes/divisor>=10?1:2)} ${unit}`;};
+const sizeText=archiveSizeText;
 const message=(error:unknown)=>(error instanceof Error?error.message:String(error)).replace(/^Error invoking remote method '[^']+':\s*/,'').replace(/^(?:Error:|ArchiveFailure:)\s*/,'');
 
 export async function renderArchiveTask(){

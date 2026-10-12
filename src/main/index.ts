@@ -715,7 +715,7 @@ function registerIPC() {
   handle('file-action-open',(_event,tool,paths)=>{if(!['rename','locksmith'].includes(tool)||!Array.isArray(paths)||paths.length>(tool==='locksmith'?32:4096))throw Error('文件操作请求无效');openFileAction({tool,paths:paths.map(filePath)});});
   handle('file-tools-run',(event,task)=>fileTools.run(event.sender.id,task));
   handle('archive-task-data',event=>{const data=archiveTaskWindows.get(event.sender.id);if(!data)throw Error('压缩任务窗口无效');return {...data,closeOnComplete:settings.archive.closeOnComplete};},['archive-task']);
-  handle('archive-source-size',(event,source)=>{if(archiveTaskWindows.get(event.sender.id)?.action!=='create')throw Error('压缩任务窗口无效');return archiveSourceSize(source);},['archive-task']);
+  handle('archive-source-size',(event,source)=>{if(roles.get(event.sender.id)==='archive-task'&&archiveTaskWindows.get(event.sender.id)?.action!=='create')throw Error('压缩任务窗口无效');return archiveSourceSize(source);},['main','archive-task']);
   handle('archive-task-auto-close',async(event,value)=>{if(!archiveTaskWindows.has(event.sender.id)||typeof value!=='boolean')throw Error('自动关闭设置无效');const next=await saveSettings(current=>mergeSettings(current,{archive:{closeOnComplete:value}}));return next.archive.closeOnComplete;},['archive-task']);
   handle('archive-run',(event,request:ArchiveRequest,id?:string)=>archiveService.run(event.sender.id,request,id),['main','archive-task']);
   handle('archive-edit-start',(event,request:import('../shared/archive-edit-session').ArchiveEditStart,id?:string)=>archiveService.edits.start(event.sender.id,request,id),['main']);

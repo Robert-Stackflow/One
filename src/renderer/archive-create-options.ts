@@ -1,5 +1,7 @@
 export const archiveFormatOptions='<option value="zip">ZIP</option><option value="7z">7Z</option><option value="tar">TAR</option><option value="tar.gz">TAR.GZ</option><option value="tar.xz">TAR.XZ</option><option value="gz">GZ · 单文件</option><option value="xz">XZ · 单文件</option>';
 
+export const archiveSizeText=(bytes:number)=>{if(bytes<1024)return `${bytes} B`;const unit=bytes>=1024**3?'GB':bytes>=1024**2?'MB':'KB',divisor=unit==='GB'?1024**3:unit==='MB'?1024**2:1024;return `${(bytes/divisor).toFixed(bytes/divisor>=10?1:2)} ${unit}`;};
+
 const volumePresets:[number,string][]=[
  [3,'3 MB'],[4,'4 MB'],[5,'5 MB'],[10,'10 MB'],[20,'20 MB'],[25,'25 MB'],
  [100,'100 MB'],[300,'300 MB'],[650,'650 MB'],[700,'700 MB'],
