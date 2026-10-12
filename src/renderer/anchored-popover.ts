@@ -1,10 +1,12 @@
 import {onRemoval} from './dom-lifecycle';
+import {inheritCaptureScale} from './capture/appearance';
 type Side='above'|'below';
 interface Placement {preferred:Side;gap:number;edge?:number;width?:number;maxHeight?:number|(()=>number);boundary?:HTMLElement}
 
 /** Keep an anchored popover and its arrow inside the viewport. */
 export function positionAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,{preferred,gap,edge=8,width:desiredWidth,maxHeight,boundary}:Placement):boolean {
  if(!anchor.isConnected||!popup.isConnected||!anchor.getClientRects().length||getComputedStyle(anchor).visibility==='hidden')return false;
+ inheritCaptureScale(anchor,popup);
  const box=anchor.getBoundingClientRect();
  if(box.bottom<=0||box.top>=innerHeight||box.right<=0||box.left>=innerWidth)return false;
  const roomAbove=Math.max(0,box.top-gap-edge),roomBelow=Math.max(0,innerHeight-box.bottom-gap-edge);
@@ -82,9 +84,11 @@ export function trackAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,placem
  const detach=()=>{if(stopped)return;stop();onDetach();};
  const update=()=>{frame=0;if(!stopped&&!positionAnchoredPopover(anchor,popup,placement))detach();};
  const schedule=()=>{if(!stopped&&!frame)frame=requestAnimationFrame(update);};
+ const scaleChanged=(event:Event)=>{if(event.target instanceof Element&&event.target.contains(anchor))schedule();};
  const observer=new ResizeObserver(schedule);observer.observe(anchor);observer.observe(popup);if(placement.boundary)observer.observe(placement.boundary);
  window.addEventListener('resize',schedule);document.addEventListener('scroll',schedule,true);
+ document.addEventListener('one:capture-scale',scaleChanged);
  const releaseAnchor=onRemoval(anchor,detach),releasePopup=onRemoval(popup,detach);
- const stop=()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();releaseAnchor();releasePopup();window.removeEventListener('resize',schedule);document.removeEventListener('scroll',schedule,true);};
+ const stop=()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();releaseAnchor();releasePopup();window.removeEventListener('resize',schedule);document.removeEventListener('scroll',schedule,true);document.removeEventListener('one:capture-scale',scaleChanged);};
  schedule();return stop;
 }

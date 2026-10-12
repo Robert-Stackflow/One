@@ -1,6 +1,19 @@
 export const colorFormatNames = {hex:'HEX',rgb:'RGB',hsl:'HSL',hsv:'HSV',cmyk:'CMYK',hsb:'HSB',hsi:'HSI',hwb:'HWB',ncol:'NCol',xyz:'CIEXYZ',lab:'CIELAB',oklab:'Oklab',oklch:'Oklch',vec4:'VEC4',decimal:'Decimal',hexInt:'HEX Int'} as const;
 export type ColorFormat = keyof typeof colorFormatNames;
 export interface ColorState {history:string[];formats:ColorFormat[];format:ColorFormat;showEditor:boolean;selected:string}
+export interface HSVColor {h:number;s:number;v:number}
+export function colorHSV(hex:string):HSVColor {
+ if(!/^#[\da-f]{6}$/i.test(hex))throw Error('颜色格式无效');
+ const [r,g,b]=hex.slice(1).match(/../g)!.map(value=>parseInt(value,16)/255),max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+ const hue=delta?(max===r?((g-b)/delta+6)%6:max===g?(b-r)/delta+2:(r-g)/delta+4):0;
+ return {h:hue*60,s:max?delta/max:0,v:max};
+}
+export function hsvColor(h:number,s:number,v:number):string {
+ if(!Number.isFinite(h)||!Number.isFinite(s)||!Number.isFinite(v)||s<0||s>1||v<0||v>1)throw Error('颜色参数无效');
+ const sector=((h%360+360)%360)/60,x=v*(1-s*Math.abs(sector%2-1)),low=v*(1-s);
+ const channels=[[v,x,low],[x,v,low],[low,v,x],[low,x,v],[x,low,v],[v,low,x]][Math.floor(sector)];
+ return '#'+channels.map(value=>Math.round(value*255).toString(16).padStart(2,'0')).join('');
+}
 /** Opaque tints and shades of a sampled sRGB color, never inferred transparency. */
 export function colorVariants(hex:string):{hex:string;label:string}[]{
   if(!/^#[\da-f]{6}$/i.test(hex))throw new Error('颜色格式无效');

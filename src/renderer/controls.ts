@@ -238,7 +238,7 @@ function enhanceSelect(select:HTMLSelectElement) {
 export function customControls(root:HTMLElement) {
   for (const select of root.querySelectorAll<HTMLSelectElement>('select')) enhanceSelect(select);
   for (const input of root.querySelectorAll<HTMLInputElement>('input[type=number]')) {
-    if (input.parentElement?.classList.contains('number-control')) continue;
+    if (input.dataset.customControl==='true'||input.parentElement?.classList.contains('number-control')) continue;
     const wrapper = document.createElement('span');wrapper.className = 'number-control';input.replaceWith(wrapper);wrapper.append(input);
     for (const direction of [-1,1] as const) {
       const button = document.createElement('button');button.type = 'button';button.innerHTML = icon(direction < 0 ? 'minus' : 'plus');

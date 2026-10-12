@@ -7,7 +7,7 @@ const assert=require('node:assert/strict');
 (async()=>{
   const root=path.resolve('work/current/capture-migration');await fs.mkdir(root,{recursive:true});
   const profile=await fs.mkdtemp(path.join(root,'popovers-profile-'));
-  const bundle=await build({stdin:{contents:`export * from './src/renderer/anchored-popover'; export * from './src/renderer/confirm-popover';`,resolveDir:path.resolve('.')},bundle:true,platform:'browser',format:'iife',globalName:'popovers',write:false});
+  const bundle=await build({stdin:{contents:`export * from './src/renderer/anchored-popover'; export * from './src/renderer/confirm-popover';export * from './src/renderer/capture/appearance';`,resolveDir:path.resolve('.')},bundle:true,platform:'browser',format:'iife',globalName:'popovers',write:false});
   const env={...process.env,ONE_COMPONENT_TEST_PROFILE:profile};delete env.ELECTRON_RUN_AS_NODE;
   let app;
   try{
@@ -24,6 +24,15 @@ const assert=require('node:assert/strict');
     await expect(page.locator('#popup')).toHaveAttribute('data-side','above');
     assert.equal(await page.locator('#popup').evaluate(el=>el.offsetWidth),344);
     assert.equal(await page.locator('#popup').evaluate(el=>el.offsetHeight),400);
+    const normalFont=await page.locator('#outside').evaluate(el=>getComputedStyle(el).fontSize);
+    await page.evaluate(()=>{const root=document.createElement('section');root.id='capture-root';document.body.append(root);root.append(anchor);popovers.applyCaptureScale(root,125);});
+    await expect.poll(()=>page.locator('#popup').evaluate(el=>getComputedStyle(el).fontSize)).toBe('16.25px');
+    assert.equal(await page.locator('#outside').evaluate(el=>getComputedStyle(el).fontSize),normalFont);
+    await page.evaluate(()=>popovers.applyCaptureScale(document.querySelector('#capture-root'),150));
+    await expect.poll(()=>page.locator('#popup').evaluate(el=>getComputedStyle(el).fontSize)).toBe('19.5px');
+    await page.evaluate(()=>{document.body.append(anchor);popovers.openAnchoredPopover(anchor,popup,options);});
+    assert.equal(await page.locator('#popup').getAttribute('data-capture-scale'),null);
+    assert.equal(await page.locator('#popup').evaluate(el=>el.style.fontSize),'');
     await page.evaluate(()=>document.querySelector('#boundary').style.width='260px');
     await expect.poll(()=>page.locator('#popup').evaluate(el=>el.offsetWidth)).toBe(244);
     await page.evaluate(()=>{limit=200;anchor.style.top='10px';anchor.style.bottom='auto';window.dispatchEvent(new Event('resize'));});
@@ -58,6 +67,6 @@ const assert=require('node:assert/strict');
     await expect(page.locator('.confirmation-popover')).toHaveCount(0);
     assert.equal(await page.evaluate(()=>confirmed),1);
     assert.deepEqual(errors,[]);
-    console.log('Popovers: constrained sizing, boundary resize, placement, interrupted close, reopen/detach, reduced motion and existing One confirmation passed.');
+    console.log('Popovers: constrained sizing, boundary resize, placement, scoped capture scale/portal updates, interrupted close, reopen/detach, reduced motion and existing One confirmation passed.');
   }finally{await app?.close();const resolved=await fs.realpath(profile);assert.ok(resolved.startsWith(root+path.sep));await fs.rm(resolved,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});
