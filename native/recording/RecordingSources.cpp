@@ -1,0 +1,36 @@
+#define NOMINMAX
+#include <windows.h>
+#include <dwmapi.h>
+#include <wincodec.h>
+#include <uiautomation.h>
+#include <oleacc.h>
+#include <wrl/client.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <io.h>
+#include <fcntl.h>
+using Microsoft::WRL::ComPtr;
+static std::string utf8(const std::wstring& value){const int n=WideCharToMultiByte(CP_UTF8,0,value.data(),static_cast<int>(value.size()),nullptr,0,nullptr,nullptr);std::string result(n,'\0');WideCharToMultiByte(CP_UTF8,0,value.data(),static_cast<int>(value.size()),result.data(),n,nullptr,nullptr);return result;}
+static std::string json(const std::wstring& value){std::string result="\"";for(unsigned char c:utf8(value)){if(c=='"'||c=='\\'){result+='\\';result+=c;}else if(c<32){char hex[7];sprintf_s(hex,"\\u%04x",c);result+=hex;}else result+=c;}return result+'"';}
+static bool capturable(HWND hwnd){DWORD cloak=0,affinity=0;RECT r{};return IsWindowVisible(hwnd)&&!IsIconic(hwnd)&&GetWindowRect(hwnd,&r)&&r.right-r.left>1&&r.bottom-r.top>1&&!(GetWindowLongPtrW(hwnd,GWL_EXSTYLE)&WS_EX_TOOLWINDOW)&&SUCCEEDED(DwmGetWindowAttribute(hwnd,DWMWA_CLOAKED,&cloak,sizeof(cloak)))&&!cloak&&(!GetWindowDisplayAffinity(hwnd,&affinity)||!affinity);}
+static BOOL CALLBACK collect(HWND hwnd,LPARAM state){auto* rows=reinterpret_cast<std::vector<HWND>*>(state);wchar_t title[201]{};if(rows->size()<150&&capturable(hwnd)&&GetWindowTextW(hwnd,title,201)>0)rows->push_back(hwnd);return rows->size()<150;}
+static void windows(){std::vector<HWND> rows;EnumWindows(collect,reinterpret_cast<LPARAM>(&rows));std::cout<<'[';bool first=true;for(HWND hwnd:rows){wchar_t title[201]{};if(!GetWindowTextW(hwnd,title,201))continue;if(!first)std::cout<<',';first=false;DWORD pid=0;GetWindowThreadProcessId(hwnd,&pid);std::cout<<"{\"pid\":"<<pid<<",\"id\":\"window:"<<reinterpret_cast<uintptr_t>(hwnd)<<":0\",\"name\":"<<json(title)<<",\"display_id\":\"\",\"thumbnail\":\"data:image/png;base64,\"}";}std::cout<<']';}
+static void screens(){std::cout<<'[';bool first=true;for(DWORD index=0;index<256;index++){DISPLAY_DEVICEW device{};device.cb=sizeof(device);if(!EnumDisplayDevicesW(nullptr,index,&device,0))break;if(!(device.StateFlags&DISPLAY_DEVICE_ACTIVE))continue;DEVMODEW mode{};mode.dmSize=sizeof(mode);if(!EnumDisplaySettingsW(device.DeviceName,ENUM_CURRENT_SETTINGS,&mode))continue;if(!first)std::cout<<',';first=false;std::cout<<"{\"id\":\"screen:"<<index<<":0\",\"device\":"<<json(device.DeviceName)<<",\"x\":"<<mode.dmPosition.x<<",\"y\":"<<mode.dmPosition.y<<",\"width\":"<<mode.dmPelsWidth<<",\"height\":"<<mode.dmPelsHeight<<'}';}std::cout<<']';}
+static void encodeImage(IWICImagingFactory* factory,IWICBitmapSource* image){ComPtr<IStream> output;if(FAILED(CreateStreamOnHGlobal(nullptr,TRUE,&output)))throw 1;ComPtr<IWICBitmapEncoder> encoder;if(FAILED(factory->CreateEncoder(GUID_ContainerFormatPng,nullptr,&encoder))||FAILED(encoder->Initialize(output.Get(),WICBitmapEncoderNoCache)))throw 1;ComPtr<IWICBitmapFrameEncode> frame;ComPtr<IPropertyBag2> props;if(FAILED(encoder->CreateNewFrame(&frame,&props))||FAILED(frame->Initialize(props.Get()))||FAILED(frame->WriteSource(image,nullptr))||FAILED(frame->Commit())||FAILED(encoder->Commit()))throw 1;STATSTG info{};if(FAILED(output->Stat(&info,STATFLAG_NONAME))||info.cbSize.QuadPart>256*1024)throw 1;LARGE_INTEGER zero{};output->Seek(zero,STREAM_SEEK_SET,nullptr);std::vector<char> bytes(static_cast<size_t>(info.cbSize.QuadPart));ULONG count=0;if(FAILED(output->Read(bytes.data(),static_cast<ULONG>(bytes.size()),&count))||count!=bytes.size())throw 1;std::cout.write(bytes.data(),bytes.size());SecureZeroMemory(bytes.data(),bytes.size());}
+static void encode(HBITMAP bitmap){ComPtr<IWICImagingFactory> factory;if(FAILED(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory))))throw 1;ComPtr<IWICBitmap> image;if(FAILED(factory->CreateBitmapFromHBITMAP(bitmap,nullptr,WICBitmapIgnoreAlpha,&image)))throw 1;encodeImage(factory.Get(),image.Get());}
+static bool identity(HWND hwnd,DWORD expected){DWORD pid=0;GetWindowThreadProcessId(hwnd,&pid);return pid==expected&&capturable(hwnd);}
+static void preview(HWND hwnd,const wchar_t* device,DWORD expected=0){
+ HDC source=nullptr,original=nullptr,target=nullptr;HBITMAP full=nullptr,previewBitmap=nullptr;HGDIOBJ previous=nullptr,previousTarget=nullptr;
+ try{int width=0,height=0;RECT rect{};if(hwnd){if(!identity(hwnd,expected)||!GetWindowRect(hwnd,&rect))throw 1;width=rect.right-rect.left;height=rect.bottom-rect.top;}else{DEVMODEW mode{};mode.dmSize=sizeof(mode);if(!EnumDisplaySettingsW(device,ENUM_CURRENT_SETTINGS,&mode))throw 1;width=mode.dmPelsWidth;height=mode.dmPelsHeight;}
+  if(width<2||height<2||width>16384||height>16384||(hwnd&&static_cast<uint64_t>(width)*height>16000000))throw 1;
+  source=hwnd?GetWindowDC(hwnd):CreateDCW(L"DISPLAY",device,nullptr,nullptr);if(!source)throw 1;target=CreateCompatibleDC(source);const double scale=std::min({1.0,280.0/width,158.0/height});const int w=std::max(1,static_cast<int>(std::round(width*scale))),h=std::max(1,static_cast<int>(std::round(height*scale)));previewBitmap=CreateCompatibleBitmap(source,w,h);if(!target||!previewBitmap)throw 1;previousTarget=SelectObject(target,previewBitmap);SetStretchBltMode(target,HALFTONE);SetBrushOrgEx(target,0,0,nullptr);
+  if(hwnd){original=CreateCompatibleDC(source);full=CreateCompatibleBitmap(source,width,height);if(!original||!full)throw 1;previous=SelectObject(original,full);PatBlt(original,0,0,width,height,BLACKNESS);if(!PrintWindow(hwnd,original,2)||!identity(hwnd,expected))throw 1;if(!StretchBlt(target,0,0,w,h,original,0,0,width,height,SRCCOPY))throw 1;}
+  else if(!StretchBlt(target,0,0,w,h,source,0,0,width,height,SRCCOPY|CAPTUREBLT))throw 1;
+  SelectObject(target,previousTarget);previousTarget=nullptr;encode(previewBitmap);
+ }catch(...){if(previous&&original)SelectObject(original,previous);if(previousTarget&&target)SelectObject(target,previousTarget);if(full)DeleteObject(full);if(previewBitmap)DeleteObject(previewBitmap);if(original)DeleteDC(original);if(target)DeleteDC(target);if(source){if(hwnd)ReleaseDC(hwnd,source);else DeleteDC(source);}throw;}
+ if(previous&&original)SelectObject(original,previous);if(full)DeleteObject(full);if(previewBitmap)DeleteObject(previewBitmap);if(original)DeleteDC(original);if(target)DeleteDC(target);if(source){if(hwnd)ReleaseDC(hwnd,source);else DeleteDC(source);}
+}
+int wmain(int argc,wchar_t** argv){SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);_setmode(_fileno(stdout),_O_BINARY);if(FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 1;int result=0;try{if(argc==2&&wcscmp(argv[1],L"windows")==0)windows();else if(argc==2&&wcscmp(argv[1],L"screens")==0)screens();else if(argc==4&&wcscmp(argv[1],L"window")==0){wchar_t *end=nullptr,*pidEnd=nullptr;auto handle=wcstoull(argv[2],&end,10);auto pid=wcstoul(argv[3],&pidEnd,10);if(!handle||*end||!pid||*pidEnd)throw 1;preview(reinterpret_cast<HWND>(handle),nullptr,pid);}else if(argc==3&&wcscmp(argv[1],L"screen")==0){if(wcsncmp(argv[2],L"\\\\.\\DISPLAY",11)!=0||wcslen(argv[2])>32)throw 1;preview(nullptr,argv[2]);}else throw 1;}catch(...){result=1;}std::cout.flush();CoUninitialize();return result;}
