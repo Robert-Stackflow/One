@@ -17,6 +17,7 @@ export interface Appearance { mode: 'system' | 'light' | 'dark'; accent: string;
 export interface ColorSample { hex: string; rgb: string; hsl: string }
 export interface ScreenCapture { url: string; data?:Uint8Array; width: number; height: number; hex: string; pixels: number; x:number; y:number; centerX?:number;centerY?:number;cropX?:number;cropY?:number;zoomFrozen?:boolean }
 export interface Settings {
+  capture:import('./capture/settings').CapturePreferences;
   displays:import('./display-management').DisplayPreferences;
   themeSchedule:import('./theme-schedule').ThemeSchedulePreferences;
   quickActions:import('./quick-actions').QuickActions;

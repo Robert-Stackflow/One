@@ -8,7 +8,7 @@ async function run() {
   await fs.mkdir(output, {recursive:true});
   const profile = await fs.mkdtemp(path.join(output,'profile-'));
   const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
-  const app=await electron.launch({args:[path.resolve('.')],env});
+  let app=await electron.launch({args:[path.resolve('.')],env});
   try {
     const page=await app.firstWindow();
     await page.locator('[data-page=images]').click();
@@ -19,7 +19,10 @@ async function run() {
     await expect(input).not.toBeFocused();
 
     const current=await page.evaluate(()=>window.one.settings());
-    const updated={...current,colorShortcut:'Ctrl+Alt+P',appearance:{...current.appearance,mode:'dark'}};
+    const capture={...current.capture,uiScale:125,remoteCompatible:false,
+      watermark:{...current.capture.watermark,text:'One backup'},
+      workflows:[{...current.capture.workflows[0],id:'review',name:'校对流程',actions:['save','translate'],translationTarget:'en'}],workflowId:'review'};
+    const updated={...current,capture,colorShortcut:'Ctrl+Alt+P',appearance:{...current.appearance,mode:'dark'}};
     const backupPath=path.join(profile,'settings-backup.json');
     await fs.writeFile(backupPath,JSON.stringify({format:'one-settings-backup',schema:1,exportedAt:new Date().toISOString(),settings:updated}));
     await app.evaluate(({dialog,globalShortcut},file)=>{
@@ -34,11 +37,21 @@ async function run() {
     const imported=await page.evaluate(()=>window.one.settings());
     assert.equal(imported.colorShortcut,'Ctrl+Alt+P');
     assert.equal(imported.appearance.mode,'dark');
+    assert.deepEqual(imported.capture,capture);
     await app.evaluate(({dialog,globalShortcut})=>{
       globalShortcut.register=globalThis.originalShortcutRegister;
       dialog.showOpenDialog=globalThis.originalBackupDialog;
     });
-    console.log(JSON.stringify({result:'PASS',winChordCaptured:true,conflictingBackupImported:true}));
+    await assert.rejects(page.evaluate(()=>window.one.patchSettings({capture:{workflowId:'missing'}})),/默认输出流程不存在/);
+    assert.deepEqual((await page.evaluate(()=>window.one.settings())).capture,capture);
+    const exportedPath=path.join(profile,'settings-export.json');
+    await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},exportedPath);
+    assert.equal((await page.evaluate(()=>window.one.settingsBackupExport())).saved,true);
+    assert.deepEqual(JSON.parse(await fs.readFile(exportedPath,'utf8')).settings.capture,capture);
+    await app.close();app=await electron.launch({args:[path.resolve('.')],env});
+    const reopened=await app.firstWindow();await reopened.waitForFunction(()=>!!window.one);
+    assert.deepEqual((await reopened.evaluate(()=>window.one.settings())).capture,capture);
+    console.log(JSON.stringify({result:'PASS',winChordCaptured:true,conflictingBackupImported:true,capturePreferencesBackupAndRestart:true}));
   } finally {
     await app.close();
     const resolved=await fs.realpath(profile),parent=await fs.realpath(output);
