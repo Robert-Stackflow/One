@@ -5,7 +5,7 @@ async function run(){
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'one-search-shortcuts-'));
  const profile=path.join(root,'profile'),files=path.join(root,'files');
  await fs.mkdir(profile);await fs.mkdir(files);
- for(const name of ['report.zip','report.7z','report.txt','cover.png','movie.mp4','song.mp3'])await fs.writeFile(path.join(files,name),'sample');
+ for(const name of ['report.zip','report.7z','report.txt','cover.png','movie.mp4','song.mp3','搜索.png'])await fs.writeFile(path.join(files,name),'sample');
  await fs.mkdir(path.join(files,'.zip'));
  await fs.writeFile(path.join(profile,'file-search-history.json'),JSON.stringify([path.join(files,'report.txt'),files]));
  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
@@ -24,6 +24,9 @@ async function run(){
   // The search window focuses itself on launch; keep physical keyboard input out of this desktop smoke test.
   await input.evaluate(element=>element.blur());
   const activate=async value=>input.evaluate((element,next)=>{element.value=next;element.dispatchEvent(new Event('input',{bubbles:true}));},value);
+  await activate('搜索');
+  await expect.poll(()=>search.locator('.search-result .result-icon:not([data-file-icon])').count()).toBeGreaterThan(0);
+  await expect(search.locator('.search-result').filter({hasText:'搜索.png'}).locator('.windows-file-icon')).toHaveCount(1,{timeout:10000});
   await activate('ai');
   await expect(search.locator('.search-shortcut-hint')).toContainText('AI 问答');
   await expect(search.locator('.search-shortcut-hint .result-name>span')).toHaveText('按空格进入快捷命令');
@@ -94,11 +97,11 @@ async function run(){
   await search.locator('[data-mode-exit]').evaluate(button=>button.click());
   await activate('mm ');
   await expect(search.locator('#search-filters')).toBeHidden();
-  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['cover.png','movie.mp4','song.mp3']);
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['cover.png','movie.mp4','song.mp3','搜索.png']);
   await input.fill('o');await expect(search.locator('#search-filters')).toBeVisible();
   await search.locator('[data-filter="pic:"]').click();
   await expect(search.locator('#search-mode-tag strong')).toHaveText('媒体文件');
-  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['cover.png']);
+  await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual(['cover.png','搜索.png']);
   await search.locator('[data-mode-exit]').evaluate(button=>button.click());
   await activate('fav ');
   await expect.poll(()=>search.locator('.result-name strong').allTextContents()).toEqual([path.basename(files)]);
@@ -119,7 +122,7 @@ async function run(){
   await expect(search.locator('[data-history-id]')).toHaveCount(2);
   await expect(search.locator('[data-history-id]').first().locator('.icon')).toHaveCount(1);
   await expect(search.locator('[data-history-favorite]').first()).toHaveCSS('width','0px');
-  await search.locator('[data-history-favorite]').first().evaluate(button=>button.focus());
+  await search.locator('[data-idle-kind="history"]').first().hover();
   await expect.poll(()=>search.locator('[data-history-favorite]').first().evaluate(button=>button.getBoundingClientRect().width)).toBeGreaterThan(20);
   await expect(search.locator('[data-history-clear]')).toBeVisible();
   await expect(search.locator('#search-filters')).toBeHidden();

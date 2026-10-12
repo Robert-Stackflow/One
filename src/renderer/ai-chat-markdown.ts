@@ -1,4 +1,5 @@
 import {Marked,Renderer,type Tokens,type TokenizerAndRendererExtension} from 'marked';
+import 'katex/dist/katex.min.css';
 import katex from 'katex';
 import {StreamLanguage} from '@codemirror/language';
 import {highlightTree,tagHighlighter,tags} from '@lezer/highlight';
