@@ -1,4 +1,28 @@
-.archive-edit-sessions .archive-session-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.archive-edit-sessions .archive-session-password{display:grid;gap:8px;margin-top:16px;font-size:12px;color:var(--muted)}
+.archive-edit-sessions{width:min(680px,calc(100vw - 32px))}
+.archive-edit-sessions .one-dialog-body{display:grid;gap:12px;padding-top:8px}
+.archive-edit-toolbar,.archive-edit-toolbar>div{display:flex;align-items:center;gap:8px}
+.archive-edit-toolbar{justify-content:space-between;min-height:36px;color:var(--muted);font-size:12px}
+.archive-edit-toolbar button{display:inline-flex;align-items:center;gap:6px}
+.archive-edit-toolbar .icon{width:14px;height:14px}
+.archive-edit-empty{display:grid;justify-items:center;align-content:center;gap:7px;min-height:148px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center;font-size:12px}
+.archive-edit-empty>.icon{width:24px;height:24px;margin-bottom:3px}
+.archive-edit-empty strong{font-size:13px;font-weight:550;color:var(--fg)}
+.archive-edit-item{margin:0 0 10px;padding:15px 16px;border:1px solid var(--line);border-radius:12px}
+.archive-edit-item-heading{display:flex;justify-content:space-between;align-items:baseline;gap:16px;min-width:0}
+.archive-edit-item-heading strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:550}
+.archive-edit-item-heading span{flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px}
+.archive-edit-copy,.archive-edit-item-state{margin:6px 0 0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.archive-edit-copy{color:var(--muted)}
+.archive-edit-item-state{color:var(--fg)}
+.archive-edit-item-state[data-error=true]{color:var(--danger,#b34a41)}
+.archive-session-actions{display:grid;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.archive-session-actions>div{display:flex;flex-wrap:wrap;gap:7px}
+.archive-session-actions>div+div{gap:3px}
+.archive-session-actions>div+div button{font-size:12px}
+.archive-edit-sessions .archive-session-password{display:grid;gap:7px;margin-top:2px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.archive-edit-sessions .archive-session-password[hidden]{display:none}
 .archive-edit-sessions .archive-session-password input{width:100%}
-.archive-edit-sessions [data-edit-feedback]{font-size:12px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}
+.archive-edit-sessions [data-edit-feedback]{margin:0;padding:9px 11px;border-radius:8px;background:var(--soft);font-size:12px;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
+.archive-edit-sessions [data-edit-feedback][hidden]{display:none}
+.archive-edit-sessions [data-edit-feedback][data-state=error]{color:var(--danger,#b34a41)}
+@media(max-width:650px){.archive-edit-item-heading{display:grid;gap:2px}.archive-edit-item-heading span{max-width:100%}.archive-session-actions button{font-size:12px}}
