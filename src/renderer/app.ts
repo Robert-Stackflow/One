@@ -34,6 +34,7 @@ const render=async()=>{
  else if(view==='file-context')await (await import('./file-context-view')).renderFileContextMenu();
  else if(view==='dialog-bar')await (await import('./dialog-bar-view')).renderDialogBar();
  else if(view==='search')await (await import('./search-view')).renderSearch();
+ else if(view==='ai-chat')await (await import('./ai-chat-view')).renderAIChat();
  else (await import('./main-view')).renderMain();
 };
 void render().catch(error=>{void api.diagnosticsReport('render',error?.stack||String(error)).catch(()=>{});console.error(error);});

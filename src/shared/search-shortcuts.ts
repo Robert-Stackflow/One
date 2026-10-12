@@ -1,15 +1,16 @@
-export interface SearchWebEngine {id:string;shortcut:string;name:string;url:string;icon?:string}
+export interface SearchWebEngine {id:string;shortcut:string;name:string;url:string;icon?:string;suggestUrl?:string}
 
 export const builtinSearchEngines:SearchWebEngine[]=[
- {id:'google',shortcut:'g',name:'Google',url:'https://www.google.com/search?q={query}'},
- {id:'bing',shortcut:'b',name:'Bing',url:'https://www.bing.com/search?q={query}'},
- {id:'duckduckgo',shortcut:'ddg',name:'DuckDuckGo',url:'https://duckduckgo.com/?q={query}'},
+ {id:'google',shortcut:'g',name:'Google',url:'https://www.google.com/search?q={query}',suggestUrl:'https://suggestqueries.google.com/complete/search?client=firefox&q={query}'},
+ {id:'bing',shortcut:'b',name:'Bing',url:'https://www.bing.com/search?q={query}',suggestUrl:'https://www.bing.com/osjson.aspx?query={query}'},
+ {id:'duckduckgo',shortcut:'ddg',name:'DuckDuckGo',url:'https://duckduckgo.com/?q={query}',suggestUrl:'https://duckduckgo.com/ac/?q={query}'},
  {id:'baidu',shortcut:'bd',name:'百度',url:'https://www.baidu.com/s?wd={query}'}
 ];
 
 export interface BuiltinSearchCommand {id:string;shortcut:string;name:string;description:string;placeholder:string;showFilters:boolean;icon:string;queryPrefix?:string}
 export const builtinSearchCommands:BuiltinSearchCommand[]=[
  {id:'one',shortcut:'>',name:'One 命令',description:'搜索 One 的页面和操作',placeholder:'搜索 One 的功能和操作',showFilters:false,icon:'terminal'},
+ {id:'ai',shortcut:'ai',name:'AI 问答',description:'在搜索框直接提问，按 Enter 查看回复',placeholder:'向 AI 提问，按 Enter 发送',showFilters:false,icon:'ai'},
  {id:'extension',shortcut:'.扩展名',name:'扩展名',description:'支持 .zip 和 .zip|7z 等格式组合',placeholder:'搜索指定扩展名的文件',showFilters:true,icon:'file'},
  {id:'app',shortcut:'app',name:'应用',description:'搜索已注册的应用',placeholder:'搜索应用',showFilters:false,icon:'window',queryPrefix:'app:'},
  {id:'cfg',shortcut:'cfg',name:'设置',description:'搜索 Windows 设置',placeholder:'搜索 Windows 设置',showFilters:false,icon:'settings',queryPrefix:'setting:'},
@@ -49,8 +50,9 @@ export function validateSearchEngines(value:unknown):SearchWebEngine[]{
   if(typeof item.id!=='string'||!/^[-\w]{1,80}$/.test(item.id)||typeof item.shortcut!=='string'||!/^\p{L}[\p{L}\d-]{0,15}$/u.test(item.shortcut)||typeof item.name!=='string'||!item.name.trim()||item.name.length>60||typeof item.url!=='string')throw new Error('搜索引擎设置无效');
   const shortcut=item.shortcut.toLowerCase();if(used.has(shortcut))throw new Error('快捷命令已被占用');used.add(shortcut);
   searchEngineUrl(item.url,'test');
+  if(item.suggestUrl!==undefined&&item.suggestUrl!=='')searchEngineUrl(item.suggestUrl,'test');
   if(item.icon!==undefined&&(typeof item.icon!=='string'||item.icon.length>350_000||item.icon&&!/^data:image\/(?:png|jpeg|gif|webp|x-icon|vnd\.microsoft\.icon);base64,/i.test(item.icon)))throw new Error('搜索引擎图标无效');
-  return {id:item.id,shortcut,name:item.name.trim(),url:item.url,...(item.icon?{icon:item.icon}:{})};
+  return {id:item.id,shortcut,name:item.name.trim(),url:item.url,...(item.icon?{icon:item.icon}:{}),...(item.suggestUrl?{suggestUrl:item.suggestUrl}:{})};
  });
 }
 

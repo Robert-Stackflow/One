@@ -56,8 +56,8 @@ async function run(){
   await main.locator('[data-page=search]').click();
   await main.locator('#search-tab-shortcuts').click();
   await expect(main.locator('[data-search-panel="shortcuts"]')).toBeVisible();
-  await expect(main.locator('#search-command-list .search-command-row')).toHaveCount(14);
-  await expect(main.locator('#search-command-list .search-shortcut-trigger')).toHaveCount(14);
+  await expect(main.locator('#search-command-list .search-command-row')).toHaveCount(15);
+  await expect(main.locator('#search-command-list .search-shortcut-trigger')).toHaveCount(15);
   await expect(main.locator('#search-web-engine-list .search-shortcut-trigger')).toHaveCount(4);
   await main.locator('[data-search-command="app"]').uncheck();
   await expect.poll(()=>main.evaluate(async()=>(await window.one.settings()).search.shortcutDisabled)).toContain('app');

@@ -39,6 +39,17 @@ export interface PreviewData { photoLocation?:import('./photo-metadata').PhotoLo
 export interface LinkCard {domain:string;title:string;description:string;image?:string}
 export type { PickerData } from './picker';
 export interface OneAPI {
+  searchSuggest(engineId:string,query:string):Promise<string[]>;
+  aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
+  aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;
+  codexStatus():Promise<import('./codex-types').CodexStatus>;codexLogin():Promise<import('./codex-types').CodexStatus>;codexCancelLogin():Promise<import('./codex-types').CodexStatus>;codexLogout():Promise<import('./codex-types').CodexStatus>;codexChooseExecutable():Promise<import('./codex-types').CodexStatus|null>;codexAutoExecutable():Promise<import('./codex-types').CodexStatus>;codexOpenLogin():Promise<void>;codexCopyCode():Promise<void>;codexModelCatalog():Promise<import('./ai').AIModel[]>;
+  aiCommandSave(value:Partial<import('./ai').AICommand>):Promise<string>;aiCommandRemove(id:string):Promise<void>;aiShortcut(value:string):Promise<import('./ai').AIState>;
+  aiChatOpen(id?:string):Promise<void>;aiChatCreate(seed?:{query:string;answer:string}):Promise<string>;aiChatRemove(id:string):Promise<void>;aiChatRename(id:string,title:string):Promise<void>;aiChatSend(id:string,text:string,profileId:string,commandId?:string,modelId?:string,reasoningEffort?:string,images?:import('./ai').AIImage[]):Promise<import('./ai').AIMessage>;
+  aiChatCancel(id:string):Promise<void>;aiChatRetry(id:string,profileId:string):Promise<import('./ai').AIMessage>;
+  aiChatConfigure(value:Partial<import('./ai').AIState['chatOptions']>):Promise<import('./ai').AIState['chatOptions']>;aiChatHide():Promise<void>;aiChatSidebar(open:boolean):Promise<void>;aiChatClipboard():Promise<{text:string;images:import('./ai').AIImage[]}>;
+  aiInline(query:string,requestId:string):Promise<{text:string;model:string}>;aiCancel(requestId:string):Promise<void>;
+  aiOpenLink(url:string):Promise<void>;
+  searchHistoryAdd(query:string,command:string,result?:string,engineId?:string):Promise<void>;searchHistoryClear():Promise<void>;
   trayMenuState():Promise<import('../main/tray-menu').TrayMenuView>;trayMenuAction(id:import('../main/tray-menu').TrayMenuAction):Promise<void>;trayMenuReady():Promise<void>;trayMenuHide():Promise<void>;onTrayMenuChanged(callback:()=>void):()=>void;
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;

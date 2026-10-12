@@ -124,3 +124,7 @@ html.transparent-root,html.transparent-root body,html.transparent-root #app{back
 .popup-position-controls .custom-select{width:210px;min-width:0}
 .popup-position-controls>button{white-space:nowrap}
 @media(max-width:760px){.settings-panels .setting-row:has(.popup-position-controls){align-items:stretch;flex-direction:column}.popup-position-controls{justify-content:flex-start}.settings-panels .appearance-row{min-height:56px}}
+.select-popup{display:flex;flex-direction:column;overflow:hidden}
+.select-popup-options{min-height:0;overflow:auto;overscroll-behavior:contain}
+.select-popup-search{width:100%;min-height:34px;flex:none;margin-bottom:5px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;outline:none}
+.select-popup-search:focus{border-color:color-mix(in srgb,var(--fg) 38%,var(--line))}

@@ -14,6 +14,15 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
+  searchSuggest:(id,query)=>invoke('search-suggest',id,query),
+  aiState:()=>invoke('ai-state'),onAIEvent:callback=>listen('ai-event',callback),onAIChatOpen:callback=>listen('ai-chat-open',callback),
+  aiProfile:value=>invoke('ai-profile',value),aiProfileRemove:id=>invoke('ai-profile-remove',id),aiProfileDefault:id=>invoke('ai-profile-default',id),aiModels:id=>invoke('ai-models',id),aiModelCatalog:id=>invoke('ai-model-catalog',id),aiModelCatalogDraft:value=>invoke('ai-model-catalog-draft',value),
+  codexStatus:()=>invoke('codex-status'),codexLogin:()=>invoke('codex-login'),codexCancelLogin:()=>invoke('codex-cancel-login'),codexLogout:()=>invoke('codex-logout'),codexChooseExecutable:()=>invoke('codex-choose-executable'),codexAutoExecutable:()=>invoke('codex-auto-executable'),codexOpenLogin:()=>invoke('codex-open-login'),codexCopyCode:()=>invoke('codex-copy-code'),codexModelCatalog:()=>invoke('codex-model-catalog'),
+  aiCommandSave:value=>invoke('ai-command-save',value),aiCommandRemove:id=>invoke('ai-command-remove',id),aiShortcut:value=>invoke('ai-shortcut',value),
+  aiChatOpen:id=>invoke('ai-chat-open',id),aiChatCreate:seed=>invoke('ai-chat-create',seed),aiChatRemove:id=>invoke('ai-chat-remove',id),aiChatRename:(id,title)=>invoke('ai-chat-rename',id,title),aiChatSend:(id,text,profileId,commandId,modelId,reasoningEffort,images)=>invoke('ai-chat-send',id,text,profileId,commandId,modelId,reasoningEffort,images),
+  aiChatCancel:id=>invoke('ai-chat-cancel',id),aiChatRetry:(id,profileId)=>invoke('ai-chat-retry',id,profileId),
+  aiChatConfigure:value=>invoke('ai-chat-configure',value),aiChatHide:()=>invoke('ai-chat-hide'),aiChatSidebar:open=>invoke('ai-chat-sidebar',open),aiChatClipboard:()=>invoke('ai-chat-clipboard'),
+  aiInline:(query,requestId)=>invoke('ai-inline',query,requestId),aiCancel:id=>invoke('ai-cancel',id),aiOpenLink:url=>invoke('ai-open-link',url),searchHistoryAdd:(query,command,result,engineId)=>invoke('search-history-add',query,command,result,engineId),searchHistoryClear:()=>invoke('search-history-clear'),
   archiveAssociation:operation=>invoke('archive-association',operation),onArchivePreferences:callback=>listen('archive-preferences',callback),
   trayMenuState:()=>invoke('tray-menu-state'),trayMenuAction:id=>invoke('tray-menu-action',id),trayMenuReady:()=>invoke('tray-menu-ready'),trayMenuHide:()=>invoke('tray-menu-hide'),onTrayMenuChanged:callback=>listen('tray-menu-changed',callback),
   explorerMenuState:()=>invoke('explorer-menu-state'),setExplorerMenu:value=>invoke('explorer-menu-set',value),fileActionData:()=>invoke('file-action-data'),openFileAction:(tool,paths)=>invoke('file-action-open',tool,paths),
