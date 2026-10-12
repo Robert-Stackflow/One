@@ -158,6 +158,12 @@ async function readManifest(input: FileHandle) {
 }
 /** Serve only the original screen track for lazy card posters, with byte ranges.
  * The caller resolves a managed material ID; this never accepts a renderer path. */
+/** Validate managed material metadata without loading the potentially large media tracks. */
+export async function recordingProjectInfo(path:string){
+  const input=await open(path,'r');
+  try{return (await readManifest(input)).manifest.project;}finally{await input.close();}
+}
+
 export async function recordingProjectPreview(path: string, request: Request) {
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 });
   const input = await open(path, 'r');
