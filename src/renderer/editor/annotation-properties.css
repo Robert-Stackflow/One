@@ -1,0 +1,249 @@
+/* Properties use compact, labelled controls, never a second row inside actions. */
+body[data-view="image-editor"] .annotation-properties {
+  gap: 8px 12px;
+  padding: 8px 10px;
+}
+body[data-view="image-editor"] .annotation-properties > label,
+body[data-view="image-editor"] .capture-property {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  min-height: 30px;
+}
+body[data-view="image-editor"] .annotation-properties > label:not([hidden]) ~ label:not([hidden]):not(.property-row-start) {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+body[data-view="image-editor"] .annotation-properties > label.property-row-start {
+  padding-left: 0;
+  border-left: 0;
+}
+body[data-view="image-editor"] .annotation-properties .custom-select {
+  width: 106px;
+  color: var(--fg);
+}
+body[data-view="image-editor"] .annotation-properties [id$='family-trigger'] {
+  width: 128px;
+}
+body[data-view="image-editor"] .annotation-properties [id$='weight-trigger'] {
+  width: 90px;
+}
+body[data-view="image-editor"] .annotation-properties [id$='stroke-trigger'] {
+  width: 128px;
+}
+body[data-view="image-editor"] .annotation-properties .number-control {
+  width: 104px;
+  color: var(--fg);
+}
+body[data-view="image-editor"] .annotation-properties > label > button {
+  padding: 3px 8px;
+  color: var(--fg);
+}
+body[data-view="image-editor"] .annotation-properties #watermark-text {
+  width: 160px;
+  color: var(--fg);
+}
+body[data-view="image-editor"] .annotation-color-field {
+  gap: 8px;
+}
+body[data-view="image-editor"] .annotation-palette {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+body[data-view="image-editor"] .annotation-palette > button {
+  width: 24px;
+  height: 26px;
+  min-width: 24px;
+  min-height: 26px;
+  padding: 3px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+}
+body[data-view="image-editor"] .annotation-palette > button::before {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--preset-color);
+  box-shadow: inset 0 0 0 1px #0002;
+}
+body[data-view="image-editor"] .annotation-palette > button:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .annotation-palette > button[aria-pressed='true'] {
+  border-color: var(--fg);
+  background: var(--selected);
+}
+body[data-view="image-editor"] .annotation-properties .capture-color-control > button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 5px;
+  border-radius: 5px;
+  background: var(--surface);
+  border-color: var(--line);
+}
+body[data-view="image-editor"] .capture-color-control .color-picker-value {
+  display: none;
+}
+body[data-view="image-editor"] .capture-color-control .color-picker-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+}
+body[data-view="image-editor"] .capture-color-panel.anchored-popover {
+  padding: 14px;
+  border-radius: 10px;
+}
+body[data-view="image-editor"] .capture-color-panel .color-picker-eyedropper {
+  margin-top: 12px;
+  width: 100%;
+}
+body[data-view="image-editor"] .capture-range-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+body[data-view="image-editor"] .capture-range-presets {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+body[data-view="image-editor"] .capture-range-presets button {
+  min-width: 24px;
+  width: 24px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 11px;
+  color: var(--muted);
+}
+body[data-view="image-editor"] .capture-range-presets button:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .capture-range-presets button[aria-pressed='true'] {
+  border-color: var(--line);
+  background: var(--selected);
+  color: var(--fg);
+}
+body[data-view="image-editor"] .capture-size-preset span {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+}
+body[data-view="image-editor"] .annotation-properties .capture-range-control input[type='range'] {
+  appearance: none;
+  width: 64px;
+  min-width: 40px;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+body[data-view="image-editor"] .capture-range-control input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--fg) var(--range-progress),
+    var(--line) var(--range-progress)
+  );
+}
+body[data-view="image-editor"] .capture-range-control input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--fg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 30%, transparent);
+  margin-top: -4px;
+}
+body[data-view="image-editor"] .capture-range-value {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--field-radius);
+  height: var(--control-height);
+  padding-right: 6px;
+  font-size: 11px;
+}
+body[data-view="image-editor"] .annotation-properties .capture-range-value input[type='number'] {
+  width: 40px;
+  height: calc(var(--control-height) - 2px);
+  min-height: 0;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--control-font);
+  color: var(--fg);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+body[data-view="image-editor"] .capture-range-value input::-webkit-inner-spin-button {
+  appearance: none;
+}
+body[data-view="image-editor"] .annotation-properties .annotation-color-field {
+  order: -2;
+}
+body[data-view="image-editor"] .annotation-properties .annotation-width-field,
+body[data-view="image-editor"] .annotation-properties .annotation-size-field {
+  order: -1;
+}
+@media (max-width: 780px) {
+  body[data-view="image-editor"] .capture-range-presets {
+    display: none;
+  }
+  body[data-view="image-editor"] .annotation-properties {
+    gap: 7px 9px;
+  }
+}
+@media (max-width: 520px) {
+  body[data-view="image-editor"] .annotation-properties .capture-range-control input[type='range'] {
+    width: 44px;
+  }
+  body[data-view="image-editor"] .annotation-palette {
+    gap: 2px;
+  }
+  body[data-view="image-editor"] .annotation-palette > button {
+    width: 22px;
+    min-width: 22px;
+  }
+}
+body[data-view="image-editor"] .text-emphasis {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+  align-items: center;
+}
+body[data-view="image-editor"] .text-emphasis button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--fg, #303030);
+  background: transparent;
+}
+body[data-view="image-editor"] .text-emphasis button svg {
+  width: 16px;
+  height: 16px;
+}
+body[data-view="image-editor"] .text-emphasis button:hover {
+  background: var(--hover, #eee);
+}
+body[data-view="image-editor"] .text-emphasis button[aria-pressed='true'] {
+  background: var(--hover, #eee);
+  border-color: var(--line, #ddd);
+}

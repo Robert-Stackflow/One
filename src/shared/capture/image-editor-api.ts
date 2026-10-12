@@ -13,6 +13,7 @@ export interface ImageEditorState {
   history?: ImageHistoryState;
   watermark?: WatermarkPreset;
   openedAt?: number;
+  uiScale?: import('./settings').CapturePreferences['uiScale'];
 }
 export interface ImageSaveRequest {
   token: string;
@@ -31,6 +32,10 @@ export interface ImageEditorAPI extends SensitiveAPI {
     history?: ImageHistoryState,
   ): Promise<string | null>;
   fonts(): Promise<InstalledFont[]>;
+  selectFont(token:string,family:string):Promise<boolean>;
+  onPreferences(callback:(value:Pick<import('./settings').CapturePreferences,'uiScale'>)=>void):()=>void;
+  onCloseRequest(callback:(token:string)=>void):()=>void;
+  answerClose(token:string,accepted:boolean):Promise<void>;
   saveWatermark(token: string, value: WatermarkPreset): Promise<void>;
   chooseWatermarkImage(token: string): Promise<import('./watermark').WatermarkImage | null>;
 }

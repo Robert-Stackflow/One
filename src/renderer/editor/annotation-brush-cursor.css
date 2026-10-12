@@ -1,0 +1,11 @@
+body[data-view="image-editor"] .annotation-brush-cursor {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid #fff;
+  outline: 1px solid #555;
+  border-radius: 50%;
+  z-index: 3;
+}
+body[data-view="image-editor"] .annotation-brush-cursor[hidden] {
+  display: none !important;
+}

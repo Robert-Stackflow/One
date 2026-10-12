@@ -1,0 +1,42 @@
+body[data-view="image-editor"] .sensitive-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 420px;
+}
+body[data-view="image-editor"] .sensitive-controls .help {
+  flex-basis: 100%;
+  max-width: 100%;
+  margin: 0;
+  font-size: 11px;
+}
+body[data-view="image-editor"] .sensitive-controls #sensitive-review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+body[data-view="image-editor"] .sensitive-controls #sensitive-count {
+  flex-basis: 100%;
+}
+body[data-view="image-editor"] .sensitive-controls label {
+  margin: 0;
+}
+body[data-view="image-editor"] .sensitive-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--muted);
+  cursor: help;
+}
+body[data-view="image-editor"] .sensitive-help svg {
+  width: 15px;
+  height: 15px;
+}
+body[data-view="image-editor"] .sensitive-controls[hidden],
+body[data-view="image-editor"] .sensitive-controls [hidden] {
+  display: none !important;
+}

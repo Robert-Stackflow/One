@@ -32,3 +32,15 @@ export function releaseUIFont(value:UIFont){
   const face=faces.get(value);if(face)document.fonts.delete(face);
   faces.delete(value);cache.delete(value);
 }
+
+const documentFonts=new Map<string,Promise<void>>();
+/** Editable documents keep the actual family name; the host authorizes each selected font. */
+export function loadDocumentFont(family:string):Promise<void>{
+  let pending=documentFonts.get(family);if(pending)return pending;
+  pending=Promise.resolve().then(async()=>{
+    const source=await api.uiFontSource(family);if(!source)return;
+    const candidates=[...(source.url?['url('+quote(source.url)+')']:[]),...source.local.map(name=>'local('+quote(name)+')')];
+    const face=new FontFace(family,candidates.join(','));await face.load();document.fonts.add(face);
+  }).catch(error=>{documentFonts.delete(family);throw error;});
+  documentFonts.set(family,pending);return pending;
+}

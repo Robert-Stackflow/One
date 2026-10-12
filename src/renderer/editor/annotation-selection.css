@@ -1,0 +1,52 @@
+body[data-view="image-editor"] .annotation-selection {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+  border: 1px dashed #555;
+  outline: 1px solid #ffffff;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move] {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+}
+body[data-view="image-editor"] .annotation-selection.global-watermark [data-annotation-move] {
+  pointer-events: none;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='top'],
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='bottom'] {
+  left: 8px;
+  right: 8px;
+  height: 8px;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='top'] {
+  top: -4px;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='bottom'] {
+  bottom: -4px;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='left'],
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='right'] {
+  top: 8px;
+  bottom: 8px;
+  width: 8px;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='left'] {
+  left: -4px;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-move='right'] {
+  right: -4px;
+}
+body[data-view="image-editor"] .annotation-selection [data-annotation-handle] {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  min-width: 7px;
+  min-height: 7px;
+  padding: 0;
+  border: 1px solid #666;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}

@@ -6,7 +6,9 @@ export interface SelectOption {label:string;value:string;disabled?:boolean;icon?
 /** Return a fresh option list; it is applied only while this open request remains current. */
 export type SelectLoader = (signal:AbortSignal) => Promise<readonly SelectOption[]>;
 const loaders = new WeakMap<HTMLElement, SelectLoader>();
-const controls = new WeakMap<HTMLElement, {update(options:readonly SelectOption[]):void;close():void;setLoader(loader:SelectLoader|undefined):void}>();
+const controls = new WeakMap<HTMLElement, {source:HTMLSelectElement;update(options:readonly SelectOption[]):void;close():void;setLoader(loader:SelectLoader|undefined):void}>();
+/** For business controls that need native option metadata after enhancement. */
+export function selectSource(control:HTMLElement){return controls.get(control)?.source||(control instanceof HTMLSelectElement?control:undefined);}
 let closeActive:(() => void)|null = null;
 
 export function setSelectLoader(control:HTMLElement, loader:SelectLoader|undefined) {
@@ -223,7 +225,7 @@ function enhanceSelect(select:HTMLSelectElement) {
   const stateObserver = new MutationObserver(() => {if (!available()) close();renderLabel();});
   stateObserver.observe(button,{attributes:true,attributeFilter:['disabled','hidden','data-display-label']});
   const resize = new ResizeObserver(() => {if (menu || abort) position();});resize.observe(button);
-  const state = {update,close,setLoader(next:SelectLoader|undefined){close();loader = next;}};
+  const state = {source:select,update,close,setLoader(next:SelectLoader|undefined){close();loader = next;}};
   controls.set(select,state);controls.set(button,state);
   select.replaceWith(button);sync();
   onRemoval(button,() => {

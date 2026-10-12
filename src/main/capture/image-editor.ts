@@ -22,6 +22,7 @@ export interface ImageEditorContext {
   register(name:string, handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
   confirmClose(window:BrowserWindow):Promise<boolean>;
   fonts():Promise<InstalledFont[]>;
+  uiScale?():import('../../shared/capture/settings').CapturePreferences['uiScale'];
   autosaveProject?(
     id: string,
     project: import('../../shared/capture/image-project').ImageProject,
@@ -75,8 +76,9 @@ export class ImageEditorService {
   private generation = 0;
   private dirty = false;
   private busy = false;
-  private closing = false;
+  private closing?:Promise<boolean>;
   private opening = false;
+  private selectedFonts=new Set<string>();
   constructor(private ctx: ImageEditorContext) {
     const handle = (name: string, fn: (...args: any[]) => unknown) =>
       ctx.register('image-project-' + name, (event, ...args) => {
@@ -100,6 +102,7 @@ export class ImageEditorService {
       history: this.history,
       watermark: this.ctx.watermark?.() || defaultWatermarkPreset(),
       openedAt: this.openedAt,
+      uiScale:ctx.uiScale?.()||100,
     }));
     handle('dirty', (token, value) => {
       if (token !== this.token || typeof value !== 'boolean' || this.busy)
@@ -109,6 +112,13 @@ export class ImageEditorService {
     handle('save', (request) => this.save(request));
     handle('project', (token, document, history) => this.saveProject(token, document, history));
     handle('fonts', () => ctx.fonts());
+    handle('select-font',async(token,family)=>{
+      if(token!==this.token||typeof family!=='string'||family.length>256)throw Error('字体选择无效');
+      const fonts=await ctx.fonts();
+      if(token!==this.token||ctx.blocked())throw Error('图片编辑已失效');
+      if(!fonts.some(font=>font.family===family))return false;
+      this.selectedFonts.add(family);return true;
+    });
     handle('watermark', (token, value) => {
       if (!token || token !== this.token || this.busy) throw Error('图片编辑已失效');
       return this.ctx.saveWatermark?.(watermarkPreset(value));
@@ -152,7 +162,7 @@ export class ImageEditorService {
   /** The One session guard checks owner and frame before dispatch. */
   authorize(url:string,owner:number){
     return !!this.token && !!this.png && !this.ctx.blocked() && !!this.window &&
-      !this.window.isDestroyed() && this.window.webContents.id===owner &&
+      !this.window.isDestroyed() && this.window.webContents.id===owner && this.window.webContents.getURL()===IMAGE_EDITOR_URL &&
       url==='one-file://image-editor/'+this.token;
   }
   resource(request:Request){
@@ -166,6 +176,19 @@ export class ImageEditorService {
   get hasUnsaved() {
     return this.dirty || this.busy;
   }
+  usesMaterial(id:string){return this.materialId===id||(!this.source?.transient&&this.source?.id===id);}
+  requestClose():Promise<boolean>{
+    if(this.closing)return this.closing;
+    if(this.busy||this.opening)return Promise.resolve(false);
+    if(!this.window||!this.hasUnsaved){this.abort();return Promise.resolve(true);}
+    const generation=this.generation;
+    const pending=this.ctx.confirmClose(this.window).then(accepted=>{
+      if(generation!==this.generation||!accepted)return false;
+      this.abort();return true;
+    }).catch(()=>false).finally(()=>{if(this.closing===pending)this.closing=undefined;});
+    this.closing=pending;return pending;
+  }
+  allowsFont(owner:number,family:string){return !this.ctx.blocked()&&this.window?.webContents.id===owner&&this.selectedFonts.has(family);}
   get available() {
     return !this.opening && (!this.window || this.window.isDestroyed()) && !this.ctx.blocked();
   }
@@ -282,22 +305,7 @@ export class ImageEditorService {
     window.webContents.on('render-process-gone', () => this.abort());
     window.on('close', (e) => {
       e.preventDefault();
-      if (this.busy) return;
-      if (!this.hasUnsaved) {
-        this.abort();
-        return;
-      }
-      if (this.closing) return;
-      this.closing = true;
-      const generation = this.generation;
-      void this.ctx.confirmClose(window)
-        .then((result) => {
-          if (generation === this.generation && result) this.abort();
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (generation === this.generation) this.closing = false;
-        });
+      void this.requestClose();
     });
     window.on('closed', () => {
       if (this.window === window) this.abort();
@@ -455,7 +463,7 @@ export class ImageEditorService {
   abort() {
     if (this.token) void this.ctx.sensitive?.cancelSensitive(this.token).catch(() => {});
     const hadSession = !!this.window || !!this.source;
-    this.closing = false;
+    this.closing = undefined;
     this.generation++;
     this.dirty = false;
     this.busy = false;
@@ -464,6 +472,7 @@ export class ImageEditorService {
     this.history = undefined;
     this.materialId = '';
     this.token = '';
+    this.selectedFonts.clear();
     this.png?.fill(0);
     this.png = undefined;
     const window = this.window;

@@ -1,0 +1,401 @@
+
+body[data-view="image-editor"] .image-workbench > .feedback-inline {
+  margin: 8px 16px !important;
+}
+body[data-view="image-editor"] .image-workbench > .feedback-inline:empty {
+  display: none;
+}
+@media (max-width: 1000px) {
+  body[data-view="image-editor"] .editor-commandbar {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  body[data-view="image-editor"] .editor-commandbar button {
+    font-size: calc(11px * var(--text-scale, 1));
+    padding: 5px 7px;
+  }
+  body[data-view="image-editor"] .image-workbench .editor-layout {
+    grid-template-columns: minmax(0, 1fr) 176px;
+  }
+  body[data-view="image-editor"] .editor-footer .status {
+    gap: 8px;
+  }
+  body[data-view="image-editor"] .editor-footer #steps {
+    display: none;
+  }
+  body[data-view="image-editor"] .editor-footer .actions {
+    gap: 4px;
+  }
+}
+@media (max-width: 800px) {
+  body[data-view="image-editor"] .editor-commandbar {
+    align-items: flex-start;
+  }
+  body[data-view="image-editor"] .editor-commandbar .actions {
+    flex-direction: column;
+  }
+  body[data-view="image-editor"] .image-workbench .editor-layout {
+    grid-template-columns: minmax(0, 1fr) 156px;
+  }
+  body[data-view="image-editor"] .image-workbench #viewport {
+    padding: 16px;
+  }
+  body[data-view="image-editor"] .image-workbench footer.editor-footer {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  body[data-view="image-editor"] .editor-footer .status {
+    flex: 1 0 100%;
+  }
+  body[data-view="image-editor"] .editor-footer .actions {
+    margin-left: auto;
+  }
+}
+body[data-view="image-editor"] main.image-workbench {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+body[data-view="image-editor"] .editor-commandbar {
+  display: flex;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  align-items: center;
+}
+body[data-view="image-editor"] .editor-commandbar > .toolbar {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0;
+  gap: 2px;
+  border: 0;
+}
+body[data-view="image-editor"] .editor-commandbar button {
+  border: 0;
+  background: transparent;
+  padding: 6px 9px;
+  font-size: calc(12px * var(--text-scale, 1));
+  min-height: 30px;
+}
+body[data-view="image-editor"] .editor-commandbar .toolbar button.active {
+  background: var(--selected);
+}
+body[data-view="image-editor"] .editor-commandbar .toolbar .divider {
+  height: 18px;
+  width: 1px;
+  border: 0;
+  background: var(--line);
+  margin: 0 6px;
+}
+body[data-view="image-editor"] .editor-commandbar .actions {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+body[data-view="image-editor"] .image-workbench .editor-layout {
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 0;
+}
+body[data-view="image-editor"] .image-workbench .editor-tools {
+  border-left: 1px solid var(--line);
+  padding: 18px 14px;
+  min-width: 0;
+}
+body[data-view="image-editor"] .image-workbench .options {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: 0;
+}
+body[data-view="image-editor"] .image-workbench .options label {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: calc(12px * var(--text-scale, 1));
+}
+body[data-view="image-editor"] .image-workbench .options #text-value {
+  margin-top: 14px;
+}
+body[data-view="image-editor"] .crop-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 18px;
+}
+body[data-view="image-editor"] .crop-actions > button {
+  min-height: 30px;
+  font-size: calc(12px * var(--text-scale, 1));
+}
+body[data-view="image-editor"] .image-workbench #viewport {
+  border-radius: 0;
+  background: var(--stage);
+  padding: 24px;
+  min-height: 0;
+}
+body[data-view="image-editor"] .image-workbench #surface {
+  box-shadow: 0 4px 20px #0002;
+}
+body[data-view="image-editor"] .editor-tools #hint {
+  font-size: calc(11px * var(--text-scale, 1));
+  line-height: 1.65;
+  margin-top: 18px;
+  color: var(--muted);
+}
+body[data-view="image-editor"] .image-workbench footer.editor-footer {
+  padding: 12px 18px;
+  gap: 20px;
+  min-height: 58px;
+  border-top: 1px solid var(--line);
+}
+body[data-view="image-editor"] .editor-footer .status {
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  font-size: calc(11px * var(--text-scale, 1));
+}
+body[data-view="image-editor"] .editor-footer .status > .custom-select {
+  margin-left: auto;
+  max-width: 148px;
+}
+body[data-view="image-editor"] .editor-footer .actions {
+  flex-wrap: nowrap;
+}
+body[data-view="image-editor"] .editor-footer button {
+  font-size: calc(12px * var(--text-scale, 1));
+  min-height: 32px;
+}
+body[data-view="image-editor"] .editor-footer button.quiet {
+  border: 0;
+}
+
+body[data-view="image-editor"] .editor-commandbar {
+  align-items: flex-start;
+  min-width: 0;
+  gap: 12px;
+  padding: 6px 16px;
+}
+body[data-view="image-editor"] .editor-commandbar > .toolbar {
+  flex-wrap: wrap;
+  overflow: visible;
+  min-width: 0;
+  align-items: center;
+  margin: 0;
+}
+body[data-view="image-editor"] .editor-commandbar > .toolbar > button,
+body[data-view="image-editor"] .editor-commandbar > .toolbar > .divider {
+  flex-shrink: 0;
+}
+body[data-view="image-editor"] .editor-commandbar > .actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+}
+body[data-view="image-editor"] .editor-commandbar button {
+  height: 32px;
+  min-height: 32px;
+  line-height: 1;
+  padding: 5px 9px;
+}
+body[data-view="image-editor"] .editor-commandbar button.quiet:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .editor-commandbar button.active {
+  background: var(--selected);
+}
+body[data-view="image-editor"] .editor-commandbar .image-shape-tool {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+body[data-view="image-editor"] .editor-commandbar .image-shape-tool .custom-select {
+  width: auto;
+}
+body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger {
+  display: flex;
+  height: 32px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 0;
+  background: transparent;
+  gap: 7px;
+  box-shadow: none;
+}
+body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger.active {
+  background: var(--selected);
+}
+body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .shape-symbol {
+  display: flex;
+}
+body[data-view="image-editor"] .shape-symbol svg {
+  width: 17px;
+  height: 17px;
+}
+body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger > svg {
+  width: 12px;
+  height: 12px;
+}
+body[data-view="image-editor"] .editor-commandbar .image-transform-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+@media (max-width: 800px) {
+  body[data-view="image-editor"] .editor-commandbar .image-transform-tools button {
+    width: 32px;
+    min-width: 32px;
+    justify-content: center;
+    padding-inline: 5px;
+  }
+  body[data-view="image-editor"] .editor-commandbar .image-transform-tools button > span {
+    display: none;
+  }
+  body[data-view="image-editor"] .image-workbench footer.editor-footer .status {
+    flex: 1 1 auto;
+  }
+}
+@media (max-width: 800px) {
+  body[data-view="image-editor"] .editor-commandbar > .toolbar > button,
+  body[data-view="image-editor"] .editor-commandbar > .actions > button {
+    width: 32px;
+    min-width: 32px;
+    justify-content: center;
+    padding-inline: 5px;
+    font-size: 0;
+  }
+  body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger {
+    width: 42px;
+    min-width: 42px;
+    justify-content: center;
+    padding-inline: 5px;
+    gap: 2px;
+    font-size: 0;
+  }
+  body[data-view="image-editor"] .editor-commandbar > .toolbar > button svg,
+  body[data-view="image-editor"] .editor-commandbar > .actions > button svg {
+    flex-shrink: 0;
+  }
+}
+body[data-view="image-editor"] .image-workbench .selected-mark {
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+body[data-view="image-editor"] .selected-mark > div {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+body[data-view="image-editor"] .image-workbench .selected-mark button {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+body[data-view="image-editor"] .image-workbench .selected-mark button:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .image-workbench .options #fill-field {
+  min-height: 32px;
+}
+@media (max-width: 800px) {
+  body[data-view="image-editor"] .image-workbench .options label:has(.number-control) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    justify-items: stretch;
+  }
+  body[data-view="image-editor"] .image-workbench .options label > .number-control {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
+}
+body[data-view="image-editor"] .image-workbench #viewport {
+  scrollbar-width: none;
+  padding: 24px;
+  box-sizing: border-box;
+}
+body[data-view="image-editor"] .image-workbench #viewport::-webkit-scrollbar {
+  display: none;
+}
+body[data-view="image-editor"] .editor-footer button.quiet:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .image-workbench .color-picker-trigger {
+  font-size: 10px;
+}
+
+body[data-view="image-editor"] .editor-commandbar :is(.toolbar, .player-toolstrip, .actions) button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease;
+  flex-shrink: 0;
+}
+body[data-view="image-editor"] .editor-commandbar button:is(:hover, :focus-visible):not(:disabled) {
+  background: var(--hover);
+  border-color: var(--line);
+}
+body[data-view="image-editor"] .editor-commandbar button:is(.active, [aria-expanded='true'], [aria-pressed='true']) {
+  background: var(--selected);
+  border-color: var(--line);
+}
+body[data-view="image-editor"] .editor-commandbar button > svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.7;
+}
+body[data-view="image-editor"] .editor-actions-menu {
+  padding: 6px;
+  width: 200px;
+}
+body[data-view="image-editor"] .editor-actions-menu > button {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  font-size: 12px;
+}
+body[data-view="image-editor"] .editor-actions-menu > button:hover:not(:disabled) {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .editor-actions-menu svg {
+  width: 16px;
+  height: 16px;
+}
+body[data-view="image-editor"] .editor-footer .editor-more {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+}
+body[data-view="image-editor"] .image-workbench .editor-footer :is(#steps, #dirty) {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="image-editor"] .editor-commandbar button {
+    transition: none;
+  }
+}

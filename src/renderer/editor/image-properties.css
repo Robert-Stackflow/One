@@ -1,0 +1,307 @@
+/* A full canvas with contextual controls; no permanent inspector column. */
+body[data-view="image-editor"] .image-workbench .editor-layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+body[data-view="image-editor"] .image-workbench .editor-stage {
+  order: 1;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+body[data-view="image-editor"] .image-workbench .editor-commandbar {
+  flex-wrap: nowrap;
+  gap: 5px;
+  align-items: center;
+}
+body[data-view="image-editor"] .editor-commandbar .editor-tool-group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+}
+body[data-view="image-editor"] .editor-commandbar .toolbar > .editor-tool-group:first-child {
+  border: 0;
+  padding-left: 0;
+}
+body[data-view="image-editor"] .image-workbench .editor-commandbar .actions {
+  flex: 0 0 auto;
+  flex-direction: row;
+  margin-left: auto;
+  border: 0;
+  padding: 0;
+  gap: 5px;
+}
+body[data-view="image-editor"] .editor-commandbar > .editor-tool-group::before,
+body[data-view="image-editor"] .editor-commandbar > .actions::before {
+  content: '';
+  flex: 0 0 1px;
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  align-self: center;
+  background: var(--line);
+}
+body[data-view="image-editor"] .editor-commandbar .editor-tool-group > button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+body[data-view="image-editor"] .image-workbench .editor-tools.editor-secondary-toolbar {
+  position: relative;
+  z-index: 8;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  min-height: 56px;
+  overflow-y: hidden;
+  overflow-x: auto;
+  padding: 8px 20px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
+  scrollbar-width: none;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar::-webkit-scrollbar {
+  display: none;
+}
+body[data-view="image-editor"] .image-workbench .editor-secondary-toolbar .options {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0;
+}
+body[data-view="image-editor"] .image-workbench .editor-secondary-toolbar .options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  font-size: 12px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .options > label {
+  flex: 0 0 auto;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .number-control {
+  width: 112px;
+  min-width: 112px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .custom-select {
+  width: 124px;
+  flex: 0 0 auto;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #font-family-field .custom-select {
+  width: 144px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #font-weight-field .custom-select {
+  width: 96px;
+}
+body[data-view="image-editor"] .image-workbench .editor-secondary-toolbar .custom-select {
+  width: 100%;
+  max-width: none;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .color-trigger {
+  max-width: 120px;
+  min-width: 70px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .capture-color-control .color-picker-trigger {
+  min-width: 30px;
+  max-width: 30px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #sensitive-controls {
+  flex: 0 0 auto;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  border: 0;
+  border-left: 1px solid var(--line);
+}
+body[data-view="image-editor"] .editor-secondary-toolbar
+  :is(
+    #sensitive-controls,
+    #sensitive-review,
+    #mosaic-controls,
+    #mosaic-review-field,
+    .watermark-image-controls
+  ) {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .options > div {
+  flex: 0 0 auto;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #sensitive-count {
+  flex-basis: auto;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #selected-mark {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #watermark-fields {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0;
+  border: 0;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #watermark-fields > label {
+  flex: 0 0 auto;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #watermark-fields :is(input, .custom-select) {
+  flex: 0 0 auto;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar :is(.magnifier-controls, .magnifier-fields) {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: none;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .magnifier-hint {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #watermark-fields input[type='range'] {
+  width: 140px;
+}
+body[data-view="image-editor"] .image-workbench .editor-secondary-toolbar #watermark-image-controls {
+  width: auto;
+  flex-direction: row;
+  align-items: center;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar #watermark-hint {
+  display: none;
+}
+body[data-view="image-editor"] .image-workbench .crop-actions {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 0;
+}
+body[data-view="image-editor"] .image-effects-popover {
+  width: 360px;
+  padding: 16px;
+}
+body[data-view="image-editor"] .image-effects-popover .output-effect-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 700px) {
+  body[data-view="image-editor"] .image-workbench .editor-secondary-toolbar {
+    padding-inline: 12px;
+  }
+}
+
+body[data-view="image-editor"] body[data-view='image-editor'] #message[popover] {
+  inset: var(--image-feedback-top, 136px) 20px auto auto;
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(400px, calc(100vw - 40px));
+}
+body[data-view="image-editor"] #message[data-kind='loading']::before {
+  content: '';
+  flex: 0 0 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--fg);
+  border-radius: 50%;
+  animation: image-notice-spin 0.8s linear infinite;
+}
+body[data-view="image-editor"] #message .feedback-text {
+  min-width: 0;
+}
+body[data-view="image-editor"] #message .feedback-action {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--fg);
+}
+@keyframes image-notice-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="image-editor"] #message[data-kind='loading']::before {
+    animation: none;
+  }
+}
+
+body[data-view="image-editor"] .image-workbench .editor-commandbar .toolbar {
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  overflow: visible;
+  flex-wrap: nowrap;
+}
+body[data-view="image-editor"] .editor-commandbar [hidden] {
+  display: none !important;
+}
+body[data-view="image-editor"] #image-toolbar-more {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+body[data-view="image-editor"] .editor-secondary-toolbar
+  :is(
+    #selected-mark,
+    .watermark-image-controls,
+    .magnifier-controls,
+    .magnifier-fields,
+    .annotation-step-order
+  ) {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .options button {
+  white-space: nowrap;
+}
+
+body[data-view="image-editor"] .editor-secondary-toolbar .magnifier-controls {
+  gap: 10px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .magnifier-fields {
+  gap: 10px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .magnifier-fields input[type='number'] {
+  width: 96px;
+}
+body[data-view="image-editor"] .editor-secondary-toolbar .magnifier-hint {
+  display: none;
+}

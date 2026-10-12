@@ -85,6 +85,9 @@ export class MaterialLibrary {
     if (!validId(id)) throw Error('素材不存在');
     return join(this.directory, 'images', id + IMAGE_PROJECT_FORMAT.extension);
   }
+  async saveImageProject(id:string,project:import('../../shared/capture/image-project').ImageProject,original:Buffer){
+    const asset=this.images.get(id);await this.image(asset,original,project.document,original,project.history);
+  }
   recordingPath(id: string) {
     if (!this.recordings.some((item) => item.id === id)) throw Error('素材不存在');
     return join(this.folder(id), 'project'+RECORDING_PROJECT_FORMAT.extension);

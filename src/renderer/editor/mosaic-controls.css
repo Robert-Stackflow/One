@@ -1,0 +1,11 @@
+body[data-view="image-editor"] .mosaic-controls,
+body[data-view="image-editor"] #mosaic-review-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+body[data-view="image-editor"] .mosaic-controls[hidden],
+body[data-view="image-editor"] .mosaic-controls [hidden] {
+  display: none !important;
+}

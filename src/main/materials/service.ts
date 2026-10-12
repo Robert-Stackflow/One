@@ -30,6 +30,7 @@ export class MaterialsService {
     this.ready=this.library.init();void this.ready.catch(error=>{this.error=error instanceof Error?error.message:String(error);});
   }
   get pendingTasks(){return this.tasks.size;}
+  async initialized(){await this.ready;if(this.closing)throw Error('素材服务已关闭');}
   private owner(id:number){const window=this.context.window(id);if(this.closing||!window||window.isDestroyed()||window.webContents.isDestroyed())throw Error('素材窗口已关闭');return window;}
   private run<T>(owner:number,work:()=>Promise<T>):Promise<T>{
     this.owner(owner);

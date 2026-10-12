@@ -19,6 +19,8 @@ export interface MaterialsAPI {
   materialsRemoveImage(id:string):Promise<void>;
   materialsRemoveRecording(id:string):Promise<void>;
   materialsOpenDirectory():Promise<void>;
+  materialsEditImage(id:string):Promise<void>;
+  materialsOpenImageProject():Promise<void>;
   onMaterialsChanged(callback:()=>void):()=>void;
 }
 export const MATERIAL_INDEX_FORMAT={images:'one-image-materials',recording:'one-recording-material',version:1} as const;

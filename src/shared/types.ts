@@ -41,6 +41,7 @@ export interface PreviewData { photoLocation?:import('./photo-metadata').PhotoLo
 export interface LinkCard {domain:string;title:string;description:string;image?:string}
 export type { PickerData } from './picker';
 export interface OneAPI extends MaterialsAPI {
+  imageEditor?:import('./capture/image-editor-api').ImageEditorAPI;
   searchSuggest(engineId:string,query:string):Promise<string[]>;
   aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
   aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;

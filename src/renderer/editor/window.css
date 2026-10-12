@@ -1,0 +1,10 @@
+body[data-view='image-editor'] #app{height:100%;display:flex;flex-direction:column;--stage:var(--soft)}
+body[data-view='image-editor'] .media-header{height:52px;min-height:52px;display:flex;align-items:center;gap:10px;padding:0 0 0 16px;border-bottom:1px solid var(--line);-webkit-app-region:drag;font-size:13px}
+body[data-view='image-editor'] #brand{display:flex}
+body[data-view='image-editor'] svg:not(.window-glyph){width:18px;height:18px;flex-shrink:0}
+body[data-view='image-editor'] .image-workbench{flex:1;min-height:0;max-width:none;margin:0;padding:0;gap:0;overflow:hidden}
+body[data-view='image-editor'] .actions{display:flex;align-items:center;gap:8px}
+body[data-view='image-editor'] .media-header .window-controls{position:static;margin-left:auto;align-self:stretch;-webkit-app-region:no-drag}
+body[data-view='image-editor'] .editor-popover[popover]{position:fixed;margin:0;inset:auto;overflow:auto}
+body[data-view='image-editor'] .capture-menu[popover]{margin:0;inset:auto;position:fixed;overflow:auto}
+body[data-view='image-editor'] .feedback-toast{position:fixed;left:50%;bottom:76px;translate:-50% 0;z-index:100}

@@ -1,0 +1,244 @@
+
+    <header class="media-header">
+      <span id="brand"></span><strong>编辑图片</strong><span id="source-name"></span>
+    </header>
+    <main class="image-workbench">
+      <div class="editor-commandbar">
+        <nav id="annotation-tools" class="toolbar" role="toolbar" aria-label="图片标注"></nav>
+        <div class="editor-tool-group image-transform-tools" role="group" aria-label="图像变换">
+          <button
+            id="rotate"
+            type="button"
+            class="quiet"
+            aria-label="右转 90°"
+            title="右转 90°"
+            disabled
+          ></button>
+          <button
+            id="flip"
+            type="button"
+            class="quiet"
+            aria-label="水平镜像"
+            title="水平镜像"
+            disabled
+          ></button>
+          <button
+            id="flip-y"
+            type="button"
+            class="quiet"
+            aria-label="垂直镜像"
+            title="垂直镜像"
+            disabled
+          ></button>
+        </div>
+        <div class="editor-tool-group" role="group" aria-label="输出效果">
+          <button
+            id="output-effects"
+            type="button"
+            class="quiet"
+            title="输出效果"
+            aria-label="输出效果"
+            aria-haspopup="dialog"
+            aria-controls="image-effects-popover"
+            aria-expanded="false"
+          ></button>
+        </div>
+        <div class="actions">
+          <button id="undo" type="button" title="撤销 · Ctrl+Z" aria-label="撤销" disabled></button
+          ><button
+            id="redo"
+            type="button"
+            title="重做 · Ctrl+Y"
+            aria-label="重做"
+            disabled
+          ></button>
+        </div>
+      </div>
+      <div class="editor-layout">
+        <section class="editor-stage">
+          <div id="viewport">
+            <div id="surface">
+              <canvas id="image" aria-label="编辑预览"></canvas
+              ><canvas id="overlay" aria-label="标注与裁剪交互" tabindex="0"></canvas>
+              <div id="crop-handles" hidden></div>
+              <div id="annotation-selection" hidden aria-label="选中的标注">
+                <div id="annotation-handles"></div>
+              </div>
+              <form id="text-editor" hidden novalidate>
+                <textarea
+                  id="text-value"
+                  aria-label="标注文字"
+                  maxlength="2000"
+                  placeholder="输入标注文字"
+                ></textarea>
+                <button id="text-cancel" type="button" hidden>取消文字编辑</button>
+              </form>
+            </div>
+          </div>
+        </section>
+        <div
+          id="image-properties"
+          class="editor-tools editor-secondary-toolbar"
+          aria-label="标注属性"
+          hidden
+        >
+          <div class="options">
+            <div id="selected-mark" hidden>
+              <button id="edit-text" type="button" class="quiet" hidden>编辑文字</button
+              ><button id="delete-mark" type="button" class="quiet">删除标注</button>
+            </div>
+            <label id="color-field"
+              >颜色<span id="editor-palette" role="group" aria-label="预置标注颜色"></span
+              ><input id="color" type="color" value="#e34e4e" aria-label="标注颜色"
+            /></label>
+            <label id="width-field"
+              >线宽<input id="width" type="range" min="1" max="80" value="3" aria-label="标注线宽"
+            /></label>
+            <label id="stroke-style-field" hidden
+              >线型<select id="stroke-style" aria-label="标注线型"></select
+            ></label>
+            <label id="text-size-field" hidden
+              >字号<input id="text-size" type="number" min="8" max="240" value="24"
+            /></label>
+            <label id="font-family-field" hidden
+              >字体<select id="font-family" aria-label="标注字体">
+                <option value="Segoe UI">Segoe UI</option>
+                <option value="Microsoft YaHei">Microsoft YaHei</option>
+              </select></label
+            >
+            <label id="font-weight-field" hidden
+              >字重<select id="font-weight" aria-label="标注字重">
+                <option value="400">常规</option>
+                <option value="600">半粗</option>
+                <option value="700">粗体</option>
+              </select></label
+            >
+            <div class="text-emphasis" data-text-emphasis hidden>
+              <input id="text-italic" type="checkbox" hidden /><input
+                id="text-outline"
+                type="checkbox"
+                hidden
+              />
+            </div>
+            <div id="watermark-fields" hidden>
+              <div id="watermark-image-controls"></div>
+              <label id="watermark-text-field"
+                >文字<textarea
+                  id="watermark-text"
+                  rows="2"
+                  maxlength="500"
+                  aria-label="水印文字"
+                ></textarea>
+              </label>
+              <button id="watermark-date" type="button" class="quiet">插入日期时间</button>
+              <label
+                >布局<select id="watermark-position" aria-label="水印布局">
+                  <option value="tile">平铺</option>
+                  <option value="top-left">左上</option>
+                  <option value="top">顶部居中</option>
+                  <option value="top-right">右上</option>
+                  <option value="left">左侧居中</option>
+                  <option value="center">居中</option>
+                  <option value="right">右侧居中</option>
+                  <option value="bottom-left">左下</option>
+                  <option value="bottom">底部居中</option>
+                  <option value="bottom-right">右下</option>
+                  <option value="custom">自由位置</option>
+                </select></label
+              >
+              <label
+                >透明度<input
+                  id="watermark-opacity"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="25"
+                  aria-label="水印透明度"
+              /></label>
+              <label
+                >角度<input
+                  id="watermark-angle"
+                  type="range"
+                  min="-90"
+                  max="90"
+                  value="-30"
+                  aria-label="水印角度"
+              /></label>
+              <label id="watermark-spacing-field"
+                >间距<input
+                  id="watermark-spacing"
+                  type="range"
+                  min="8"
+                  max="600"
+                  value="60"
+                  aria-label="水印间距"
+              /></label>
+              <p id="watermark-hint" class="help">
+                点击图像输入文字。日期使用本次打开图片的时间；已有工程保留原日期。
+              </p>
+            </div>
+            <label id="strength-field" hidden
+              >强度<input
+                id="strength"
+                type="range"
+                min="1"
+                max="64"
+                value="12"
+                aria-label="处理强度"
+            /></label>
+            <label id="fill-field" hidden>填充<input id="shape-filled" type="checkbox" /></label>
+            <label id="redaction-mode-field" hidden
+              >方式<select id="redaction-mode" aria-label="遮盖方式">
+                <option value="brush">笔刷</option>
+                <option value="rectangle">矩形</option>
+              </select></label
+            >
+            <label id="brush-size-field" hidden
+              >笔刷<input
+                id="brush-size"
+                type="range"
+                min="6"
+                max="80"
+                value="24"
+                aria-label="笔刷大小"
+            /></label>
+            <div id="mosaic-controls" hidden></div>
+          </div>
+          <div id="sensitive-controls" hidden></div>
+          <div id="crop-actions" class="crop-actions" hidden>
+            <span id="crop-size"></span
+            ><button id="apply-crop" type="button" class="primary" disabled>应用裁剪</button
+            ><button id="clear-selection" type="button" class="quiet" disabled>取消选区</button>
+          </div>
+        </div>
+      </div>
+      <footer class="editor-footer">
+        <div class="status">
+          <span id="dimensions"></span><span id="steps"></span><span id="dirty"></span
+          ><select id="zoom" aria-label="预览缩放">
+            <option value="fit">适应窗口</option>
+            <option value="0.5">50%</option>
+            <option value="1">100%</option>
+            <option value="2">200%</option>
+            <option value="4">400%</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button id="save-project" type="button" class="quiet" disabled>保存工程</button
+          ><button id="ocr" type="button" class="quiet" disabled>识别文字</button
+          ><button id="copy" type="button" class="quiet" disabled>复制图片</button
+          ><button id="export" type="button" class="quiet" disabled>另存 PNG</button
+          ><button id="save" type="button" class="primary" disabled>保存素材副本</button>
+        </div>
+      </footer>
+    </main>
+    <div
+      id="image-effects-popover"
+      class="editor-popover image-effects-popover"
+      role="dialog"
+      aria-label="输出效果"
+      hidden
+    >
+      <div id="image-output-effects"></div>
+    </div>
+    <div id="message" class="feedback-toast" role="status" aria-live="polite" hidden></div>

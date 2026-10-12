@@ -9,3 +9,4 @@ declare module '*.css?inline' {
 }
 
 declare module '*.wasm?url' {const url:string;export default url;}
+declare module '*.html?raw' {const markup:string;export default markup;}

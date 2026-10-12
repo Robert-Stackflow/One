@@ -1,0 +1,252 @@
+body[data-view="image-editor"] .watermark-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body[data-view="image-editor"] #capture-properties.capture-panel.watermark-property-strip {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+body[data-view="image-editor"] .watermark-menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 2px 6px #0001;
+  color: var(--fg);
+  white-space: nowrap;
+}
+body[data-view="image-editor"] .watermark-menu-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+body[data-view="image-editor"] .watermark-menu-button:hover,
+body[data-view="image-editor"] .watermark-menu-button[aria-expanded='true'] {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .watermark-menu-button::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  rotate: 45deg;
+  margin: -3px 1px 0 2px;
+}
+body[data-view="image-editor"] .watermark-menu-detail {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Popup form layout is deliberately independent of the horizontal property strip. */
+body[data-view="image-editor"] .watermark-menu.capture-menu[popover] {
+  width: min(360px, calc(100vw - 24px));
+  box-sizing: border-box;
+  padding: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--fg);
+}
+body[data-view="image-editor"] .watermark-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+body[data-view="image-editor"] .watermark-menu-header strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+body[data-view="image-editor"] .watermark-menu-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+body[data-view="image-editor"] .watermark-menu-close:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+body[data-view="image-editor"] .watermark-menu-close svg {
+  width: 18px;
+  height: 18px;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields.annotation-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  min-width: 0;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields.annotation-properties > label,
+body[data-view="image-editor"] .watermark-menu
+  .watermark-menu-fields.annotation-properties
+  > label:not([hidden])
+  ~ label:not([hidden]):not(.property-row-start) {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  min-height: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  order: 0;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .custom-select,
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .custom-select,
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .number-control {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .annotation-color-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .annotation-palette {
+  grid-column: 1;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+body[data-view="image-editor"] .watermark-menu .annotation-color-field .capture-color-control {
+  grid-column: 2;
+  grid-row: 2;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields #watermark-text {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 72px;
+  max-height: 180px;
+  line-height: 1.5;
+}
+body[data-view="image-editor"] .watermark-time-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body[data-view="image-editor"] .watermark-time-controls > label {
+  display: grid;
+  grid-template-columns: auto 144px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+body[data-view="image-editor"] .watermark-time-insert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+body[data-view="image-editor"] .watermark-time-insert output {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+body[data-view="image-editor"] .watermark-time-insert > button {
+  flex-shrink: 0;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-date-action {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+}
+body[data-view="image-editor"] .watermark-menu .watermark-date-action:hover {
+  background: var(--hover);
+}
+body[data-view="image-editor"] .watermark-menu .watermark-image-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-image-controls > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+body[data-view="image-editor"] .watermark-menu .watermark-image-controls .custom-select {
+  width: 144px;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-image-controls > button {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 38px;
+  background: var(--soft);
+}
+body[data-view="image-editor"] .watermark-menu .watermark-image-controls .help {
+  font-size: 11px;
+  margin: 0;
+}
+body[data-view="image-editor"] .watermark-menu-type .watermark-menu-fields.annotation-properties {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 12px;
+}
+body[data-view="image-editor"] .watermark-menu-type .annotation-color-field,
+body[data-view="image-editor"] .watermark-menu-type :is(#mark-family-field, #font-family-field) {
+  grid-column: 1 / -1;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .capture-range-control {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  min-width: 0;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .capture-range-control input[type='range'] {
+  width: auto;
+  flex: 1;
+  min-width: 40px;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .capture-range-value {
+  width: 64px;
+  min-width: 64px;
+}
+body[data-view="image-editor"] .watermark-menu .watermark-menu-fields .capture-range-presets {
+  display: inline-flex;
+  flex: 0 0 auto;
+}

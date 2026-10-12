@@ -1,20 +1,29 @@
 import {onRemoval} from './dom-lifecycle';
 import {inheritCaptureScale} from './capture/appearance';
-type Side='above'|'below';
-interface Placement {preferred:Side;gap:number;edge?:number;width?:number;maxHeight?:number|(()=>number);boundary?:HTMLElement}
+type Side='above'|'below'|'left'|'right';
+interface Placement {preferred:Side;gap:number;edge?:number;width?:number;maxHeight?:number|(()=>number);boundary?:HTMLElement;bottom?:number|(()=>number)}
 
 /** Keep an anchored popover and its arrow inside the viewport. */
-export function positionAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,{preferred,gap,edge=8,width:desiredWidth,maxHeight,boundary}:Placement):boolean {
+export function positionAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,{preferred,gap,edge=8,width:desiredWidth,maxHeight,boundary,bottom}:Placement):boolean {
  if(!anchor.isConnected||!popup.isConnected||!anchor.getClientRects().length||getComputedStyle(anchor).visibility==='hidden')return false;
  inheritCaptureScale(anchor,popup);
  const box=anchor.getBoundingClientRect();
  if(box.bottom<=0||box.top>=innerHeight||box.right<=0||box.left>=innerWidth)return false;
- const roomAbove=Math.max(0,box.top-gap-edge),roomBelow=Math.max(0,innerHeight-box.bottom-gap-edge);
+ const bottomEdge=Math.min(innerHeight-edge,typeof bottom==='function'?bottom():bottom??innerHeight-edge);
+ const roomAbove=Math.max(0,box.top-gap-edge),roomBelow=Math.max(0,bottomEdge-box.bottom-gap);
  if(desiredWidth!==undefined){
   const limit=Math.max(0,Math.min(innerWidth-edge*2,boundary?boundary.clientWidth-edge*2:Infinity));
   popup.style.maxWidth=limit+'px';popup.style.width=Math.min(desiredWidth,limit)+'px';
  }
  const heightLimit=typeof maxHeight==='function'?maxHeight():maxHeight;
+ if(preferred==='left'||preferred==='right'){
+  if(heightLimit!==undefined)popup.style.maxHeight=Math.max(0,Math.min(heightLimit,bottomEdge-edge))+'px';
+  const width=popup.offsetWidth,height=popup.offsetHeight,leftRoom=box.left-gap-edge,rightRoom=innerWidth-box.right-gap-edge;
+  const side=preferred==='right'?(rightRoom>=width||rightRoom>=leftRoom?'right':'left'):(leftRoom>=width||leftRoom>=rightRoom?'left':'right');
+  popup.style.left=Math.max(edge,Math.min(side==='right'?box.right+gap:box.left-width-gap,innerWidth-width-edge))+'px';
+  popup.style.top=Math.max(edge,Math.min(box.top,bottomEdge-height))+'px';popup.dataset.side=side;
+  popup.style.transformOrigin=side==='right'?'top left':'top right';return true;
+ }
  if(heightLimit!==undefined)popup.style.maxHeight=Math.max(0,Math.min(heightLimit,Math.max(roomAbove,roomBelow)))+'px';
  const width=popup.offsetWidth,height=popup.offsetHeight;
  const side:Side=preferred==='above'
@@ -23,7 +32,7 @@ export function positionAnchoredPopover(anchor:HTMLElement,popup:HTMLElement,{pr
  if(heightLimit!==undefined)popup.style.maxHeight=Math.max(0,Math.min(heightLimit,side==='above'?roomAbove:roomBelow))+'px';
  const finalHeight=popup.offsetHeight;
  const left=Math.max(edge,Math.min(box.right-width,innerWidth-width-edge));
- const top=Math.max(edge,Math.min(side==='above'?box.top-finalHeight-gap:box.bottom+gap,innerHeight-finalHeight-edge));
+ const top=Math.max(edge,Math.min(side==='above'?box.top-finalHeight-gap:box.bottom+gap,bottomEdge-finalHeight));
  popup.style.left=left+'px';popup.style.top=top+'px';popup.dataset.side=side;
  popup.style.transformOrigin=side==='above'?'bottom right':'top right';
  popup.style.setProperty('--arrow-left',Math.max(12,Math.min(width-18,box.left+box.width/2-left-4))+'px');
@@ -36,10 +45,11 @@ const popovers=new WeakMap<HTMLElement,PopoverState>();
 
 function animatePopover(popup:HTMLElement,state:PopoverState,opening:boolean,finish:()=>void):Promise<boolean>{
  const revision=++state.revision,style=getComputedStyle(popup),interrupted=!!state.animation;
- const from={opacity:interrupted?style.opacity:opening?'0':'1',translate:interrupted?style.translate:opening?`0 ${popup.dataset.side==='above'?6:-6}px`:'0 0',scale:interrupted?style.scale:opening?'.985':'1'};
+ const offset=(distance:number)=>popup.dataset.side==='left'?`${distance}px 0`:popup.dataset.side==='right'?`${-distance}px 0`:`0 ${popup.dataset.side==='above'?distance:-distance}px`;
+ const from={opacity:interrupted?style.opacity:opening?'0':'1',translate:interrupted?style.translate:opening?offset(6):'0 0',scale:interrupted?style.scale:opening?'.985':'1'};
  state.animation?.cancel();state.animation=undefined;
  if(!popup.isConnected||matchMedia('(prefers-reduced-motion:reduce)').matches){finish();return Promise.resolve(true);}
- const animation=popup.animate([from,{opacity:opening?'1':'0',translate:opening?'0 0':`0 ${popup.dataset.side==='above'?3:-3}px`,scale:opening?'1':'.985'}],{duration:opening?180:120,easing:opening?'cubic-bezier(.2,.8,.2,1)':'ease-in',fill:'both'});
+ const animation=popup.animate([from,{opacity:opening?'1':'0',translate:opening?'0 0':offset(3),scale:opening?'1':'.985'}],{duration:opening?180:120,easing:opening?'cubic-bezier(.2,.8,.2,1)':'ease-in',fill:'both'});
  state.animation=animation;
  return animation.finished.then(()=>{if(state.revision!==revision)return false;animation.cancel();state.animation=undefined;finish();return true;},()=>false);
 }
