@@ -14,6 +14,11 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
+  materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
+  materialsImageURL:id=>invoke('materials-image-url',id),materialsRecordingURL:id=>invoke('materials-recording-url',id),
+  materialsCopyImage:id=>invoke('materials-copy-image',id),materialsExportImage:id=>invoke('materials-export-image',id),
+  materialsRemoveImage:id=>invoke('materials-remove-image',id),materialsRemoveRecording:id=>invoke('materials-remove-recording',id),
+  materialsOpenDirectory:()=>invoke('materials-open-directory'),onMaterialsChanged:callback=>listen('materials-changed',callback),
   searchSuggest:(id,query)=>invoke('search-suggest',id,query),
   aiState:()=>invoke('ai-state'),onAIEvent:callback=>listen('ai-event',callback),onAIChatOpen:callback=>listen('ai-chat-open',callback),
   aiProfile:value=>invoke('ai-profile',value),aiProfileRemove:id=>invoke('ai-profile-remove',id),aiProfileDefault:id=>invoke('ai-profile-default',id),aiModels:id=>invoke('ai-models',id),aiModelCatalog:id=>invoke('ai-model-catalog',id),aiModelCatalogDraft:value=>invoke('ai-model-catalog-draft',value),

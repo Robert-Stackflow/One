@@ -100,8 +100,8 @@ export class ImageMaterialLibrary {
     this.queue = next;
     return next;
   }
-  private persist() {
-    return atomicWrite(join(this.directory,'index.json'),JSON.stringify({format:MATERIAL_INDEX_FORMAT.images,version:1,assets:this.assets}));
+  private persist(assets=this.assets) {
+    return atomicWrite(join(this.directory,'index.json'),JSON.stringify({format:MATERIAL_INDEX_FORMAT.images,version:1,assets}));
   }
   add(
     png: Buffer,
@@ -135,16 +135,12 @@ export class ImageMaterialLibrary {
         };
       const thumbnail = this.thumbnail(png);
       if(!Buffer.isBuffer(thumbnail)||thumbnail.length<24||thumbnail.length>2*1024*1024||imageSize(thumbnail).type!=='png')throw Error('素材缩略图无效');
-      let added = false;
       try {
         await writeFile(this.file(id), png, { flag: 'wx', mode: 0o600 });
         await writeFile(this.file(id, '.thumb.png'), thumbnail, { flag: 'wx', mode: 0o600 });
         await this.saveProject(asset, png, document, original, history);
-        this.assets.unshift(asset);
-        added = true;
-        await this.persist();
+        const next=[asset,...this.assets];await this.persist(next);this.assets=next;
       } catch (error) {
-        if (added) this.assets = this.assets.filter((a) => a.id !== id);
         await Promise.all([
           unlink(this.file(id)).catch(() => {}),
           unlink(this.file(id, '.thumb.png')).catch(() => {}),
@@ -159,14 +155,7 @@ export class ImageMaterialLibrary {
   remove(id: string) {
     return this.serial(async () => {
       this.get(id);
-      const previous = this.assets;
-      this.assets = this.assets.filter((a) => a.id !== id);
-      try {
-        await this.persist();
-      } catch (error) {
-        this.assets = previous;
-        throw error;
-      }
+      const next=this.assets.filter(a=>a.id!==id);await this.persist(next);this.assets=next;
       await Promise.all([
         unlink(this.file(id)).catch(() => {}),
         unlink(this.file(id, '.thumb.png')).catch(() => {}),

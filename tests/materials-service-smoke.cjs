@@ -1,0 +1,86 @@
+const {_electron:electron,expect}=require('@playwright/test');
+const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+(async()=>{
+  const root=path.resolve('work/current/capture-migration');await fs.mkdir(root,{recursive:true});
+  const profile=await fs.mkdtemp(path.join(root,'materials-service-profile-'));
+  const fixtureName=path.basename(profile)+'.html',fixture=path.resolve('dist/renderer',fixtureName);
+  const seed=async()=>{
+  const bundled=require('esbuild').buildSync({stdin:{contents:`export {MaterialLibrary} from './src/main/materials/library';export {RecordingFile} from './src/main/recording/recording-file';export {saveRecordingProject} from './src/main/recording/recording-project';export {defaultPlayback} from './src/shared/recording/recording-playback';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'cjs',write:false,external:['koffi']});
+  const loaded={exports:{}};new Function('module','exports','require',bundled.outputFiles[0].text)(loaded,loaded.exports,require);
+  const {MaterialLibrary,RecordingFile,saveRecordingProject,defaultPlayback}=loaded.exports;
+  const library=new MaterialLibrary(path.join(profile,'materials'),()=>Buffer.alloc(0));await library.init();
+  const media=new RecordingFile(profile,undefined,'webm'),recordId=require('node:crypto').randomUUID(),raw=Buffer.concat([Buffer.from([0x1a,0x45,0xdf,0xa3]),Buffer.from('bounded-original-media-fixture')]);
+  try{await media.create();await media.append(0,raw);await media.finish();
+  const playback=defaultPlayback(),project={format:'one-recording',version:1,seconds:1,options:{mode:'video',container:'webm',sourceId:'screen:0:0',systemAudio:false,microphone:false,microphoneId:'',fps:30,maxWidth:1920},video:{width:480,height:240,fps:30,encoder:'fixture'},playback,inputs:[],annotations:[],layouts:[]};
+  await library.addRecording({id:recordId,title:'Range fixture',created:Date.now(),seconds:1,bytes:raw.length,mode:'video'},file=>saveRecordingProject(file,project,[{kind:'screen',file:media}],()=>true),playback);}finally{await media.dispose();}
+  return {recordId,raw};};
+  let networkRequests=0;const server=http.createServer((_,response)=>{networkRequests++;response.writeHead(200,{'Access-Control-Allow-Origin':'*'});response.end('network');});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;let app;
+  const readable=(page,url)=>page.evaluate(async url=>{try{return (await fetch(url)).ok;}catch{return false;}},url);
+  try{
+    await fs.writeFile(fixture,'<!doctype html><meta charset="utf-8"><p>Isolated permission fixture</p>');
+    const {recordId,raw}=await seed();
+    app=await electron.launch({args:[path.resolve('.')],env});let page=await app.firstWindow();await page.waitForFunction(()=>!!window.one);
+    const errors=[];page.on('pageerror',error=>errors.push(String(error)));
+    assert.equal((await page.evaluate(()=>window.one.materialsState())).error,'');
+    const recordURL=await page.evaluate(id=>window.one.materialsRecordingURL(id),recordId);
+    const range=await page.evaluate(async url=>{const response=await fetch(url,{headers:{Range:'bytes=3-10'}});return {status:response.status,bytes:Array.from(new Uint8Array(await response.arrayBuffer())),length:response.headers.get('Content-Length')};},recordURL);
+    assert.equal(range.status,206);assert.deepEqual(Buffer.from(range.bytes),raw.subarray(3,11));assert.equal(range.length,'8');
+    const source=path.join(profile,'sample.png'),exported=path.join(profile,'exported.png');
+    await app.evaluate(async({dialog,nativeImage,clipboard},{source,exported})=>{
+      const fs=process.getBuiltinModule('fs/promises');global.materialPNG=nativeImage.createFromBitmap(Buffer.alloc(24*16*4,170),{width:24,height:16}).toPNG();await fs.writeFile(source,global.materialPNG);
+      global.materialCopies=[];clipboard.write=async items=>{for(const item of items)global.materialCopies.push(Buffer.from(await (await item.getType('image/png')).arrayBuffer()));};
+      clipboard.read=async()=>[{types:['image/png'],getType:async()=>new Blob([global.materialPNG],{type:'image/png'})}];
+      dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});dialog.showSaveDialog=async()=>({canceled:false,filePath:exported});
+    },{source,exported});
+    const ids=await page.evaluate(()=>window.one.materialsImportImages());assert.equal(ids.length,1);
+    let state=await page.evaluate(()=>window.one.materialsState());assert.equal(state.images.length,1);assert.equal(state.images[0].id,ids[0]);
+    assert.ok(state.directory.startsWith(profile));assert.ok(state.images[0].thumbnail.startsWith('one-file://materials/'));
+    const url=await page.evaluate(id=>window.one.materialsImageURL(id),ids[0]);
+    assert.equal(await readable(page,state.images[0].thumbnail),true);assert.equal(await readable(page,url),true);
+    const served=await page.evaluate(async url=>Array.from(new Uint8Array(await (await fetch(url)).arrayBuffer())),url);
+    assert.deepEqual(Buffer.from(served),await fs.readFile(path.join(profile,'materials','images',ids[0]+'.png')));
+    await page.evaluate(id=>window.one.materialsCopyImage(id),ids[0]);
+    assert.equal(await app.evaluate(()=>global.materialCopies.length),1);
+    assert.equal(await page.evaluate(id=>window.one.materialsExportImage(id),ids[0]),true);assert.deepEqual(await fs.readFile(exported),Buffer.from(served));
+    await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},path.join(state.directory,'images','index.json'));
+    await assert.rejects(page.evaluate(id=>window.one.materialsExportImage(id),ids[0]),/素材目录之外/);
+    const clipboardId=await page.evaluate(()=>window.one.materialsImportClipboard());assert.notEqual(clipboardId,ids[0]);
+    assert.equal((await page.evaluate(()=>window.one.materialsState())).images.length,2);
+
+    const windows=app.windows().length;
+    await app.evaluate(async({BrowserWindow},{fixtureName,preload})=>{global.materialOther=new BrowserWindow({show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,preload}});await global.materialOther.loadURL('one://app/'+fixtureName);},{fixtureName,preload:path.resolve('dist/preload/index.cjs')});
+    await expect.poll(()=>app.windows().length).toBe(windows+1);const other=app.windows().find(item=>item.url().endsWith(fixtureName));
+    await assert.rejects(other.evaluate(()=>window.one.materialsState()),/调用来源无效/);
+    assert.equal(await readable(other,url),false,'Another same-origin window cannot use the main window capability');
+    const subframe=await page.evaluate(async({fixtureName,url})=>{const frame=document.createElement('iframe');frame.src='one://app/'+fixtureName;document.body.append(frame);await new Promise(resolve=>frame.onload=resolve);try{return (await frame.contentWindow.fetch(url)).ok;}catch{return false;}finally{frame.remove();}},{fixtureName,url});
+    assert.equal(subframe,false,'Even the owner window must use its main frame');
+    assert.equal(await readable(page,'http://127.0.0.1:'+server.address().port),false);assert.equal(networkRequests,0,'Existing One network policy remains active');
+    await other.close();
+    await page.reload();await page.waitForFunction(()=>!!window.one);
+    assert.equal(await readable(page,url),false,'Navigation revokes old grants');
+    const fresh=await page.evaluate(id=>window.one.materialsImageURL(id),ids[0]);assert.notEqual(fresh,url);assert.equal(await readable(page,fresh),true);
+    await page.evaluate(id=>window.one.materialsRemoveImage(id),ids[0]);assert.equal(await readable(page,fresh),false);
+    await assert.rejects(page.evaluate(()=>window.one.materialsImageURL('../escape')),/素材不存在/);
+    await app.close();app=await electron.launch({args:[path.resolve('.')],env});page=await app.firstWindow();await page.waitForFunction(()=>!!window.one);
+    state=await page.evaluate(()=>window.one.materialsState());assert.deepEqual(state.images.map(item=>item.id),[clipboardId]);assert.equal(state.error,'');
+    assert.equal(await readable(page,state.images[0].thumbnail),true);
+    assert.deepEqual(errors,[]);
+    const child=app.process(),exit=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));
+    await app.evaluate(({clipboard,nativeImage})=>{global.pendingMaterialPNG=nativeImage.createFromBitmap(Buffer.alloc(16*16*4),{width:16,height:16}).toPNG();clipboard.read=()=>new Promise(resolve=>{global.releaseMaterialRead=()=>resolve([{types:['image/png'],getType:async()=>new Blob([global.pendingMaterialPNG],{type:'image/png'})}]);});});
+    await page.evaluate(()=>{void window.one.materialsImportClipboard().catch(()=>{});});await expect.poll(()=>app.evaluate(()=>typeof global.releaseMaterialRead)).toBe('function');
+    await app.evaluate(({app})=>{setTimeout(()=>global.releaseMaterialRead(),80);app.quit();});
+    const ended=await Promise.race([exit,new Promise((_,reject)=>setTimeout(()=>reject(Error('Materials shutdown timed out')),5000).unref())]);assert.deepEqual(ended,{code:0,signal:null});app=undefined;
+    assert.deepEqual(JSON.parse(await fs.readFile(path.join(profile,'materials','images','index.json'),'utf8')).assets.map(item=>item.id),[clipboardId]);
+    const broken=JSON.stringify({format:'unknown-index',version:1,assets:[]}),index=path.join(profile,'materials','images','index.json');await fs.writeFile(index,broken);
+    app=await electron.launch({args:[path.resolve('.')],env});page=await app.firstWindow();await page.waitForFunction(()=>!!window.one);
+    assert.match((await page.evaluate(()=>window.one.materialsState())).error,/索引损坏/);
+    await assert.rejects(page.evaluate(()=>window.one.materialsImportImages()),/索引损坏/);
+    assert.equal(await fs.readFile(index,'utf8'),broken);
+    console.log('Materials service: import/clipboard/copy/export, media ranges, protected paths, restart, owner/frame/network guards, revocation, shutdown drain and corrupt-index isolation passed.');
+  }finally{
+    await app?.close();await new Promise(resolve=>server.close(resolve));await fs.unlink(fixture);
+    const resolved=await fs.realpath(profile);assert.ok(resolved.startsWith(root+path.sep));await fs.rm(resolved,{recursive:true,force:true});
+  }
+})().catch(error=>{console.error(error);process.exitCode=1;});

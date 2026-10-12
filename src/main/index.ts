@@ -1,4 +1,5 @@
 import {previewArchive} from './preview-archive';
+import {MaterialsService} from './materials/service';
 import {FileContextMenu} from './file-menu';
 import {explorerMenuState,setExplorerMenu,repairExplorerMenu} from './explorer-menu';
 import {readShellRequest} from './shell-request';
@@ -308,6 +309,7 @@ async function chooseSearch(value:unknown){
 function utilityState(){return {awake:awake?.state()||{...settings.utilities.awake,active:false,locked:false,remaining:0,error:''},pinned:topmost?.count()||0,shortcutError:topmost?.error||'',clicker:clicker?.state()||{running:false,clicks:0,remaining:0,error:''}};}
 function utilityChanged(){if(!awake||!topmost||!clicker)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}
 let applicationIcon: Electron.NativeImage;
+let materials:MaterialsService|undefined;
 let settings: Settings = defaultSettings(); let input: InputService; let quitting = false;let finishingQuit:Promise<unknown>|undefined;let pickerQuitReady=false;
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 function windowFor(view: string, options: Electron.BrowserWindowConstructorOptions = {},query='') {
@@ -342,7 +344,9 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('will-navigate', event => event.preventDefault());
   if(view==='preview'){const stop=()=>{nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);};window.webContents.on('did-start-loading',stop);window.webContents.on('render-process-gone',stop);}
   window.on('close',()=>{if(view==='preview'){nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);}if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker','archive-task'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageAi.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);motionVideoExports.get(windowId)?.abort();if(view==='preview'||view==='archive-task'){archiveService?.cancelOwner(windowId);if(view==='preview')nativeOfficePreview.stop(windowId);}textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {if(['main','file-action','search','color-picker','archive-task'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageAi.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);motionVideoExports.get(windowId)?.abort();if(view==='preview'||view==='archive-task'){archiveService?.cancelOwner(windowId);if(view==='preview')nativeOfficePreview.stop(windowId);}materials?.release(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.webContents.on('did-start-navigation',(_event,_url,inPlace,isMainFrame)=>{if(isMainFrame&&!inPlace)materials?.release(windowId);});
+  window.webContents.on('render-process-gone',()=>materials?.release(windowId));
   void window.loadURL(`one://app/index.html?view=${view}${query}`);
   return window;
 }
@@ -425,7 +429,7 @@ function echo(text:string,channel?:import('../shared/echo').EchoChannel){echoes?
 function textValue(value: unknown, limit = 10_000_000): string { if (typeof value !== 'string' || value.length > limit) throw new Error('文本参数无效或超过长度上限'); return value; }
 function filePath(value: unknown): string { if (typeof value !== 'string' || value.length > 32768 || !isAbsolute(value) || value.includes('\0')) throw new Error('文件路径无效'); return resolve(value); }
 const fileActionIPC=new Set(['file-action-data','window-action','window-state','settings','app-info','file-icons','file-icon','shell-icons','file-tools-run','file-tools-cancel','file-tools-page','file-tools-history','lock-state','lock-scan','lock-cancel','lock-end','pick-file','pick-directory','drop-path-kinds','open-file','reveal-file','native-context-menu','preview','copy-text','file-tools-overview','appearance']);
-const auditedIPC=new Set(['archive-edit-export','archive-edit-inspect','archive-edit-resolve','archive-edit-start','archive-edit-save','archive-edit-discard','archive-edit-open','archive-recovery-cleanup','archive-recovery-restore','archive-recovery-inspect','archive-recovery-forget','archive-association','patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','archive-run','archive-cancel','archive-cancel-id','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate','hotkey-owner']);
+const auditedIPC=new Set(['materials-import-images','materials-import-clipboard','materials-copy-image','materials-export-image','materials-remove-image','materials-remove-recording','materials-open-directory','archive-edit-export','archive-edit-inspect','archive-edit-resolve','archive-edit-start','archive-edit-save','archive-edit-discard','archive-edit-open','archive-recovery-cleanup','archive-recovery-restore','archive-recovery-inspect','archive-recovery-forget','archive-association','patch-settings','settings-backup-export','settings-backup-import','file-tools-run','file-tools-cancel','archive-run','archive-cancel','archive-cancel-id','lock-scan','lock-end','maintenance-scan','maintenance-apply','maintenance-restore','search-rebuild','search-cancel','explorer-menu-set','restart','restart-normal','elevate','hotkey-owner']);
 function handle(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown, allowed = ['main']) {
   ipcMain.handle(`one:${name}`, async(event, ...args) => {const start=performance.now(),role=roles.get(event.sender.id)||'unknown';try{if (!(allowed.includes(role)||role==='file-action'&&fileActionIPC.has(name)) || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith('one://app/')) throw new Error('调用来源无效');const result=await handler(event,...args);if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'ok');return result;}catch(error){if(auditedIPC.has(name))runtimeOperation(app.getPath('userData'),name,role,performance.now()-start,'error');runtimeError(app.getPath('userData'),`ipc:${name}`,error);throw error;} });
 }
@@ -668,6 +672,16 @@ async function previewExplorerSelection(hwnd:number,focus:number){
  await preview(filePath(context.selected[0]));
 }
 function registerIPC() {
+  handle('materials-state',event=>materials!.state(event.sender.id));
+  handle('materials-import-images',event=>materials!.importImages(event.sender.id));
+  handle('materials-import-clipboard',event=>materials!.importClipboard(event.sender.id));
+  handle('materials-image-url',(event,id)=>materials!.imageURL(event.sender.id,id));
+  handle('materials-recording-url',(event,id)=>materials!.recordingURL(event.sender.id,id));
+  handle('materials-copy-image',(event,id)=>materials!.copyImage(event.sender.id,id));
+  handle('materials-export-image',(event,id)=>materials!.exportImage(event.sender.id,id));
+  handle('materials-remove-image',(event,id)=>materials!.removeImage(event.sender.id,id));
+  handle('materials-remove-recording',(event,id)=>materials!.removeRecording(event.sender.id,id));
+  handle('materials-open-directory',event=>materials!.openDirectory(event.sender.id));
   handle('ai-state',()=>aiService.state(),['main','ai-chat','search']);
   handle('ai-profile',(_event,value:AIProfileInput)=>aiService.profile(value),['main']);
   handle('ai-profile-remove',(_event,id:string)=>aiService.removeProfile(id),['main']);
@@ -1122,6 +1136,10 @@ async function start() {
   }
   try { settings = validateSettings(JSON.parse(await readFile(settingsPath(), 'utf8'))); } catch {}
   aiService=new OneAIService(app.getPath('userData'),broadcastAI);
+  materials=new MaterialsService(join(app.getPath('userData'),'materials'),{
+    window:owner=>roles.get(owner)==='main'&&main&&!main.isDestroyed()&&!main.webContents.isDestroyed()&&main.webContents.id===owner?main:undefined,
+    changed:()=>{if(main&&!main.isDestroyed()&&!main.webContents.isDestroyed())main.webContents.send('one:materials-changed');},
+  });
   // Upgrade existing login items without changing an entry disabled in Windows settings.
   if(app.isPackaged&&!testMode&&settings.general.launchAtLogin&&app.getLoginItemSettings().openAtLogin&&!app.getLoginItemSettings({args:[loginStartupArg]}).openAtLogin)
     app.setLoginItemSettings({openAtLogin:true,args:[loginStartupArg]});
@@ -1140,14 +1158,19 @@ async function start() {
   powerMonitor.on('resume',()=>displayManagement.invalidate());
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); return net.fetch(pathToFileURL(path).toString()); });
-  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request,'segment' in asset?asset.segment:undefined); });
+  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='materials')return materials?materials.resources.response(request):new Response(null,{status:404});if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request,'segment' in asset?asset.segment:undefined); });
   const canFullscreen=(contents:Electron.WebContents|null,permission:string,details:{isMainFrame:boolean;requestingUrl?:string})=>{
     if(permission!=='fullscreen'||!contents||contents.isDestroyed()||roles.get(contents.id)!=='preview'||!details.isMainFrame)return false;
     return contents.getURL()==='one://app/index.html?view=preview'&&details.requestingUrl===contents.getURL();
   };
   session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>callback(canFullscreen(contents,permission,details)));
   session.defaultSession.setPermissionCheckHandler((contents,permission,_origin,details)=>canFullscreen(contents,permission,details));
-  session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*','https://*/*'] }, (_details, callback) => callback({ cancel: true }));
+  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*','one-file://materials/*']},(details,callback)=>{
+    if(details.url.startsWith('one-file://materials/')){
+      const owner=details.webContents;
+      callback({cancel:!owner||owner.isDestroyed()||details.frame!==owner.mainFrame||!materials?.resources.authorize(details.url,owner.id)});
+    }else callback({cancel:true});
+  });
   diskService=new DiskService(p=>{if(main&&!main.isDestroyed())main.webContents.send('one:progress',p);});maintenance=new MaintenanceClient(join(app.getPath('userData'),'maintenance-backups'),value=>{if(main&&!main.isDestroyed())main.webContents.send('one:maintenance-progress',value);});
   systemInformation=new SystemInformationService(value=>{if(main&&!main.isDestroyed())main.webContents.send('one:system-information-progress',value);},value=>{if(main&&!main.isDestroyed())main.webContents.send('one:system-information-group',value);});
   proxyDiagnostics=new ProxyDiagnosticsService(value=>{if(main&&!main.isDestroyed())main.webContents.send('one:proxy-diagnostics-progress',value);});
@@ -1202,5 +1225,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   if(!testMode)void repairExplorerMenu().catch(error=>runtimeLog(app.getPath('userData'),'explorer-menu-repair',String(error)));
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageAi.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks){event.preventDefault();finishingQuit=Promise.all([fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageAi.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;aiService?.dispose();nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageAi.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks||materials?.pendingTasks){event.preventDefault();finishingQuit=Promise.all([materials?.stop(),fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageAi.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]);void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;void materials?.stop();aiService?.dispose();nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });
