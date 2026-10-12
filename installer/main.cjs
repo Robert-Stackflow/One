@@ -142,7 +142,7 @@ async function removePrevious(saved,scratch) {
   if(!fs.existsSync(original)) throw Error('找不到原有版本的卸载程序');
   const copy=path.join(scratch,'Previous-Uninstall.exe');
   await fsp.copyFile(original,copy);
-  const code=await run(copy,['/S','/KEEP_APP_DATA','/currentuser',`_?=${saved.previous}`],{...process.env,TEMP:scratch,TMP:scratch});
+  const code=await run(copy,['/S','/KEEP_APP_DATA','/currentuser','--updated',`_?=${saved.previous}`],{...process.env,TEMP:scratch,TMP:scratch});
   if(code!==0) throw Object.assign(Error(`无法移除旧版：${code}`),{reason:code===1602?'running':'engine'});
   // NSIS can hand off its final cleanup to a temporary process after its
   // original executable exits. Wait for both files and registration.

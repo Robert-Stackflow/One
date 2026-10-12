@@ -60,12 +60,13 @@
   ${IfNot} ${isUpdated}
     IfFileExists "$INSTDIR\resources\app.asar.unpacked\dist\main\archive-associations.ps1" 0 one_archive_cleanup_done
     ClearErrors
-    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\app.asar.unpacked\dist\main\archive-associations.ps1" -Operation remove -Executable "$INSTDIR\${APP_EXECUTABLE_FILENAME}"' $R0
+    nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\app.asar.unpacked\dist\main\archive-associations.ps1" -Operation remove -Executable "$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+    Pop $R0
     ${If} ${Errors}
       StrCpy $R0 1603
     ${EndIf}
     ${If} $R0 != 0
-      SetErrorLevel $R0
+      SetErrorLevel 1603
       Abort "$(OneRemoveFailed)"
     ${EndIf}
     one_archive_cleanup_done:
