@@ -261,7 +261,32 @@ function showSearch(kind:SearchContext['kind']='search',hwnd=foreground(true)?.h
  void searchBridge.context(hwnd,focus).then(context=>{if(revision!==searchRevision)return;searchContext={...context,kind};w.webContents.send('one:search-context',searchContext);}).catch(error=>{if(revision===searchRevision){searchBridge.error=(error as Error).message;searchChanged();}});
 }
 function warmSearchPopups(){if(quitting||!main||main.isDestroyed())return;launcher?.refresh();if(settings.search.explorerTyping)searchPopup(true);dialogBar?.warm();}
-async function chooseSearch(value:unknown){const item=typeof value==='string'?launcher.get(value):undefined;if(item){if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);searchWindow?.hide();return;}const path=filePath(value),info=await stat(path);if(info.isDirectory())await menuService.remember(path);if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');if(info.isDirectory()&&searchContext.kind!=='search'){searchWindow?.hide();try{if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}else await searchBridge.jump(searchContext,path);}catch(error){if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure)return;error=new Error(failure);}searchWindow?.show();searchWindow?.focus();throw error;}}else{if(!info.isDirectory()&&isArchivePath(path)){searchWindow?.hide();await shellInvocation([`--one-archive=${path}`],'search-open');return;}const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();}}
+const rememberSearchVisit=(path:string)=>{void search.remember(path).catch(error=>runtimeLog(app.getPath('userData'),'search-history',String(error)));};
+async function chooseSearch(value:unknown){
+ const item=typeof value==='string'?launcher.get(value):undefined;
+ if(item){
+  if(item.launchKind==='setting')await shell.openExternal(item.target);else await launcher.open(item.path);
+  rememberSearchVisit(item.path);searchWindow?.hide();return;
+ }
+ const path=filePath(value),info=await stat(path);
+ if(searchContext.kind==='dialog'&&!info.isDirectory())throw new Error('请选择文件夹');
+ if(info.isDirectory()&&searchContext.kind!=='search'){
+  searchWindow?.hide();
+  try{
+   if(searchContext.kind==='explorer'&&!searchContext.tab){const failure=await shell.openPath(path);if(failure)throw new Error(failure);}
+   else await searchBridge.jump(searchContext,path);
+  }catch(error){
+   if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure){await menuService.remember(path);rememberSearchVisit(path);return;}error=new Error(failure);}
+   searchWindow?.show();searchWindow?.focus();throw error;
+  }
+ }else if(!info.isDirectory()&&isArchivePath(path)){
+  searchWindow?.hide();await shellInvocation([`--one-archive=${path}`],'search-open');
+ }else{
+  const error=await shell.openPath(path);if(error)throw new Error(error);searchWindow?.hide();
+ }
+ if(info.isDirectory())await menuService.remember(path);
+ rememberSearchVisit(path);
+}
 function utilityState(){return {awake:awake?.state()||{...settings.utilities.awake,active:false,locked:false,remaining:0,error:''},pinned:topmost?.count()||0,shortcutError:topmost?.error||'',clicker:clicker?.state()||{running:false,clicks:0,remaining:0,error:''}};}
 function utilityChanged(){if(!awake||!topmost||!clicker)return;for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&roles.get(w.webContents.id)==='main')w.webContents.send('one:utility-state',utilityState());}
 let applicationIcon: Electron.NativeImage;
@@ -712,7 +737,12 @@ function registerIPC() {
   },['search']);
   handle('search-files',async(event,query,foldersOnly,token,rootScope)=>{
     if(token!==undefined&&(typeof token!=='string'||!/^[a-f0-9-]{36}$/.test(token)))throw new Error('搜索标识无效');
-    if(rootScope!==undefined&&rootScope!==''&&(roles.get(event.sender.id)!=='search'||typeof rootScope!=='string'||!settings.search.savedQueries.some(saved=>saved.folder===rootScope)))throw new Error('搜索范围无效');
+    if(rootScope!==undefined&&rootScope!==''){
+      if(roles.get(event.sender.id)!=='search'||event.sender.getURL().includes('embedded')||typeof rootScope!=='string')throw new Error('搜索范围无效');
+      const folder=filePath(rootScope);
+      if(!settings.search.roots.some(root=>{const path=relative(root,folder);return !path||path!=='..'&&!path.startsWith('..\\')&&!isAbsolute(path);} ))throw new Error('所选搜索范围尚未建立索引');
+      rootScope=folder;
+    }
     const role=roles.get(event.sender.id),include=role==='search'&&!event.sender.getURL().includes('embedded')&&!foldersOnly;
     if(role==='dialog-bar')foldersOnly=true;
     const folder=role==='search'?searchContext.currentFolder:role==='dialog-bar'?dialogBar.context?.currentFolder:'';

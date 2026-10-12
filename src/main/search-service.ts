@@ -1,6 +1,7 @@
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {watch,type FSWatcher} from 'node:fs';
-import {join,resolve} from 'node:path';
+import {readFile,writeFile,rename} from 'node:fs/promises';
+import {dirname,join,resolve} from 'node:path';
 import type {SearchSettings,SearchState,SearchResult} from '../shared/search';
 export class SearchService {
  private child:ChildProcessWithoutNullStreams;private serial=0;private pending=new Map<number,{resolve:(r:SearchResult)=>void;reject:(e:Error)=>void;timer:NodeJS.Timeout;progress?:(r:SearchResult)=>void}>();
@@ -9,8 +10,11 @@ export class SearchService {
  private restartTimer?:NodeJS.Timeout;private healthyTimer?:NodeJS.Timeout;private restartAttempts=0;private launcherItems:import('../shared/search').SearchEntry[]=[];
  private cache:string;private resync=false;private resyncUrgent=false;private resyncDue=0;private resyncTimer?:NodeJS.Timeout;
  private lastFullCheck=Date.now();private fullCheckPending=true;
+ private historyPath:string;private recent:string[]=[];private historyReady:Promise<void>;private historyWrite:Promise<void>=Promise.resolve();
  constructor(cache:string,private settings:SearchSettings,private changed:(s:SearchState)=>void,private backend:'memory'|'disk'='disk'){
   this.cache=resolve(cache.replace(/\.ndjson$/,'.bin'));
+  this.historyPath=join(dirname(this.cache),'file-search-history.json');
+  this.historyReady=readFile(this.historyPath,'utf8').then(text=>{const values=JSON.parse(text);if(Array.isArray(values))this.recent=values.filter(value=>typeof value==='string'&&value.length<=32768).slice(0,30);}).catch(()=>{});
   this.child=this.spawnHelper();this.startWatch();this.send({type:'init',settings});
  }
  private spawnHelper(){
@@ -80,12 +84,20 @@ export class SearchService {
  state(){return this.value;}
  rebuild(settings:SearchSettings){this.settings=settings;this.startWatch();this.fullCheckPending=true;this.value={...this.value,running:true};this.changed(this.value);this.send({type:'rebuild',settings});}
  cancel(){this.send({type:'cancel'});}
- query(query:unknown,foldersOnly:unknown=false,currentFolder='',scope=0,includeLaunchers=false,progress?:(r:SearchResult)=>void,rootScope=''){if(typeof query!=='string'||query.length>1000||typeof foldersOnly!=='boolean')throw new Error('搜索条件无效');const id=++this.serial;return new Promise<SearchResult>((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error('搜索超时，请缩小条件后重试'));},15000);this.pending.set(id,{resolve,reject,timer,progress});try{this.send({type:'query',id,query,scope,includeLaunchers:includeLaunchers&&!rootScope,foldersOnly,currentFolder:rootScope||currentFolder,rootScope,progressive:!!progress,priorities:this.settings.priorities??[],fuzzy:this.settings.fuzzy,pinyin:this.settings.pinyin});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}});}
+ async query(query:unknown,foldersOnly:unknown=false,currentFolder='',scope=0,includeLaunchers=false,progress?:(r:SearchResult)=>void,rootScope=''){if(typeof query!=='string'||query.length>1000||typeof foldersOnly!=='boolean')throw new Error('搜索条件无效');await this.historyReady;const id=++this.serial;return new Promise<SearchResult>((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error('搜索超时，请缩小条件后重试'));},15000);this.pending.set(id,{resolve,reject,timer,progress});try{this.send({type:'query',id,query,scope,includeLaunchers:includeLaunchers&&!rootScope,foldersOnly,currentFolder:rootScope||currentFolder,rootScope,progressive:!!progress,priorities:this.settings.priorities??[],recent:this.recent,fuzzy:this.settings.fuzzy,pinyin:this.settings.pinyin});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}});}
+ async remember(path:string){
+  await this.historyReady;if(this.stopped)return;
+  const normalized=path.replace(/\//g,'\\').toLowerCase();
+  this.recent=[path,...this.recent.filter(item=>item.replace(/\//g,'\\').toLowerCase()!==normalized)].slice(0,30);
+  const contents=JSON.stringify(this.recent),target=this.historyPath;
+  this.historyWrite=this.historyWrite.catch(()=>{}).then(async()=>{const temporary=target+'.tmp';await writeFile(temporary,contents,'utf8');await rename(temporary,target);});
+  await this.historyWrite;
+ }
  launchers(items:import('../shared/search').SearchEntry[]){this.launcherItems=items;try{if(this.available())this.send({type:'launchers',items});}catch(error){this.helperFailed(this.child,error as Error);}}
  releaseScope(scope:number){
   // A window may close in the same turn that the helper exits. Releasing its
   // query is best effort; a dead helper has no scope left to release.
   try{if(this.available())this.send({type:'release-query',scope});}catch{}
  }
- stop(){this.stopped=true;clearTimeout(this.timer);clearTimeout(this.resyncTimer);clearTimeout(this.restartTimer);clearTimeout(this.healthyTimer);for(const w of this.watchers)w.close();this.failed(new Error('搜索已关闭'));const child=this.child;return new Promise<void>(resolve=>{if(child.exitCode!==null||child.signalCode!==null||!child.pid){resolve();return;}const timer=setTimeout(()=>child.kill(),10000);child.once('exit',()=>{clearTimeout(timer);child.stdin.destroy();child.stdout.destroy();child.stderr.destroy();resolve();});if(child.stdin.writable&&!child.stdin.destroyed)child.stdin.end(JSON.stringify({type:'stop'})+'\n');else child.kill();});}
+ stop(){this.stopped=true;clearTimeout(this.timer);clearTimeout(this.resyncTimer);clearTimeout(this.restartTimer);clearTimeout(this.healthyTimer);for(const w of this.watchers)w.close();this.failed(new Error('搜索已关闭'));const child=this.child;const closed=new Promise<void>(resolve=>{if(child.exitCode!==null||child.signalCode!==null||!child.pid){resolve();return;}const timer=setTimeout(()=>child.kill(),10000);child.once('exit',()=>{clearTimeout(timer);child.stdin.destroy();child.stdout.destroy();child.stderr.destroy();resolve();});if(child.stdin.writable&&!child.stdin.destroyed)child.stdin.end(JSON.stringify({type:'stop'})+'\n');else child.kill();});return Promise.all([closed,this.historyWrite.catch(()=>{})]).then(()=>{});}
 }

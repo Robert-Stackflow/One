@@ -1,5 +1,20 @@
 use super::*;
 
+pub struct Recent { paths: Vec<(String, i8)> }
+impl Recent {
+    pub fn new(value: &Value) -> Self {
+        let paths = value.as_array().into_iter().flatten().take(30).enumerate()
+            .filter_map(|(index, value)| value.as_str().filter(|path| path.len() <= 32768)
+                .map(|path| (key(path), (32 - index) as i8))).collect();
+        Self { paths }
+    }
+    pub fn rank(&self, path: &impl SearchPath) -> i8 {
+        let length = path.prefix().len() + path.name().len();
+        self.paths.iter().find(|(recent, _)| recent.len() == length && path.starts_with(recent))
+            .map_or(0, |(_, rank)| *rank)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Rule {
     pub path: String,
@@ -95,6 +110,12 @@ pub fn scans(config: &Config) -> Vec<Scan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn visited_items_rank_above_configured_roots_without_boosting_siblings() {
+        let recent = Recent::new(&json!(["C:/work/used.zip", "C:/work/older.zip"]));
+        assert!(recent.rank(&PathKey::new(key("C:/work/used.zip"))) > recent.rank(&PathKey::new(key("C:/work/older.zip"))));
+        assert_eq!(recent.rank(&PathKey::new(key("C:/work/unused.zip"))), 0);
+    }
     #[test]
     fn priorities_use_specific_directory_and_preserve_boundaries() {
         let rules = Rules::new(&[

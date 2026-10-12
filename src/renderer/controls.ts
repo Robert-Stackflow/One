@@ -45,7 +45,7 @@ export function customControls(root: HTMLElement) {
     };
     button.addEventListener('click',()=>{if(menu)close();else open()});
     button.addEventListener('keydown',event=>{
-      if(event.key==='Escape'){event.preventDefault();close();return} if(event.key==='Tab'){close();return}
+      if(event.key==='Escape'){if(menu){event.preventDefault();event.stopPropagation();close();}return} if(event.key==='Tab'){close();return}
       if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();if(!menu){open();return}if(event.key==='Home')move(0,1);else if(event.key==='End')move(options.length-1,-1);else{const direction=event.key==='ArrowDown'?1:-1;move(active<0?direction>0?0:options.length-1:active+direction,direction);}return}
       if((event.key==='Enter'||event.key===' ')&&menu){event.preventDefault();choose(active);return}
       if(event.key.length===1&&!event.ctrlKey&&!event.altKey){event.preventDefault();if(Date.now()-typedAt>700)prefix='';prefix+=event.key.toLowerCase();typedAt=Date.now();open();const index=options.findIndex(option=>!option.disabled&&option.label.toLowerCase().startsWith(prefix));if(index>=0)activate(index)}

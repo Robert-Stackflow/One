@@ -657,8 +657,15 @@ fn parse(query: &str, folder: bool) -> (String, Vec<String>, Vec<Term>) {
     };
     let mut extensions = Vec::new();
     let mut terms = Vec::new();
+    let mut inferred_extensions = Vec::new();
     for (raw, exact) in tokens {
         let text = raw.to_lowercase().replace('/', "\\");
+        let inferred = text.strip_prefix("*.").or_else(|| text.strip_prefix('.'));
+        if !exact && inferred.is_some_and(|ext| !ext.is_empty() && ext.len() <= 10
+            && ext.bytes().all(|c| c.is_ascii_alphanumeric())) {
+            inferred_extensions.push(inferred.unwrap().to_string());
+            continue;
+        }
         if let Some(t) = text.strip_prefix("ext:") {
             extensions = t
                 .split(';')
@@ -668,7 +675,7 @@ fn parse(query: &str, folder: bool) -> (String, Vec<String>, Vec<Term>) {
         }
         if let Some((k, v)) = text.split_once(':') {
             if [
-                "folder", "file", "doc", "pic", "video", "audio", "app", "setting",
+                "folder", "file", "doc", "pic", "video", "audio", "archive", "app", "setting",
             ]
             .contains(&k)
             {
@@ -680,6 +687,14 @@ fn parse(query: &str, folder: bool) -> (String, Vec<String>, Vec<Term>) {
             }
         }
         terms.push(Term::new(text, exact));
+    }
+    if !inferred_extensions.is_empty() {
+        if extensions.is_empty() && !matches!(kind.as_str(), "folder" | "app" | "setting") {
+            extensions = inferred_extensions;
+            if kind.is_empty() { kind = "file".into(); }
+        } else {
+            terms.extend(inferred_extensions.into_iter().map(|ext| Term::new(format!(".{ext}"), false)));
+        }
     }
     (kind, extensions, terms)
 }
@@ -709,6 +724,10 @@ fn accepts_extension(lower: &str, kind: &str, exts: &[String]) -> bool {
         "pic" => matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svg" | "avif" | "heic"),
         "video" => matches!(ext, "mp4" | "mkv" | "webm" | "avi" | "mov" | "m4v"),
         "audio" => matches!(ext, "mp3" | "flac" | "wav" | "m4a" | "ogg" | "aac" | "opus"),
+        "archive" => matches!(ext, "zip" | "zipx" | "jar" | "apk" | "7z" | "rar" | "r00" | "tar" | "tgz" | "txz" | "tbz" | "tbz2" | "tzst" | "gz" | "xz" | "bz2" | "bzip2" | "zst" | "zstd" | "cab" | "lha" | "lzh" | "iso" | "wim" | "alz" | "egg")
+            || ext == "001" && lower.ends_with(".7z.001")
+            || ext.len() == 3 && ext.as_bytes()[1..].iter().all(u8::is_ascii_digit)
+                && matches!(ext.as_bytes()[0], b'z' | b'a'..=b'k'),
         _ => true,
     }
 }
@@ -857,6 +876,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
     let mut matcher = QueryMatcher::new(&terms, fuzzy, pinyin);
     let shared_parent = matcher.shares_parent();
     let rules = priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default());
+    let recent = priority::Recent::new(&v["recent"]);
     let current = key(v["currentFolder"].as_str().unwrap_or(""));
     let local_only = v["rootScope"].as_str().is_some_and(|value| !value.is_empty());
     let index = s.index.read().unwrap();
@@ -878,7 +898,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
             }
             if accepts(row, &kind, &extensions) {
                 if let Some((points, mode)) = if shared_parent { matcher.score(row,path) } else { score(row,path,&terms,fuzzy,pinyin) } {
-                    total += 1;retain_match(&mut heap, path, points, mode, true, rules.rank(path));
+                    let visit=recent.rank(path);total += 1;retain_match(&mut heap, path, points, mode, true, if visit>0 {visit} else {rules.rank(path)});
                 }
             }
         }
@@ -920,7 +940,7 @@ fn query(s: &Shared, v: &Value, ticket: u64) {
             if progressive && local { continue; }
             total += 1;
             if local { local_total += 1; }
-            retain_match(&mut heap, path, points, mode, local, rules.rank(path));
+            let visit=recent.rank(path);retain_match(&mut heap, path, points, mode, local, if visit>0 {visit} else {rules.rank(path)});
         }
     }
     if !current_query(s, v, ticket) {
@@ -1109,6 +1129,36 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dot_extension_intent_filters_files_without_matching_folders() {
+        let (kind, exts, terms) = parse(".zip", false);
+        assert_eq!(kind, "file");
+        assert_eq!(exts, ["zip"]);
+        assert!(terms.is_empty());
+        let (_, exts, terms) = parse("报告 .png", false);
+        assert_eq!(exts, ["png"]);
+        assert_eq!(terms.len(), 1);
+        let (kind, exts, terms) = parse("*.7z", false);
+        assert_eq!(kind, "file");
+        assert_eq!(exts, ["7z"]);
+        assert!(terms.is_empty());
+        let (kind, exts, terms) = parse("folder: .zip", false);
+        assert_eq!(kind, "folder");
+        assert!(exts.is_empty());
+        assert_eq!(terms.len(), 1);
+        let (_, exts, terms) = parse("\".zip\"", false);
+        assert!(exts.is_empty());
+        assert_eq!(terms.len(), 1);
+    }
+    #[test]
+    fn archive_filter_accepts_supported_formats_and_volumes() {
+        for name in ["sample.zip", "sample.7z", "sample.tar.gz", "sample.7z.001", "sample.z01", "sample.a02"] {
+            assert!(accepts_extension(name, "archive", &[]), "{name}");
+        }
+        for name in ["sample.docx", "sample.exe", "sample.001"] {
+            assert!(!accepts_extension(name, "archive", &[]), "{name}");
+        }
+    }
     #[test]
     fn compact_names_and_launchers() {
         for (path, name) in [

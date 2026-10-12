@@ -767,6 +767,7 @@ struct SearchPass<'a, 'q> {
     exts: &'q [String],
     matcher: QueryMatcher<'q>,
     rules: priority::Rules,
+    recent: priority::Recent,
 }
 impl<'a> SearchPass<'a, '_> {
     #[inline(always)]
@@ -777,7 +778,8 @@ impl<'a> SearchPass<'a, '_> {
         if skip_local && local { return; }
         self.total += 1;
         if local { self.local_total += 1; }
-        let rank = self.rules.rank(&path);
+        let visit = self.recent.rank(&path);
+        let rank = if visit>0 {visit} else {self.rules.rank(&path)};
         if self.heap.len() < 100 || self.heap.peek().is_some_and(|r| (local, rank, points) > (r.0.0, r.0.1, r.0.2)) {
             self.heap.push(Reverse((local, rank, points, path, source, mode)));
             if self.heap.len() > 100 { self.heap.pop(); }
@@ -898,13 +900,14 @@ fn query_mapping(map: &Mapping, v: &Value, gate: &Gate, ticket: u64, overlay: &O
         heap:Matches::new(), total:0, local_total:0, prefix:&prefix, kind:&kind, exts:&exts,
         matcher:QueryMatcher::new(&terms, fuzzy, pinyin),
         rules:priority::Rules::new(&serde_json::from_value::<Vec<priority::Rule>>(v["priorities"].clone()).unwrap_or_default()),
+        recent:priority::Recent::new(&v["recent"]),
     };
     // Program and settings matches are already in memory. Keep them in a
     // separate preview so the final file-first top-100 tie behavior is intact.
     let early_launchers=if progressive && !local_progressive && v["includeLaunchers"].as_bool().unwrap_or(false) {
         let mut preview=SearchPass {
             heap:Matches::new(),total:0,local_total:0,prefix:&prefix,kind:&kind,exts:&exts,
-            matcher:QueryMatcher::new(&terms,fuzzy,pinyin),rules:pass.rules.clone(),
+            matcher:QueryMatcher::new(&terms,fuzzy,pinyin),rules:pass.rules.clone(),recent:priority::Recent::new(&v["recent"]),
         };
         for (path,row) in &launchers.rows {
             preview.visit(row,Fragments::from_key(path),Source::Launcher(path),false);

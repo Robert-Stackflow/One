@@ -1,4 +1,5 @@
 import {builtinById} from './menu-builtins';
+import {isArchivePath} from './archive-actions';
 import {validateIndexPriorities,type IndexPriorityRule} from './search-priority';
 export type MenuKind='folder'|'file'|'url'|'command'|'shell'|'group'|'separator'|'builtin';
 export type MenuShell='powershell'|'pwsh'|'cmd'|'custom';
@@ -46,7 +47,7 @@ export function validateSearch(value:unknown):SearchSettings {
  if(v.priorityDefaultsVersion!==undefined&&v.priorityDefaultsVersion!==0&&v.priorityDefaultsVersion!==1)throw new Error('默认目录版本无效');
  for(const key of ['roots','excluded','bookmarks'] as const)if(!Array.isArray(v[key])||v[key].length>64||v[key].some(x=>typeof x!=='string'||x.length>32768||/[\0\r\n]/.test(x)||!(/^[A-Z]:[\\/]|^\\\\[^\\]+\\[^\\]+/i.test(x))))throw new Error('请选择有效的绝对目录路径');
  const savedQueries=v.savedQueries??[];
- if(!Array.isArray(savedQueries)||savedQueries.length>32||savedQueries.some(item=>!item||typeof item.id!=='string'||!(/^[\w-]{1,80}$/).test(item.id)||typeof item.name!=='string'||!item.name.trim()||item.name.length>80||typeof item.query!=='string'||!item.query.trim()||item.query.length>1000||typeof item.filter!=='string'||!['','app:','setting:','folder:','doc:','pic:','video:','audio:'].includes(item.filter)||typeof item.folder!=='string'||item.folder&&(!(/^[A-Z]:[\\/]|^\\\\[^\\]+\\[^\\]+/i.test(item.folder))||item.folder.length>32768||/[\0\r\n]/.test(item.folder))))throw new Error('保存的搜索条件无效');
+ if(!Array.isArray(savedQueries)||savedQueries.length>32||savedQueries.some(item=>!item||typeof item.id!=='string'||!(/^[\w-]{1,80}$/).test(item.id)||typeof item.name!=='string'||!item.name.trim()||item.name.length>80||typeof item.query!=='string'||!item.query.trim()||item.query.length>1000||typeof item.filter!=='string'||!['','app:','setting:','folder:','doc:','pic:','video:','audio:','archive:'].includes(item.filter)||typeof item.folder!=='string'||item.folder&&(!(/^[A-Z]:[\\/]|^\\\\[^\\]+\\[^\\]+/i.test(item.folder))||item.folder.length>32768||/[\0\r\n]/.test(item.folder))))throw new Error('保存的搜索条件无效');
  if(new Set(savedQueries.map(item=>item.id)).size!==savedQueries.length)throw new Error('搜索条件标识重复');
  if(v.fuzzy!==undefined&&typeof v.fuzzy!=='boolean'||v.pinyin!==undefined&&typeof v.pinyin!=='boolean')throw new Error('匹配设置无效');
  if(v.maxEntries!==undefined&&(!Number.isSafeInteger(v.maxEntries)||v.maxEntries<1000||v.maxEntries>10_000_000))throw new Error('索引上限应为 1,000–10,000,000 项');
@@ -58,8 +59,9 @@ export function validateSearch(value:unknown):SearchSettings {
 }
 const groups:Record<string,Set<string>>={doc:new Set(['txt','md','pdf','doc','docx','ppt','pptx','xls','xlsx','csv','rtf','epub']),pic:new Set(['png','jpg','jpeg','webp','gif','bmp','tif','tiff','svg','avif','heic','livp']),video:new Set(['mp4','mkv','webm','avi','mov','m4v']),audio:new Set(['mp3','flac','wav','m4a','ogg','aac','opus'])};
 export function searchMatcher(query:string,foldersOnly=false){
- const tokens=(query.match(/"[^"]*"|\S+/g)||[]).map(t=>t.replace(/^"|"$/g,'').toLowerCase());let type=foldersOnly?'folder':'',extension='';const terms:string[]=[];
- for(const token of tokens){if(/^(folder|file|doc|pic|video|audio):$/.test(token))type=token.slice(0,-1);else if(token.startsWith('ext:'))extension=token.slice(4).replace(/^\./,'');else if(token.startsWith('folder:')){type='folder';if(token.length>7)terms.push(token.slice(7));}else terms.push(token);}
- return (item:SearchEntry)=>{if((foldersOnly||type==='folder')&&!item.directory||type&&type!=='folder'&&item.directory)return -1;const name=item.name.toLowerCase(),ext=name.includes('.')?name.split('.').pop()!:'';if(extension&&!extension.split(';').includes(ext)||groups[type]&&!groups[type].has(ext))return -1;
+ const tokens=(query.match(/"[^"]*"|\S+/g)||[]).map(t=>({text:t.replace(/^"|"$/g,'').toLowerCase(),exact:t.startsWith('"')}));let type=foldersOnly?'folder':'',extension='';const terms:string[]=[],inferred:string[]=[];
+ for(const {text:token,exact} of tokens){if(!exact&&/^(?:\.|\*\.)[a-z0-9]{1,10}$/.test(token)){inferred.push(token.slice(token.lastIndexOf('.')+1));continue;}if(/^(folder|file|doc|pic|video|audio|archive):$/.test(token))type=token.slice(0,-1);else if(token.startsWith('ext:'))extension=token.slice(4).replace(/^\./,'');else if(token.startsWith('folder:')){type='folder';if(token.length>7)terms.push(token.slice(7));}else terms.push(token);}
+ if(inferred.length){if(!extension&&type!=='folder'&&type!=='app'&&type!=='setting'){extension=inferred.join(';');if(!type)type='file';}else terms.push(...inferred.map(ext=>'.'+ext));}
+ return (item:SearchEntry)=>{if((foldersOnly||type==='folder')&&!item.directory||type&&type!=='folder'&&item.directory)return -1;const name=item.name.toLowerCase(),ext=name.includes('.')?name.split('.').pop()!:'';if(extension&&!extension.split(';').includes(ext)||groups[type]&&!groups[type].has(ext)||type==='archive'&&!isArchivePath(name))return -1;
  const path=item.path.toLowerCase();let score=item.directory?3:0;for(const term of terms){const normalized=term.replace(/\//g,'\\');const at=name.indexOf(normalized);if(at>=0)score+=name===normalized?100:at===0?50:25;else if(path.includes(normalized))score+=5;else return -1;}return score;};
 }

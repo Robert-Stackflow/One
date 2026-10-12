@@ -5,6 +5,8 @@ import {api,q,icon,iconButton,button,esc,switchControl,toast,action,errorMessage
 import {bindPreference} from './preferences';
 import {setupShortcut} from './shortcut';
 import {SearchResults} from './search-results';
+import {commandMatches} from './search-commands';
+import {customControls,updateSelectOptions} from './controls';
 import {isWindowVisible,onWindowVisibility} from './window-visibility';
 import {defaultSearch,type SearchSettings,type SearchEntry,type SearchContext,type SearchState} from '../shared/search';
 const searchSwitch=(key:string,title:string,description='')=>`<div class="setting-row"><div class="setting-copy"><h2>${title}</h2>${description?`<p>${description}</p>`:''}</div>${switchControl('search-'+key,title)}</div>`;
@@ -29,16 +31,11 @@ export function setupSearchPage(){let config:SearchSettings,settingsRevision=0;f
 export async function renderSearch(){
  const embedded=new URLSearchParams(location.search).has('embedded');
  document.body.classList.add('search-window');if(embedded)document.body.classList.add('search-inline');
- const filters=[['','全部'],...(!embedded?[['app:','程序'],['setting:','设置']]:[]),['folder:','文件夹'],['doc:','文档'],['pic:','图片'],['video:','视频'],['audio:','音频']];
- document.querySelector('#app')!.innerHTML=`<div class="search-shell"><header class="search-input-row drag-region">${icon('search')}<input id="file-query" placeholder="搜索文件、应用与设置；输入 > 查找命令" aria-label="搜索文件与文件夹" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">${embedded?'<span id="search-inline-summary" role="status"></span>':iconButton('search-save','保存当前搜索','star')}${iconButton('search-clear','清空','close')}</header>${embedded?'':'<div id="search-saved-row" class="search-saved-row" hidden></div>'}<div class="search-filter-row" id="search-filters"><div class="tabs" role="tablist" aria-label="搜索类型">${filters.map(([filter,label],i)=>`<button data-filter="${filter}" role="tab" aria-selected="${i===0}" class="${i===0?'selected':''}">${label}</button>`).join('')}</div></div><div id="search-results" class="search-results" role="listbox" aria-label="搜索结果" aria-busy="false"></div><footer class="search-footer"><span id="search-summary" role="status"></span><span id="search-keys">↑↓ 选择 · Enter 打开 · Alt+P 预览</span></footer></div><div id="toast" class="toast" role="status" hidden></div>`;
+ const filters=[['','全部'],...(!embedded?[['app:','程序'],['setting:','设置']]:[]),['folder:','文件夹'],['doc:','文档'],['pic:','图片'],['video:','视频'],['audio:','音频'],['archive:','压缩包']];
+ document.querySelector('#app')!.innerHTML=`<div class="search-shell"><header class="search-input-row drag-region">${icon('search')}<input id="file-query" placeholder="搜索文件、应用与设置；输入 > 查找命令" aria-label="搜索文件与文件夹" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">${embedded?'<span id="search-inline-summary" role="status"></span>':iconButton('search-save','保存当前搜索','star')}${iconButton('search-clear','清空','close')}</header>${embedded?'':'<div id="search-saved-row" class="search-saved-row" hidden></div>'}<div class="search-filter-row" id="search-filters"><div class="tabs" role="tablist" aria-label="搜索类型">${filters.map(([filter,label],i)=>`<button data-filter="${filter}" role="tab" aria-selected="${i===0}" class="${i===0?'selected':''}">${label}</button>`).join('')}</div>${embedded?'':'<div class="search-scope-field"><select id="search-scope" aria-label="搜索范围"><option value="">全部索引</option></select></div>'}</div><div id="search-results" class="search-results" role="listbox" aria-label="搜索结果" aria-busy="false"></div><footer class="search-footer"><span id="search-summary" role="status"></span><span id="search-keys">↑↓ 选择 · Enter 打开 · Alt+P 预览</span></footer></div><div id="toast" class="toast" role="status" hidden></div>`;
+ if(!embedded)customControls(q('search-filters'));
  const input=q<HTMLInputElement>('file-query'),list=q('search-results');
- let context:SearchContext={kind:'search',hwnd:0,pid:0,created:'',folders:[]},prefs:SearchSettings,filter='',savedScope='',selectedSaved='';
- const actions=[
-  ['preview','快速预览','预览选中的文件或文件夹'],['diff','文件比较','将选中的两个项目放入左右两侧'],['rename','批量重命名','把选中的项目添加到重命名范围'],['locksmith','检查文件占用','检查当前选中的文件或文件夹'],['disk','空间分析','分析当前目录'],['integrity','完整性校验','为目录生成或核对 SHA-256 清单'],['tasks','任务中心','查看正在执行的任务和历史结果'],
-  ['page:home','打开概览','查看磁盘、任务与常用工具'],['page:tools','打开文件工具','重复文件、比较、重命名与全文搜索'],['page:text','打开文本处理','清理、转换、比较与批处理'],['page:search','打开文件搜索设置','索引、快捷入口与菜单'],['page:input','打开操作增强','快捷操作、边缘、唤醒与置顶'],['page:disk','打开空间分析','查看目录占用与变化'],['page:locksmith','打开文件占用','检查被进程占用的文件'],['page:system','打开系统维护','启动项、注册表、磁盘清理、网络端口与系统服务'],['page:hardware','打开系统信息','查看硬件与网络信息'],['page:ports','打开网络端口','查看端口、进程与连接'],['page:services','打开系统服务','查看服务状态与启动方式'],['page:color','打开屏幕取色','从屏幕拾取颜色'],['page:settings','打开设置','外观与通用设置']
- ] as const;
- const commandKeywords:Record<string,string>={'page:ports':'port ports network 网络 端口','page:services':'service services 系统 服务','page:hardware':'hardware system info 系统 硬件 信息','page:disk':'storage space 磁盘 空间','page:locksmith':'lock file occupied 占用 锁定','page:color':'color picker colour 取色 颜色','page:tools':'file tools 文件 工具','page:text':'text markdown 文本','page:input':'utility utilities 操作 增强'};
- const commandMatches=(term:string,limit=6):SearchEntry[]=>{const value=term.trim().toLowerCase();return actions.filter(([id,label,detail])=>!value||(label+' '+detail+' '+(commandKeywords[id]||'')).toLowerCase().includes(value)).slice(0,limit).map(([id,label,detail])=>({path:'action:'+id,name:label,subtitle:detail,directory:false,size:0,modified:0,launchKind:'action'}));};
+ let context:SearchContext={kind:'search',hwnd:0,pid:0,created:'',folders:[]},prefs:SearchSettings,filter='',scopeSelection='',selectedSaved='';
  let revision=0,navigation=0,shownKey='',composing=false,inputPending=false,backgroundPending=false;
  let inputTimer:ReturnType<typeof setTimeout>|undefined,refreshTimer:ReturnType<typeof setTimeout>|undefined;
  let running:{version:number;key:string;navigation:number}|undefined,lastLayout='',lastInlineSummary='';
@@ -51,8 +48,22 @@ export async function renderSearch(){
   let offset=0;return Array.from(item.name).map(c=>{const active=matched.has(offset);offset+=c.length;return active?`<mark>${esc(c)}</mark>`:esc(c);}).join('');
  };
  const results=new SearchResults(list,input,embedded,nameMarkup);
+ const withinRoot=(path:string,root:string)=>{const value=path.replace(/\//g,'\\').replace(/\\+$/,'').toLowerCase(),base=root.replace(/\//g,'\\').replace(/\\+$/,'').toLowerCase();return value===base||value.startsWith(base+'\\');};
+ const indexed=(path:string)=>!!path&&!!prefs?.roots.some(root=>withinRoot(path,root));
+ const scopePath=()=>filter==='app:'||filter==='setting:'?'':scopeSelection==='@current'?context.currentFolder||'':scopeSelection;
+ const drawScope=()=>{
+  if(embedded)return;
+  const select=q<HTMLButtonElement&{value:string}>('search-scope'),roots=prefs?.roots||[],current=context.currentFolder||'';
+  if(scopeSelection==='@current'&&!indexed(current)||scopeSelection&&scopeSelection!=='@current'&&!indexed(scopeSelection))scopeSelection='';
+  const options=[{label:'全部索引',value:''}];
+  if(indexed(current))options.push({label:'当前文件夹 · '+(current.split(/[\\/]/).filter(Boolean).pop()||current),value:'@current'});
+  for(const root of roots)options.push({label:'索引目录 · '+root,value:root});
+  if(scopeSelection&&scopeSelection!=='@current'&&!roots.some(root=>root.toLowerCase()===scopeSelection.toLowerCase()))options.push({label:'已保存范围 · '+scopeSelection,value:scopeSelection});
+  updateSelectOptions(select,options);select.value=scopeSelection;select.disabled=filter==='app:'||filter==='setting:'||options.length===1;
+  select.title=scopePath()||'全部索引目录';
+ };
  // Enriching the same Explorer context only changes ranking, not user intent.
- const key=()=>JSON.stringify([input.value.trim(),filter,savedScope,context.kind,context.hwnd]);
+ const key=()=>JSON.stringify([input.value.trim(),filter,scopePath(),context.kind,context.hwnd]);
  const layout=()=>{
   const active=!!input.value.trim()||!!filter;
   document.body.classList.toggle('search-idle',!embedded&&!active);
@@ -65,8 +76,8 @@ export async function renderSearch(){
  };
  const choose=async(index=results.selected)=>{const item=results.entry(index);if(item)try{if(item.launchKind==='action')await api.searchAction(item.path.slice(7));else await api.searchChoose(item.path);}catch(e){toast(e);}};
  const drawSaved=()=>{if(embedded)return;const row=q('search-saved-row'),saved=prefs?.savedQueries||[];row.hidden=!saved.length;row.innerHTML=saved.map(item=>`<div class="search-saved-item ${selectedSaved===item.id?'selected':''}"><button data-saved-id="${esc(item.id)}" title="${esc(item.query+(item.folder?' · '+item.folder:''))}">${icon('search')}<span>${esc(item.name)}</span></button><button class="search-saved-remove" data-saved-remove="${esc(item.id)}" aria-label="删除 ${esc(item.name)}">${icon('close')}</button></div>`).join('');};
- if(!embedded){q('search-saved-row').addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest<HTMLElement>('[data-saved-id],[data-saved-remove]'):null;if(!target)return;const id=target.dataset.savedId||target.dataset.savedRemove,item=prefs?.savedQueries.find(saved=>saved.id===id);if(!item)return;if(target.dataset.savedRemove){void api.searchSavedQuery('remove',item.id).catch(toast);return;}selectedSaved=item.id;savedScope=item.folder;input.value=item.query;filter=item.filter;syncFilters();drawSaved();input.focus();newQuery();});
-  q('search-save').onclick=()=>{const query=input.value.trim();if(!query||query.startsWith('>'))return;const folder=context.kind==='explorer'?context.currentFolder||'':'';if(prefs.savedQueries.some(item=>item.query===query&&item.filter===filter&&item.folder===folder)){toast('已保存这个搜索');return;}const next={id:crypto.randomUUID(),name:query.slice(0,50),query,filter,folder};void api.searchSavedQuery('add',next).then(result=>{prefs=result;selectedSaved=next.id;savedScope=folder;drawSaved();}).catch(toast);};}
+ if(!embedded){q('search-saved-row').addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest<HTMLElement>('[data-saved-id],[data-saved-remove]'):null;if(!target)return;const id=target.dataset.savedId||target.dataset.savedRemove,item=prefs?.savedQueries.find(saved=>saved.id===id);if(!item)return;if(target.dataset.savedRemove){void api.searchSavedQuery('remove',item.id).catch(toast);return;}selectedSaved=item.id;scopeSelection=item.folder;input.value=item.query;filter=item.filter;syncFilters();drawScope();drawSaved();input.focus();newQuery();});
+  q('search-save').onclick=()=>{const query=input.value.trim();if(!query||query.startsWith('>'))return;const folder=scopePath();if(prefs.savedQueries.some(item=>item.query===query&&item.filter===filter&&item.folder===folder)){toast('已保存这个搜索');return;}const next={id:crypto.randomUUID(),name:query.slice(0,50),query,filter,folder};void api.searchSavedQuery('add',next).then(result=>{prefs=result;selectedSaved=next.id;scopeSelection=folder;drawScope();drawSaved();}).catch(toast);};}
  const stopTimers=()=>{clearTimeout(inputTimer);clearTimeout(refreshTimer);inputTimer=undefined;refreshTimer=undefined;};
  const invalidate=()=>{revision++;progressive=undefined;stopTimers();backgroundPending=false;inputPending=false;list.setAttribute('aria-busy','false');};
  // Background indexing never cancels an in-flight query. Many notifications become
@@ -87,7 +98,8 @@ export async function renderSearch(){
    shownKey=request.key;layout();
   };
   try{
-  if(!embedded&&text.startsWith('>')){const entries=commandMatches(text.slice(1),100);update(entries);summary(entries.length+' 个命令 · Enter 执行');return;}
+  const commandSettings={pinyin:prefs?.pinyin??true,fuzzy:prefs?.fuzzy??true};
+  if(!embedded&&text.startsWith('>')){const entries=commandMatches(text.slice(1),100,commandSettings);update(entries);summary(entries.length+' 个命令 · Enter 执行');return;}
    if(!embedded&&!text&&!filter){update([]);summary('');return;}
    if(!text&&!filter){
     const seen=new Set<string>(),entries=[...(prefs?.bookmarks||[]),...context.folders.map(f=>f.path)].filter(p=>{const k=p.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;}).map(path=>({path,name:path.split(/[\\/]/).filter(Boolean).pop()||path,directory:true,size:0,modified:0}));
@@ -98,10 +110,10 @@ export async function renderSearch(){
    summary('正在搜索…', '搜索中');
    const token=shownKey!==request.key||!results.count?crypto.randomUUID():undefined;
    if(token)progressive={token,accept:result=>{if(!current()||result.cancelled)return;update(result.items);summary(result.partialScope==='global'?`已找到 ${result.total.toLocaleString()} 项 · 搜索中`:`本文件夹 · ${result.total.toLocaleString()} 项 · 正在搜索其他位置`,`${result.total.toLocaleString()} 项 · 搜索中`);}};
-   const result=await api.searchFiles(filter+' '+text,context.kind==='dialog',token,savedScope);
+   const result=await api.searchFiles(filter+' '+text,context.kind==='dialog',token,scopePath());
    if(!current())return;
    if(result.cancelled){if(embedded)q('search-inline-summary').textContent=lastInlineSummary;return;}
-   const commands=embedded?[]:commandMatches(text);
+   const commands=embedded?[]:commandMatches(text,6,commandSettings);
    update([...commands,...result.items]);
    summary(`${result.total.toLocaleString()} 项${commands.length?` · ${commands.length} 个 One 命令`:''}${result.total>100?' · 显示前 100 项':''} · ${Math.round(result.elapsed)} ms`,result.total?`${result.total.toLocaleString()} 项`:(commands.length?`${commands.length} 个命令`:'无结果'));
   }catch(e){if(current()){results.update([],false,errorMessage(e));shownKey=request.key;summary('');layout();}}
@@ -153,15 +165,16 @@ export async function renderSearch(){
  const syncFilters=()=>document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>{
   const active=b.dataset.filter===filter;b.classList.toggle('selected',active);b.setAttribute('aria-selected',String(active));
  });
- q('search-clear').onclick=()=>{if(!input.value){void api.closeWindow();return;}input.value='';savedScope='';selectedSaved='';drawSaved();input.focus();newQuery();};
+ q('search-clear').onclick=()=>{if(!input.value){void api.closeWindow();return;}input.value='';selectedSaved='';drawSaved();input.focus();newQuery();};
  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.onclick=event=>{
-  filter=b.dataset.filter!;syncFilters();if(event.detail)input.focus();newQuery();
+  filter=b.dataset.filter!;syncFilters();drawScope();if(event.detail)input.focus();newQuery();
  });
+ if(!embedded)q<HTMLButtonElement&{value:string}>('search-scope').onchange=event=>{scopeSelection=(event.currentTarget as HTMLButtonElement&{value:string}).value;selectedSaved='';drawSaved();drawScope();newQuery();};
  const applyContext=(c:SearchContext)=>{
   const previous=key(),previousFolder=context.currentFolder;context=c;
   document.title=(c.kind==='dialog'?'跳转文件夹':c.kind==='menu'?'文件夹菜单':'文件搜索')+' · One';
   q('search-keys').textContent=c.kind==='search'?'↑↓ 选择 · Enter 打开 · Alt+P 预览':'↑↓ 选择 · Enter 跳转 · Alt+P 预览';
-  q('search-filters').hidden=c.kind==='dialog';
+  q('search-filters').hidden=c.kind==='dialog';drawScope();
   input.placeholder=c.kind==='dialog'?'搜索要跳转的文件夹':embedded?'搜索文件与文件夹':'搜索文件、程序与设置';
   if(key()!==previous)newQuery();else if(previousFolder!==c.currentFolder){invalidate();void query();}else refresh();
  };
@@ -172,9 +185,9 @@ export async function renderSearch(){
  api.onSearchState(state=>{if(state.running||!state.updated||state.updated===lastIndexUpdate)return;lastIndexUpdate=state.updated;if(input.value.trim()||filter)refresh();});
  api.onSearchContext(applyContext);
  api.onSearchReset(()=>{
-  invalidate();shownKey='';input.value='';filter='';savedScope='';selectedSaved='';syncFilters();drawSaved();input.focus();
-  const reset=revision;void api.searchPreferences().then(p=>{prefs=p;drawSaved();lastLayout='';layout();if(revision===reset)void query();});void api.searchReady();
+  invalidate();shownKey='';input.value='';filter='';scopeSelection='';selectedSaved='';syncFilters();drawSaved();drawScope();input.focus();
+  const reset=revision;void api.searchPreferences().then(p=>{prefs=p;drawScope();drawSaved();lastLayout='';layout();if(revision===reset)void query();});void api.searchReady();
  });
- input.focus();void api.searchReady();await subscribeSnapshot(api.onSearchPreferences,api.searchPreferences,next=>{const changed=JSON.stringify(prefs?.bookmarks)!==JSON.stringify(next.bookmarks),ranking=JSON.stringify([prefs?.priorities,prefs?.fuzzy,prefs?.pinyin])!==JSON.stringify([next.priorities,next.fuzzy,next.pinyin]);prefs=next;if(selectedSaved&&!next.savedQueries.some(item=>item.id===selectedSaved)){selectedSaved='';savedScope='';}drawSaved();lastLayout='';layout();if(ranking||changed&&!input.value.trim()&&!filter)refresh();});
+ input.focus();void api.searchReady();await subscribeSnapshot(api.onSearchPreferences,api.searchPreferences,next=>{const changed=JSON.stringify(prefs?.bookmarks)!==JSON.stringify(next.bookmarks),ranking=JSON.stringify([prefs?.priorities,prefs?.fuzzy,prefs?.pinyin])!==JSON.stringify([next.priorities,next.fuzzy,next.pinyin]),oldScope=scopePath();prefs=next;if(selectedSaved&&!next.savedQueries.some(item=>item.id===selectedSaved)){selectedSaved='';scopeSelection='';}drawScope();drawSaved();lastLayout='';layout();if(ranking||oldScope!==scopePath()||changed&&!input.value.trim()&&!filter)refresh();});
  if(context.hwnd===0)applyContext(await api.searchContext());else void query();
 }

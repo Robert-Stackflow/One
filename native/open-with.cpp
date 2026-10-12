@@ -19,7 +19,26 @@ std::string bitmapData(Gdiplus::Bitmap* bitmap){
 }
 std::wstring itemName(IShellItem* item,SIGDN format){PWSTR raw=nullptr;std::wstring value;if(SUCCEEDED(item->GetDisplayName(format,&raw))&&raw){value=raw;CoTaskMemFree(raw);}return value;}
 HRESULT installedApps(){ComPtr<IShellItem> folder;HRESULT hr=SHGetKnownFolderItem(FOLDERID_AppsFolder,KF_FLAG_DEFAULT,nullptr,IID_PPV_ARGS(&folder));ComPtr<IEnumShellItems> enumerator;if(SUCCEEDED(hr))hr=folder->BindToHandler(nullptr,BHID_EnumItems,IID_PPV_ARGS(&enumerator));if(FAILED(hr))return hr;std::cout<<'[';bool comma=false;int count=0;for(ComPtr<IShellItem> item;count<3000&&enumerator->Next(1,item.ReleaseAndGetAddressOf(),nullptr)==S_OK;count++){auto id=itemName(item.Get(),SIGDN_DESKTOPABSOLUTEPARSING),name=itemName(item.Get(),SIGDN_NORMALDISPLAY),file=itemName(item.Get(),SIGDN_FILESYSPATH);if(id.empty()||name.empty())continue;if(comma)std::cout<<',';comma=true;std::cout<<"{\"id\":"<<json(id)<<",\"name\":"<<json(name)<<",\"file\":"<<json(file)<<'}';}std::cout<<']';return S_OK;}
-HRESULT appImage(const std::wstring& path){ComPtr<IShellItemImageFactory> factory;HRESULT hr=SHCreateItemFromParsingName(path.c_str(),nullptr,IID_PPV_ARGS(&factory));HBITMAP image=nullptr;if(SUCCEEDED(hr))hr=factory->GetImage({32,32},SIIGBF_ICONONLY,&image);if(SUCCEEDED(hr)){std::unique_ptr<Gdiplus::Bitmap> bitmap(Gdiplus::Bitmap::FromHBITMAP(image,nullptr));std::cout<<bitmapData(bitmap.get());bitmap.reset();DeleteObject(image);}return hr;}
+HRESULT appImage(const std::wstring& path){
+ ComPtr<IShellItemImageFactory> factory;HRESULT hr=SHCreateItemFromParsingName(path.c_str(),nullptr,IID_PPV_ARGS(&factory));
+ HBITMAP image=nullptr;if(SUCCEEDED(hr))hr=factory->GetImage({32,32},SIIGBF_ICONONLY,&image);
+ if(SUCCEEDED(hr)){
+  // FromHBITMAP discards the alpha channel of Shell image-factory bitmaps.
+  // Read the 32-bit pixels directly so transparent corners stay transparent.
+  BITMAP source{};GetObjectW(image,sizeof(source),&source);
+  if(source.bmWidth>0&&source.bmHeight>0&&source.bmWidth<=256&&source.bmHeight<=256){
+   BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=source.bmWidth;info.bmiHeader.biHeight=-source.bmHeight;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+   std::vector<BYTE> pixels((size_t)source.bmWidth*source.bmHeight*4);
+   HDC dc=CreateCompatibleDC(nullptr);int rows=GetDIBits(dc,image,0,source.bmHeight,pixels.data(),&info,DIB_RGB_COLORS);DeleteDC(dc);
+   if(rows==source.bmHeight){
+    Gdiplus::Bitmap bitmap(source.bmWidth,source.bmHeight,source.bmWidth*4,PixelFormat32bppARGB,pixels.data());
+    std::cout<<bitmapData(&bitmap);
+   }
+  }
+  DeleteObject(image);
+ }
+ return hr;
+}
 std::string iconData(HICON icon){
  // Draw into a transparent 32-bit DIB. FromHICON drops alpha on some Shell
  // icons, leaving a black square in both light and dark interfaces.
@@ -44,12 +63,9 @@ std::string applicationIcon(IAssocHandler* handler){
  PWSTR raw=nullptr;int index=0;if(FAILED(handler->GetIconLocation(&raw,&index))||!raw)return {};std::wstring path=raw;CoTaskMemFree(raw);
  wchar_t expanded[32768];if(ExpandEnvironmentStringsW(path.c_str(),expanded,32768))path=expanded;
  HICON iconLarge=nullptr,iconSmall=nullptr;SHDefExtractIconW(path.c_str(),index,0,&iconLarge,&iconSmall,MAKELONG(32,16));
- std::unique_ptr<Gdiplus::Bitmap> bitmap(iconLarge?Gdiplus::Bitmap::FromHICON(iconLarge):Gdiplus::Bitmap::FromFile(path.c_str()));
- std::string result;if(bitmap&&bitmap->GetLastStatus()==Gdiplus::Ok){
-  ComPtr<IStream> stream;CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
-  if(SUCCEEDED(CreateStreamOnHGlobal(nullptr,TRUE,&stream))&&bitmap->Save(stream.Get(),&png)==Gdiplus::Ok){STATSTG stat{};stream->Stat(&stat,STATFLAG_NONAME);if(stat.cbSize.QuadPart&&stat.cbSize.QuadPart<131072){LARGE_INTEGER zero{};stream->Seek(zero,STREAM_SEEK_SET,nullptr);std::vector<BYTE> bytes((size_t)stat.cbSize.QuadPart);ULONG read=0;stream->Read(bytes.data(),(ULONG)bytes.size(),&read);DWORD count=0;CryptBinaryToStringA(bytes.data(),read,CRYPT_STRING_BASE64|CRYPT_STRING_NOCRLF,nullptr,&count);std::string encoded(count,0);if(CryptBinaryToStringA(bytes.data(),read,CRYPT_STRING_BASE64|CRYPT_STRING_NOCRLF,encoded.data(),&count)){encoded.resize(count);while(!encoded.empty()&&encoded.back()==0)encoded.pop_back();result="data:image/png;base64,"+encoded;}}}
- }
- bitmap.reset();if(iconLarge)DestroyIcon(iconLarge);if(iconSmall)DestroyIcon(iconSmall);return result;
+ std::string result=iconLarge?iconData(iconLarge):iconSmall?iconData(iconSmall):"";
+ if(result.empty()){std::unique_ptr<Gdiplus::Bitmap> bitmap(Gdiplus::Bitmap::FromFile(path.c_str()));result=bitmapData(bitmap.get());}
+ if(iconLarge)DestroyIcon(iconLarge);if(iconSmall)DestroyIcon(iconSmall);return result;
 }
 
 ComPtr<IContextMenu2> shellMenu2;ComPtr<IContextMenu3> shellMenu3;
