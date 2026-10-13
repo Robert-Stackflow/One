@@ -44,6 +44,10 @@
 
 One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在独立推理 Worker 中运行检测、方向处理、识别和后处理，复用模型缓存；模型首次使用按需下载，记录版本、字典、前后处理配置、大小、哈希和许可，原子完成安装。代码许可和具体权重许可分别核对，不只看仓库首页。
 
+首批原型固定 [tiny 检测](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/tree/2ba1506c0380b8f0b03dd142459aac66d4421f6c) 与 [tiny 识别](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/tree/2612ab37152ae0a677521bae4e1e3d4fb4cf7c30) 官方 ONNX/YAML，权重许可标为 Apache-2.0；使用同版本字典和前后处理，不需要 Python。已实现 CPU/DirectML 推理、DB 文字框与透视裁剪，CTC 发射区间只标作近似对齐信息，不冒充实际字框。当前文档输出保留真实检测四边形，选择粒度为整行词框；精细对齐和方向模型仍待后续适配。外层推理 Worker、统一模型/设备管理和各预设仍需接入，当前原型不改变用户的默认 OCR。
+
+可重复基准入口为 `node scripts/prepare-recognition-benchmark.mjs --prepare` 和 `node tests/recognition-paddle-runtime.cjs`，前者无 `--prepare` 时只验证已缓存文件。当前通过 60 张合成单行与三类合成整图的 CPU/DirectML 设备 0 核验；同图 Tesseract 也识别出三类整图的预期文字，因此不能据此证明默认引擎应替换。结果记录文字、CER、冷启动、阶段耗时和进程 RSS，GPU 显存与物理适配器映射尚未测量；真实分层样本与其他模型/尺寸仍按 A 门槛验收，不把合成样本成绩推广到真实使用场景。
+
 ### 3.2 本地模型、尺寸与 GPU 管理
 
 本地能力采用可扩展模型目录，不只内置一个“最佳模型”。用户可以分别为 OCR、公式识别和原图翻译的背景修复选择模型、尺寸及推理设备；默认推荐档仅作为初始选择，不限制其他已适配型号。现有 AI 服务中的 Ollama/LM Studio 等仍由服务端管理其模型和 GPU，不把外部模型复制到 One 的模型目录。
