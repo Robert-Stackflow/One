@@ -54,6 +54,7 @@ test('manager resumes cancelled downloads and removes shared and legacy repair c
   await assert.rejects(task, /取消/);
   let state = await manager.state(); const partial = state.entries.find(entry => entry.id === paddleTinyModel.id)!;
   assert.equal(partial.ready, false); assert.equal(partial.downloadedBytes, 32); assert.equal(partial.diskBytes, 32);
+  assert.equal(partial.error, '', 'intentional cancellation leaves resumable state without a failure');
   stall = false; await manager.install(paddleTinyModel.id); assert.ok(requested.includes('bytes=32-'));
   state = await manager.state(); assert.equal(state.entries.find(entry => entry.id === paddleTinyModel.id)!.ready, true);
   const lease = await manager.store.acquire(paddleTinyModel); await assert.rejects(manager.remove(paddleTinyModel.id), /使用/);

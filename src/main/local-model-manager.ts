@@ -134,7 +134,7 @@ export class LocalModelManager {
     // The legacy MI-GAN file can migrate without another download.
     const sources: Record<string, string> = model.purpose === 'repair' ? { repair: aiModelPath(this.dataDirectory, repairModel) } : {};
     const task = this.store.install(model, abort.signal, value => this.progress.set(model.id, value), sources).catch(error => {
-      this.errors.set(model.id, error instanceof Error ? error.message : '模型下载失败'); throw error;
+      if (!abort.signal.aborted) this.errors.set(model.id, error instanceof Error ? error.message : '模型下载失败'); throw error;
     }).finally(async () => { this.tasks.delete(model.id); this.states.delete(model.id); await this.modelState(model.id).catch(() => {}); });
     this.tasks.set(model.id, { abort, promise: task });
     return task;
