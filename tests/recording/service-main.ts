@@ -109,6 +109,7 @@ async function run(){
   const url=service.state().url!;assert.equal(service.authorize(url,client.webContents.id),true);assert.equal(service.authorize(url,stranger.webContents.id),false);
   const range=await client.webContents.executeJavaScript(`fetch(${JSON.stringify(url)},{headers:{Range:'bytes=0-3'}}).then(async response=>({status:response.status,bytes:Array.from(new Uint8Array(await response.arrayBuffer()))}))`);
   assert.deepEqual(range,{status:206,bytes:[26,69,223,163]});
+  assert.deepEqual(await client.webContents.executeJavaScript(`window.readRecordingFixture(${JSON.stringify(url)})`),{width:160,height:100,alpha:255});
   await assert.rejects(service.dispose(),/保存或放弃/);assert.equal(service.authorize(url,client.webContents.id),true);
   await invoke(client,'cancel');assert.equal(service.authorize(url,client.webContents.id),false);assert.equal(loads,1);
   await invoke(client,'pageActive',true);

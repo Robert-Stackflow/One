@@ -2314,6 +2314,7 @@ export class RecordingService {
       'Content-Length': String(range.end - range.start + 1),
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
+      'Access-Control-Allow-Origin': 'one://app',
     };
     if (range.partial) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${file.bytes}`;
     return new Response(
