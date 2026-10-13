@@ -47,16 +47,16 @@ const backdrop = document.createElement('canvas');
 let frameTimer: ReturnType<typeof setTimeout> | undefined,
   framePending = false,
   frameFailed = false;
-function redacted() {
-  return scene?.annotations.some((a) => a.tool === 'mosaic' || a.tool === 'blur');
+function needsBackground() {
+  return !!text?.textOutline || scene?.annotations.some((a) => a.tool === 'mosaic' || a.tool === 'blur' || (a.tool === 'text' && a.textOutline));
 }
 async function refreshFrame() {
   frameTimer = undefined;
-  if (!redacted() || framePending || frameFailed) return;
+  if (!needsBackground() || framePending || frameFailed) return;
   framePending = true;
   try {
     const frame = await api.frame(packet.token);
-    if (!redacted()) return;
+    if (!needsBackground()) return;
     if (
       !frame.width ||
       !frame.height ||
@@ -80,7 +80,7 @@ async function refreshFrame() {
     error(e);
   } finally {
     framePending = false;
-    if (redacted() && !frameFailed) frameTimer = setTimeout(() => void refreshFrame(), 100);
+    if (needsBackground() && !frameFailed) frameTimer = setTimeout(() => void refreshFrame(), 100);
   }
 }
 addEventListener('beforeunload', () => {
@@ -101,7 +101,7 @@ const stepOrder = stepOrderControls(
 function draw() {
   if (!scene) return;
   stepOrder.refresh();
-  if (redacted()) {
+  if (needsBackground()) {
     if (!framePending && frameTimer === undefined && !frameFailed) void refreshFrame();
   } else {
     clearTimeout(frameTimer);

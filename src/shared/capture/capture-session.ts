@@ -1,7 +1,7 @@
 import type { Rectangle } from './region';
 import type { SensitiveAPI } from '../recognition/sensitive-api';
 import type { CandidateUpdate, CaptureCandidate } from './capture-detection';
-import type { Point, ImageDocument, ImageHistoryState } from './image-document';
+import type { Point, ImageDocument, ImageHistoryState, CaptureTool } from './image-document';
 import {
   validSelection,
   validateImageDocument,
@@ -40,6 +40,7 @@ export interface CaptureData {
   origin?: Point;
   capturedAt: number;
   watermark: WatermarkPreset;
+  annotationStyles?: import('./annotation-preferences').AnnotationStyles;
   uiScale:import('./settings').CapturePreferences['uiScale'];
 }
 export interface CaptureRequest {
@@ -66,6 +67,7 @@ export interface CaptureAPI extends SensitiveAPI {
   selectFont(token:string,family:string):Promise<boolean>;
   onPreferences(callback:(value:Pick<import('./settings').CapturePreferences,'uiScale'>)=>void):()=>void;
   saveWatermark(token: string, preset: WatermarkPreset): Promise<void>;
+  saveAnnotationStyle(token:string,tool:CaptureTool,style:import('../recording/recording-annotations').RecordingAnnotationStyle):Promise<void>;
   chooseWatermarkImage(token: string): Promise<import('./watermark').WatermarkImage | null>;
   onCandidates(callback: (update: CandidateUpdate) => void): () => void;
 }

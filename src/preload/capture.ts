@@ -10,6 +10,7 @@ const capture:CaptureAPI={
   moveCursor:(token,point)=>invoke('capture-cursor',token,point),copyColor:(token,value)=>invoke('capture-color',token,value),
   fonts:()=>invoke('capture-fonts'),selectFont:(token,family)=>invoke('capture-select-font',token,family),
   saveWatermark:(token,preset)=>invoke('capture-watermark',token,preset),chooseWatermarkImage:token=>invoke('capture-watermark-image',token),
+  saveAnnotationStyle:(token,tool,style)=>invoke('capture-annotation-style',token,tool,style),
   scanSensitive:(token,png)=>invoke('capture-sensitive',token,png),cancelSensitive:token=>invoke('capture-sensitive-cancel',token),
   onCandidates:callback=>listen('capture-candidates',callback),onPreferences:callback=>listen('capture-preferences',callback),
 };

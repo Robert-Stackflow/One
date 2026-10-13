@@ -1250,7 +1250,12 @@ async function start() {
     createWindow:()=>windowFor('recognition',{width:1000,height:740,minWidth:640,minHeight:520,title:'文字识别 · One'},'',false),
     register:(name,handler)=>handle(name,handler,['recognition']),blocked:()=>quitting,uiScale:()=>settings.capture.uiScale,connections:aiService.serviceConnections(),
   });
+  const annotationPreferences:import('../shared/capture/annotation-preferences').AnnotationPreferencesHost={
+    annotationStyles:()=>settings.capture.annotationStyles,
+    saveAnnotationStyle:async(tool,style)=>{await saveSettings(current=>mergeSettings(current,{capture:{annotationStyles:{[tool]:style}}}));},
+  };
   imageEditor=new ImageEditorHost(materials,{
+    ...annotationPreferences,
     createWindow:()=>windowFor('image-editor',{width:1080,height:800,minWidth:760,minHeight:620,title:'图片编辑 · One'},'',false),
     register:(name,handler)=>handle(name,(event,...args)=>{if(event.senderFrame?.url!==IMAGE_EDITOR_URL)throw Error('编辑窗口来源无效');return handler(event,...args);},['image-editor']),
     settings:()=>settings.capture,saveWatermark:watermark=>saveSettings(current=>mergeSettings(current,{capture:{watermark}})),
@@ -1264,6 +1269,7 @@ async function start() {
     dark:()=>{const value=themeAutomation?.appearance()||settings.appearance;return value.mode==='dark'||value.mode==='system'&&nativeTheme.shouldUseDarkColors;},
   },()=>{if(main&&!main.isDestroyed())main.webContents.send('one:pins-changed');},error=>runtimeError(app.getPath('userData'),'pins',error));
   capture=new CaptureHost(app.getPath('userData'),{
+    ...annotationPreferences,
     createWindow:options=>windowFor('capture',{minWidth:1,minHeight:1,roundedCorners:false,...options},'',false),
     register:(name,handler)=>handle(name,(event,...args)=>{if(event.senderFrame?.url!==CAPTURE_URL)throw Error('截图窗口来源无效');return handler(event,...args);},['capture']),
     fonts:()=>installedFonts(),settings:()=>settings.capture,mainWindow:()=>main,blocked:()=>quitting,
@@ -1285,6 +1291,7 @@ async function start() {
     failed:error=>runtimeError(app.getPath('userData'),'scroll-capture',error),
   });
   recording=new RecordingHost({
+    ...annotationPreferences,
     directory:join(app.getPath('userData'),'recording'),mainWindow:()=>main,
     windowHost:{createWindow:(role,options)=>windowFor(role,{minWidth:1,minHeight:1,...options},'',false),register:(name,handler,allowed)=>handle(name,handler,[...allowed])},
     register:(name,handler)=>handle(name,handler,['main']),

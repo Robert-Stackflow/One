@@ -74,7 +74,7 @@ export function bindAnnotationStyle(
 }
 export function fillAnnotationStyle(
   root: ParentNode,
-  mark: Annotation,
+  mark: Pick<Annotation,'tool'|'color'|'width'> & Partial<Annotation>,
   ids: Record<string, string> = {},
 ) {
   for (const [name, property] of styleFields) {

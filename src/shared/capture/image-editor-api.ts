@@ -12,6 +12,7 @@ export interface ImageEditorState {
   document?: ImageDocument;
   history?: ImageHistoryState;
   watermark?: WatermarkPreset;
+  annotationStyles?: import('./annotation-preferences').AnnotationStyles;
   openedAt?: number;
   uiScale?: import('./settings').CapturePreferences['uiScale'];
 }
@@ -37,5 +38,6 @@ export interface ImageEditorAPI extends SensitiveAPI {
   onCloseRequest(callback:(token:string)=>void):()=>void;
   answerClose(token:string,accepted:boolean):Promise<void>;
   saveWatermark(token: string, value: WatermarkPreset): Promise<void>;
+  saveAnnotationStyle(token:string,tool:import('./image-document').CaptureTool,style:import('../recording/recording-annotations').RecordingAnnotationStyle):Promise<void>;
   chooseWatermarkImage(token: string): Promise<import('./watermark').WatermarkImage | null>;
 }

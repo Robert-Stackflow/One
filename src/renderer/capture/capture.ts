@@ -1,3 +1,4 @@
+import { annotationPreferences } from '../editor/annotation-preferences';
 import { annotationBrushCursor } from '../editor/annotation-brush-cursor';
 import { watermarkControls } from '../editor/watermark-controls';
 import { watermarkToolbar } from '../editor/watermark-toolbar';
@@ -85,6 +86,7 @@ import { CaptureSelection } from './capture-selection';
 import { captureSource } from './capture-source';
 
 const api = window.one.capture!;
+const rememberedStyles = annotationPreferences(document,{},(tool,style)=>api.saveAnnotationStyle(data.token,tool,style),value=>error(value));
 const q = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const select=(id:string)=>selectSource(q(id))!;
 const canvas = q<HTMLCanvasElement>('capture-preview');
@@ -786,6 +788,7 @@ function setTool(next: CaptureTool) {
     annotations?.clear();
     selectedId = '';
   }
+  if (!selectedId) rememberedStyles.restore(next);
   document
     .querySelectorAll<HTMLButtonElement>('[data-tool]')
     .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === next)));
@@ -867,6 +870,7 @@ bindAnnotationStyle(
   {
     locked: () => busy || !scene || !!gesture || annotations.active,
     update: (style, preview) => {
+      if (!preview) rememberedStyles.remember(textTarget?.tool || scene.annotations.find(mark=>mark.id===selectedId)?.tool || tool);
       if (textTarget) {
         Object.assign(textTarget, style);
         layoutText();
@@ -882,6 +886,7 @@ bindAnnotationStyle(
 const toolUI = groupedAnnotationTools(q('annotation-tools'), setTool);
 bindAnnotationFonts(document, () => api.fonts());
 q('mark-mode').onchange = () => {
+  rememberedStyles.remember(tool);
   annotations?.clear();
   properties();
   draw();
@@ -1601,8 +1606,9 @@ void api
   .data()
   .then(async (initial) => {
     data = initial;
+    rememberedStyles.load(initial.annotationStyles);
     applyCaptureScale(document.body,initial.uiScale);
-    await loadAnnotationFont(initial.watermark.fontFamily);
+    await Promise.all([...new Set([initial.watermark.fontFamily,...Object.values(initial.annotationStyles||{}).map(style=>style.fontFamily)])].map(loadAnnotationFont));
     shapedSelection.mode = initial.selectionMode || 'rectangle';
     q('capture-selection-mode').hidden = true;
     const watermark = initial.watermark;

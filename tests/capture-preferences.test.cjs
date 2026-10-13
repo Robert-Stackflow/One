@@ -5,6 +5,23 @@ const bundle=buildSync({stdin:{contents:`export * from './src/shared/settings'; 
 const loaded={exports:{}};new Function('module','exports','require',bundle.outputFiles[0].text)(loaded,loaded.exports,require);
 const {defaultSettings,validateSettings,mergeSettings,customCaptureSelection}=loaded.exports;
 
+test('annotation defaults remember tools independently and survive settings serialization',()=>{
+  const original=defaultSettings();
+  const edited=mergeSettings(original,{capture:{annotationStyles:{text:{color:'#f8f8f8',fontSize:38,fontWeight:700,italic:true,textOutline:true},brush:{color:'#3388cc',width:8},mosaic:{brushSize:44,brush:true}}}});
+  const restored=validateSettings(JSON.parse(JSON.stringify(edited)));
+  assert.deepEqual(restored.capture.annotationStyles,edited.capture.annotationStyles);
+  assert.equal(restored.capture.annotationStyles.text.textOutline,true);
+  assert.equal(restored.capture.annotationStyles.text.width,3);
+  assert.equal(restored.capture.annotationStyles.brush.width,8);
+  assert.equal(restored.capture.annotationStyles.brush.fontWeight,400);
+  assert.equal(restored.capture.annotationStyles.mosaic.brushSize,44);
+  assert.equal(original.capture.annotationStyles.text.fontWeight,400);
+  const old=JSON.parse(JSON.stringify(original));delete old.capture.annotationStyles;
+  assert.deepEqual(validateSettings(old).capture.annotationStyles,original.capture.annotationStyles);
+  for(const patch of [{text:{fontSize:999}},{text:{color:'red'}},{text:{textOutline:1}},{move:{width:5}}])
+    assert.throws(()=>mergeSettings(original,{capture:{annotationStyles:patch}}));
+});
+
 test('One settings preserve complete capture workflows, watermark and custom selection through edits and backup JSON',()=>{
   const original=defaultSettings(),unchanged=structuredClone(original);
   const workflow={...original.capture.workflows[0],id:'translated',name:'  识别并翻译  ',actions:['save','ocr','translate','library'],translationTarget:'ja'};

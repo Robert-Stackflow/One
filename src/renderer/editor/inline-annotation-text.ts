@@ -1,4 +1,5 @@
 import './inline-annotation-text.css';
+import { maxTextOutlineWidth } from '../../shared/capture/text-outline';
 import {
   identity,
   mappedPoint,
@@ -25,6 +26,10 @@ interface TextHost {
 export class InlineAnnotationText {
   target?: Annotation;
   private measure = document.createElement('canvas').getContext('2d')!;
+  private readonly placeholder = '输入文字';
+  private caret = document.createElement('span');
+  private editingBounds?: Annotation['textBounds'];
+  private caretLine = { top: 0, height: 0, advance: 0 };
   measured(mark: Annotation) {
     if (!['text', 'watermark'].includes(mark.tool) || mark.watermark?.image) return mark;
     const size = mark.fontSize || Math.max(12, mark.width * 6);
@@ -53,7 +58,7 @@ export class InlineAnnotationText {
           ...metrics.map(({ m, index }) => index * size * 1.2 + m.actualBoundingBoxDescent),
         ) - ink.y;
       if (mark.textOutline) {
-        const edge = Math.max(1, size / 16);
+        const edge = maxTextOutlineWidth(size) / 2;
         ink.x -= edge;
         ink.y -= edge;
         ink.width += edge * 2;
@@ -69,27 +74,28 @@ export class InlineAnnotationText {
       },
     };
   }
-  /** Editing and export use the exact same canvas painter; the textarea provides
-   * native input/selection/caret without a second, differently aligned glyph layer. */
+  /** Editing and export use the same canvas painter; the textarea owns native
+   * input, selection and IME. A separate caret follows the visible glyph height. */
   scene(scene: ImageDocument): ImageDocument {
     if (!this.target) return scene;
+    const target =
+      !this.target.text && this.target.tool === 'text'
+        ? { ...this.target, text: this.placeholder, color: '#767676', textOutline: false }
+        : this.target;
     const found = scene.annotations.some((a) => a.id === this.target!.id);
     return {
       ...scene,
       annotations: found
-        ? scene.annotations.map((a) => (a.id === this.target!.id ? this.target! : a))
-        : [...scene.annotations, this.target],
+        ? scene.annotations.map((a) => (a.id === this.target!.id ? target : a))
+        : [...scene.annotations, target],
     };
   }
   get selection() {
     if (!this.target) return;
-    if (this.target.text.trim()) return this.target;
+    // Line leading belongs to the invisible input, not the visible editing frame.
     return {
       ...this.target,
-      textBounds: {
-        width: parseFloat(this.input.style.width),
-        height: parseFloat(this.input.style.height),
-      },
+      textBounds: this.target.watermark ? this.target.textBounds : this.editingBounds,
     };
   }
   constructor(
@@ -99,7 +105,13 @@ export class InlineAnnotationText {
   ) {
     form.classList.add('inline-annotation-editor');
     input.wrap = 'off';
-    input.placeholder = '输入文字';
+    // Canvas paints both the hint and the text; the textarea only owns input, selection and IME.
+    input.placeholder = '';
+    this.caret.className = 'inline-annotation-caret';
+    this.caret.setAttribute('aria-hidden', 'true');
+    form.append(this.caret);
+    for (const event of ['select', 'selectionchange', 'keyup', 'pointerup', 'focus', 'blur', 'compositionend'])
+      input.addEventListener(event, () => this.layoutCaret());
     form.onsubmit = (event) => {
       event.preventDefault();
       this.submit();
@@ -132,6 +144,7 @@ export class InlineAnnotationText {
     this.layout();
     this.host.changed(this.target);
     this.input.focus({ preventScroll: true });
+    this.layoutCaret();
   }
   layout() {
     if (!this.target) return;
@@ -147,6 +160,31 @@ export class InlineAnnotationText {
       width = Math.max(1, ...lines.map((line) => this.measure.measureText(line).width)),
       height = lines.length * size * 1.2;
     mark.textBounds = this.measured(mark).textBounds;
+    this.measure.textBaseline = 'top';
+    const reference = this.measure.measureText(this.placeholder);
+    const inkTop = -reference.actualBoundingBoxAscent;
+    const inkHeight = reference.actualBoundingBoxAscent + reference.actualBoundingBoxDescent || size;
+    const editWidth = Math.max(width, reference.width,
+      ...this.input.value.split('\n').map(line => this.measure.measureText(line).width));
+    const padding = Math.max(1, Math.min(3, size / 24),
+      mark.textOutline ? maxTextOutlineWidth(size) / 2 : 0);
+    const content = mark.textOutline
+      ? this.measured({ ...mark, textOutline: false }).textBounds?.ink
+      : mark.textBounds?.ink;
+    // Keep the empty line's geometry while typing, extending only for glyphs
+    // (for example italic overhangs or descenders) that actually exceed it.
+    const left = Math.min(0, -reference.actualBoundingBoxLeft, content?.x ?? 0);
+    const right = Math.max(editWidth, reference.actualBoundingBoxRight,
+      content ? content.x + content.width : 0);
+    const topInk = Math.min(inkTop, content?.y ?? inkTop);
+    const bottomInk = Math.max((lines.length - 1) * size * 1.2 + inkTop + inkHeight,
+      content ? content.y + content.height : 0);
+    this.editingBounds = {
+      width: editWidth, height,
+      ink: { x: left - padding, y: topInk - padding,
+        width: right - left + padding * 2, height: bottomInk - topInk + padding * 2 },
+    };
+    this.caretLine = { top: inkTop, height: inkHeight, advance: size * 1.2 };
     const radians = ((style?.angle || 0) * Math.PI) / 180,
       cos = Math.cos(radians),
       sin = Math.sin(radians);
@@ -179,15 +217,9 @@ export class InlineAnnotationText {
       font: this.measure.font,
       lineHeight: '1.2',
       color: 'transparent',
-      caretColor: mark.color,
+      caretColor: 'transparent',
       transform: `translateY(${offset}px)`,
-      width:
-        Math.max(
-          size * 4,
-          width + 8,
-          ...this.input.value.split('\n').map((line) => this.measure.measureText(line).width + 8),
-          this.input.value ? 0 : this.measure.measureText(this.input.placeholder).width + 8,
-        ) + 'px',
+      width: editWidth + 8 + 'px',
       height: height + 2 + 'px',
     });
     Object.assign(this.form.style, {
@@ -195,6 +227,20 @@ export class InlineAnnotationText {
       top: position.y + 'px',
       transform: `matrix(${(matrix[0] * cos + matrix[2] * sin) * scale},${(matrix[1] * cos + matrix[3] * sin) * scale},${(matrix[2] * cos - matrix[0] * sin) * scale},${(matrix[3] * cos - matrix[1] * sin) * scale},0,0)`,
     });
+    this.layoutCaret();
+  }
+  private layoutCaret() {
+    this.caret.hidden = !this.target || document.activeElement !== this.input ||
+      this.input.selectionStart !== this.input.selectionEnd;
+    if (this.caret.hidden) return;
+    const lines = this.input.value.slice(0, this.input.selectionStart).split('\n');
+    Object.assign(this.caret.style, {
+      left: this.measure.measureText(lines.at(-1)!).width + 'px',
+      top: this.caretLine.top + (lines.length - 1) * this.caretLine.advance + 'px',
+      height: this.caretLine.height + 'px',
+      background: this.target!.color,
+    });
+    for (const animation of this.caret.getAnimations()) animation.currentTime = 0;
   }
   submit() {
     if (!this.target) return;

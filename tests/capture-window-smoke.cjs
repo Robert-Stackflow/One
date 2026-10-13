@@ -42,7 +42,11 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{creat
     await capture.locator('[data-tool=rectangle]:visible').click();const selection=await capture.locator('#selection').boundingBox();assert.ok(selection);
     await capture.mouse.move(selection.x+45,selection.y+45);await capture.mouse.down();await capture.mouse.move(selection.x+180,selection.y+110,{steps:5});await capture.mouse.up();
     await expect(capture.locator('#undo')).toBeEnabled();
-    await capture.locator('[data-tool=text]:visible').click();await capture.mouse.click(selection.x+60,selection.y+145);
+    await capture.locator('[data-tool=text]:visible').click();
+    for(const name of ['加粗','斜体','描边']) await capture.getByRole('button',{name,exact:true}).click();
+    await capture.evaluate(()=>{const color=document.getElementById('mark-color');color.value='#f0e060';color.dispatchEvent(new Event('change',{bubbles:true}));});
+    await expect.poll(()=>main.evaluate(async()=>(await window.one.settings()).capture.annotationStyles.text)).toMatchObject({color:'#f0e060',fontWeight:700,italic:true,textOutline:true});
+    await capture.mouse.click(selection.x+60,selection.y+145);
     await capture.locator('#capture-text-value').fill('One 截图标注');await capture.locator('#capture-text-value').press('Control+Enter');
     const fonts=await capture.evaluate(()=>window.one.capture.fonts());const font=fonts.find(item=>item.family==='Arial')||fonts.find(item=>item.family!=='Segoe UI');assert.ok(font);
     await assert.rejects(capture.evaluate(family=>window.one.uiFontSource(family),font.family),/字体未被选择/);
@@ -70,6 +74,9 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{creat
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().endsWith('?view=image-editor')).close());await expect.poll(()=>editor.isClosed()).toBe(true);
     capture=await start();assert.equal(await capture.evaluate(async url=>{try{return(await fetch(url)).ok;}catch{return false;}},data.image),false);await capture.evaluate(()=>{setTimeout(()=>document.getElementById('cancel').click(),20);});await expect.poll(()=>main.evaluate(()=>window.captureFinished)).toBe(true);assert.equal(await main.evaluate(()=>window.captureFailure),'');assert.equal(await main.evaluate(()=>window.captureOutcome),null);assert.equal((await main.evaluate(()=>window.one.materialsState())).images.length,1);
     capture=await start();
+    await capture.locator('[data-tool=text]:visible').click();
+    assert.equal(await capture.locator('#mark-color').inputValue(),'#f0e060');
+    for(const name of ['加粗','斜体','描边']) await expect(capture.getByRole('button',{name,exact:true})).toHaveAttribute('aria-pressed','true');
     await app.close();app=undefined;assert.equal(capture.isClosed(),true);
     assert.deepEqual(errors,[]);
     console.log('Capture window: One restricted bridge/resources, native window source, annotation, cancel/retry receipts, original preservation, material/editor/pin delivery, cancellation and active-capture quit passed.');

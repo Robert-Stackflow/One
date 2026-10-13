@@ -1,3 +1,5 @@
+import { textOutline } from '../../shared/capture/text-outline';
+import { outlineBackground } from './outline-background';
 import { watermarkBitmap } from './watermark-bitmap';
 import {
   localAnnotationBounds,
@@ -46,8 +48,9 @@ export function paintAnnotations(
     context.closePath();
     context.clip('evenodd');
   }
+  const outline = outlineBackground(context,scene,source,backdrop);
   for (const annotation of scene.annotations)
-    paintAnnotation(context, source, annotation, scene, backdrop);
+    paintAnnotation(context, source, annotation, scene, backdrop,outline);
   context.restore();
 }
 function strokeArea(a: Annotation) {
@@ -80,6 +83,7 @@ function paintAnnotation(
   a: Annotation,
   doc: ImageDocument,
   backdrop?: CanvasImageSource,
+  outline?: ReturnType<typeof outlineBackground>,
 ) {
   const r = localAnnotationBounds(a);
   c.save();
@@ -148,8 +152,9 @@ function paintAnnotation(
       if (a.textOutline) {
         c.save();
         c.setLineDash([]);
-        c.strokeStyle = '#ffffff';
-        c.lineWidth = Math.max(2, size / 8);
+        const edge = outline?.(a,size,x,y,c.measureText(line)) || textOutline(a.color,size);
+        c.strokeStyle = edge.color;
+        c.lineWidth = edge.width;
         c.lineJoin = 'round';
         c.strokeText(line, x, y);
         c.restore();

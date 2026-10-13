@@ -17,6 +17,7 @@ const imageEditor:ImageEditorAPI={
   onCloseRequest:callback=>listen('image-project-close-request',callback),
   answerClose:(token,accepted)=>invoke('image-project-close-answer',token,accepted),
   saveWatermark:(token,value)=>invoke('image-project-watermark',token,value),
+  saveAnnotationStyle:(token,tool,style)=>invoke('image-project-annotation-style',token,tool,style),
   chooseWatermarkImage:token=>invoke('image-project-watermark-image',token),
   scanSensitive:(token,png)=>invoke('image-project-sensitive',token,png),
   cancelSensitive:token=>invoke('image-project-sensitive-cancel',token),

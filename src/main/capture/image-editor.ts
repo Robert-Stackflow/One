@@ -1,3 +1,4 @@
+import { annotationStylePreference, type AnnotationPreferencesHost } from '../../shared/capture/annotation-preferences';
 import { t as tr } from '../../shared/capture/i18n';
 import { dialog, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { basename } from 'node:path';
@@ -16,7 +17,7 @@ import { decodePng, pngDimensions } from './clipboard';
 import { saveImage } from './image-export';
 import { chooseWatermarkImage } from './watermark-image';
 import { defaultWatermarkPreset, watermarkPreset, type WatermarkPreset } from '../../shared/capture/watermark';
-export interface ImageEditorContext {
+export interface ImageEditorContext extends AnnotationPreferencesHost {
   /** One supplies the role, restricted preload, icon and common window policies. */
   createWindow(): BrowserWindow;
   register(name:string, handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
@@ -101,6 +102,7 @@ export class ImageEditorService {
       document: this.document,
       history: this.history,
       watermark: this.ctx.watermark?.() || defaultWatermarkPreset(),
+      annotationStyles: this.ctx.annotationStyles?.(),
       openedAt: this.openedAt,
       uiScale:ctx.uiScale?.()||100,
     }));
@@ -122,6 +124,11 @@ export class ImageEditorService {
     handle('watermark', (token, value) => {
       if (!token || token !== this.token || this.busy) throw Error('图片编辑已失效');
       return this.ctx.saveWatermark?.(watermarkPreset(value));
+    });
+    handle('annotation-style', (token, tool, value) => {
+      if (!token || token !== this.token || this.busy) throw Error('图片编辑已失效');
+      const preference = annotationStylePreference(tool,value);
+      return this.ctx.saveAnnotationStyle?.(preference.tool,preference.style);
     });
     handle('watermark-image', async (token) => {
       if (!token || token !== this.token || this.busy) throw Error('图片编辑已失效');

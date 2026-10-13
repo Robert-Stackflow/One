@@ -1,4 +1,4 @@
-body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-editor {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-annotation-overlay"]) .inline-annotation-editor {
   position: absolute;
   z-index: 2;
   padding: 0;
@@ -7,7 +7,7 @@ body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-edi
   background: transparent;
   transform-origin: 0 0;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-editor textarea {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-annotation-overlay"]) .inline-annotation-editor textarea {
   display: block;
   padding: 0;
   margin: 0;
@@ -25,9 +25,16 @@ body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-edi
   font-family: 'Segoe UI', 'Microsoft YaHei UI', sans-serif;
   user-select: text;
   cursor: text;
-  caret-color: currentColor;
+  caret-color: transparent;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .inline-annotation-editor textarea::placeholder {
-  color: #767676;
-  opacity: 1;
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-annotation-overlay"]) .inline-annotation-caret {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  user-select: none;
+  width: 1px;
+  animation: annotation-caret-blink 1s step-end infinite;
 }
+@keyframes annotation-caret-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .inline-annotation-caret { animation: none !important; } }

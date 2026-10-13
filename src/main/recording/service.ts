@@ -1,3 +1,4 @@
+import type { AnnotationPreferencesHost } from '../../shared/capture/annotation-preferences';
 import { RECORDING_PROJECT_FORMAT } from '../../shared/media-project';
 import { recordingWindowURL, type RecordingWindowHost, type RecordingWindowRole } from './window-host';
 import { AudioTestManager } from './audio-test';
@@ -61,7 +62,7 @@ import {
   type RecordingState,
   type RecordingSource,
 } from '../../shared/recording/recording';
-export interface RecordingContext {
+export interface RecordingContext extends AnnotationPreferencesHost {
   directory: string;
   windowHost: RecordingWindowHost;
   register(name: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown): void;
@@ -463,6 +464,8 @@ export class RecordingService {
       failed: (message) => this.sourceStopped(message),
     });
     this.annotationOverlay = new RecordingAnnotationOverlay(this.windowHost, {
+      annotationStyles:ctx.annotationStyles,
+      saveAnnotationStyle:ctx.saveAnnotationStyle,
       frame: async () => {
         const capture = this.capture,
           token = this.token;

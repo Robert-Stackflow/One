@@ -1,3 +1,4 @@
+import { annotationStylePreference, type AnnotationPreferencesHost } from '../../shared/capture/annotation-preferences';
 import { flushDesktopComposition } from './native';
 import { type BrowserWindow, clipboard, desktopCapturer, screen } from 'electron';
 import { ScrollNative, captureMonitorBounds } from './scroll-native';
@@ -75,7 +76,7 @@ interface CaptureRun {
   refresh(): Promise<Snapshot>;
   finish(value: Region | null): void;
 }
-export interface CaptureHost {
+export interface CaptureHost extends AnnotationPreferencesHost {
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:Electron.IpcMainInvokeEvent,...args:any[])=>unknown):void;
   fonts():Promise<import('../../shared/fonts').InstalledFont[]>;
@@ -206,6 +207,11 @@ export class CaptureService {
     register('capture-watermark', (e, token, value) => {
       if (token !== session(e).token) throw Error('截图会话已结束');
       return this.host.saveWatermark(watermarkPreset(value));
+    });
+    register('capture-annotation-style', (e, token, tool, value) => {
+      if (token !== session(e).token) throw Error('截图会话已结束');
+      const preference = annotationStylePreference(tool,value);
+      return this.host.saveAnnotationStyle?.(preference.tool,preference.style);
     });
     register('capture-watermark-image', async (e, token) => {
       const current = session(e);
@@ -437,6 +443,7 @@ export class CaptureService {
       image: `one-file://capture/${current.token}/${current.imageRevision}`,
       capturedAt: current.shot.capturedAt,
       watermark: this.host.watermark(),
+      annotationStyles: this.host.annotationStyles?.(),
       uiScale:this.host.uiScale(),
       name: current.shot.name,
       width: size.width,

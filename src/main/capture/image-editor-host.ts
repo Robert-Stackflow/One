@@ -1,3 +1,4 @@
+import type { AnnotationPreferencesHost } from '../../shared/capture/annotation-preferences';
 import type {BrowserWindow,IpcMainInvokeEvent} from 'electron';
 import {randomUUID} from 'node:crypto';
 import {ImageEditorService} from './image-editor';
@@ -7,7 +8,7 @@ import type {ImageProject} from '../../shared/capture/image-project';
 import type {CapturePreferences} from '../../shared/capture/settings';
 import type {WatermarkPreset} from '../../shared/capture/watermark';
 import type {InstalledFont} from '../../shared/fonts';
-interface Context {
+interface Context extends AnnotationPreferencesHost {
   createWindow():BrowserWindow;
   register(name:string,handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
   settings():CapturePreferences;

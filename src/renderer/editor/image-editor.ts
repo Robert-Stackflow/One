@@ -1,3 +1,4 @@
+import { annotationPreferences } from './annotation-preferences';
 import { annotationBrushCursor } from './annotation-brush-cursor';
 import { watermarkControls } from './watermark-controls';
 import { watermarkToolbar } from './watermark-toolbar';
@@ -66,6 +67,7 @@ let propertyUI: ReturnType<typeof captureProperties>;
 let watermarkBar: ReturnType<typeof watermarkToolbar> | undefined;
 
 const api = window.one.imageEditor!;
+const rememberedStyles = annotationPreferences(document,imageAnnotationIds,(tool,style)=>api.saveAnnotationStyle(data.token,tool,style),value=>message(value));
 const q = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fontFamilyControl=q<HTMLSelectElement>('font-family');
 const source = new Image(),
@@ -417,6 +419,7 @@ function setTool(next: CaptureTool) {
   crop = null;
   if (!annotations.retainsSelection(next)) annotations.clear();
   tool = next;
+  if (!annotations.selectedId) rememberedStyles.restore(next);
   q('annotation-tools').dispatchEvent(new CustomEvent('annotation-tool-change', { detail: tool }));
   document
     .querySelectorAll<HTMLButtonElement>('[data-tool]')
@@ -489,6 +492,7 @@ function saveWatermarkDefaults(draft = false) {
 }
 function updateStyle(style: Parameters<AnnotationEditor['update']>[0], preview = false) {
   if (!annotations || busy || cropGesture || annotations.active) return;
+  if (!preview) rememberedStyles.remember(textTarget?.tool || scene.annotations.find(mark=>mark.id===annotations.selectedId)?.tool || tool);
   if (textTarget) {
     Object.assign(textTarget, style);
     if (style.text !== undefined) q<HTMLTextAreaElement>('text-value').value = style.text;
@@ -543,6 +547,7 @@ bindAnnotationStyle(document, imageAnnotationIds, {
 });
 q('redaction-mode').onchange = () => {
   if (active()) return;
+  rememberedStyles.remember(tool);
   annotations.clear();
   options(tool);
   draw();
@@ -887,6 +892,8 @@ void api
   .state()
   .then(async (initial) => {
     data = initial;
+    rememberedStyles.load(initial.annotationStyles);
+    await Promise.all([...new Set(Object.values(initial.annotationStyles||{}).map(style=>style.fontFamily))].map(loadAnnotationFont));
     applyCaptureScale(document.body,initial.uiScale||100);
     source.crossOrigin='anonymous';
     source.src = initial.url;

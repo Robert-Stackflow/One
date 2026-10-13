@@ -11,6 +11,7 @@ import { recordingWindowURL, type RecordingWindowHost, type RecordingWindowRole 
 import { defaultCameraStyle, type CameraStyle } from '../../src/shared/recording/recording-camera';
 import { defaultInputStyle, type RecordingInput } from '../../src/shared/recording/recording-input';
 import { defaultAnnotationStyle } from '../../src/shared/recording/recording-annotations';
+import { annotationStylesFrom } from '../../src/shared/capture/annotation-preferences';
 import type { RecordingState } from '../../src/shared/recording/recording';
 import type { VideoReady } from '../../src/shared/recording/native-video';
 
@@ -137,7 +138,8 @@ async function run() {
   const lateStyle=cameraOverlay.setStyle(defaultCameraStyle());cameraOverlay.close();releaseLayout();await lateStyle;
   assert.ok(window.isDestroyed());assert.equal(cameraOverlay.currentStyle,undefined);
 
-  const annotation=new RecordingAnnotationOverlay(host,{valid,scene:async()=>{},frame:async()=>({}) as any,failed:()=>{failures++;},raised:()=>{raised++;},selected:()=>{selected++;},controls:()=>[{x:dip.x+50,y:dip.y+50,width:100,height:30}]});
+  const annotationStyles=annotationStylesFrom();let styleWrites=0;
+  const annotation=new RecordingAnnotationOverlay(host,{annotationStyles:()=>annotationStyles,saveAnnotationStyle:async(tool,style)=>{annotationStyles[tool as keyof typeof annotationStyles]=style;styleWrites++;},valid,scene:async()=>{},frame:async()=>({}) as any,failed:()=>{failures++;},raised:()=>{raised++;},selected:()=>{selected++;},controls:()=>[{x:dip.x+50,y:dip.y+50,width:100,height:30}]});
   await annotation.open(state.token,physical.width,physical.height,bounds);window=annotation.window!;
   await scopedBridge(window,'recordingAnnotation');
   assert.equal(protections.get(window),true);assert.equal(passthrough.get(window),true);
@@ -145,6 +147,13 @@ async function run() {
   await wrongOwner(window,'recording-annotation-state');await wrongFrame(window,'recording-annotation-state');
   await annotation.command({kind:'tool',tool:'brush'});assert.equal(annotation.interactive,true);assert.equal(passthrough.get(window),false);
   await call(window,'recording-annotation-selected',state.token,'brush',defaultAnnotationStyle());assert.equal(selected,1);assert.ok(raised>0);
+  assert.equal(styleWrites,0,'Selecting existing annotations must not replace defaults');
+  await annotation.command({kind:'style',style:{...annotation.style,color:'#4488cc',width:9}});
+  await annotation.command({kind:'tool',tool:'text'});assert.equal(annotation.style.width,3);
+  await annotation.command({kind:'style',style:{...annotation.style,fontWeight:700,italic:true,textOutline:true}});
+  await annotation.command({kind:'tool',tool:'brush'});assert.equal(annotation.style.width,9);assert.equal(annotation.style.fontWeight,400);
+  await annotation.command({kind:'tool',tool:'text'});assert.equal(annotation.style.textOutline,true);assert.equal(annotation.style.italic,true);assert.equal(annotation.style.fontWeight,700);
+  assert.equal(styleWrites,2);
   const flush=annotation.flush();assert.equal(annotation.flush(),flush);await drain();
   const flushPacket=await lastPacket(window,'one:recording-annotation-changed');assert.ok(flushPacket.flush);
   await call(window,'recording-annotation-flushed',state.token,'other','');

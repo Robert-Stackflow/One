@@ -1,3 +1,4 @@
+import { remembersAnnotationTool, type AnnotationPreferencesHost } from '../../shared/capture/annotation-preferences';
 import { recordingWindowURL, type RecordingWindowHost } from './window-host';
 import { screen, type BrowserWindow, type Rectangle } from 'electron';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +12,7 @@ import {
 } from '../../shared/recording/recording-annotations';
 import type { ImageDocument, CaptureTool } from '../../shared/capture/image-document';
 const URL = recordingWindowURL('recording-annotation-overlay');
-interface Actions {
+interface Actions extends AnnotationPreferencesHost {
   valid(token: string): boolean;
   scene(value: ImageDocument): Promise<void>;
   frame(): Promise<RecordingAnnotationFrame>;
@@ -100,7 +101,7 @@ export class RecordingAnnotationOverlay {
       height,
       interactive: false,
       tool: 'brush',
-      style: defaultAnnotationStyle(),
+      style: this.actions.annotationStyles?.().brush || defaultAnnotationStyle(),
     };
     const rect = bounds();
     if (!rect) throw Error('无法定位录制标注区域');
@@ -162,7 +163,13 @@ export class RecordingAnnotationOverlay {
       this.packet.tool = command.tool;
       this.selectedTool = undefined;
       this.packet.interactive = true;
-    } else if (command.kind === 'style') this.packet.style = command.style;
+      if (remembersAnnotationTool(command.tool)) this.packet.style = this.actions.annotationStyles?.()[command.tool] || defaultAnnotationStyle();
+    } else if (command.kind === 'style') {
+      this.packet.style = command.style;
+      const tool = this.selectedTool || this.packet.tool;
+      if (remembersAnnotationTool(tool)) await this.actions.saveAnnotationStyle?.(tool,command.style);
+      if (!this.window || !this.actions.valid(this.packet.token)) return;
+    }
     this.window.setFocusable(this.packet.interactive);
     // Changing focusability updates native extended styles on Windows.
     this.window.setSkipTaskbar(true);

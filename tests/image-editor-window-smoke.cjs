@@ -25,6 +25,14 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await assert.rejects(main.evaluate(id=>window.one.materialsRemoveImage(id),id),/关闭当前图片编辑/);
     assert.equal(await editor.evaluate(()=>typeof window.one.patchSettings),'undefined');
     await expect(editor.locator('#save')).toBeEnabled();
+    await editor.locator('[data-tool="text"]:visible').click();
+    for(const name of ['加粗','斜体','描边']) await editor.getByRole('button',{name,exact:true}).click();
+    await editor.evaluate(()=>{const color=document.getElementById('color');color.value='#f0e060';color.dispatchEvent(new Event('change',{bubbles:true}));});
+    await expect.poll(()=>main.evaluate(async()=>(await window.one.settings()).capture.annotationStyles.text)).toMatchObject({color:'#f0e060',fontWeight:700,italic:true,textOutline:true});
+    await editor.locator('[data-tool="rectangle"]:visible').click();
+    assert.equal(await editor.locator('#color').inputValue(),'#e34e4e');
+    await editor.locator('[data-tool="text"]:visible').click();
+    await expect(editor.getByRole('button',{name:'描边',exact:true})).toHaveAttribute('aria-pressed','true');
     const workerAsset=(await fs.readdir(path.resolve('dist/renderer/assets'))).find(name=>/^mosaic-worker-.*\.js$/.test(name));assert(workerAsset);
     const matching=await editor.evaluate(url=>new Promise((resolve,reject)=>{
       const worker=new Worker(url,{type:'module'}),timer=setTimeout(()=>{worker.terminate();reject(Error('Matching worker timeout'));},5000);
@@ -62,7 +70,27 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await editor.locator('#undo').click();await expect(editor.locator('#steps')).toHaveText('0 个标注');
     await editor.locator('#redo').click();await expect(editor.locator('#steps')).toHaveText('1 个标注');
     await editor.locator('[data-tool="text"]:visible').click();
+    await editor.evaluate(()=>{const size=document.getElementById('text-size');size.value='96';size.dispatchEvent(new Event('change',{bubbles:true}));});
     const canvas=await editor.locator('#overlay').boundingBox();await editor.mouse.click(canvas.x+canvas.width*.1,canvas.y+canvas.height*.1);
+    assert.equal(await editor.locator('#color').inputValue(),'#f0e060');
+    for(const name of ['加粗','斜体','描边']) await expect(editor.getByRole('button',{name,exact:true})).toHaveAttribute('aria-pressed','true');
+    const emptyInput=await editor.locator('#text-value').boundingBox();
+    const textGeometry=()=>editor.evaluate(async()=>{
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const input=document.getElementById('text-value'),form=input.form,caret=form.querySelector('.inline-annotation-caret');
+      const frame=document.getElementById('annotation-selection').getBoundingClientRect(),position=form.getBoundingClientRect();
+      const context=document.createElement('canvas').getContext('2d');context.font=input.style.font;context.textBaseline='top';
+      const glyph=context.measureText('输入文字'),scale=new DOMMatrix(getComputedStyle(form).transform).a;
+      return {frame:frame.toJSON(),caret:caret.getBoundingClientRect().toJSON(),caretHidden:caret.hidden,lineHeight:parseFloat(getComputedStyle(input).lineHeight)*scale,
+        bottomGap:frame.bottom-(position.top+glyph.actualBoundingBoxDescent*scale),topGap:position.top-glyph.actualBoundingBoxAscent*scale-frame.top};
+    });
+    const empty=await textGeometry();assert(empty.bottomGap<12,JSON.stringify(empty));assert(empty.topGap<12,JSON.stringify(empty));
+    await editor.screenshot({path:path.join(root,'text-input-empty.png'),clip:{x:empty.frame.x-12,y:empty.frame.y-12,width:empty.frame.width+24,height:empty.frame.height+24}});
+    await editor.locator('#text-value').fill('中');assert.deepEqual(await editor.locator('#text-value').boundingBox(),emptyInput);
+    const first=await textGeometry();assert.deepEqual(first.frame,empty.frame);assert.equal(first.caret.y,empty.caret.y);assert.equal(first.caret.height,empty.caret.height);
+    await editor.locator('#text-value').fill('中\n文');const multiline=await textGeometry();assert(Math.abs(multiline.frame.height-first.frame.height-first.lineHeight)<1,JSON.stringify({first,multiline}));
+    await editor.locator('#text-value').fill('');assert.deepEqual((await textGeometry()).frame,empty.frame);
+    await fs.writeFile(path.join(root,'text-input-geometry.json'),JSON.stringify({empty,first,multiline},null,2));
     await editor.locator('#text-value').fill('One 标注');await editor.locator('#text-value').press('Control+Enter');
     await expect(editor.locator('#steps')).toHaveText('2 个标注');
     const font=await editor.evaluate(async()=>{const fonts=await window.one.imageEditor.fonts();return fonts.find(font=>font.family==='Arial')||fonts[0];});assert(font);

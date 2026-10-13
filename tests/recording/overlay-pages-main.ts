@@ -48,7 +48,8 @@ async function main(){
   handle('recording-camera-state',()=>camera);handle('recording-camera-style',(token,style)=>{assert.equal(token,'camera');camera.style=style;if(style.shape==='circle')cameraWindow.setContentSize(234,234);cameraWindow.webContents.send('one:recording-camera-changed',camera);});handle('recording-camera-drag',()=>{});
   const packet:AnnotationPacket={token:'annotation',width:400,height:240,interactive:true,tool:'rectangle',style:defaultAnnotationStyle()};let scene:ImageDocument|undefined;
   handle('recording-annotation-state',()=>packet);handle('recording-annotation-scene',(token,value)=>{assert.equal(token,'annotation');scene=value;});handle('recording-annotation-selected',()=>{});handle('recording-annotation-flushed',()=>{});
-  handle('recording-annotation-frame',()=>({width:2,height:2,pixels:new Uint8Array(16)}));
+  let annotationFrames=0;
+  handle('recording-annotation-frame',()=>{annotationFrames++;return {width:2,height:2,pixels:new Uint8Array(16).fill(245)};});
 
   const countdown=await open('recording-countdown',400,400);
   await until(()=>js(countdown,"document.getElementById('seconds').textContent==='3'"),'countdown initial');
@@ -90,6 +91,19 @@ async function main(){
   annotation.webContents.send('one:recording-annotation-changed',{...packet,flush:'fixture-flush'});
   await until(()=>calls.some(c=>c.name==='recording-annotation-flushed'&&c.args[1]==='fixture-flush'&&c.args[2]===''),'annotation flush');
   await until(async()=>await js(annotation,canvasPixels)>100,'annotation canvas');
+  packet.tool='text';packet.style={...packet.style,textOutline:true};
+  annotation.webContents.send('one:recording-annotation-changed',{...packet,command:{kind:'tool',tool:'text'}});
+  await until(()=>js(annotation,"document.documentElement.dataset.tool==='text'"),'text tool');
+  pointer(annotation,45,160,'mouseDown');pointer(annotation,45,160,'mouseUp');
+  await until(()=>js(annotation,"document.querySelector('textarea').getBoundingClientRect().width>0"),'inline text');
+  const beforeText=await js(annotation,"(()=>{const input=document.querySelector('textarea'),rect=input.getBoundingClientRect();return {x:rect.x,y:rect.y,width:rect.width,height:rect.height,position:getComputedStyle(input.form).position};})()");
+  assert.equal(beforeText.position,'absolute');assert.ok(beforeText.y>=0&&beforeText.y+beforeText.height<=240);
+  await js(annotation,"(()=>{const input=document.querySelector('textarea');input.value='中';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  const afterText=await js(annotation,"(()=>{const rect=document.querySelector('textarea').getBoundingClientRect();return {x:rect.x,y:rect.y,width:rect.width,height:rect.height,position:getComputedStyle(document.querySelector('textarea').form).position};})()");
+  assert.deepEqual(afterText,beforeText,'First character must not shift the editing box');
+  await js(annotation,"(()=>{const input=document.querySelector('textarea');input.value='One';input.dispatchEvent(new Event('input',{bubbles:true}));input.form.requestSubmit();})()");
+  await until(()=>scene?.annotations.some(mark=>mark.tool==='text'&&mark.textOutline),'outlined recording text');
+  await until(()=>annotationFrames>0,'recording outline background sampling');
   const fonts=await js(cameraWindow,"[getComputedStyle(document.body).fontFamily,getComputedStyle(document.documentElement).getPropertyValue('--ui-font').trim()]");assert.ok(fonts[1]);assert.equal(fonts[0].replace(/['"\s]/g,''),fonts[1].replace(/['"\s]/g,''));
   for(const window of windows)assert.equal(await js(window,'document.documentElement.scrollWidth>innerWidth'),false);
   for(const [name,window] of [['countdown',countdown],['region',region],['outline',outline],['input',inputWindow],['camera',cameraWindow],['annotation',annotation]] as const){
