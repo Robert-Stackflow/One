@@ -29,6 +29,8 @@
 
 已按 [OCR、翻译与长截图重构计划](OCR翻译与长截图-重构调研与实施计划.md) 开始实施；当前先完成快照稳定性，再推进 OCR 与统一服务。不恢复原迁移目标，也不将分批实现视为整个重构完成。
 
+DeepSeek-OCR v1/v2 已纳入适配目标，并通过固定 Q8 文件与 Windows 原生 CPU/CUDA 独立推理验证；尚未接入模型目录与窗口。下一步完成按需运行包、缓存/租约、设备身份映射、后台任务和取消，再验收真实文档与图上几何。已有验证权重继续复用，不重复下载；详见上述计划中的原生可行性记录。
+
 - [ ] A（进行中）：已复现并修复多窗口组合缺少 `composition` 标记、归档误用首张窗口原图导致“图片原图已改变”；快照元数据冻结、逐窗口身份核验与一次尺寸重采、候选刷新解码后提交、布局变化/失败保留旧图、离线导出与实时定位分离已实现。`capture-snapshot-window-smoke.cjs` 通过真实双窗口的移动/缩放/最小化/关闭、候选放弃/提交/过期和模拟显示器变化后保存；`capture-window-smoke.cjs` 原有标注/取消重试/素材编辑/贴图/退出回归通过。OCR/公式各尺寸 Windows 实测、CPU/GPU 矩阵和默认档仍待完成；历史用户环境报错尚未独立复现。
 
   A 的 OCR 原型已接入 PP-OCRv6 tiny 官方 ONNX 检测/识别、BGR 归一化、DB 文本框/扩框、透视裁剪及 CTC 解码，固定两个仓库版本和四份文件的大小/SHA-256。ORT 1.30.0 的 CPU/DirectML 设备 0 通过 60 张合成单行（CER=0）和中英三行、深色、顺时针 90° 三类合成整图；同图 Tesseract 三类均识别出预期文字。紧裁剪单行暴露了扩框重叠导致重复识别数字的问题，已按共线重叠区域合并后识别，CPU/DirectML 回归通过。单行 CPU 较快，整图 DirectML 热运行较快、冷启动有开销；进程 RSS 已记录，显存未测。`node scripts/prepare-recognition-benchmark.mjs --prepare` 显式准备约 6 MiB 官方权重与配置，去掉 `--prepare` 仅校验；`node tests/recognition-paddle-runtime.cjs` 重复基准。记录在 `work/current/capture-reconstruction/paddle-*-benchmark.json`。这仍是引擎原型，未接入用户模型管理/选择，默认 Tesseract 未变；真实截图、其他尺寸/家族、具体显卡映射、共享管理与默认档验收待继续。
