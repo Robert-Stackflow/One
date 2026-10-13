@@ -1,0 +1,699 @@
+@import '../editor/layout.css';
+@import '../editor/window.css';
+@import './recording-properties.css';
+body[data-view="recording-player"] #app {
+  display: flex;
+  flex-direction: column;
+}
+body[data-view="recording-player"] #app > .media-header {
+  flex-shrink: 0;
+}
+body[data-view="recording-player"] main#result {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body[data-view="recording-player"] .player-toolstrip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  flex: 1;
+}
+body[data-view="recording-player"] .player-toolstrip > .player-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 9px;
+  min-height: 32px;
+  font-size: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  border-radius: 7px;
+}
+body[data-view="recording-player"] .player-toolstrip > .player-tool:hover {
+  background: var(--hover);
+}
+body[data-view="recording-player"] .player-toolstrip > .player-tool[aria-expanded='true'] {
+  background: var(--selected);
+}
+body[data-view="recording-player"] .player-tool svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
+}
+body[data-view="recording-player"] .player-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+body[data-view="recording-player"] .player-view {
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+  background: var(--stage);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+body[data-view="recording-player"] .player-canvas-space {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body[data-view="recording-player"] .media-stage {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  min-width: 0;
+  border-radius: 8px;
+  background: transparent;
+  overflow: hidden;
+  box-shadow: 0 4px 20px #0002;
+}
+body[data-view="recording-player"] #preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+body[data-view="recording-player"] .media-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+body[data-view="recording-player"] #cursor-inverse {
+  mix-blend-mode: difference;
+}
+body[data-view="recording-player"] #audio-picture {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #999;
+}
+body[data-view="recording-player"] #audio-picture svg {
+  width: 64px;
+  height: 64px;
+  stroke-width: 1;
+}
+body[data-view="recording-player"] .player-transport {
+  flex: none;
+  width: min(700px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  padding: 0 8px;
+}
+body[data-view="recording-player"] .player-transport #seek {
+  display: block;
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+body[data-view="recording-player"] .playback-row,
+body[data-view="recording-player"] .playback-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body[data-view="recording-player"] .playback-buttons button {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 6px;
+  color: var(--text);
+  border: 0;
+  background: transparent;
+}
+body[data-view="recording-player"] .playback-buttons button:hover {
+  background: var(--hover);
+}
+body[data-view="recording-player"] .playback-buttons #play {
+  border-radius: 50%;
+  background: var(--selected);
+}
+body[data-view="recording-player"] .playback-buttons svg {
+  width: 20px;
+  height: 20px;
+}
+body[data-view="recording-player"] #play-time {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+body[data-view="recording-player"] .playback-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+body[data-view="recording-player"] .playback-speed > span:not(.custom-select-wrap) {
+  display: none;
+}
+body[data-view="recording-player"] .playback-speed .custom-select-wrap {
+  width: 76px;
+}
+body[data-view="recording-player"] .player-transport .custom-select {
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 8px;
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+body[data-view="recording-player"] #player-properties {
+  display: contents;
+}
+body[data-view="recording-player"] #player-properties > .player-tool-panel {
+  display: none;
+}
+body[data-view="recording-player"] #player-properties > .player-tool-panel:popover-open:not([hidden]) {
+  display: block;
+  padding: 18px;
+}
+body[data-view="recording-player"] #player-properties > .player-tool-panel > :is(summary, h2) {
+  display: none;
+}
+body[data-view="recording-player"] .tool-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+body[data-view="recording-player"] .tool-panel-heading strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+body[data-view="recording-player"] .tool-panel-heading button {
+  display: flex;
+  padding: 4px;
+  min-height: 26px;
+}
+body[data-view="recording-player"] .tool-panel-heading button svg {
+  width: 16px;
+  height: 16px;
+}
+body[data-view="recording-player"] #player-properties .player-tool-panel label {
+  font-size: 12px;
+  font-weight: 400;
+}
+body[data-view="recording-player"] #player-properties .player-tool-panel fieldset {
+  min-width: 0;
+}
+body[data-view="recording-player"] #player-properties .export-note {
+  display: none;
+}
+body[data-view="recording-player"] #player-properties .input-style-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+body[data-view="recording-player"] #player-properties .frame-list,
+body[data-view="recording-player"] #player-properties .gif-frames {
+  max-height: none;
+  overflow: visible;
+}
+body[data-view="recording-player"] .editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 12px 18px;
+  min-height: 58px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+}
+body[data-view="recording-player"] .player-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+body[data-view="recording-player"] #summary {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+body[data-view="recording-player"] .player-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+body[data-view="recording-player"] .player-actions button {
+  font-size: 12px;
+  min-height: 32px;
+}
+body[data-view="recording-player"] [hidden] {
+  display: none !important;
+}
+@media (max-width: 740px) {
+  body[data-view="recording-player"] .player-view {
+    padding: 12px;
+  }
+  body[data-view="recording-player"] .editor-footer {
+    padding: 10px 12px;
+  }
+  body[data-view="recording-player"] .player-transport {
+    padding: 0 4px;
+  }
+  body[data-view="recording-player"] .playback-row,
+  body[data-view="recording-player"] .playback-buttons {
+    gap: 4px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="recording-player"] .player-transport {
+    transition: none;
+  }
+}
+
+body[data-view="recording-player"] #player-properties h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+body[data-view="recording-player"] #player-properties .player-tool-panel details {
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+  margin: 0;
+}
+body[data-view="recording-player"] #player-properties summary {
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+body[data-view="recording-player"] #player-properties summary::marker {
+  color: var(--muted);
+}
+body[data-view="recording-player"] #player-properties .help {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+body[data-view="recording-player"] #player-properties .input-style-grid {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+body[data-view="recording-player"] #player-properties .input-style-grid > label {
+  font-size: 12px;
+}
+body[data-view="recording-player"] #player-properties .input-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  margin: 14px 0 4px;
+}
+body[data-view="recording-player"] .channel-row {
+  display: grid;
+  grid-template-columns: 1fr 26px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 12px;
+}
+body[data-view="recording-player"] .channel-row button {
+  width: 26px;
+  min-height: 26px;
+  padding: 4px;
+  border: 0;
+}
+body[data-view="recording-player"] .channel-row input {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0;
+  width: 100%;
+}
+body[data-view="recording-player"] .channel-row output {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  color: var(--muted);
+  font-size: 11px;
+}
+body[data-view="recording-player"] .export-note {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+body[data-view="recording-player"] #export-progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: 12px;
+  accent-color: var(--text);
+}
+body[data-view="recording-player"] #export-status {
+  overflow-wrap: anywhere;
+}
+body[data-view="recording-player"] #gif-controls {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+body[data-view="recording-player"] #gif-controls label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+}
+body[data-view="recording-player"] #gif-controls input[type='number'] {
+  width: 90px;
+  max-width: 50%;
+}
+body[data-view="recording-player"] #gif-position {
+  width: 100%;
+}
+body[data-view="recording-player"] #gif-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 8px 0;
+}
+body[data-view="recording-player"] #gif-frames button {
+  padding: 4px 6px;
+  min-width: 24px;
+  font-size: 11px;
+}
+body[data-view="recording-player"] #gif-frames [aria-pressed='true'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+body[data-view="recording-player"] #gif-controls .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+body[data-view="recording-player"] #gif-controls input[type='text'] {
+  width: 140px;
+  max-width: 60%;
+}
+body[data-view="recording-player"] #gif-controls details {
+  margin: 10px 0;
+}
+body[data-view="recording-player"] #gif-quality-dialog {
+  width: min(840px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+}
+body[data-view="recording-player"] #gif-quality-dialog::backdrop {
+  background: #0009;
+}
+body[data-view="recording-player"] .gif-quality-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+body[data-view="recording-player"] .gif-quality-heading h2 {
+  margin: 0;
+}
+body[data-view="recording-player"] #gif-quality-image {
+  display: block;
+  max-width: 100%;
+  max-height: 50vh;
+  margin: 12px auto;
+  object-fit: contain;
+  background: #151515;
+}
+
+body[data-view="recording-player"] .media-stage .overlay-drag-target {
+  position: absolute;
+  z-index: 6;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  touch-action: none;
+  cursor: grab;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+body[data-view="recording-player"] .media-stage .overlay-drag-target:is(:hover, :focus-visible, [data-selected], [data-dragging]) {
+  border-color: #388fe7;
+  border-radius: 0;
+  box-shadow: 0 0 0 1px #ffffffa0;
+  background: transparent;
+}
+body[data-view="recording-player"] .media-stage .overlay-drag-target[data-dragging] {
+  cursor: grabbing;
+}
+body[data-view="recording-player"] .overlay-resize-handle {
+  display: none;
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border: 1px solid #388fe7;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+}
+body[data-view="recording-player"] .overlay-drag-target:is([data-selected], :focus-visible) .overlay-resize-handle {
+  display: block;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='nw'] {
+  left: 0;
+  top: 0;
+  cursor: nwse-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='n'] {
+  left: 50%;
+  top: 0;
+  cursor: ns-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='ne'] {
+  left: 100%;
+  top: 0;
+  cursor: nesw-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='e'] {
+  left: 100%;
+  top: 50%;
+  cursor: ew-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='se'] {
+  left: 100%;
+  top: 100%;
+  cursor: nwse-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='s'] {
+  left: 50%;
+  top: 100%;
+  cursor: ns-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='sw'] {
+  left: 0;
+  top: 100%;
+  cursor: nesw-resize;
+}
+body[data-view="recording-player"] .overlay-resize-handle[data-handle='w'] {
+  left: 0;
+  top: 50%;
+  cursor: ew-resize;
+}
+body[data-view="recording-player"] #player-properties :is(#camera-preview-controls, #input-preview-controls) .input-style-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+body[data-view="recording-player"] #player-properties
+  :is(#camera-preview-controls, #input-preview-controls)
+  .input-style-grid
+  > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+body[data-view="recording-player"] #player-properties
+  :is(#camera-preview-controls, #input-preview-controls)
+  .input-style-grid
+  > :is(
+    .input-toggle,
+    label:has(select),
+    label:has(input[type='color']),
+    label:has(input[id$='-size']),
+    label:has(input[id$='-width'])
+  ) {
+  grid-column: 1 / -1;
+}
+body[data-view="recording-player"] #player-properties
+  :is(#camera-preview-controls, #input-preview-controls)
+  .input-style-grid
+  > .input-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+}
+body[data-view="recording-player"] #player-properties
+  :is(#camera-preview-controls, #input-preview-controls)
+  .property-section-title:not(:first-child) {
+  margin-top: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+body[data-view="recording-player"] #player-properties .camera-panel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 16px;
+}
+
+html body[data-view="recording-player"] .editor-commandbar .player-toolstrip > .player-tool {
+  width: auto;
+  min-width: 68px;
+  height: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+body[data-view="recording-player"] #export-settings .export-output-fields,
+body[data-view="recording-player"] #export-settings .export-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+body[data-view="recording-player"] #export-settings :is(.export-output-fields, .export-range-fields) > label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 5px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+body[data-view="recording-player"] #export-settings :is(.custom-select-wrap, .number-control) {
+  width: 100%;
+  max-width: none;
+  flex: 1 0 100%;
+  min-width: 0;
+  color: var(--fg);
+}
+body[data-view="recording-player"] #export-settings .export-summary {
+  margin: 12px 0 18px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+body[data-view="recording-player"] #export-settings .export-range {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+body[data-view="recording-player"] #export-settings .export-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+body[data-view="recording-player"] #export-settings .export-section-heading strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+body[data-view="recording-player"] #export-settings .export-section-heading button {
+  min-height: 28px;
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+body[data-view="recording-player"] #export-settings .export-unit {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+}
+body[data-view="recording-player"] #export-settings #export-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+body[data-view="recording-player"] #export-settings #export-preview svg {
+  width: 14px;
+  height: 14px;
+}
+body[data-view="recording-player"] #export-settings .export-panel-actions {
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+body[data-view="recording-player"] #export-settings #export-start {
+  flex: 1;
+  min-height: 36px;
+}
+body[data-view="recording-player"] #export-settings .export-feedback {
+  margin-top: 10px;
+}
+body[data-view="recording-player"] #export-settings #export-progress {
+  width: 100%;
+  height: 4px;
+}
+body[data-view="recording-player"] #export-settings #export-status {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+body[data-view="recording-player"] #export-settings .export-feedback:has(#export-progress[hidden]):has(#export-status:empty) {
+  display: none;
+}

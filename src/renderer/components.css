@@ -1,6 +1,8 @@
 @import './feedback.css';
 @import './color-picker.css';
 .anchored-popover[popover]{position:fixed;inset:auto;margin:0;box-sizing:border-box;animation:none!important}
+.one-popover[popover]{border:1px solid var(--line);border-radius:var(--panel-radius);background:var(--surface);color:var(--fg);box-shadow:var(--shadow);overscroll-behavior:contain}
+.one-popover::backdrop{background:transparent}
 .tabs{position:relative;isolation:isolate}.tabs.segment-ready::before{content:"";position:absolute;left:0;top:0;width:var(--segment-width);height:var(--segment-height);transform:translate(var(--segment-x),var(--segment-y));background:var(--surface);border-radius:999px;box-shadow:0 1px 3px #0000000d;transition:transform .22s cubic-bezier(.2,.8,.2,1),width .22s cubic-bezier(.2,.8,.2,1),height .22s cubic-bezier(.2,.8,.2,1);pointer-events:none;z-index:0}.tabs.segment-ready>button.selected,.tabs.segment-ready>button[aria-selected=true],.tabs.segment-ready>button[aria-pressed=true]{background:transparent;box-shadow:none}.tabs>button{position:relative;z-index:1}
 .one-dialog{padding:0;width:440px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);overflow:hidden;border-radius:var(--panel-radius);box-shadow:0 12px 36px #00000014,0 2px 6px #00000008}
 .one-dialog-heading{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:16px;padding:20px 24px 8px}

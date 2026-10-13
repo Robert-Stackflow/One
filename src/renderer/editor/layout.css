@@ -6,11 +6,11 @@ body[data-view="image-editor"] .image-workbench > .feedback-inline:empty {
   display: none;
 }
 @media (max-width: 1000px) {
-  body[data-view="image-editor"] .editor-commandbar {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar {
     gap: 8px;
     padding: 8px 12px;
   }
-  body[data-view="image-editor"] .editor-commandbar button {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button {
     font-size: calc(11px * var(--text-scale, 1));
     padding: 5px 7px;
   }
@@ -28,10 +28,10 @@ body[data-view="image-editor"] .image-workbench > .feedback-inline:empty {
   }
 }
 @media (max-width: 800px) {
-  body[data-view="image-editor"] .editor-commandbar {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar {
     align-items: flex-start;
   }
-  body[data-view="image-editor"] .editor-commandbar .actions {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .actions {
     flex-direction: column;
   }
   body[data-view="image-editor"] .image-workbench .editor-layout {
@@ -57,7 +57,7 @@ body[data-view="image-editor"] main.image-workbench {
   padding: 0;
   gap: 0;
 }
-body[data-view="image-editor"] .editor-commandbar {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar {
   display: flex;
   gap: 12px;
   padding: 10px 18px;
@@ -65,7 +65,7 @@ body[data-view="image-editor"] .editor-commandbar {
   flex-shrink: 0;
   align-items: center;
 }
-body[data-view="image-editor"] .editor-commandbar > .toolbar {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .toolbar {
   flex: 1;
   flex-direction: row;
   align-items: center;
@@ -74,24 +74,24 @@ body[data-view="image-editor"] .editor-commandbar > .toolbar {
   gap: 2px;
   border: 0;
 }
-body[data-view="image-editor"] .editor-commandbar button {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button {
   border: 0;
   background: transparent;
   padding: 6px 9px;
   font-size: calc(12px * var(--text-scale, 1));
   min-height: 30px;
 }
-body[data-view="image-editor"] .editor-commandbar .toolbar button.active {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .toolbar button.active {
   background: var(--selected);
 }
-body[data-view="image-editor"] .editor-commandbar .toolbar .divider {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .toolbar .divider {
   height: 18px;
   width: 1px;
   border: 0;
   background: var(--line);
   margin: 0 6px;
 }
-body[data-view="image-editor"] .editor-commandbar .actions {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .actions {
   flex-wrap: nowrap;
   gap: 2px;
 }
@@ -171,24 +171,24 @@ body[data-view="image-editor"] .editor-footer button.quiet {
   border: 0;
 }
 
-body[data-view="image-editor"] .editor-commandbar {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar {
   align-items: flex-start;
   min-width: 0;
   gap: 12px;
   padding: 6px 16px;
 }
-body[data-view="image-editor"] .editor-commandbar > .toolbar {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .toolbar {
   flex-wrap: wrap;
   overflow: visible;
   min-width: 0;
   align-items: center;
   margin: 0;
 }
-body[data-view="image-editor"] .editor-commandbar > .toolbar > button,
-body[data-view="image-editor"] .editor-commandbar > .toolbar > .divider {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .toolbar > button,
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .toolbar > .divider {
   flex-shrink: 0;
 }
-body[data-view="image-editor"] .editor-commandbar > .actions {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .actions {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -198,27 +198,27 @@ body[data-view="image-editor"] .editor-commandbar > .actions {
   margin: 0;
   padding: 0;
 }
-body[data-view="image-editor"] .editor-commandbar button {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button {
   height: 32px;
   min-height: 32px;
   line-height: 1;
   padding: 5px 9px;
 }
-body[data-view="image-editor"] .editor-commandbar button.quiet:hover {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button.quiet:hover {
   background: var(--hover);
 }
-body[data-view="image-editor"] .editor-commandbar button.active {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button.active {
   background: var(--selected);
 }
-body[data-view="image-editor"] .editor-commandbar .image-shape-tool {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .image-shape-tool {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
 }
-body[data-view="image-editor"] .editor-commandbar .image-shape-tool .custom-select {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .image-shape-tool .custom-select {
   width: auto;
 }
-body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar #shape-kind-trigger {
   display: flex;
   height: 32px;
   min-height: 32px;
@@ -228,10 +228,10 @@ body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger {
   gap: 7px;
   box-shadow: none;
 }
-body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger.active {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar #shape-kind-trigger.active {
   background: var(--selected);
 }
-body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger:hover {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar #shape-kind-trigger:hover {
   background: var(--hover);
 }
 body[data-view="image-editor"] .shape-symbol {
@@ -241,24 +241,24 @@ body[data-view="image-editor"] .shape-symbol svg {
   width: 17px;
   height: 17px;
 }
-body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger > svg {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar #shape-kind-trigger > svg {
   width: 12px;
   height: 12px;
 }
-body[data-view="image-editor"] .editor-commandbar .image-transform-tools {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .image-transform-tools {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
 }
 @media (max-width: 800px) {
-  body[data-view="image-editor"] .editor-commandbar .image-transform-tools button {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .image-transform-tools button {
     width: 32px;
     min-width: 32px;
     justify-content: center;
     padding-inline: 5px;
   }
-  body[data-view="image-editor"] .editor-commandbar .image-transform-tools button > span {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar .image-transform-tools button > span {
     display: none;
   }
   body[data-view="image-editor"] .image-workbench footer.editor-footer .status {
@@ -266,15 +266,15 @@ body[data-view="image-editor"] .editor-commandbar .image-transform-tools {
   }
 }
 @media (max-width: 800px) {
-  body[data-view="image-editor"] .editor-commandbar > .toolbar > button,
-  body[data-view="image-editor"] .editor-commandbar > .actions > button {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .toolbar > button,
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .actions > button {
     width: 32px;
     min-width: 32px;
     justify-content: center;
     padding-inline: 5px;
     font-size: 0;
   }
-  body[data-view="image-editor"] .editor-commandbar #shape-kind-trigger {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar #shape-kind-trigger {
     width: 42px;
     min-width: 42px;
     justify-content: center;
@@ -282,8 +282,8 @@ body[data-view="image-editor"] .editor-commandbar .image-transform-tools {
     gap: 2px;
     font-size: 0;
   }
-  body[data-view="image-editor"] .editor-commandbar > .toolbar > button svg,
-  body[data-view="image-editor"] .editor-commandbar > .actions > button svg {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .toolbar > button svg,
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar > .actions > button svg {
     flex-shrink: 0;
   }
 }
@@ -337,7 +337,7 @@ body[data-view="image-editor"] .image-workbench .color-picker-trigger {
   font-size: 10px;
 }
 
-body[data-view="image-editor"] .editor-commandbar :is(.toolbar, .player-toolstrip, .actions) button {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar :is(.toolbar, .player-toolstrip, .actions) button {
   width: 36px;
   height: 36px;
   min-width: 36px;
@@ -351,24 +351,24 @@ body[data-view="image-editor"] .editor-commandbar :is(.toolbar, .player-toolstri
     border-color 0.14s ease;
   flex-shrink: 0;
 }
-body[data-view="image-editor"] .editor-commandbar button:is(:hover, :focus-visible):not(:disabled) {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button:is(:hover, :focus-visible):not(:disabled) {
   background: var(--hover);
   border-color: var(--line);
 }
-body[data-view="image-editor"] .editor-commandbar button:is(.active, [aria-expanded='true'], [aria-pressed='true']) {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button:is(.active, [aria-expanded='true'], [aria-pressed='true']) {
   background: var(--selected);
   border-color: var(--line);
 }
-body[data-view="image-editor"] .editor-commandbar button > svg {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button > svg {
   width: 18px;
   height: 18px;
   stroke-width: 1.7;
 }
-body[data-view="image-editor"] .editor-actions-menu {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-actions-menu {
   padding: 6px;
   width: 200px;
 }
-body[data-view="image-editor"] .editor-actions-menu > button {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-actions-menu > button {
   display: flex;
   justify-content: flex-start;
   width: 100%;
@@ -379,14 +379,14 @@ body[data-view="image-editor"] .editor-actions-menu > button {
   background: transparent;
   font-size: 12px;
 }
-body[data-view="image-editor"] .editor-actions-menu > button:hover:not(:disabled) {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-actions-menu > button:hover:not(:disabled) {
   background: var(--hover);
 }
-body[data-view="image-editor"] .editor-actions-menu svg {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-actions-menu svg {
   width: 16px;
   height: 16px;
 }
-body[data-view="image-editor"] .editor-footer .editor-more {
+body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-footer .editor-more {
   width: 32px;
   height: 32px;
   padding: 6px;
@@ -395,7 +395,7 @@ body[data-view="image-editor"] .image-workbench .editor-footer :is(#steps, #dirt
   display: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  body[data-view="image-editor"] .editor-commandbar button {
+  body:is([data-view="image-editor"],[data-view="recording-player"]) .editor-commandbar button {
     transition: none;
   }
 }

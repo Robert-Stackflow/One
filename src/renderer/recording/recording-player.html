@@ -1,0 +1,540 @@
+<header class="media-header"><span id="brand"></span><strong>录制结果</strong></header>
+    <main id="result">
+      <div id="player-commandbar" class="editor-commandbar"></div>
+      <div class="player-layout">
+        <section class="player-view">
+          <div class="player-canvas-space">
+            <div class="media-stage">
+              <video
+                id="preview"
+                crossorigin="anonymous"
+                controlslist="nodownload noremoteplayback"
+                disablepictureinpicture
+                disableremoteplayback
+                playsinline
+                preload="metadata"
+              ></video>
+              <video
+                id="camera-video"
+                crossorigin="anonymous"
+                muted
+                playsinline
+                preload="auto"
+                aria-hidden="true"
+                hidden
+              ></video>
+              <canvas id="annotation-preview" aria-hidden="true"></canvas>
+              <canvas id="camera-preview" aria-hidden="true"></canvas>
+              <canvas id="input-preview" aria-hidden="true"></canvas
+              ><canvas id="time-preview" aria-hidden="true"></canvas>
+              <canvas id="cursor-preview" aria-hidden="true"></canvas
+              ><canvas id="cursor-inverse" aria-hidden="true"></canvas>
+              <div id="audio-picture" hidden aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="player-transport" aria-label="播放控制">
+            <input
+              id="seek"
+              type="range"
+              min="0"
+              max="0"
+              step="0.001"
+              value="0"
+              aria-label="播放进度"
+              disabled
+            />
+            <div class="playback-row">
+              <div class="playback-buttons">
+                <button id="back" title="后退 5 秒 · ←" aria-label="后退 5 秒"></button
+                ><button
+                  id="play"
+                  class="primary"
+                  title="播放 · 空格"
+                  aria-label="播放"
+                  disabled
+                ></button
+                ><button id="forward" title="前进 5 秒 · →" aria-label="前进 5 秒"></button>
+              </div>
+              <output id="play-time">00:00 / 00:00</output>
+              <label class="playback-speed"
+                ><span>速度</span
+                ><select id="speed" aria-label="播放速度">
+                  <option value="0.25">0.25×</option>
+                  <option value="0.5">0.5×</option>
+                  <option value="0.75">0.75×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="1.25">1.25×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="2">2×</option>
+                  <option value="3">3×</option>
+                  <option value="4">4×</option>
+                </select></label
+              >
+            </div>
+          </div>
+        </section>
+        <aside id="player-properties">
+          <section id="export-settings" aria-label="合成导出">
+            <h2>合成导出</h2>
+            <div class="export-output-fields">
+              <label
+                >文件格式<select id="export-format" aria-label="导出格式">
+                  <option value="mp4">MP4</option>
+                  <option value="gif">GIF</option>
+                  <option value="webp">动画 WebP</option>
+                </select></label
+              >
+              <label
+                >输出质量<select id="export-quality" aria-label="导出质量">
+                  <option value="light">轻量</option>
+                  <option value="standard" selected>标准</option>
+                  <option value="original">原始</option>
+                </select></label
+              >
+            </div>
+            <p id="export-parameters" class="export-summary"></p>
+            <section class="export-range" aria-label="导出片段">
+              <div class="export-section-heading">
+                <strong>导出片段</strong><button id="export-whole" class="quiet">恢复全部</button>
+              </div>
+              <div class="export-range-fields">
+                <label
+                  >开始时间 <span class="export-unit">秒</span
+                  ><input
+                    id="export-from"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value="0"
+                    aria-label="导出开始时间"
+                /></label>
+                <label
+                  >结束时间 <span class="export-unit">秒</span
+                  ><input id="export-to" type="number" min="0" step="any" aria-label="导出结束时间"
+                /></label>
+              </div>
+              <button id="export-preview" class="quiet">预览片段</button>
+            </section>
+            <div class="export-panel-actions">
+              <button id="export-start" class="primary">合成导出</button
+              ><button id="export-cancel" class="quiet" hidden>取消导出</button>
+            </div>
+            <div class="export-feedback">
+              <progress
+                id="export-progress"
+                max="1"
+                value="0"
+                hidden
+                aria-label="导出进度"
+              ></progress>
+              <p id="export-status" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+          <details id="gif-editor" hidden>
+            <summary>GIF 逐帧编辑</summary>
+            <fieldset id="gif-controls">
+              <p class="help" id="gif-summary"></p>
+              <label
+                >抽帧率<input
+                  id="gif-fps"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value="10"
+                  aria-label="GIF 抽帧率"
+              /></label>
+              <button id="gif-create" class="quiet">从当前导出片段抽帧</button>
+              <div class="buttons">
+                <button id="gif-undo" class="quiet">撤销</button
+                ><button id="gif-redo" class="quiet">重做</button>
+              </div>
+              <div id="gif-tools" hidden>
+                <input
+                  id="gif-position"
+                  type="range"
+                  min="1"
+                  max="1"
+                  value="1"
+                  aria-label="定位 GIF 帧"
+                />
+                <p id="gif-current" class="help"></p>
+                <div id="gif-frames" aria-label="GIF 帧列表"></div>
+                <label>选中起始帧<input id="gif-from" type="number" min="1" value="1" /></label>
+                <label>选中结束帧<input id="gif-to" type="number" min="1" value="1" /></label>
+                <div class="buttons">
+                  <button id="gif-all" class="quiet">全选</button
+                  ><button id="gif-delete" class="quiet">删除所选</button>
+                </div>
+                <div class="buttons">
+                  <button id="gif-earlier" class="quiet">前移一帧</button
+                  ><button id="gif-later" class="quiet">后移一帧</button>
+                </div>
+                <label
+                  >延时（ms）<input
+                    id="gif-delay"
+                    type="number"
+                    min="20"
+                    max="60000"
+                    step="10"
+                    value="100"
+                /></label>
+                <button id="gif-apply-delay" class="quiet">应用到所选帧</button>
+                <label
+                  >播放方向<select id="gif-direction" aria-label="GIF 播放方向">
+                    <option value="forward">正向</option>
+                    <option value="reverse">倒放</option>
+                    <option value="pingpong">往返</option>
+                  </select></label
+                >
+                <label
+                  >重复次数<input id="gif-repeat" type="number" min="-1" max="65535" value="0"
+                /></label>
+                <p class="help">
+                  -1 播放一次，0 无限循环，正数为额外重复次数。速度设置同时影响帧延时，最短 20
+                  ms。再次抽帧会替换当前编辑，可撤销。帧预览静音，定位解码耗时可能影响预览速度。
+                </p>
+                <details id="gif-output-settings">
+                  <summary>输出与画面</summary>
+                  <label
+                    >最大宽度（像素）<input
+                      id="gif-width"
+                      type="number"
+                      min="2"
+                      max="8192"
+                      placeholder="跟随质量档位"
+                  /></label>
+                  <label
+                    >色数<select id="gif-colors">
+                      <option value="">跟随质量档位</option>
+                      <option value="16">16 色</option>
+                      <option value="32">32 色</option>
+                      <option value="64">64 色</option>
+                      <option value="128">128 色</option>
+                      <option value="256">256 色</option>
+                    </select></label
+                  >
+                  <label>合并连续相同帧<input id="gif-optimize" type="checkbox" /></label>
+                  <p class="help">
+                    保持裁剪后的宽高比，不放大。自定参数优先于质量档位。抽帧率决定帧率，再次抽帧会替换帧编辑并保留画面设置。
+                  </p>
+                  <details>
+                    <summary>裁剪原片</summary>
+                    <label>左侧 X<input id="gif-crop-x" type="number" min="0" /></label>
+                    <label>顶部 Y<input id="gif-crop-y" type="number" min="0" /></label>
+                    <label
+                      >裁剪宽度<input id="gif-crop-width" type="number" min="2" max="8192"
+                    /></label>
+                    <label
+                      >裁剪高度<input id="gif-crop-height" type="number" min="2" max="8192"
+                    /></label>
+                  </details>
+                  <details>
+                    <summary>文字</summary>
+                    <label
+                      >文字内容<input id="gif-caption-text" type="text" maxlength="120"
+                    /></label>
+                    <label
+                      >字号<input id="gif-caption-size" type="number" min="12" max="128" value="24"
+                    /></label>
+                    <label
+                      >位置<select id="gif-caption-position">
+                        <option value="top-left">左上</option>
+                        <option value="top-center" selected>顶部居中</option>
+                        <option value="top-right">右上</option>
+                        <option value="bottom-left">左下</option>
+                        <option value="bottom-center">底部居中</option>
+                        <option value="bottom-right">右下</option>
+                      </select></label
+                    >
+                    <label
+                      >文字颜色<input id="gif-caption-color" type="color" value="#ffffff"
+                    /></label>
+                    <label
+                      >不透明度（%）<input
+                        id="gif-caption-opacity"
+                        type="number"
+                        min="5"
+                        max="100"
+                        value="100"
+                    /></label>
+                  </details>
+                  <details>
+                    <summary>文字水印</summary>
+                    <label
+                      >水印内容<input id="gif-watermark-text" type="text" maxlength="120"
+                    /></label>
+                    <label
+                      >字号<input
+                        id="gif-watermark-size"
+                        type="number"
+                        min="12"
+                        max="128"
+                        value="16"
+                    /></label>
+                    <label
+                      >位置<select id="gif-watermark-position">
+                        <option value="top-left">左上</option>
+                        <option value="top-center">顶部居中</option>
+                        <option value="top-right">右上</option>
+                        <option value="bottom-left">左下</option>
+                        <option value="bottom-center">底部居中</option>
+                        <option value="bottom-right" selected>右下</option>
+                      </select></label
+                    >
+                    <label
+                      >水印颜色<input id="gif-watermark-color" type="color" value="#ffffff"
+                    /></label>
+                    <label
+                      >不透明度（%）<input
+                        id="gif-watermark-opacity"
+                        type="number"
+                        min="5"
+                        max="100"
+                        value="50"
+                    /></label>
+                  </details>
+                  <div class="buttons">
+                    <button id="gif-apply-output" class="quiet">应用画面设置</button
+                    ><button id="gif-reset-output" class="quiet">重置画面设置</button>
+                  </div>
+                  <p id="gif-output-pending" class="help" hidden>
+                    画面参数有修改，编码预览会先应用。
+                  </p>
+                  <p class="help">编码预览会应用未保存的画面参数。画面设置随工程保存，可撤销。</p>
+                </details>
+                <label>完整预览（最多 64 MB）<input id="gif-quality-full" type="checkbox" /></label>
+                <p class="help">默认最多抽样 12 帧。完整预览编码所有帧，耗时更长，可随时取消。</p>
+                <button id="gif-quality" class="primary">编码预览与体积估算</button>
+                <div class="buttons">
+                  <button id="gif-preview" class="quiet">预览帧序列</button
+                  ><button id="gif-clear" class="quiet">清除帧编辑</button>
+                </div>
+              </div>
+            </fieldset>
+          </details>
+          <details id="cursor-settings" hidden>
+            <summary>鼠标光标</summary>
+            <label class="input-toggle"
+              >显示光标<input id="cursor-visible" type="checkbox" checked
+            /></label>
+            <label class="channel-row"
+              ><span>光标大小</span
+              ><input
+                id="cursor-size"
+                type="range"
+                min="50"
+                max="400"
+                value="100"
+                aria-label="光标大小"
+              /><output id="cursor-size-value">100%</output></label
+            >
+            <label class="input-toggle">点击动画<input id="cursor-clicks" type="checkbox" /></label>
+            <div class="editor-form-pair">
+              <label
+                >点击风格<select id="cursor-clickStyle">
+                  <option value="ring">圆环</option>
+                  <option value="ripple">涟漪</option>
+                  <option value="spotlight">聚光</option>
+                </select></label
+              >
+              <label
+                >光标拖尾<select id="cursor-trail">
+                  <option value="none">关闭</option>
+                  <option value="laser">激光</option>
+                  <option value="ribbon">飘带</option>
+                  <option value="dots">光点</option>
+                </select></label
+              >
+            </div>
+            <label class="channel-row"
+              ><span>光标与点击动画速度</span
+              ><input
+                id="cursor-animation"
+                type="range"
+                min="25"
+                max="400"
+                value="100"
+                aria-label="光标与点击动画速度"
+              /><output id="cursor-animation-value">1×</output></label
+            >
+            <label class="input-toggle"
+              >动画颜色<input
+                id="cursor-color"
+                type="color"
+                value="#F3B74C"
+                aria-label="点击动画颜色"
+            /></label>
+            <p class="help"></p>
+          </details>
+          <details id="source-settings" open hidden>
+            <summary>声音来源</summary>
+            <label class="channel-row"
+              ><span>系统声</span
+              ><button id="mute-system" class="quiet" aria-label="静音系统声"></button
+              ><input
+                id="channel-system"
+                type="range"
+                min="0"
+                max="200"
+                value="100"
+                aria-label="系统声音量"
+              /><output id="channel-system-value">100%</output></label
+            >
+            <label class="channel-row"
+              ><span>麦克风</span
+              ><button id="mute-microphone" class="quiet" aria-label="静音麦克风"></button
+              ><input
+                id="channel-microphone"
+                type="range"
+                min="0"
+                max="200"
+                value="100"
+                aria-label="麦克风音量"
+              /><output id="channel-microphone-value">100%</output></label
+            >
+            <p class="help">
+              分别调整原始声源。录制时的音量与静音只影响原片；这里的修改随工程保存。
+            </p>
+          </details>
+          <details id="channel-settings" open>
+            <summary>左右声道</summary>
+            <label class="channel-row"
+              ><span>左声道</span
+              ><button id="mute-left" class="quiet" aria-label="静音左声道"></button
+              ><input
+                id="channel-left"
+                type="range"
+                min="0"
+                max="200"
+                value="100"
+                aria-label="左声道音量"
+              /><output id="channel-left-value">100%</output></label
+            ><label class="channel-row"
+              ><span>右声道</span
+              ><button id="mute-right" class="quiet" aria-label="静音右声道"></button
+              ><input
+                id="channel-right"
+                type="range"
+                min="0"
+                max="200"
+                value="100"
+                aria-label="右声道音量"
+              /><output id="channel-right-value">100%</output></label
+            >
+            <p id="channel-hint" class="help">分别调整左右声道的音量。</p>
+          </details>
+          <details id="time-settings">
+            <summary>进度与时间</summary>
+            <label class="input-toggle">显示时间<input id="time-visible" type="checkbox" /></label>
+            <div class="input-style-grid">
+              <label
+                >进度风格<select id="time-shape">
+                  <option value="rectangle">矩形</option>
+                  <option value="circle">圆形</option>
+                </select></label
+              >
+              <label
+                >位置<select id="time-position">
+                  <option value="custom">自由位置</option>
+                  <option value="top-left">左上</option>
+                  <option value="top-center">上方居中</option>
+                  <option value="top-right">右上</option>
+                  <option value="bottom-left">左下</option>
+                  <option value="bottom-center">下方居中</option>
+                  <option value="bottom-right">右下</option>
+                </select></label
+              >
+              <div class="editor-form-pair">
+                <label>文字颜色<input id="time-color" type="color" value="#FFFFFF" /></label
+                ><label>背景颜色<input id="time-background" type="color" value="#101010" /></label>
+              </div>
+              <label
+                >字号
+                <div class="input-range">
+                  <input id="time-size" type="range" min="12" max="64" value="24" /><output
+                    id="time-size-value"
+                  ></output></div></label
+              ><label
+                >宽度
+                <div class="input-range">
+                  <input id="time-width" type="range" min="8" max="90" value="18" /><output
+                    id="time-width-value"
+                  ></output></div></label
+              ><label
+                >不透明度
+                <div class="input-range">
+                  <input id="time-opacity" type="range" min="0" max="100" value="100" /><output
+                    id="time-opacity-value"
+                  ></output></div></label
+              ><label
+                >背景不透明度
+                <div class="input-range">
+                  <input
+                    id="time-backgroundOpacity"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="70"
+                  /><output id="time-backgroundOpacity-value"></output></div></label
+              ><label class="input-toggle"
+                >显示进度条<input id="time-progress" type="checkbox" checked
+              /></label>
+            </div>
+          </details>
+          <details id="annotation-preview-settings" class="record-input-settings" hidden>
+            <summary>录制标注</summary>
+            <label><input id="annotation-show" type="checkbox" checked />显示录制标注</label>
+            <p class="help">绘制、移动、修改和撤销随时间轴回放，合成导出应用当前显隐设置。</p>
+          </details>
+          <details id="camera-preview-settings" class="record-input-settings" hidden>
+            <summary>摄像头画面</summary>
+            <div id="camera-preview-controls"></div>
+            <div class="camera-panel-actions">
+              <button id="camera-replay-reset" class="quiet">恢复录制布局</button
+              ><button id="save-camera" class="quiet">保存摄像头原片</button>
+            </div>
+            <p id="camera-saved" class="help"></p>
+          </details>
+          <details id="input-preview-settings" class="record-input-settings" hidden>
+            <summary>键鼠回显样式</summary>
+            <div id="input-preview-controls"></div>
+          </details>
+
+          <p class="help export-note">
+            保存原片保留录制时的内容。合成导出应用开始导出时的光标、画中画、标注、键鼠、时间和声音设置；导出期间修改设置不会改变当前任务。GIF
+            / WebP 不包含声音。“原始”保留源尺寸与帧率，不会从有损原片恢复无损画质。
+          </p>
+        </aside>
+      </div>
+      <footer class="editor-footer">
+        <div class="player-meta">
+          <h1 class="sr-only">录制结果</h1>
+          <p id="summary"></p>
+          <span id="saved" class="sr-only"></span>
+          <p id="project-saved" class="player-project-status sr-only"></p>
+        </div>
+        <div class="player-actions">
+          <button id="save-project" class="quiet">保存工程</button
+          ><button id="save" class="primary">保存原片</button>
+        </div>
+      </footer>
+    </main>
+    <dialog id="gif-quality-dialog" aria-labelledby="gif-quality-title">
+      <div class="gif-quality-heading">
+        <h2 id="gif-quality-title">GIF 编码预览</h2>
+        <button id="gif-quality-close" class="quiet">关闭</button>
+      </div>
+      <p id="gif-quality-summary" class="help"></p>
+      <label
+        >预览缩放<select id="gif-quality-zoom">
+          <option value="1">100%</option>
+          <option value="2">200%</option>
+          <option value="4">400%</option>
+        </select></label
+      >
+      <img id="gif-quality-image" alt="编码后的 GIF 预览" />
+      <p id="gif-quality-estimate"></p>
+      <p id="gif-quality-note" class="help"></p>
+      <p class="help">预览会循环播放。关闭后可调整参数再次比较；导出后的实际文件大小会单独显示。</p>
+    </dialog>
+    <div id="toast" class="feedback-toast" role="status" aria-live="polite" hidden></div>
