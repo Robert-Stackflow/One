@@ -59,7 +59,7 @@ export function mountLocalModels(api:OCRAPI, updated:()=>Promise<void>) {
     const value=entry();if(!value)return;
     const downloading=value.downloading||installing===value.id;
     field('title').textContent=value.title+' · '+value.size;field('status').textContent=downloading?'下载中':value.inUse?'使用中':value.ready?'已安装':'未安装';
-    field('metadata').innerHTML=`<dt>模型大小</dt><dd>${size(value.totalBytes)}</dd><dt>磁盘占用</dt><dd>${size(value.diskBytes)}</dd><dt>兼容设备</dt><dd>${value.backends.includes('dml')?'CPU / DirectML GPU':'CPU'}</dd><dt>内存 / 显存</dt><dd>${value.measuredMemoryMiB===undefined?'未知':size(value.measuredMemoryMiB*1024**2)} / ${value.measuredVRAMMiB===undefined?'未知':size(value.measuredVRAMMiB*1024**2)}</dd><dt>许可 / 精度</dt><dd>${esc(value.weightLicense)} · ${esc(value.precision)}</dd><dt>版本</dt><dd>${esc(value.revision)}</dd>`;
+    field('metadata').innerHTML=`<dt>模型大小</dt><dd>${size(value.totalBytes)}</dd><dt>磁盘占用</dt><dd>${size(value.diskBytes)}</dd><dt>兼容设备</dt><dd>${value.backends.includes('dml')?'CPU / DirectML GPU':'CPU'}</dd><dt>实测内存</dt><dd title="5 组合成图片的 CPU 进程峰值；实际占用随图片大小变化">${value.measuredMemoryMiB===undefined?'未知':'CPU 峰值 · '+size(value.measuredMemoryMiB*1024**2)}</dd><dt>实测显存</dt><dd>${value.measuredVRAMMiB===undefined?'未知':size(value.measuredVRAMMiB*1024**2)}</dd><dt>许可 / 精度</dt><dd>${esc(value.weightLicense)} · ${esc(value.precision)}</dd><dt>版本</dt><dd>${esc(value.revision)}</dd>`;
     field<HTMLButtonElement>('delete').disabled=downloading||value.inUse||!value.diskBytes;
     field<HTMLButtonElement>('save').disabled=cancelling.has(value.id)||saving&&!downloading;
     field('save').querySelector<HTMLElement>('.model-action-spinner')!.hidden=!downloading;

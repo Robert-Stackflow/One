@@ -6,6 +6,8 @@ export interface PaddleModelFiles {
   recognition: PaddleArtifact;
   detectionConfig: PaddleArtifact;
   recognitionConfig: PaddleArtifact;
+  orientation?: PaddleArtifact;
+  orientationConfig?: PaddleArtifact;
 }
 export interface PaddlePreferences { device: 'auto' | 'cpu' | 'gpu'; deviceId: number; memoryMiB?: number }
 export interface PaddleJob {

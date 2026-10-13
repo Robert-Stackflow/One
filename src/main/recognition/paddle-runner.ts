@@ -4,11 +4,12 @@ import { ocrDimensions, ocrLanguage, ocrResult, type OCRResult } from '../../sha
 import type { PaddleModelFiles, PaddlePreferences, PaddleJob } from './paddle-job';
 import { localInference, type LocalInferenceScheduler, type LocalInferenceClient } from '../local-inference-scheduler';
 
-export interface PaddleTaskResult extends OCRResult { actualBackend: 'cpu' | 'dml'; deviceId?: number; fallbackReason?: string }
+export interface PaddleTaskResult extends OCRResult { actualBackend: 'cpu' | 'dml'; deviceId?: number; fallbackReason?: string; peakRSSMiB?: number }
 class InferenceError extends Error { constructor(message: string, readonly kind: string) { super(message); } }
 /** One isolated process/cache per owner. Killing a task releases native ONNX/DML resources with the process. */
 export class PaddleRunner {
   private child?: ChildProcess;
+  private workerIdentity = '';
   private abort?: AbortController;
   private active?: Promise<PaddleTaskResult>;
   private serial = 0;
@@ -22,7 +23,7 @@ export class PaddleRunner {
   private async terminate() {
     clearTimeout(this.idle);
     if (this.terminating) return this.terminating;
-    const child = this.child; this.child = undefined;
+    const child = this.child; this.child = undefined; this.workerIdentity = '';
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const termination = this.terminating = new Promise<void>(resolve => { child.once('exit', () => resolve()); child.kill(); });
     try { await termination; } finally { if (this.terminating === termination) this.terminating = undefined; }
@@ -67,12 +68,16 @@ export class PaddleRunner {
       prefs: PaddlePreferences, backend: 'cpu' | 'dml', signal: AbortSignal, progress: (value: number, phase: string) => void) {
     await this.terminating;
     signal.throwIfAborted();
+    const identity=JSON.stringify([model,backend,prefs.deviceId,prefs.memoryMiB??1536]);
+    if(this.child&&this.workerIdentity!==identity)await this.terminate();
+    signal.throwIfAborted();
     if (this.child && (!this.child.connected || this.child.exitCode !== null || this.child.signalCode !== null)) this.child = undefined;
     if (!this.child) {
       const owned = this.child = fork(this.worker, [], { execArgv: ['--max-old-space-size=384'], serialization: 'advanced',
         windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
+      this.workerIdentity=identity;
       owned.on('error', () => {});
-      owned.once('exit', () => { if (this.child === owned) this.child = undefined; });
+      owned.once('exit', () => { if (this.child === owned) {this.child = undefined;this.workerIdentity='';} });
     }
     const child = this.child;
     const id = ++this.serial;
@@ -94,7 +99,9 @@ export class PaddleRunner {
           const value = ocrResult(packet.result, size, language);
           // The child is owned by this service; preserve its source-bound document, not arbitrary renderer input.
           value.document = packet.result.document;
-          finish(undefined, { ...value, actualBackend: backend, deviceId: backend === 'dml' ? prefs.deviceId : undefined });
+          const peak = packet.result.peakRSSMiB;
+          if (peak !== undefined && (!Number.isFinite(peak) || peak < 1 || peak > 65536)) throw Error('OCR 内存记录无效');
+          finish(undefined, { ...value, actualBackend: backend, deviceId: backend === 'dml' ? prefs.deviceId : undefined, peakRSSMiB: peak });
         } catch { finish(new InferenceError('OCR 推理结果无效', 'result')); }
       };
       const timer = setTimeout(() => finish(new InferenceError('文字识别超时，输入已保留，请重试', 'timeout')), this.timeoutMs);

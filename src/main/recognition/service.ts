@@ -272,9 +272,9 @@ export class OCRService {
           const selected = resolveInferenceDevice(choice.device, devices, this.size.width * this.size.height);
           abort.signal.throwIfAborted();
           const result = await this.paddle.run(this.png!, this.size, language, lease.model,
-            { device: selected.backend === 'cpu' ? 'cpu' : choice.device.mode === 'auto' ? 'auto' : 'gpu', deviceId: selected.gpu?.deviceId ?? 0 },
+            { device: selected.backend === 'cpu' ? 'cpu' : choice.device.mode === 'auto' ? 'auto' : 'gpu', deviceId: selected.gpu?.deviceId ?? 0, memoryMiB: lease.preset.memoryBudgetMiB },
             value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
-          result.inference = { model: 'PP-OCRv6 tiny', backend: result.actualBackend, device: result.actualBackend === 'dml' ? selected.gpu!.name + ' · ' + selected.gpu!.deviceId : 'CPU',
+          result.inference = { model: lease.preset.title + ' ' + lease.preset.size, backend: result.actualBackend, device: result.actualBackend === 'dml' ? selected.gpu!.name + ' · ' + selected.gpu!.deviceId : 'CPU',
             fallbackReason: result.fallbackReason || selected.reason }; return result;
         } finally { lease.release(); }
       } finally { releaseUse(); }

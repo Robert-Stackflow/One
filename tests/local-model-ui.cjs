@@ -3,6 +3,7 @@ const {build}=require('esbuild');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
 (async()=>{
+  const presets=process.argv.includes('--presets');
   const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'model-ui-'));
   const profile=path.join(directory,'profile'),input=path.join(directory,'input.png'),errors=[];let app,imported=false;
   async function choose(page,id,label){await page.locator('#'+id).click();await page.getByRole('option',{name:label,exact:true}).click();}
@@ -20,9 +21,24 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
   }
   try{
     await build({entryPoints:['tests/local-model-ui-prepare.ts'],outfile:path.join(directory,'prepare.mjs'),bundle:true,format:'esm',platform:'node',target:'node22',packages:'external',logLevel:'warning'});
-    await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile},windowsHide:true,maxBuffer:64*1024});
+    await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile,...(presets?{ONE_MODEL_UI_PRESETS:'1'}:{})},windowsHide:true,maxBuffer:64*1024});
     await sharp(Buffer.from('<svg width="680" height="120"><rect width="680" height="120" fill="white"/><text x="15" y="85" font-family="Arial" font-size="58">ONE OCR 2026</text></svg>')).png().toFile(input);
     let page=await open();assert.equal((await page.evaluate(()=>window.one.recognition.state())).modelTitle,'Tesseract fast');
+    if(presets){
+      for(const id of ['pp-ocrv6-small','pp-ocrv6-medium']){
+        await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');
+        await dialog.locator(`[data-select-model=${id}]`).click();await choose(page,'local-model-device','CPU');
+        await dialog.locator('#local-model-save').click();await expect(dialog).not.toBeVisible();
+        const state=await page.evaluate(()=>window.one.recognition.localModels());assert.equal(state.choices.ocr.modelId,id);
+        const revision=state.entries.find(entry=>entry.id===id).revision;
+        for(let run=0;run<(id.endsWith('medium')?2:1);run++){
+          const result=await page.evaluate(async()=>{const api=window.one.recognition,state=await api.state();return api.run(state.token,'eng');});
+          assert.match(result.text,/ONE\s*OCR\s*2026/);assert.equal(result.document.engine.model,revision);
+          assert.equal(result.inference.model,'PP-OCRv6 '+id.split('-').at(-1));assert.equal(result.inference.backend,'cpu');
+        }
+      }
+      assert.deepEqual(errors,[]);console.log('model preset UI: small/medium apply-close, exact model revisions and medium warm CPU budget passed');return;
+    }
     await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');await expect(dialog).toBeVisible();await expect(dialog.locator('[data-select-model=tesseract] .model-current')).toBeVisible();
     await page.locator('[data-select-model=pp-ocrv6-tiny]').click();await expect(dialog.locator('[data-select-model=tesseract] .model-current')).toBeVisible();await expect(dialog.locator('[data-select-model=pp-ocrv6-tiny] .model-current')).not.toBeVisible();
     await choose(page,'local-model-device','CPU');

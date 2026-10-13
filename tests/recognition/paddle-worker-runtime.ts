@@ -27,6 +27,9 @@ export async function paddleWorkerBench(directory: string) {
     const initialPid = child().pid;
     await runner.run(png, size, 'eng', model, { device: 'cpu', deviceId: 0 });
     assert.equal(child().pid, initialPid, 'warm tasks reuse the owned process and loaded sessions');
+    const initialChild=child();await runner.run(png,size,'eng',{...model,revision:model.revision+'-updated'},{device:'cpu',deviceId:0});
+    assert.notEqual(child().pid,initialPid,'changed weights/config revision replaces the native process');
+    assert.ok(initialChild.exitCode!==null||initialChild.signalCode!==null,'old model process exits before new inference');
     let cancel = false;
     const pending = runner.run(png, size, 'eng', model, { device: 'cpu', deviceId: 0 }, (_value, phase) => {
       if (!cancel && phase === 'recognizing') { cancel = true; void runner.cancel(); }

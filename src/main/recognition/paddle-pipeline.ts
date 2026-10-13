@@ -5,9 +5,10 @@ import { textBounds, textDocument, type TextQuad } from '../../shared/recognitio
 import type { OCRLanguage, OCRResult } from '../../shared/recognition/ocr';
 import { PaddleDetector, mergePaddleTextBoxes, type PaddleDetConfig } from './paddle-detector';
 import { PaddleRecognizer, type PaddleRecConfig } from './paddle-recognizer';
+import { PaddleOrientation, type PaddleOrientationConfig } from './paddle-orientation';
 export interface PaddleOCRResult extends OCRResult {
   truncated: boolean;
-  timings: { decodeMs: number; preprocessMs: number; inferenceMs: number; postprocessMs: number; rectifyMs: number; recognizeMs: number; totalMs: number };
+  timings: { decodeMs: number; preprocessMs: number; inferenceMs: number; postprocessMs: number; rectifyMs: number; orientationMs: number; recognizeMs: number; totalMs: number };
 }
 
 /** Perspective sampling uses the source quadrilateral; it does not replace it with an axis-aligned crop. */
@@ -53,12 +54,17 @@ export function rectifyPaddleText(rgb: Uint8Array, sourceWidth: number, sourceHe
 
 /** Prototype/full-image pipeline. Worker ownership and shared model management wrap this engine. */
 export class PaddleOCRPipeline {
-  private constructor(private detector: PaddleDetector, private recognizer: PaddleRecognizer, readonly backend: 'cpu' | 'dml', readonly modelRevision: string) {}
-  static async create(models: { det: string | Uint8Array; rec: string | Uint8Array; detection: PaddleDetConfig; recognition: PaddleRecConfig; revision: string }, backend: 'cpu' | 'dml', deviceId = 0) {
+  private constructor(private detector: PaddleDetector, private recognizer: PaddleRecognizer, readonly backend: 'cpu' | 'dml', readonly modelRevision: string, private orientation?: PaddleOrientation) {}
+  static async create(models: { det: string | Uint8Array; rec: string | Uint8Array; detection: PaddleDetConfig; recognition: PaddleRecConfig; revision: string; orientation?: Uint8Array; orientationConfig?: PaddleOrientationConfig }, backend: 'cpu' | 'dml', deviceId = 0) {
     if (models.detection.name.replace(/_det$/, '') !== models.recognition.name.replace(/_rec$/, '')) throw Error('OCR 检测与识别模型预设不匹配');
+    if (!!models.orientation !== !!models.orientationConfig) throw Error('OCR 方向模型预设不完整');
     const detector = await PaddleDetector.create(models.det, models.detection, backend, deviceId);
-    try { return new PaddleOCRPipeline(detector, await PaddleRecognizer.create(models.rec, models.recognition, backend, deviceId), backend, models.revision); }
-    catch (error) { await detector.close(); throw error; }
+    let recognizer: PaddleRecognizer | undefined, orientation: PaddleOrientation | undefined;
+    try {
+      recognizer = await PaddleRecognizer.create(models.rec, models.recognition, backend, deviceId);
+      if (models.orientation) orientation = await PaddleOrientation.create(models.orientation, models.orientationConfig!, backend, deviceId);
+      return new PaddleOCRPipeline(detector, recognizer, backend, models.revision, orientation);
+    } catch (error) { await Promise.allSettled([detector.close(), recognizer?.close(), orientation?.close()]); throw error; }
   }
   async run(png: Buffer, language: OCRLanguage = 'chi_sim+eng', signal?: AbortSignal): Promise<PaddleOCRResult> {
     const started = performance.now();
@@ -79,12 +85,18 @@ export class PaddleOCRPipeline {
           [boxes[j], boxes[j - 1]] = [boxes[j - 1], boxes[j]];
         else break;
       const words: OCRResult['words'] = [], quads: TextQuad[] = [];
-      let rectifyMs = 0, recognizeMs = 0;
+      let rectifyMs = 0, orientationMs = 0, recognizeMs = 0;
       for (const box of boxes) {
         signal?.throwIfAborted();
         const beforeCrop = performance.now(), crop = rectifyPaddleText(rgb, width, height, box.quad);
         rectifyMs += performance.now() - beforeCrop;
         try {
+          if (this.orientation) {
+            const before = performance.now(), direction = await this.orientation.run(crop.data, crop.width, crop.height);
+            if (direction.rotation === 180) for (let i = 0, j = crop.data.length - 3; i < j; i += 3, j -= 3)
+              for (let channel = 0; channel < 3; channel++) [crop.data[i + channel], crop.data[j + channel]] = [crop.data[j + channel], crop.data[i + channel]];
+            orientationMs += performance.now() - before;
+          }
           const beforeRecognition = performance.now();
           const recognized = await this.recognizer.run(crop.data, crop.width, crop.height);
           recognizeMs += performance.now() - beforeRecognition;
@@ -104,8 +116,8 @@ export class PaddleOCRPipeline {
       for (const [index, line] of result.document.blocks.flatMap(block => block.lines).entries()) {
         line.quad = quads[index]; for (const token of line.tokens) token.quad = quads[index];
       }
-      return { ...result, timings: { decodeMs: decoded - started, ...detection.timings, rectifyMs, recognizeMs, totalMs: performance.now() - started } };
+      return { ...result, timings: { decodeMs: decoded - started, ...detection.timings, rectifyMs, orientationMs, recognizeMs, totalMs: performance.now() - started } };
     } finally { rgb.fill(0); }
   }
-  async close() { await Promise.all([this.detector.close(), this.recognizer.close()]); }
+  async close() { await Promise.all([this.detector.close(), this.recognizer.close(), this.orientation?.close()]); }
 }
