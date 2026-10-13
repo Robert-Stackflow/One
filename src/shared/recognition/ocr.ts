@@ -28,7 +28,7 @@ export interface OCRResult {
   words: OCRWord[];
   language: OCRLanguage;
   document?: import('./text-document').TextDocument;
-  inference?: { model: string; backend: 'cpu' | 'dml'; device: string; fallbackReason?: string };
+  inference?: { model: string; backend: 'cpu' | 'dml' | 'cuda'; device: string; fallbackReason?: string };
 }
 export interface OCRState {
   uiScale:100|110|125|150;

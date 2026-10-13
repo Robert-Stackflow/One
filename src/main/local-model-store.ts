@@ -175,14 +175,14 @@ export class LocalModelStore {
     }
   }
   /** Keep model files alive for an inference task, including while the user's selection changes. */
-  async acquire<T extends LocalArtifactBundle>(input: T) {
+  async acquire<T extends LocalArtifactBundle>(input: T, signal?:AbortSignal) {
     const model = structuredClone(input), paths = this.paths(model);
     if (operations.has(paths.lock)) throw Error('模型正在下载或删除');
     leases.set(paths.lock, (leases.get(paths.lock) || 0) + 1);
     let released = false;
     const release = () => { if (!released) { released = true; const count = (leases.get(paths.lock) || 1) - 1; if (count) leases.set(paths.lock, count); else leases.delete(paths.lock); } };
     try {
-      if (!(await this.state(model)).ready) throw Error('模型缺失或校验失败，请下载或修复模型');
+      if (!(await this.state(model,signal)).ready) throw Error('模型缺失或校验失败，请下载或修复模型');
       return { model, files: model.artifacts.map(artifact => ({ ...artifact, path: join(paths.installed, artifact.name) })), release };
     } catch (error) { release(); throw error; }
   }

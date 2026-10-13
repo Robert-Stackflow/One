@@ -1,5 +1,5 @@
 export type LocalModelPurpose = 'ocr' | 'formula' | 'repair';
-export type LocalModelBackend = 'cpu' | 'dml';
+export type LocalModelBackend = 'cpu' | 'dml' | 'cuda';
 export interface LocalModelArtifact {
   name: string;
   role: string;
@@ -21,7 +21,7 @@ export interface LocalModelDescriptor extends LocalArtifactBundle {
   languages: string[];
   weightLicense: { name: string; source: string };
   backends: LocalModelBackend[];
-  precision: 'fp32';
+  precision: 'fp32' | 'q8_0';
   runtime: string;
   measuredMemoryMiB?: number;
   measuredVRAMMiB?: number;

@@ -49,12 +49,15 @@ test('shared model bundles resume, publish atomically and preserve active/versio
     const offline = new LocalModelStore(directory, async () => { throw Error('network must not be called'); });
     await offline.install(descriptor, signal());
     const firstLease = await offline.acquire(descriptor), secondLease = await store.acquire(descriptor);
+    const cancelledAcquire = new AbortController(); cancelledAcquire.abort(Error('cancelled hash verification'));
+    await assert.rejects(store.acquire(descriptor, cancelledAcquire.signal), /cancelled hash verification/);
     await assert.rejects(store.remove(descriptor), /正在下载或使用/);
     firstLease.release(); firstLease.release(); await assert.rejects(store.remove(descriptor), /正在下载或使用/);
     const newer = structuredClone(descriptor); newer.revision = 'v2';
     const newerPath = await store.install(newer, signal()); assert.notEqual(newerPath, installed);
     await store.remove(newer); assert.equal((await store.state(descriptor)).ready, true);
     secondLease.release();
+    assert.equal((await store.state(descriptor, undefined, false)).inUse, false, 'aborted verification releases its temporary lease');
     // Same-size corruption is never presented as ready; repair keeps the old bundle until replacement succeeds.
     await writeFile(join(installed, 'model.onnx'), Buffer.alloc(content.length, 0));
     assert.equal((await store.state(descriptor)).ready, false);

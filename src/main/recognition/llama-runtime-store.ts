@@ -74,9 +74,9 @@ export class LlamaRuntimeStore {
       if(temporary){const actual=await realpath(temporary);if(dirname(actual).toLowerCase()!==(await realpath(this.binaries.root)).toLowerCase())throw Error('运行包临时目录越界');await rm(actual,{recursive:true,force:true});}
     }
   }
-  async acquire(backend:Backend){
-    this.platform();if(this.closed)throw Error('运行包服务已关闭');const value=profile(backend),lease=await this.binaries.acquire(descriptor(value,true));
-    if(this.closed){lease.release();throw Error('运行包服务已关闭');}
+  async acquire(backend:Backend,signal?:AbortSignal){
+    this.platform();if(this.closed)throw Error('运行包服务已关闭');const value=profile(backend),lease=await this.binaries.acquire(descriptor(value,true),signal);
+    if(this.closed||signal?.aborted){lease.release();if(this.closed)throw Error('运行包服务已关闭');signal?.throwIfAborted();}
     const executable=lease.files.find(file=>file.name==='llama-server.exe')!;
     return {profile:structuredClone(value),executable:executable.path,directory:dirname(executable.path),release:lease.release};
   }

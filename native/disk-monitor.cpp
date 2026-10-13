@@ -95,8 +95,11 @@ static void hardware(const std::wstring& category){
  std::cout<<']';
 }
 #include "inference-devices.h"
+#include "inference-host.h"
 int wmain(int argc,wchar_t** argv){
  if(argc>1&&std::wstring(argv[1])==L"inference-devices")return inferenceDevices()?0:2;
+ if(argc>1&&std::wstring(argv[1])==L"inference-host")return inferenceHost(argc,argv);
+ if(argc>1&&std::wstring(argv[1])==L"inference-wait")return inferenceWait(argc,argv);
  if(argc>2&&std::wstring(argv[1])==L"hardware"){hardware(argv[2]);return 0;}
  unsigned interval=2000;bool trace=argc>1&&std::wstring(argv[1])==L"trace";std::atomic<ULONGLONG> writerMode{trace||argc<=1||std::wstring(argv[1])!=L"capacity"?1ULL:0ULL};if(argc>2)try{interval=std::clamp<unsigned>(std::stoul(argv[2]),1000,60000);}catch(...){}
  wchar_t drives[512]{};GetLogicalDriveStringsW(512,drives);for(auto p=drives;*p;p+=wcslen(p)+1){std::wstring name(p,2);wchar_t device[1024]{};if(QueryDosDeviceW(name.c_str(),device,1024))mounts.push_back({device,name});}std::sort(mounts.begin(),mounts.end(),[](auto& a,auto& b){return a.first.size()>b.first.size();});
