@@ -266,5 +266,3 @@ body[data-view=pin-controls]{overflow:auto}
 body[data-view=pin-controls] #app{overflow:visible}
 
 body[data-view=pin-controls] .pin-tool-heading .window-controls{margin-right:10px}
-
-html.image-pin-window,html.image-pin-window body,html.image-pin-window #app{background:transparent!important}

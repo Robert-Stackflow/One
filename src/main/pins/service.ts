@@ -51,8 +51,6 @@ export interface PinContext {
   icon():Electron.NativeImage;
 }
 export class PinService {
-  private imageWindows=new WeakSet<BrowserWindow>();
-  isImageWindow(window:BrowserWindow){return this.imageWindows.has(window);}
   private entries = new Map<string, Presentation>();
   private controls?: Presentation;
   private drags = new Map<string, Drag>();
@@ -347,25 +345,23 @@ export class PinService {
         if (size.width !== record.content.width || size.height !== record.content.height)
           throw Error('贴图原图尺寸不匹配');
       }
-      const image=record.content.kind==='image';
       const window = this.ctx.createWindow('pin',{
         ...this.place(record),
         useContentSize: true,
-        minWidth:1,minHeight:1,roundedCorners:!image,
-        frame: !image,
-        titleBarStyle: image?'default':'hidden',
+        minWidth:1,minHeight:1,roundedCorners:true,
+        frame: true,
+        titleBarStyle: 'hidden',
         titleBarOverlay: false,
-        thickFrame: !image,
-        hasShadow: !image,
-        transparent: image,
-        backgroundColor: image?'#00000000':this.ctx.dark() ? '#181818' : '#fff',
+        thickFrame: true,
+        hasShadow: true,
+        transparent: false,
+        backgroundColor: this.ctx.dark() ? '#181818' : '#fff',
         resizable: false,
         alwaysOnTop: true,
         skipTaskbar: true,
         show: false,
         title: 'One · ' + record.title,
       });
-      if(image)this.imageWindows.add(window);
       entry = { window, id, token: randomUUID() };
       this.entries.set(id, entry);
       const presentation = entry;

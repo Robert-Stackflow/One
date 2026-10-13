@@ -724,7 +724,7 @@ async function pickColor(mode:'live'|'frozen'='live'){
   catch(error){if(colorWorker===worker)closeColors();throw error;}
   finally{clearTimeout(timeout);}
 }
-function refreshWindowAppearance(){const a=themeAutomation?.appearance()||settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu','image-editor','pin','pin-controls','recording-player','recording-toolbar-menu'].includes(role||'')){if(role!=='pin'||!pins?.service.isImageWindow(w))w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
+function refreshWindowAppearance(){const a=themeAutomation?.appearance()||settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu','image-editor','pin','pin-controls','recording-player','recording-toolbar-menu'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
 function syncThemeAfterWake(){void themeAutomation?.sync();}
 function colorShortcutStatus(){return {active:!!registeredColorShortcut,error:colorShortcutError};}
 function configuredHotkeyOwner(shortcut:string,field:string,includeCapture=true){

@@ -1,5 +1,8 @@
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+const koffi=require('koffi'),user32=koffi.load('user32.dll'),dwm=koffi.load('dwmapi.dll');
+const windowStyle=user32.func('intptr_t __stdcall GetWindowLongPtrW(intptr_t, int)');
+const windowAttribute=dwm.func('long __stdcall DwmGetWindowAttribute(intptr_t, uint32_t, void *, uint32_t)');
 (async()=>{
   const root=path.resolve('work/current/capture-migration');await fs.mkdir(root,{recursive:true});
   const profile=await fs.mkdtemp(path.join(root,'pins-window-'));let app;const errors=[];
@@ -23,6 +26,16 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await pin.waitForFunction(()=>document.body.dataset.pinReady==='true'||!!document.body.dataset.pinError);
     assert.equal(await pin.evaluate(()=>document.body.dataset.pinError||''),'');await expect(pin.locator('#pin-content img')).toHaveJSProperty('naturalWidth',400);
     const original=await pin.evaluate(()=>window.one.pin.state()),id=original.record.id,imageURL=original.image;
+    const native=await app.evaluate(({BrowserWindow})=>{
+      const windows=BrowserWindow.getAllWindows(),pin=windows.find(window=>window.webContents.getURL().endsWith('?view=pin')),
+        main=windows.find(window=>window.webContents.getURL().endsWith('?view=main'));
+      return{pin:Number(pin.getNativeWindowHandle().readBigUInt64LE()),main:Number(main.getNativeWindowHandle().readBigUInt64LE()),shadow:pin.hasShadow(),background:pin.getBackgroundColor()};
+    });
+    assert.equal(native.shadow,true);assert.notEqual(native.background,'#00000000');
+    assert.equal(windowStyle(native.pin,-16)&0x00c00000,windowStyle(native.main,-16)&0x00c00000,'image pin must retain the same native caption/border style as the main window');
+    assert.notEqual(windowStyle(native.pin,-16)&0x00c00000,0);
+    const rendering=Buffer.alloc(4);assert.equal(windowAttribute(native.pin,1,rendering,4),0);
+    assert.equal(rendering.readInt32LE(0),1,'DWM must render the native non-client border');
     assert.equal(await pin.evaluate(()=>typeof window.one.pinsState),'undefined');
     assert.equal(await main.evaluate(async url=>{try{return(await fetch(url)).ok;}catch{return false;}},imageURL),false);
     await main.getByRole('button',{name:'删除素材',exact:true}).click();await expect(main.locator('#material-results .asset-card')).toHaveCount(0);
