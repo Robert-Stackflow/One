@@ -10,7 +10,9 @@ async function run(){
   const originals=new Map(await Promise.all(Object.values(files).map(async file=>[file,await fs.readFile(file)])));
   async function launch(args,name){
     const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:path.join(root,name)};delete env.ELECTRON_RUN_AS_NODE;
-    const app=await electron.launch({args:[path.resolve('.'),...args],env});apps.push(app);
+    const executable=process.env.ONE_TEST_EXECUTABLE;
+    const app=await electron.launch(executable?{executablePath:path.resolve(executable),args,env}:{args:[path.resolve('.'),...args],env});apps.push(app);
+    if(executable)assert.equal(await app.evaluate(({app})=>app.isPackaged),true);
     for(const page of app.windows())page.on('pageerror',error=>errors.push(String(error)));
     app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
     return app;
@@ -79,7 +81,7 @@ async function run(){
     await recordingMain.evaluate(()=>window.one.recording.cancel());
     for(const [file,bytes] of originals)assert.deepEqual(await fs.readFile(file),bytes);
     assert.deepEqual(errors,[]);
-    const result={result:'PASS',coldImage:true,coldRecording:true,loginArgumentWithProject:true,duplicateArguments:true,nativeSecondInstance:true,relativeSecondInstance:true,imageEditsPreserved:true,recordingReplacementCancelAndAccept:true,corruptionPreservesCurrent:true,revokedOriginalPreview:true,openFileIPC:true,originalsUnchanged:true};
+    const result={result:'PASS',packaged:!!process.env.ONE_TEST_EXECUTABLE,coldImage:true,coldRecording:true,loginArgumentWithProject:true,duplicateArguments:true,nativeSecondInstance:true,relativeSecondInstance:true,imageEditsPreserved:true,recordingReplacementCancelAndAccept:true,corruptionPreservesCurrent:true,revokedOriginalPreview:true,openFileIPC:true,originalsUnchanged:true};
     await fs.writeFile(path.join(out,'result.json'),JSON.stringify(result,null,2));console.log(result);
     await fs.unlink(path.join(out,'failure.json')).catch(error=>{if(error.code!=='ENOENT')throw error;});
   }catch(error){

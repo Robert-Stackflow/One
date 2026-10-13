@@ -9,3 +9,4 @@ const script=resolve('work/build-shell.cmd');await writeFile(script,`@echo off\r
 const result=await run('cmd.exe',['/d','/c',script],{cwd:resolve('.'),windowsHide:true});process.stdout.write(result.stdout);process.stderr.write(result.stderr);
 await copyFile('src/main/explorer-menu.xml','dist/main/explorer-menu.xml');await writeFile('dist/main/explorer-menu.ps1',Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),await readFile('src/main/explorer-menu.ps1')]));
 await writeFile('dist/main/archive-associations.ps1',Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),await readFile('src/main/archive-associations.ps1')]));
+await writeFile('dist/main/media-associations.ps1',Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),await readFile('src/main/media-associations.ps1')]));

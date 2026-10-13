@@ -9,6 +9,8 @@
   LangString OneUpgradeCopyFailed 2052 "无法保留旧版程序文件，已停止升级，旧版安装和个人设置和数据保留。"
   LangString OneRemoveFailed 1033 "Some program files are in use or inaccessible. Close One and retry; your settings and data has not been removed."
   LangString OneRemoveFailed 2052 "部分程序文件正在使用或无法访问。请退出 One 后重试，个人设置和数据未被删除。"
+  LangString OneMediaRegistrationFailed 1033 "Unable to register One project files. Run the installer again to repair this installation."
+  LangString OneMediaRegistrationFailed 2052 "无法登记 One 工程文件关联，请重新运行安装程序修复。"
 !macroend
 
 ; The standard atomic upgrade uses Rename into $PLUGINSDIR, which fails when
@@ -56,6 +58,21 @@
   StrCpy $isForceCurrentInstall "1"
 !macroend
 
+!macro customInstall
+!if "${APP_ID}" == "local.one.desktop"
+  ClearErrors
+  nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\app.asar.unpacked\dist\main\media-associations.ps1" -Operation register -Executable "$INSTDIR\${APP_EXECUTABLE_FILENAME}" -Icon "$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+  Pop $R0
+  ${If} ${Errors}
+    StrCpy $R0 1603
+  ${EndIf}
+  ${If} $R0 != 0
+    SetErrorLevel 1603
+    Abort "$(OneMediaRegistrationFailed)"
+  ${EndIf}
+!endif
+!macroend
+
 !macro customUnInstall
   ${IfNot} ${isUpdated}
     IfFileExists "$INSTDIR\resources\app.asar.unpacked\dist\main\archive-associations.ps1" 0 one_archive_cleanup_done
@@ -70,6 +87,20 @@
       Abort "$(OneRemoveFailed)"
     ${EndIf}
     one_archive_cleanup_done:
+!if "${APP_ID}" == "local.one.desktop"
+    IfFileExists "$INSTDIR\resources\app.asar.unpacked\dist\main\media-associations.ps1" 0 one_media_cleanup_done
+    ClearErrors
+    nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\app.asar.unpacked\dist\main\media-associations.ps1" -Operation remove -Executable "$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+    Pop $R0
+    ${If} ${Errors}
+      StrCpy $R0 1603
+    ${EndIf}
+    ${If} $R0 != 0
+      SetErrorLevel 1603
+      Abort "$(OneRemoveFailed)"
+    ${EndIf}
+    one_media_cleanup_done:
+!endif
   ${EndIf}
 !macroend
 

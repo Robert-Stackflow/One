@@ -45,6 +45,17 @@ async function registerArchiveAssociation(directory) {
   const result=JSON.parse(stdout.replace(/^\uFEFF/,''));
   if(!result.registered)throw Error('压缩包文件关联恢复失败');
 }
+async function mediaAssociation(directory,operation) {
+  // Verification installers have a separate identity and must not own One files.
+  if(info.product!=='One')return false;
+  const script=path.join(directory,'resources','app.asar.unpacked','dist','main','media-associations.ps1');
+  if(!fs.existsSync(script)){if(operation==='register')throw Error('缺少 One 工程关联脚本');return false;}
+  const executable=path.join(directory,`${info.product}.exe`);
+  const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-Operation',operation,'-Executable',executable,'-Icon',executable],{windowsHide:true,timeout:30000,maxBuffer:4096});
+  const result=JSON.parse(stdout.replace(/^\uFEFF/,''));
+  if(operation==='register'&&!result.registered)throw Error('One 工程关联恢复失败');
+  return result.registered===true;
+}
 function registeredDirectory(value) {
   if (!value?.icon) return '';
   const icon = value.icon.replace(/,\d+$/, '').replace(/^"|"$/g, '');
@@ -170,7 +181,7 @@ function validDirectory(input) {
 async function install(directory) {
   if(installing) return;
   if(!validDirectory(directory)) {send({stage:'failed',reason:'invalidPath'});return;}
-  installing=true;let scratch='',saved=null,changed=false,keepScratch=false,result=null,restoreArchive=false;
+  installing=true;let scratch='',saved=null,changed=false,keepScratch=false,result=null,restoreArchive=false,restoreMedia=false;
   try {
     send({stage:'checking',detail:'正在验证安装位置',caption:'准备中'});
     if(os.arch()!=='x64'&&os.arch()!=='arm64') throw Object.assign(Error('当前系统不受支持'),{reason:'unsupported'});
@@ -179,6 +190,7 @@ async function install(directory) {
     if(newerThan(existing?.version,info.version)) throw Object.assign(Error('已有更新版本'),{reason:'newer'});
     const old=registeredDirectory(existing);
     restoreArchive=await archiveAssociationWanted(old||directory);
+    restoreMedia=await mediaAssociation(old||directory,'status');
     if(old && old.toLowerCase()!==directory.toLowerCase()) {
       const inside=(child,parent)=>{const relative=path.relative(parent,child);return relative!==''&&!relative.startsWith('..')&&!path.isAbsolute(relative);};
       if(inside(directory,old)||inside(old,directory)) throw Object.assign(Error('安装位置不能包含原有目录'),{reason:'invalidPath'});
@@ -206,12 +218,14 @@ async function install(directory) {
     const asar=path.join(directory,'resources','app.asar');
     if(!fs.existsSync(path.join(directory,`${info.product}.exe`))||!fs.existsSync(asar)||await hash(asar)!==info.asarHash) throw Object.assign(Error('安装文件校验失败'),{reason:'installed-integrity'});
     if(restoreArchive)await registerArchiveAssociation(directory);
+    if(info.product==='One'&&!(await mediaAssociation(directory,'status')))throw Object.assign(Error('One 工程关联校验失败'),{reason:'installed-integrity'});
     installedDirectory=directory;
     result={stage:'done',directory};
   } catch(error) {
     console.error('One installer failed:',error);
+    if(changed&&!saved)try{await mediaAssociation(directory,'remove');}catch(cleanupError){error=Object.assign(Error('无法清理未完成的 One 工程关联，请重新运行安装程序修复'),{reason:'restore'});}
     if(changed&&saved) {
-      try {await restorePrevious(saved);if(restoreArchive)await registerArchiveAssociation(saved.previous);} catch(restoreError) {keepScratch=true;error=Object.assign(Error(`无法恢复旧版，备份位置：${scratch}`),{reason:'restore'});}
+      try {await mediaAssociation(directory,'remove');await restorePrevious(saved);if(restoreArchive)await registerArchiveAssociation(saved.previous);if(restoreMedia)await mediaAssociation(saved.previous,'register');} catch(restoreError) {keepScratch=true;error=Object.assign(Error(`无法恢复旧版，备份位置：${scratch}`),{reason:'restore'});}
     }
     result={stage:'failed',reason:error.reason||'engine',message:error.message};
   } finally {
