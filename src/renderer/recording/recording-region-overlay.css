@@ -1,0 +1,53 @@
+html:has(> :is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"])),
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) * {
+  box-sizing: border-box;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) [hidden] {
+  display: none !important;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #frame {
+  position: fixed;
+  inset: 0;
+  border: 2px solid #e54b4b;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px #ffffffaa;
+  pointer-events: none;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #drag {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--fg);
+  font:
+    12px var(--ui-font);
+  font-variant-numeric: tabular-nums;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #drag:hover,
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #drag[data-active='true'] {
+  background: var(--hover);
+  border-color: #e54b4b;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #icon {
+  display: flex;
+}
+:is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #icon svg {
+  width: 16px;
+  height: 16px;
+}

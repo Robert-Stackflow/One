@@ -1,0 +1,62 @@
+html:has(> body[data-view="recording-annotation-overlay"]),
+body[data-view="recording-annotation-overlay"] {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--ui-font);
+}
+body[data-view="recording-annotation-overlay"] canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+[data-interactive='true'] body[data-view="recording-annotation-overlay"] canvas {
+  cursor: crosshair;
+}
+[data-tool='move'] body[data-view="recording-annotation-overlay"] canvas {
+  cursor: move;
+}
+body[data-view="recording-annotation-overlay"] #status {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  max-width: 80%;
+  padding: 8px 12px;
+  color: white;
+  background: #292929ee;
+  border-radius: 8px;
+  font-size: 13px;
+  pointer-events: none;
+}
+body[data-view="recording-annotation-overlay"] [hidden] {
+  display: none !important;
+}
+body[data-view="recording-annotation-overlay"] > .annotation-step-order {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  color: #f0f0f0;
+  background: #202020ee;
+  border: 1px solid #555;
+  border-radius: 8px;
+}
+body[data-view="recording-annotation-overlay"] > .annotation-step-order input,
+body[data-view="recording-annotation-overlay"] > .annotation-step-order button {
+  color: #f0f0f0;
+  background: #303030;
+  border: 1px solid #666;
+  border-radius: 4px;
+}
+body[data-view="recording-annotation-overlay"] > .annotation-step-order button:hover:not(:disabled) {
+  background: #484848;
+}
+body[data-view="recording-annotation-overlay"] > .annotation-step-order :disabled {
+  color: #929292;
+  opacity: 0.65;
+}

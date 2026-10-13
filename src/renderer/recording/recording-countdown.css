@@ -1,0 +1,94 @@
+html:has(> body[data-view="recording-countdown"]),
+body[data-view="recording-countdown"] {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+body[data-view="recording-countdown"] {
+  display: grid;
+  place-items: center;
+  background: #0009;
+  color: white;
+  font-family: var(--ui-font);
+  user-select: none;
+}
+body[data-view="recording-countdown"] main {
+  display: grid;
+  justify-items: center;
+  gap: 28px;
+}
+body[data-view="recording-countdown"] p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 3px;
+}
+body[data-view="recording-countdown"] .count {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 160px;
+  height: 160px;
+}
+body[data-view="recording-countdown"] .count svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+body[data-view="recording-countdown"] circle {
+  fill: none;
+  stroke-width: 3;
+}
+body[data-view="recording-countdown"] .track {
+  stroke: #fff3;
+}
+body[data-view="recording-countdown"] .ring {
+  stroke: white;
+  stroke-linecap: round;
+  stroke-dasharray: 452.4;
+}
+body[data-view="recording-countdown"] .ring.running {
+  animation: one-recording-countdown-tick 1s linear both;
+}
+body[data-view="recording-countdown"] strong {
+  font-size: 76px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+body[data-view="recording-countdown"] button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #ffffff38;
+  border-radius: 22px;
+  padding: 9px 16px;
+  background: #0003;
+  color: #fffd;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+body[data-view="recording-countdown"] button:hover {
+  background: #ffffff18;
+}
+body[data-view="recording-countdown"] kbd {
+  font: inherit;
+  font-size: 11px;
+  color: #fffa;
+}
+@keyframes one-recording-countdown-tick {
+  to {
+    stroke-dashoffset: 452.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="recording-countdown"] .ring.running {
+    animation: none;
+  }
+}
+body[data-view="recording-countdown"] #app { display: grid; place-items: center; }

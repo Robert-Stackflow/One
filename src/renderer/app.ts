@@ -12,12 +12,13 @@ import {setupSegments} from './segments';
 import {setupWindowVisibility} from './window-visibility';
 import {api} from './ui';
 const view=new URLSearchParams(location.search).get('view')||'main';
-if(view!=='native-tooltip'){setupAppearance();setupTextSelection();setupTooltips();setupSegments();}
-window.addEventListener('error',event=>{void api.diagnosticsReport('uncaught-error',event.error?.stack||`${event.message} at ${event.filename}:${event.lineno}:${event.colno}`).catch(()=>{});});
-window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
+if(!['native-tooltip','recording-region-outline'].includes(view)){setupAppearance();setupTextSelection();setupTooltips();setupSegments();}
+window.addEventListener('error',event=>{void api?.diagnosticsReport('uncaught-error',event.error?.stack||`${event.message} at ${event.filename}:${event.lineno}:${event.colno}`).catch(()=>{});});
+window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api?.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
 if(['main','file-action','preview','picker','search','color-editor','dialog-bar','archive-task'].includes(view))setupWindowVisibility();
 const render=async()=>{
-  if(view==='recognition')await (await import('./recognition-view')).renderRecognition();
+  if(['recording-input-overlay','recording-camera-overlay','recording-annotation-overlay','recording-region-overlay','recording-region-outline','recording-countdown'].includes(view))await (await import('./recording-overlay-view')).renderRecordingOverlay(view);
+  else if(view==='recognition')await (await import('./recognition-view')).renderRecognition();
   else if(view==='scroll-capture')(await import('./scroll-capture-view')).renderScrollCapture();
   else if(view==='capture')(await import('./capture-window-view')).renderCapture();
   else if(view==='native-tooltip')(await import('./native-tooltip-view')).renderNativeTooltip();
@@ -43,4 +44,4 @@ const render=async()=>{
 else if(view==='image-editor')await (await import('./image-editor-view')).renderImageEditor();
  else (await import('./main-view')).renderMain();
 };
-void render().catch(error=>{void api.diagnosticsReport('render',error?.stack||String(error)).catch(()=>{});console.error(error);});
+void render().catch(error=>{void api?.diagnosticsReport('render',error?.stack||String(error)).catch(()=>{});console.error(error);});
