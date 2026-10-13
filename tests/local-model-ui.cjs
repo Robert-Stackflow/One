@@ -23,11 +23,11 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile},windowsHide:true,maxBuffer:64*1024});
     await sharp(Buffer.from('<svg width="680" height="120"><rect width="680" height="120" fill="white"/><text x="15" y="85" font-family="Arial" font-size="58">ONE OCR 2026</text></svg>')).png().toFile(input);
     let page=await open();assert.equal((await page.evaluate(()=>window.one.recognition.state())).modelTitle,'Tesseract fast');
-    await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');await expect(dialog).toBeVisible();
-    await page.locator('[data-select-model=pp-ocrv6-tiny]').click();
+    await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');await expect(dialog).toBeVisible();await expect(dialog.locator('[data-select-model=tesseract] .model-current')).toBeVisible();
+    await page.locator('[data-select-model=pp-ocrv6-tiny]').click();await expect(dialog.locator('[data-select-model=tesseract] .model-current')).toBeVisible();await expect(dialog.locator('[data-select-model=pp-ocrv6-tiny] .model-current')).not.toBeVisible();
     await choose(page,'local-model-device','CPU');
-    await page.locator('#local-model-save').click();await expect(page.locator('#local-model-error')).toHaveText('已保存，将用于新任务');
-    await page.locator('#local-model-settings-close').click();await page.locator('#run').click();
+    await page.locator('#local-model-save').click();await expect(page.locator('[data-select-model=pp-ocrv6-tiny]')).toHaveAttribute('aria-current','true');await expect(page.locator('#local-model-save')).toBeEnabled();await expect(page.locator('#local-model-error')).not.toBeVisible();
+    await expect(dialog).not.toBeVisible();await page.locator('#run').click();
     await expect(page.locator('#result')).toHaveValue(/ONE\s*OCR\s*2026/,{timeout:30000});await expect(page.locator('#local-model-configure')).toHaveAttribute('data-tooltip',/PP-OCRv6 tiny · CPU/);
     // Switching a selection while a task is active must not change that task's snapshot.
     await page.evaluate(()=>{window.currentModelTask=window.one.recognition.run((document.querySelector('#source').src).split('/').pop(),'eng').then(result=>({result}),error=>({error:String(error)}));});
@@ -35,13 +35,13 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await page.evaluate(async()=>{const api=window.one.recognition,state=await api.localModels();await api.saveLocalModel('ocr',{modelId:'tesseract',device:{mode:'auto'}},state.revision);});
     const fixed=await page.evaluate(()=>window.currentModelTask);assert.equal(fixed.result.inference.model,'PP-OCRv6 tiny');
     await page.locator('#local-model-configure').click();await page.locator('[data-select-model=pp-ocrv6-tiny]').click();
-    await page.locator('#local-model-devices').click();await expect(page.locator('#local-model-error')).toHaveText('显卡列表已更新',{timeout:15000});
+    await page.locator('#local-model-devices').click();await expect(page.locator('#local-model-devices')).toBeEnabled({timeout:15000});await expect(page.locator('#local-model-error')).not.toBeVisible();
     await expect(page.locator('#local-model-gpu')).toContainText('NVIDIA');await expect(page.locator('#local-model-note')).toHaveCount(0);await expect(page.locator('#local-model-save-note')).toHaveCount(0);const devices=await page.evaluate(()=>window.one.recognition.localModels());assert.ok(devices.devices.gpus.some(gpu=>gpu.vendorId===4098));
     const amd=devices.devices.gpus.find(gpu=>gpu.vendorId===4098&&gpu.d3d12);
     await choose(page,'local-model-device','GPU · DirectML');
     await page.locator('#local-model-gpu').click();await page.getByRole('option',{name:amd.name+' · '+amd.deviceId,exact:true}).click();
-    await page.locator('#local-model-save').click();await expect(page.locator('#local-model-error')).toHaveText('已保存，将用于新任务');
-    await page.locator('#local-model-settings-close').click();await page.locator('#run').click();await expect(page.locator('#local-model-configure')).toHaveAttribute('data-tooltip',/AMD Radeon/,{timeout:30000});
+    await page.locator('#local-model-save').click();await expect(page.locator('[data-select-model=pp-ocrv6-tiny]')).toHaveAttribute('aria-current','true');await expect(page.locator('#local-model-save')).toBeEnabled();await expect(page.locator('#local-model-error')).not.toBeVisible();
+    await expect(dialog).not.toBeVisible();await page.locator('#run').click();await expect(page.locator('#local-model-configure')).toHaveAttribute('data-tooltip',/AMD Radeon/,{timeout:30000});
     await page.locator('#local-model-configure').click();await expect(page.locator('#local-model-gpu-info')).toContainText('DXGI '+amd.deviceId);await app.evaluate(({BrowserWindow})=>{const window=BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().includes('view=recognition'));window.setSize(680,740);});
     const home=app.windows().find(window=>window.url().endsWith('?view=main'));await home.evaluate(()=>window.one.patchSettings({capture:{uiScale:150}}));await expect(page.locator('#app')).toHaveAttribute('data-capture-scale','150');
     await expect(dialog).toBeVisible();const overflow=await dialog.evaluate(element=>{const body=element.querySelector('.one-dialog-body'),rect=element.getBoundingClientRect();return {scroll:body.scrollWidth,width:body.clientWidth,top:rect.top,bottom:rect.bottom,height:innerHeight};});assert.ok(overflow.scroll<=overflow.width+1&&overflow.top>=0&&overflow.bottom<=overflow.height+1,JSON.stringify(overflow));
