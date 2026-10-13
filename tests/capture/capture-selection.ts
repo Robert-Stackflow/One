@@ -105,7 +105,7 @@ test('window layout preserves physical positions and layer order within shared i
     /总量/,
   );
 });
-test('independent window capture rejects changed identities, moved windows, failures and cancellation without partial snapshots', async () => {
+test('independent window capture freezes positions and rejects changed identities, failures and cancellation', async () => {
   const choices = [
     { hwnd: 1, pid: 11, name: 'Bottom' },
     { hwnd: 2, pid: 22, name: 'Top' },
@@ -149,14 +149,20 @@ test('independent window capture rejects changed identities, moved windows, fail
     ],
   );
   assert.equal(stopped, 2);
-  for (const reason of ['identity', 'move', 'frame']) {
+  for (const reason of ['identity', 'frame']) {
     changed = reason === 'identity';
     move = reason === 'move';
     fail = reason === 'frame';
     captured = stopped = 0;
     await assert.rejects(captureWindowFrames(choices, new AbortController().signal, source));
-    assert.equal(stopped, 2, reason);
+    assert.equal(stopped, reason === 'identity' ? 1 : 2, reason);
   }
+  changed = fail = false;
+  move = true;
+  captured = stopped = 0;
+  const moved = await captureWindowFrames(choices, new AbortController().signal, source);
+  assert.deepEqual(moved.layers.map(layer => layer.y), [0, 0]);
+  assert.equal(stopped, 2);
   const abort = new AbortController();
   let rejectFrame: (error: Error) => void = () => {};
   const pending = captureWindowFrames(choices, abort.signal, {

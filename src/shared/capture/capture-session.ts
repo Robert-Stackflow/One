@@ -22,6 +22,7 @@ export type { CaptureAction } from './capture-workflow';
 export interface CaptureData {
   token: string;
   image: string;
+  revision: number;
   name: string;
   width: number;
   height: number;
@@ -59,6 +60,7 @@ export interface CaptureAPI extends SensitiveAPI {
   ready(token: string, failure?: string): Promise<void>;
   complete(request: CaptureRequest | null): Promise<CaptureResult>;
   refresh(token: string): Promise<CaptureData>;
+  refreshReady(token: string, revision: number, accepted: boolean): Promise<void>;
   detect(token: string, point: Point): Promise<CaptureCandidate[]>;
   cursorTarget(token: string, point: Point): Promise<Point>;
   moveCursor(token: string, point: Point): Promise<void>;

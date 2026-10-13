@@ -14,22 +14,21 @@ export interface WindowFrameSource {
     stop(): void;
   };
 }
-/** Capture each selected window independently; reject the whole new snapshot if any identity changes. */
+/** Freeze each window independently. A completed layer no longer depends on its source window. */
 export async function captureWindowFrames(
   choices: WindowCaptureChoice[],
   signal: AbortSignal,
   source: WindowFrameSource,
   placements?: { x: number; y: number }[],
 ) {
-  const current = () =>
-    choices.map((choice) => {
-      const info = source.info(choice.hwnd);
-      if (!info || info.pid !== choice.pid || info.pid === source.ownPid)
-        throw Error(`窗口“${choice.name}”已关闭或最小化，请返回列表重新选择`);
-      return info;
-    });
+  const current = (choice: WindowCaptureChoice) => {
+    const info = source.info(choice.hwnd);
+    if (!info || info.hwnd !== choice.hwnd || info.pid !== choice.pid || info.pid === source.ownPid)
+      throw Error(`窗口“${choice.name}”已关闭或最小化，请返回列表重新选择`);
+    return info;
+  };
   signal.throwIfAborted();
-  const before = current();
+  const before = choices.map(current);
   if (placements && placements.length !== before.length) throw Error('窗口布局无效');
   captureWindowLayout(before.map((item, index) => ({ ...item, ...placements?.[index] })));
   let native: ReturnType<WindowFrameSource['create']> | undefined,
@@ -40,39 +39,40 @@ export async function captureWindowFrames(
     const layers = [];
     for (let i = 0; i < before.length; i++) {
       signal.throwIfAborted();
-      try {
-        native = source.create(before[i]);
-        const png = await native.frame(true);
-        signal.throwIfAborted();
-        if (png.byteLength < 24) throw Error('窗口图像不完整');
-        const width = png.readUInt32BE(16),
-          height = png.readUInt32BE(20);
-        imageDimensions(width, height);
-        bytes += png.byteLength;
-        if (bytes > IMAGE_BYTES) throw Error('所选窗口图像总量超过 64 MiB');
-        layers.push({
-          png,
-          name: choices[i].name,
-          x: placements?.[i].x ?? before[i].x,
-          y: placements?.[i].y ?? before[i].y,
-          width,
-          height,
-        });
-      } finally {
-        native?.stop();
-        native = undefined;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const info = current(choices[i]);
+        try {
+          native = source.create(info);
+          const png = await native.frame(true);
+          signal.throwIfAborted();
+          const after = current(choices[i]);
+          if (png.byteLength < 24) throw Error('窗口图像不完整');
+          const width = png.readUInt32BE(16),
+            height = png.readUInt32BE(20);
+          imageDimensions(width, height);
+          if (info.width !== after.width || info.height !== after.height ||
+              width !== after.width || height !== after.height) {
+            if (!attempt) continue;
+            throw Error(`窗口“${choices[i].name}”尺寸持续改变或帧尺寸不符，请保持稳定后重试`);
+          }
+          bytes += png.byteLength;
+          if (bytes > IMAGE_BYTES) throw Error('所选窗口图像总量超过 64 MiB');
+          layers.push({
+            png,
+            name: choices[i].name,
+            x: placements?.[i].x ?? before[i].x,
+            y: placements?.[i].y ?? before[i].y,
+            width,
+            height,
+          });
+          break;
+        } finally {
+          native?.stop();
+          native = undefined;
+        }
       }
     }
     signal.throwIfAborted();
-    const after = current();
-    if (
-      before.some((old, i) =>
-        ['x', 'y', 'width', 'height'].some(
-          (key) => old[key as keyof Rectangle] !== after[i][key as keyof Rectangle],
-        ),
-      )
-    )
-      throw Error('窗口位置或尺寸已改变，请保持窗口稳定后重试');
     const layout = captureWindowLayout(layers);
     return {
       width: layout.width,

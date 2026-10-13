@@ -24,6 +24,7 @@ import { captureRequest, type CaptureAction, type CaptureData } from '../../shar
 import { imageDimensions } from '../../shared/capture/image-limits';
 import { CAPTURE_WINDOWS, windowPlacements } from '../../shared/capture/capture-window-layout';
 import { captureWindowFrames } from './capture-window-frames';
+import { freezeCaptureSnapshot, checkSnapshotRefresh, type CaptureSnapshot as Snapshot } from './capture-snapshot';
 import {
   captureDesktopFrames,
   desktopSignature,
@@ -41,19 +42,6 @@ import { customCaptureSelection, type CustomCapture } from '../../shared/capture
 
 export const CAPTURE_URL='one://app/index.html?view=capture';
 
-interface Snapshot {
-  composition?: 'windows' | 'desktop';
-  layers?: { png: Buffer; name: string; x: number; y: number; width: number; height: number }[];
-  size: { width: number; height: number };
-  displayId: number;
-  sourceId: string;
-  signature: string;
-  name: string;
-  physical?: Rectangle;
-  pinPhysical?: Rectangle;
-  png: Buffer;
-  capturedAt: number;
-}
 interface CaptureRun {
   token: string;
   overlay: BrowserWindow;
@@ -72,6 +60,8 @@ interface CaptureRun {
   detectionRevision: number;
   remoteCompatible: boolean;
   imageRevision: number;
+  nextImageRevision: number;
+  candidate?: { shot: Snapshot; revision: number };
   ended: boolean;
   startupError?: string;
   painted(): void;
@@ -337,8 +327,8 @@ export class CaptureService {
         (!workflow || JSON.stringify(workflow.actions) !== JSON.stringify(request.actions))
       )
         throw Error('翻译仅能通过已配置的动作流程执行，请重新选择流程');
-      this.checkDisplay(current.shot);
       if (current.purpose === 'region') {
+        this.checkDisplay(current.shot);
         const r = request.selection;
         current.finish({
           displayId: current.shot.displayId,
@@ -364,7 +354,15 @@ export class CaptureService {
       if (header.width !== layout.width || header.height !== layout.height)
         throw Error('截图输出尺寸与选区不符');
       const png = decodePng(request.png!);
-      const physicalPin=request.actions.includes('pin')?capturePinBounds(current.shot.pinPhysical??current.shot.physical,current.shot.size,request.selection,layout):undefined;
+      let physicalPin: Rectangle | undefined;
+      if (request.actions.includes('pin')) {
+        try {
+          this.checkDisplay(current.shot);
+          physicalPin = capturePinBounds(current.shot.pinPhysical ?? current.shot.physical, size, request.selection, layout);
+        } catch {
+          // Saved pixels remain usable; changed screens use the pin service's default placement.
+        }
+      }
       const dipPin=physicalPin?screen.screenToDipRect(null,physicalPin):undefined;
       const captured=dipPin&&physicalPin?{...dipPin,scale:physicalPin.width/layout.width/screen.getDisplayMatching(dipPin).scaleFactor}:undefined;
       current.busy = 'output';
@@ -411,6 +409,7 @@ export class CaptureService {
       const current = session(event);
       if (token !== current.token || current.busy) throw Error('当前截图不能刷新');
       current.busy = 'refresh';
+      current.candidate = undefined;
       current.detectionRevision++;
       const old = current.shot;
       const hidden = current.remoteCompatible && !!old.physical && current.overlay.isVisible();
@@ -420,17 +419,11 @@ export class CaptureService {
       // in remote mode; the local-only mode can use capture exclusion instead.
       try {
         if (this.run !== current || current.overlay.isDestroyed()) throw Error('截图已取消');
-        const shot = await current.refresh();
-        if (
-          shot.signature !== old.signature ||
-          shot.size.width !== old.size.width ||
-          shot.size.height !== old.size.height
-        )
-          throw Error('来源尺寸或显示器配置已改变，请重新截图');
+        const shot = freezeCaptureSnapshot(await current.refresh());
+        checkSnapshotRefresh(old, shot);
         if (this.run !== current) throw Error('截图已取消');
-        current.shot = shot;
-        current.imageRevision++;
-        return this.data(current);
+        current.candidate = { shot, revision: ++current.nextImageRevision };
+        return this.data(current, shot, current.candidate.revision);
       } finally {
         current.busy = null;
         if (hidden && this.run === current && !current.overlay.isDestroyed()) {
@@ -441,17 +434,28 @@ export class CaptureService {
         }
       }
     });
+    register('capture-refresh-ready', (event, token, revision, accepted) => {
+      const current = session(event), candidate = current.candidate;
+      if (token !== current.token || current.busy || !candidate || candidate.revision !== revision ||
+          typeof accepted !== 'boolean') throw Error('刷新候选快照已失效');
+      if (accepted) {
+        current.shot = candidate.shot;
+        current.imageRevision = candidate.revision;
+      }
+      current.candidate = undefined;
+    });
   }
-  private data(current: CaptureRun): CaptureData {
-    const size = current.shot.size;
+  private data(current: CaptureRun, shot = current.shot, revision = current.imageRevision): CaptureData {
+    const size = shot.size;
     return {
       token: current.token,
-      image: `one-file://capture/${current.token}/${current.imageRevision}`,
-      capturedAt: current.shot.capturedAt,
+      image: `one-file://capture/${current.token}/${revision}`,
+      revision,
+      capturedAt: shot.capturedAt,
       watermark: this.host.watermark(),
       annotationStyles: this.host.annotationStyles?.(),
       uiScale:this.host.uiScale(),
-      name: current.shot.name,
+      name: shot.name,
       width: size.width,
       height: size.height,
       purpose: current.purpose,
@@ -460,9 +464,9 @@ export class CaptureService {
       initialSelection: current.initialSelection,
       autoCopy: current.autoCopy,
       selectionMode: current.selectionMode,
-      composition: current.shot.composition,
-      layers: current.shot.layers?.map((layer, i) => ({
-        image: `one-file://capture/${current.token}/${current.imageRevision}/layer/${i}`,
+      composition: shot.composition,
+      layers: shot.layers?.map((layer, i) => ({
+        image: `one-file://capture/${current.token}/${revision}/layer/${i}`,
         name: layer.name,
         x: layer.x,
         y: layer.y,
@@ -471,10 +475,10 @@ export class CaptureService {
       })),
       workflows: structuredClone(current.workflows),
       workflowId: current.workflowId,
-      detection: !!current.shot.physical,
-      pointer: this.pointer(current.shot),
-      origin: current.shot.physical
-        ? { x: current.shot.physical.x, y: current.shot.physical.y }
+      detection: !!shot.physical,
+      pointer: this.pointer(shot),
+      origin: shot.physical
+        ? { x: shot.physical.x, y: shot.physical.y }
         : { x: 0, y: 0 },
     };
   }
@@ -522,18 +526,17 @@ export class CaptureService {
   }
   image(path: string): Buffer | undefined {
     const current = this.run;
-    if (
-      current &&
-      !current.ended &&
-      path === `/${current.token}/${current.imageRevision}`
-    )
-      return current.shot.png;
-    if (current && !current.ended && current.shot.layers) {
-      const base = `/${current.token}/${current.imageRevision}/layer/`;
+    if (!current || current.ended) return;
+    for (const { shot, revision } of [
+      { shot: current.shot, revision: current.imageRevision },
+      ...(current.candidate ? [current.candidate] : []),
+    ]) {
+      if (path === `/${current.token}/${revision}`) return shot.png;
+      const base = `/${current.token}/${revision}/layer/`;
       if (path.startsWith(base)) {
         const index = path.slice(base.length);
         if (/^(?:[0-9]|[12][0-9]|3[01])$/.test(index))
-          return current.shot.layers[Number(index)]?.png;
+          return shot.layers?.[Number(index)]?.png;
       }
     }
   }
@@ -821,6 +824,7 @@ export class CaptureService {
           placements,
         );
         return {
+          composition: 'windows',
           size: { width: result.width, height: result.height },
           png: result.layers[0].png,
           layers: result.layers,
@@ -942,7 +946,7 @@ export class CaptureService {
         this.run = {
           token: randomUUID(),
           overlay: overlay!,
-          shot,
+          shot: freezeCaptureSnapshot(shot),
           purpose,
           regionHint,
           selected,
@@ -959,6 +963,7 @@ export class CaptureService {
           detectionRevision: 0,
           remoteCompatible,
           imageRevision: 0,
+          nextImageRevision: 0,
           ended: false,
           painted,
           refresh: getShot!,

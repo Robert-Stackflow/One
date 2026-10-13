@@ -1326,7 +1326,15 @@ async function refresh() {
   q('capture-message').textContent = '正在刷新画面…';
   try {
     const next = await api.refresh(data.token);
-    await loadImage(next);
+    let decoded: Awaited<ReturnType<typeof captureSource>>;
+    try {
+      decoded = await captureSource(next);
+      await api.refreshReady(data.token, next.revision, true);
+    } catch (e) {
+      await api.refreshReady(data.token, next.revision, false).catch(() => {});
+      throw e;
+    }
+    source = decoded;
     data = next;
     precisePointer = null;
     preciseNativePoint = null;

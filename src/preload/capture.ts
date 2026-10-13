@@ -6,6 +6,7 @@ const listen=(name:string,callback:(value:any)=>void)=>{const handler=(_event:El
 const capture:CaptureAPI={
   data:()=>invoke('capture-data'),ready:(token,failure)=>invoke('capture-ready',token,failure),
   complete:request=>invoke('capture-complete',request),refresh:token=>invoke('capture-refresh',token),
+  refreshReady:(token,revision,accepted)=>invoke('capture-refresh-ready',token,revision,accepted),
   detect:(token,point)=>invoke('capture-detect',token,point),cursorTarget:(token,point)=>invoke('capture-cursor-target',token,point),
   moveCursor:(token,point)=>invoke('capture-cursor',token,point),copyColor:(token,value)=>invoke('capture-color',token,value),
   fonts:()=>invoke('capture-fonts'),selectFont:(token,family)=>invoke('capture-select-font',token,family),
