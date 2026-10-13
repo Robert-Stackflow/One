@@ -62,6 +62,8 @@ One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在�
 
 模型管理显示名称、尺寸档、版本、语言/场景、下载大小、磁盘占用、CPU/GPU 兼容性、已测内存/显存和状态；未测需求明确标为未知。允许多个模型共存、切换、下载取消/继续、重试和删除，记忆每项功能的选择；切换只影响新任务。按需下载权重和运行包，不把所有大模型加入安装器。
 
+共享缓存基础层已实现：预设绑定整套权重和配置的固定大小/SHA-256，下载取消或超时保留进度，Range 响应严格校验，不支持 Range 时安全重下；全部文件通过校验后才发布整个目录。版本可共存，推理租约阻止使用中删除，读取和安装拒绝缓存符号链接。PP-OCRv6 tiny 已通过新缓存的实际 CPU 推理；MI-GAN 修复已接入共享缓存和租约，旧缓存校验后离线复制迁入，仍保留旧位置供旧版使用；修复推理、EXIF/Alpha、原文件保护、界面双模式和中途取消回归通过。缓存与推理检查入口为 `node tests/local-model-store.cjs`、`node tests/local-model-runtime.cjs`，后者只使用已准备的官方模型文件，不自动下载。模型选择界面、设备枚举、其他预设及跨功能调度仍待接入，当前不改变默认 OCR。
+
 设备设置为“自动 / CPU / GPU”，可选具体显卡，高级设置中选择已适配后端；运行时显示实际设备。自动模式先探测模型和后端是否兼容，再决定设备；小任务 GPU 启动开销过大时也可选 CPU，不能承诺 GPU 对每张图都更快。
 
 - Windows ONNX 通路优先验证 DirectML，覆盖兼容的 NVIDIA/AMD/Intel 显卡；同时评估 WinML 的后续接入价值。ONNX Runtime 官方 Node 预编译支持表中 Windows 有 DirectML，Windows CUDA 并未列为预编译支持，不能靠修改一个参数就承诺 CUDA 可用。[Node 支持表](https://onnxruntime.ai/docs/get-started/with-javascript/node.html)、[DirectML/WinML 状态](https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html)

@@ -1,7 +1,9 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {mkdir,open,rename,rm,stat,readdir} from 'node:fs/promises';
+import {mkdir,open,rename,rm,lstat,readdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createReadStream} from 'node:fs';
+import {LocalModelStore} from './local-model-store';
+import {miganModel} from './local-model-catalog';
 
 export interface AiModelDescriptor {id:string;url:string;bytes:number;sha256:string}
 export const backgroundModel:AiModelDescriptor={
@@ -24,9 +26,12 @@ export const repairModel:AiModelDescriptor={
 };
 
 export function aiModelPath(dataDir:string,model=backgroundModel){return join(dataDir,'models',`${model.id}-${model.sha256.slice(0,12)}.onnx`);}
+const isSharedRepair=(model:AiModelDescriptor)=>model.id===repairModel.id&&model.bytes===repairModel.bytes&&model.sha256===repairModel.sha256&&model.url===repairModel.url;
+const repairStore=(dataDir:string,transport:typeof fetch=fetch,idleTimeoutMs=25000)=>new LocalModelStore(join(dataDir,'models','library'),transport,idleTimeoutMs);
 
 export async function validAiModel(dataDir:string,model=backgroundModel):Promise<boolean>{
- const path=aiModelPath(dataDir,model),info=await stat(path).catch(()=>null);if(!info?.isFile()||info.size!==model.bytes)return false;
+ if(isSharedRepair(model)&&(await repairStore(dataDir).state(miganModel)).ready)return true;
+ const path=aiModelPath(dataDir,model),info=await lstat(path).catch(()=>null);if(!info?.isFile()||info.isSymbolicLink()||info.size!==model.bytes)return false;
  const hash=createHash('sha256');for await(const part of createReadStream(path))hash.update(part);
  return hash.digest('hex')===model.sha256;
 }
@@ -37,6 +42,11 @@ async function pruneOldModels(dataDir:string,model:AiModelDescriptor){
 }
 
 export async function ensureAiModel(dataDir:string,signal:AbortSignal,progress:(received:number,total:number)=>void,model=backgroundModel,idleTimeoutMs=25_000,fetcher:(url:string,options:RequestInit)=>Promise<Response>=fetch):Promise<string>{
+ if(isSharedRepair(model)){
+  const store=repairStore(dataDir,fetcher as typeof fetch,idleTimeoutMs);
+  const folder=await store.install(miganModel,signal,value=>progress(value.received,value.total),{repair:aiModelPath(dataDir,model)});
+  return join(folder,miganModel.artifacts[0].name);
+ }
  const path=aiModelPath(dataDir,model);if(await validAiModel(dataDir,model)){await pruneOldModels(dataDir,model);return path;}
  await mkdir(join(dataDir,'models'),{recursive:true});
  for(let attempt=0;attempt<2;attempt++){
@@ -70,4 +80,12 @@ export async function ensureAiModel(dataDir:string,signal:AbortSignal,progress:(
   }finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);await rm(temporary,{force:true}).catch(()=>{});}
  }
  throw Error('模型下载失败');
+}
+
+/** Repair tasks lease their shared bundle so model management cannot delete a running task's weights. */
+export async function acquireAiModel(dataDir:string,signal:AbortSignal,progress:(received:number,total:number)=>void,model=backgroundModel,idleTimeoutMs=25_000,fetcher:(url:string,options:RequestInit)=>Promise<Response>=fetch){
+ const path=await ensureAiModel(dataDir,signal,progress,model,idleTimeoutMs,fetcher);
+ if(!isSharedRepair(model))return {path,release:()=>{}};
+ const lease=await repairStore(dataDir).acquire(miganModel);
+ return {path:lease.files[0].path,release:lease.release};
 }

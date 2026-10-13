@@ -1,0 +1,39 @@
+export type LocalModelPurpose = 'ocr' | 'formula' | 'repair';
+export type LocalModelBackend = 'cpu' | 'dml';
+export interface LocalModelArtifact {
+  name: string;
+  role: string;
+  url: string;
+  bytes: number;
+  sha256: string;
+}
+/** A preset owns a compatible set of weights, dictionaries and preprocessing configs. */
+export interface LocalModelDescriptor {
+  id: string;
+  revision: string;
+  title: string;
+  size: string;
+  purpose: LocalModelPurpose;
+  languages: string[];
+  weightLicense: { name: string; source: string };
+  backends: LocalModelBackend[];
+  precision: 'fp32';
+  runtime: string;
+  measuredMemoryMiB?: number;
+  measuredVRAMMiB?: number;
+  artifacts: LocalModelArtifact[];
+}
+export interface LocalModelProgress {
+  phase: 'checking' | 'downloading' | 'verifying' | 'ready';
+  received: number;
+  total: number;
+  artifact?: string;
+}
+export interface LocalModelState {
+  ready: boolean;
+  downloadedBytes: number;
+  diskBytes: number;
+  totalBytes: number;
+  downloading: boolean;
+  inUse: boolean;
+}
