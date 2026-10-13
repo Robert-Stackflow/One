@@ -10,14 +10,18 @@ import {
 } from '../../shared/recognition/ocr';
 import { OCRModels } from './ocr-models';
 import { textDocument } from '../../shared/recognition/text-document';
+import { localInference, type LocalInferenceScheduler } from '../local-inference-scheduler';
 export class OCRRunner {
   private abort?: AbortController;
   private active?: Promise<OCRResult>;
+  private readonly client = { owner: Symbol('tesseract-ocr') };
   constructor(
     private models: OCRModels,
     private workerFile = join(__dirname, 'recognition/ocr-worker.cjs'),
     private timeout = 60000,
+    private scheduler: LocalInferenceScheduler = localInference,
   ) {}
+  get waiting() { return this.scheduler.waiting(this.client); }
   async cancel() {
     this.abort?.abort();
     await this.active?.catch(() => {});
@@ -31,14 +35,14 @@ export class OCRRunner {
     if (this.active) return Promise.reject(Error('正在识别，请先取消当前任务'));
     ocrDimensions(size.width, size.height);
     ocrLanguage(language);
-    const abort = (this.abort = new AbortController());
-    const task = (async () => {
+    const abort = (this.abort = new AbortController()), input = Buffer.from(png), dimensions = { ...size };
+    const task = this.scheduler.run(this.client, abort.signal, async () => {
       const packs = await this.models.prepare(language);
       let worker: Worker | undefined;
       try {
         if (abort.signal.aborted) throw Error('文字识别已取消');
         worker = new Worker(this.workerFile, {
-          workerData: { png: Uint8Array.from(png), ...size, language, packs },
+          workerData: { png: Uint8Array.from(input), ...dimensions, language, packs },
           resourceLimits: { maxOldGenerationSizeMb: 192 },
         });
         for (const pack of packs) pack.data.fill(0);
@@ -75,8 +79,8 @@ export class OCRRunner {
             }
             if (message?.ok) {
               try {
-                const result = ocrResult(message.result, size, language);
-                result.document = textDocument(result, createHash('sha256').update(png).digest('hex'), {
+                const result = ocrResult(message.result, dimensions, language);
+                result.document = textDocument(result, createHash('sha256').update(input).digest('hex'), {
                   id: 'tesseract', version: require('tesseract.js/package.json').version,
                   model: 'tessdata_fast@87416418657359cb625c412a48b6e1d6d41c29bd', device: 'cpu', confidenceScale: 100,
                 });
@@ -92,9 +96,10 @@ export class OCRRunner {
       } finally {
         for (const pack of packs) pack.data.fill(0);
       }
-    })();
+    });
     this.active = task;
     return task.finally(() => {
+      input.fill(0);
       if (this.active === task) {
         this.active = undefined;
         this.abort = undefined;

@@ -39,6 +39,7 @@ export interface OCRState {
   width: number;
   height: number;
   running: boolean;
+  waitingForInference?: boolean;
   translating: boolean;
   formulaRecognizing: boolean;
   imageBytes: number;

@@ -44,7 +44,7 @@ function render() {
   q('workflow-back').hidden = !state.workflow?.returnToCapture;
   const loading = busy || state.models.downloading || translation.busy();
   q('image-loading').hidden = !loading; q('source').parentElement!.ariaBusy = String(loading);
-  q('image-loading-label').textContent = state.models.downloading ? '下载模型中' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
+  q('image-loading-label').textContent = state.models.downloading ? '下载模型中' : state.waitingForInference ? '等待其他本地任务' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
   q<HTMLButtonElement>('overlay-cancel').disabled = requesting && !state.running;
   selection.setEnabled(!busy); translation.render();
   const error = state.error || state.models.error || '';

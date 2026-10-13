@@ -2,6 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { ocrDimensions, ocrLanguage, ocrResult, type OCRResult } from '../../shared/recognition/ocr';
 import type { PaddleModelFiles, PaddlePreferences, PaddleJob } from './paddle-job';
+import { localInference, type LocalInferenceScheduler, type LocalInferenceClient } from '../local-inference-scheduler';
 
 export interface PaddleTaskResult extends OCRResult { actualBackend: 'cpu' | 'dml'; deviceId?: number; fallbackReason?: string }
 class InferenceError extends Error { constructor(message: string, readonly kind: string) { super(message); } }
@@ -13,15 +14,21 @@ export class PaddleRunner {
   private serial = 0;
   private idle?: ReturnType<typeof setTimeout>;
   private closed = false;
-  constructor(private worker = join(__dirname, 'recognition/paddle-worker.cjs'), private timeoutMs = 90000, private idleMs = 60000) {}
+  private terminating?: Promise<void>;
+  private readonly client: LocalInferenceClient = { owner: Symbol('paddle-ocr'), unload: () => this.terminate() };
+  constructor(private worker = join(__dirname, 'recognition/paddle-worker.cjs'), private timeoutMs = 90000, private idleMs = 60000,
+      private scheduler: LocalInferenceScheduler = localInference) {}
+  get waiting() { return this.scheduler.waiting(this.client); }
   private async terminate() {
     clearTimeout(this.idle);
+    if (this.terminating) return this.terminating;
     const child = this.child; this.child = undefined;
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
-    await new Promise<void>(resolve => { child.once('exit', () => resolve()); child.kill(); });
+    const termination = this.terminating = new Promise<void>(resolve => { child.once('exit', () => resolve()); child.kill(); });
+    try { await termination; } finally { if (this.terminating === termination) this.terminating = undefined; }
   }
   async cancel() { this.abort?.abort(); await this.active?.catch(() => {}); }
-  async close() { this.closed = true; await this.cancel(); await this.terminate(); }
+  async close() { this.closed = true; await this.cancel(); await this.terminate(); this.scheduler.forget(this.client); }
   run(png: Buffer, size: { width: number; height: number }, language: 'eng' | 'chi_sim+eng', model: PaddleModelFiles,
       preferences: PaddlePreferences, progress: (value: number, phase: string) => void = () => {}): Promise<PaddleTaskResult> {
     if (this.closed) return Promise.reject(Error('OCR 推理服务已关闭'));
@@ -33,7 +40,7 @@ export class PaddleRunner {
     const snapshot = structuredClone(model), dimensions = { ...size }, input = Buffer.from(png), prefs = { ...preferences }, signal = (this.abort = new AbortController()).signal;
     const backend = prefs.device === 'gpu' || prefs.device === 'auto' && dimensions.width * dimensions.height >= 1_000_000 ? 'dml' : 'cpu';
     clearTimeout(this.idle);
-    const task = (async () => {
+    const task = this.scheduler.run(this.client, signal, async () => {
       try { return await this.execute(input, dimensions, language, snapshot, prefs, backend, signal, progress); }
       catch (error) {
         if (signal.aborted || prefs.device !== 'auto' || backend !== 'dml' || !(error instanceof InferenceError) || !['loading', 'inference', 'resource', 'exit', 'timeout'].includes(error.kind)) {
@@ -46,7 +53,7 @@ export class PaddleRunner {
         const result = await this.execute(input, dimensions, language, snapshot, prefs, 'cpu', signal, progress);
         result.fallbackReason = error.message; return result;
       }
-    })();
+    });
     this.active = task;
     return task.finally(() => {
       input.fill(0);
@@ -56,8 +63,9 @@ export class PaddleRunner {
       }
     });
   }
-  private execute(png: Buffer, size: { width: number; height: number }, language: 'eng' | 'chi_sim+eng', model: PaddleModelFiles,
+  private async execute(png: Buffer, size: { width: number; height: number }, language: 'eng' | 'chi_sim+eng', model: PaddleModelFiles,
       prefs: PaddlePreferences, backend: 'cpu' | 'dml', signal: AbortSignal, progress: (value: number, phase: string) => void) {
+    await this.terminating;
     signal.throwIfAborted();
     if (this.child && (!this.child.connected || this.child.exitCode !== null || this.child.signalCode !== null)) this.child = undefined;
     if (!this.child) {

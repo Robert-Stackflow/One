@@ -2,15 +2,18 @@ import {Worker} from 'node:worker_threads';
 import {session} from 'electron';
 import {randomUUID} from 'node:crypto';
 import {join,basename,extname,resolve} from 'node:path';
-import {rm,stat} from 'node:fs/promises';
+import {rm,stat,copyFile} from 'node:fs/promises';
+import {constants} from 'node:fs';
 import {acquireAiModel,validAiModel,backgroundModel,superResolutionModel,repairModel} from './image-ai-model';
 import type {ImageAiProgress,ImageAiResult,ImageRepairMode} from '../shared/image-ai';
+import {localInference,type LocalInferenceScheduler} from './local-inference-scheduler';
 
 interface Task {owner:number;abort:AbortController;worker?:Worker;promise?:Promise<ImageAiResult>;cancelFlag?:Int32Array}
 
 export class ImageAiService {
  private active?:Task;
- constructor(private readonly dataDir:string){}
+ private readonly client={owner:Symbol('image-ai')};
+ constructor(private readonly dataDir:string,private readonly scheduler:LocalInferenceScheduler=localInference){}
  get pendingTasks(){return !!this.active;}
  modelReady(){return validAiModel(this.dataDir);}
  superResolutionReady(){return validAiModel(this.dataDir,superResolutionModel);}
@@ -27,29 +30,36 @@ export class ImageAiService {
   const repairMode:ImageRepairMode=modeValue==='remove'?'remove':'damage';
   const source=resolve(sourceValue),directory=resolve(directoryValue);
   const id=randomUUID(),stem=basename(source,extname(source)).slice(0,90)||'image',suffix=kind==='background'?'no-background':kind==='superres'?'superres-4x':repairMode==='remove'?'object-removed':'repaired',output=join(directory,`${stem}-${suffix}-${id.slice(0,8)}.png`),temporary=join(directory,`.one-image-ai-${id}.tmp.png`);
+  const snapshot=join(directory,`.one-image-ai-${id}.input${extname(source)}`);
   const task:Task={owner,abort:new AbortController()};this.active=task;
   const run=(async()=>{
-   let releaseModel:(()=>void)|undefined;
+   let releaseModel:(()=>void)|undefined,ownsSnapshot=false;
    try{
     const [input,outputDir]=await Promise.all([stat(source).catch(()=>null),stat(directory).catch(()=>null)]);
     if(!input?.isFile()||!outputDir?.isDirectory())throw Error('图片或输出目录不存在');
     if(task.abort.signal.aborted)throw Error('已取消 AI 图片任务');
+    await copyFile(source,snapshot,constants.COPYFILE_EXCL);ownsSnapshot=true;
+    const current=await stat(source),frozen=await stat(snapshot);
+    if(current.size!==input.size||current.mtimeMs!==input.mtimeMs||current.ino!==input.ino||frozen.size!==input.size)throw Error('图片在任务准备期间已改变，请重新处理');
     notify({phase:'download',message:'检查本地模型'});
     const descriptor=kind==='background'?backgroundModel:kind==='superres'?superResolutionModel:repairModel;
     // The default session blocks all HTTP(S); this in-memory session is used only for pinned model downloads.
     const lease=await acquireAiModel(this.dataDir,task.abort.signal,(received,total)=>notify({phase:'download',received,total,message:kind==='background'?'下载去背景模型':kind==='superres'?'下载超分模型':'下载修复模型'}),descriptor,25_000,(url,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(url,options));
     releaseModel=lease.release;const model=lease.path;
     if(task.abort.signal.aborted)throw Error('已取消 AI 图片任务');
+    if(this.scheduler.running)notify({phase:'process',message:'等待其他本地任务'});
+    return await this.scheduler.run(this.client,task.abort.signal,async()=>{
     notify({phase:'process',message:kind==='background'?'正在本地去除背景':kind==='superres'?'正在本地超分':repairMode==='remove'?'正在本地移除物体':'正在本地修复选区'});
     const cancelFlag=kind==='repair'?new Int32Array(new SharedArrayBuffer(4)):undefined;task.cancelFlag=cancelFlag;
-    const worker=new Worker(join(__dirname,kind==='background'?'image-ai-worker.cjs':kind==='superres'?'image-superres-worker.cjs':'image-repair-worker.cjs'),{workerData:{source,output,temporary,model,mask:maskValue,mode:repairMode,cancelBuffer:cancelFlag?.buffer},resourceLimits:{maxOldGenerationSizeMb:256}});task.worker=worker;
-    return await new Promise<ImageAiResult>((resolveResult,rejectResult)=>{
+    const worker=new Worker(join(__dirname,kind==='background'?'image-ai-worker.cjs':kind==='superres'?'image-superres-worker.cjs':'image-repair-worker.cjs'),{workerData:{source:snapshot,output,temporary,model,mask:maskValue,mode:repairMode,cancelBuffer:cancelFlag?.buffer},resourceLimits:{maxOldGenerationSizeMb:256}});task.worker=worker;
+    try{const result=await new Promise<ImageAiResult>((resolveResult,rejectResult)=>{
      let completed=false;
      worker.on('message',(message:{type:string;result?:ImageAiResult;progress?:ImageAiProgress;message?:string})=>{if(message.type==='result'&&message.result){completed=true;resolveResult(message.result);}else if(message.type==='progress'&&message.progress){notify(message.progress);}else if(message.type==='error'){completed=true;rejectResult(Error(message.message||'AI 图片处理失败'));}});
      worker.on('error',error=>{completed=true;rejectResult(error);});
      worker.on('exit',code=>{if(!completed)rejectResult(Error(task.abort.signal.aborted?'已取消 AI 图片任务':`AI 图片处理进程退出（${code}）`));});
+    });return {...result,source};}finally{await worker.terminate();task.worker=undefined;}
     });
-   }finally{releaseModel?.();await rm(temporary,{force:true}).catch(()=>{});if(this.active===task)this.active=undefined;}
+   }finally{releaseModel?.();await rm(temporary,{force:true}).catch(()=>{});if(ownsSnapshot)await rm(snapshot,{force:true}).catch(()=>{});if(this.active===task)this.active=undefined;}
   })();task.promise=run;return run;
  }
  cancel(owner:number){const task=this.active;if(!task||task.owner!==owner)return false;task.abort.abort();if(task.cancelFlag)Atomics.store(task.cancelFlag,0,1);task.worker?.postMessage({type:'cancel'});return true;}

@@ -114,6 +114,7 @@ export class OCRService {
       uiScale:ctx.uiScale(),
       ...this.size,
       running: this.running,
+      waitingForInference: this.runner.waiting || this.paddle.waiting,
       translating: this.translating,
       formulaRecognizing: this.formulaRecognizing,
       imageBytes: this.png?.length || 0,
