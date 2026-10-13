@@ -1699,6 +1699,10 @@ export class RecordingService {
     if (!this.owner) await this.open();
     return this.openProject(kind);
   }
+  async openExternalProject(file:string){
+    if(!this.owner)await this.open();
+    return this.openProject('project',file);
+  }
   async openMaterial(id: string) {
     const materials = this.ctx.materials;
     if (!materials || typeof id !== 'string') throw Error('素材不存在');

@@ -44,6 +44,7 @@ export class RecordingHost {
   bindClient(window:BrowserWindow){this.service.bindClient(window);this.throttled=undefined;this.syncThrottling();}
   private action<T>(run:()=>Promise<T>){if(this.preparing||this.approved||this.context.blocked())throw Error('One 正在退出');return this.track(this.initialized.then(()=>this.context.materialsReady?.()).then(()=>{if(this.preparing||this.approved||this.context.blocked())throw Error('One 正在退出');return run();}));}
   importMaterial(kind:'project'|'video'){return this.action(()=>this.service.importMaterial(kind));}
+  openProject(file:string){return this.action(()=>this.service.openExternalProject(file));}
   openMaterial(id:string){return this.action(()=>this.service.openMaterial(id));}
   removeMaterial(id:string){return this.action(()=>this.service.removeMaterial(id));}
   get pendingTasks(){return this.tasks.size;}

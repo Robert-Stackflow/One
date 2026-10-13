@@ -70,7 +70,7 @@ export class ImageEditorHost {
       await this.editor.openProject(parent,this.materials.library.imagePath(item.id),id);
     }finally{this.openingMaterials.delete(id);}
   })());}
-  openProject(parent:BrowserWindow){return this.track(this.editor.openProject(parent));}
+  openProject(parent:BrowserWindow,file?:string){return this.track(this.editor.openProject(parent,file));}
   get pendingTasks(){return this.tasks.size;}
   async prepareQuit(){await Promise.allSettled([...this.tasks]);return this.editor.requestClose();}
   stop(){this.confirmation?.finish(false);this.editor.abort();}

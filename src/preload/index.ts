@@ -3,6 +3,18 @@ import type { OneAPI, ScanSummary } from '../shared/types';
 import { recording } from './recording';
 const invoke = (name: string, ...args: unknown[]) => ipcRenderer.invoke('one:' + name, ...args);
 const listen = (name: string, callback: (value: any) => void) => { const handler = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value); ipcRenderer.on('one:' + name, handler); return () => ipcRenderer.removeListener('one:' + name, handler); };
+type NavigationTarget=import('../shared/menu-builtins').OneMenuTarget;
+const pendingNavigation:NavigationTarget[]=[],navigationSubscribers=new Set<(target:NavigationTarget)=>void>();
+// Main can receive a file while the renderer is still importing and mounting its pages.
+ipcRenderer.on('one:navigate-page',(_event,target:NavigationTarget)=>{
+  if(navigationSubscribers.size)for(const callback of navigationSubscribers)callback(target);
+  else pendingNavigation.push(target);
+});
+function onNavigatePage(callback:(target:NavigationTarget)=>void){
+  navigationSubscribers.add(callback);
+  for(const target of pendingNavigation.splice(0))callback(target);
+  return ()=>{navigationSubscribers.delete(callback);};
+}
 async function scan(path:string):Promise<ScanSummary>{
   const id=crypto.randomUUID();let complete!:(value:{result?:ScanSummary;error?:string})=>void;
   const finished=new Promise<{result?:ScanSummary;error?:string}>(resolve=>{complete=resolve;});
@@ -55,7 +67,7 @@ const api: OneAPI = {
   fileIcons:paths=>invoke('file-icons',paths),menuPresets:()=>invoke('menu-presets'),menuConfirmationData:()=>invoke('menu-confirmation-data'),menuConfirmationAnswer:accepted=>invoke('menu-confirmation-answer',accepted),
   fileMenuData:()=>invoke('file-menu-data'),onFileMenu:callback=>listen('file-menu',callback),fileMenuAction:(session,action,value)=>invoke('file-menu-action',session,action,value),fileMenuApps:session=>invoke('file-menu-apps',session),fileMenuClose:(focus,childOnly)=>invoke('file-menu-close',focus,childOnly),fileMenuSubmenu:(session,top,focus,kind)=>invoke('file-menu-submenu',session,top,focus,kind),onFileMenuExpanded:callback=>listen('file-menu-expanded',callback),fileMenuSize:(session,height)=>invoke('file-menu-size',session,height),onSearchFilesChanged:callback=>listen('search-files-changed',callback),
   menuOpen:(id,anchor)=>invoke('menu-open',id,anchor),menuBack:()=>invoke('menu-back'),onMenuReset:callback=>listen('menu-reset',callback),searchContextMenu:(path,point,directory)=>invoke('search-context-menu',path,point,directory),searchSize:(rows,active)=>invoke('search-size',rows,active),searchMenu:()=>invoke('search-menu'),menuChildren:id=>invoke('menu-children',id),menuExecute:id=>invoke('menu-execute',id),menuSize:size=>invoke('menu-size',size),menuFavorite:()=>invoke('menu-favorite'),menuSettings:()=>invoke('menu-settings'),onSearchSettings:callback=>listen('search-settings',callback),
-  menuBar:()=>invoke('menu-bar'),onMenuBar:callback=>listen('menu-bar',callback),onSearchPreferences:callback=>listen('search-preferences',callback),onNavigatePage:callback=>listen('navigate-page',callback),
+  menuBar:()=>invoke('menu-bar'),onMenuBar:callback=>listen('menu-bar',callback),onSearchPreferences:callback=>listen('search-preferences',callback),onNavigatePage,
   textPipeline:(text,steps)=>invoke('text-pipeline',text,steps),cancelText:()=>invoke('text-cancel'),onTextProgress:callback=>listen('text-progress',callback),textCompare:(left,right,ignoreWhitespace)=>invoke('text-compare',left,right,ignoreWhitespace),textDifferencePage:(id,page)=>invoke('text-difference-page',id,page),clearTextComparison:id=>invoke('text-comparison-clear',id),textBatch:request=>invoke('text-batch',request),
   searchState:()=>invoke('search-state'),searchFiles:(query,foldersOnly,token,rootScope)=>invoke('search-files',query,foldersOnly,token,rootScope),searchCollection:(kind,query)=>invoke('search-collection',kind,query),searchAction:id=>invoke('search-action',id),searchWeb:(id,query)=>invoke('search-web',id,query),searchWebIcon:url=>invoke('search-web-icon',url),rebuildSearch:()=>invoke('search-rebuild'),cancelSearchIndex:()=>invoke('search-cancel'),showSearch:()=>invoke('search-show'),searchContext:()=>invoke('search-context'),searchChoose:path=>invoke('search-choose',path),searchReady:()=>invoke('search-ready'),searchPreferences:()=>invoke('search-preferences'),searchSavedQuery:(operation,value)=>invoke('search-saved-query',operation,value),onSearchState:callback=>listen('search-state',callback),onSearchContext:callback=>listen('search-context',callback),onSearchReset:callback=>listen('search-reset',callback),onSearchProgress:callback=>listen('search-progress',callback),portSnapshot:refresh=>invoke('port-snapshot',refresh),
   inspectLocks:path=>invoke('inspect-locks',path),onLockTarget:callback=>listen('lock-target',callback),

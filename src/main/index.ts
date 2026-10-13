@@ -1,5 +1,6 @@
 import {previewArchive} from './preview-archive';
 import {MaterialsService} from './materials/service';
+import {mediaProjectKind,mediaProjectLaunchPaths} from './media-project-launch';
 import {PinsHost} from './pins/host';
 import {RecognitionHost} from './recognition/host';
 import {RecordingHost} from './recording/host';
@@ -308,6 +309,8 @@ async function chooseSearch(value:unknown){
    if(searchContext.kind==='explorer'&&/Explorer tab (?:could not be identified|is no longer available)/.test(String(error))){const failure=await shell.openPath(path);if(!failure){await menuService.remember(path);rememberSearchVisit(path);return;}error=new Error(failure);}
    searchWindow?.show();searchWindow?.focus();throw error;
   }
+ }else if(!info.isDirectory()&&mediaProjectKind(path)){
+  searchWindow?.hide();await launchMediaProject(path,'search-open');
  }else if(!info.isDirectory()&&isArchivePath(path)){
   searchWindow?.hide();await shellInvocation([`--one-archive=${path}`],'search-open');
  }else{
@@ -368,6 +371,11 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   return window;
 }
 function showMain() { if (!main || main.isDestroyed()) return; if (main.isMinimized()) main.restore(); main.show(); main.focus(); }
+function navigateMainPage(target:import('../shared/menu-builtins').OneMenuTarget){
+ const window=main;if(!window||window.isDestroyed())return;
+ const send=()=>{if(!quitting&&!window.isDestroyed()&&!window.webContents.isDestroyed()){showMain();window.webContents.send('one:navigate-page',target);}};
+ if(window.webContents.isLoadingMainFrame())window.webContents.once('did-finish-load',send);else send();
+}
 const fileActions=new Map<number,FileActionTarget>();
 const fileLocks=new Map<number,LocksmithService>();
 const locksFor=(id:number)=>fileLocks.get(id)||locksmith;
@@ -382,9 +390,37 @@ function openFileAction(target:FileActionTarget){
 let shellQueue=Promise.resolve();
 const queuedShellRequests=new Set<string>();
 let shellInbox:ShellRequestInbox|undefined;
-async function shellInvocation(args:string[],source='launch'){
+const queuedMediaProjects=new Map<string,Promise<void>>();
+function hasFileInvocation(args:string[]){return args.some(value=>value.startsWith('--one-shell-request=')||value.startsWith('--one-archive='))||mediaProjectLaunchPaths(args).length>0;}
+function launchMediaProject(file:string,source:string):Promise<void>{
+ const key=process.platform==='win32'?resolve(file).toLowerCase():resolve(file),pending=queuedMediaProjects.get(key);
+ if(pending)return pending;
+ const run=async()=>{
+  try{
+   await app.whenReady();if(starting)await starting;
+   if(quitting||finishingQuit)throw Error('One 正在退出');
+   const kind=mediaProjectKind(file),info=await lstat(file);
+   if(!kind||!info.isFile()||info.isSymbolicLink())throw Error('请选择一个普通 One 图片或录制工程文件');
+   runtimeLog(app.getPath('userData'),'media-project-launch',`source=${source} kind=${kind}`);
+   if(kind==='image')await imageEditor!.openProject(main,file);
+   else{navigateMainPage({page:'recording'});await recording!.openProject(file);}
+  }catch(error){
+   runtimeError(app.getPath('userData'),'media-project-launch-error',error);
+   if(quitting||finishingQuit||!main||main.isDestroyed())return;
+   showMain();
+   const detail=(error as NodeJS.ErrnoException).code==='ENOENT'?'工程文件不存在，可能已移动或删除。':error instanceof Error?error.message:String(error);
+   await dialog.showMessageBox(main,{type:'error',message:'无法打开 One 工程',detail});
+  }
+ };
+ const task=shellQueue.then(run,run);shellQueue=task;queuedMediaProjects.set(key,task);
+ void task.finally(()=>{if(queuedMediaProjects.get(key)===task)queuedMediaProjects.delete(key);}).catch(()=>{});
+ return task;
+}
+async function shellInvocation(args:string[],source='launch',directory=process.cwd()){
  const argument=args.find(value=>value.startsWith('--one-shell-request='));
  if(!argument){
+  const projects=mediaProjectLaunchPaths(args,directory);
+  if(projects.length){await Promise.all(projects.map(file=>launchMediaProject(file,source)));return;}
   if(!args.some(value=>value.startsWith('--one-archive='))){showMain();return;}
   const run=async()=>{
    try{
@@ -438,8 +474,7 @@ function openArchiveTask(action:ArchiveOpenAction,paths:string[]){
 }
 function navigateArchive(action:ArchiveOpenAction,paths:string[]){
  if(action!=='extract'){openArchiveTask(action,paths);return;}
- const send=()=>{if(!quitting&&!main.isDestroyed()&&!main.webContents.isDestroyed()){showMain();main.webContents.send('one:navigate-page',{page:'archive',action,paths});}};
- if(main.webContents.isLoadingMainFrame())main.webContents.once('did-finish-load',send);else send();
+ navigateMainPage({page:'archive',action,paths});
 }
 async function pickPath(mode: 'file'|'directory'|'save', title: string, name = '', initialPath?: string,owner=main) { const bounds=await pickerWindowBounds();if(quitting||finishingQuit||!owner||owner.isDestroyed())throw new Error('应用正在退出');const area=screen.getDisplayMatching(bounds||owner.getBounds()).workArea;const window = windowFor('picker', { width:Math.min(860,area.width),height:Math.min(640,area.height),...bounds,minWidth:Math.min(620,area.width),minHeight:Math.min(500,area.height),parent: owner, modal: true, skipTaskbar: true });if(bounds)restorePickerBounds(window,bounds);trackPickerWindow(window); const result = pick(window, mode, title, name, initialPath); window.once('ready-to-show', () => { if (!window.isDestroyed()){if(bounds)restorePickerBounds(window,bounds);window.show();} }); return result; }
 function echo(text:string,channel?:import('../shared/echo').EchoChannel){echoes?.show(text,channel);}
@@ -1147,7 +1182,7 @@ function registerIPC() {
     });
     previewQueues.set(id,task); void task.finally(() => { if (previewQueues.get(id) === task) previewQueues.delete(id); }).catch(() => {}); return task;
   }, ['preview']);
-  handle('open-file', async (_event, path) => {const file=filePath(path);if(isArchivePath(file)&&(await stat(file)).isFile())return shellInvocation([`--one-archive=${file}`],'file-open');const error=await shell.openPath(file);if(error)throw new Error(error);}, ['main','preview','search']);
+  handle('open-file', async (_event, path) => {const file=filePath(path);if(mediaProjectKind(file))return launchMediaProject(file,'file-open');if(isArchivePath(file)&&(await stat(file)).isFile())return shellInvocation([`--one-archive=${file}`],'file-open');const error=await shell.openPath(file);if(error)throw new Error(error);}, ['main','preview','search']);
   handle('reveal-file', (_event, path) => shell.showItemInFolder(filePath(path)), ['main','preview','search','archive-task']);
   handle('start-file-drag',async(event,value)=>{
     const path=filePath(value),info=await stat(path);
@@ -1227,8 +1262,8 @@ async function start() {
     directory:join(app.getPath('userData'),'recording'),mainWindow:()=>main,
     windowHost:{createWindow:(role,options)=>windowFor(role,{minWidth:1,minHeight:1,...options},'',false),register:(name,handler,allowed)=>handle(name,handler,[...allowed])},
     register:(name,handler)=>handle(name,handler,['main']),
-    openPage:()=>{showMain();main.webContents.send('one:navigate-page',{page:'recording'});},
-    openMaterials:()=>{showMain();main.webContents.send('one:navigate-page',{page:'materials'});},
+    openPage:()=>navigateMainPage({page:'recording'}),
+    openMaterials:()=>navigateMainPage({page:'materials'}),
     materials:materials.library,materialsReady:()=>materials!.initialized(),confirm:(owner,options)=>dialog.showMessageBox(owner,options),
     chooseRegion:(id,hide=true)=>{if(capture!.service.active||scrollCapture!.service.active)throw Error('请先完成当前截图');return capture!.service.choose(id,hide&&main&&!main.isDestroyed()?[main]:[]);},
     cancelRegion:()=>capture!.service.cancel(),blocked:()=>quitting,
@@ -1303,7 +1338,7 @@ async function start() {
   registerIPC(); main = windowFor('main');recording.bindClient(main);
   trayMenuPanel=new TrayMenuPanel(()=>windowFor('tray-menu',{width:296,height:356,minWidth:296,minHeight:200,frame:false,resizable:false,maximizable:false,minimizable:false,skipTaskbar:true,alwaysOnTop:true,hasShadow:true,roundedCorners:true,title:'One 菜单'}),()=>({entries:trayMenuEntries({paused:inputPaused,launchAtLogin:settings.general.launchAtLogin}),paused:inputPaused}));
   if(testMode&&process.env.ONE_TEST_TRAY_MENU==='1')(globalThis as typeof globalThis&{oneTestTrayMenu?:TrayMenuPanel}).oneTestTrayMenu=trayMenuPanel;
-  main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!process.argv.some(a=>a.startsWith('--one-shell-request=')||a.startsWith('--one-archive=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
+  main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!hasFileInvocation(process.argv))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
   nativeTheme.on('updated',refreshWindowAppearance);
   powerMonitor.on('resume',syncThemeAfterWake);powerMonitor.on('unlock-screen',syncThemeAfterWake);
   main.on('blur',()=>stopShortcutRecording());
@@ -1321,10 +1356,10 @@ async function start() {
   }
 }
 if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.argv.includes('--one-quit-for-install')) app.quit(); else {
- app.on('second-instance',(_event,args)=>{if(args.includes('--one-quit-for-install')){app.quit();return;}if(args.includes(loginStartupArg)&&!args.some(value=>value.startsWith('--one-shell-request=')||value.startsWith('--one-archive='))){runtimeLog(app.getPath('userData'),'second-instance','login-startup-already-running');return;}runtimeLog(app.getPath('userData'),'second-instance',args.some(value=>value.startsWith('--one-shell-request='))?'shell-request':'show-main');void shellInvocation(args,'second-instance');});
+ app.on('second-instance',(_event,args,directory)=>{if(args.includes('--one-quit-for-install')){app.quit();return;}if(args.includes(loginStartupArg)&&!hasFileInvocation(args)){runtimeLog(app.getPath('userData'),'second-instance','login-startup-already-running');return;}runtimeLog(app.getPath('userData'),'second-instance',hasFileInvocation(args)?'file-invocation':'show-main');void shellInvocation(args,'second-instance',directory);});
  app.whenReady().then(()=>{if(developmentQuitRequested||quitting)return;runtimeLog(app.getPath('userData'),'main-start',`version=${app.getVersion()} mode=${app.isPackaged?'packaged':'development'} platform=${process.platform} arch=${process.arch}`);starting=start();return starting.finally(()=>{starting=undefined;});}).then(async()=>{
   runtimeLog(app.getPath('userData'),'main-ready');
-  if(process.argv.some(a=>a.startsWith('--one-shell-request=')||a.startsWith('--one-archive=')))await shellInvocation(process.argv);
+  if(hasFileInvocation(process.argv))await shellInvocation(process.argv);
   shellInbox=new ShellRequestInbox(app.getPath('userData'),path=>shellInvocation([`--one-shell-request=${path}`],'inbox'));
   await shellInbox.start();
   if(!testMode)void repairExplorerMenu().catch(error=>runtimeLog(app.getPath('userData'),'explorer-menu-repair',String(error)));
