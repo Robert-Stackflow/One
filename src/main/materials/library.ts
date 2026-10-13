@@ -3,6 +3,7 @@ import {
   readdir,
   readFile,
   stat,
+  lstat,
   unlink,
 } from 'node:fs/promises';
 import { join,resolve } from 'node:path';
@@ -10,7 +11,7 @@ import type { RecordingMaterial } from '../../shared/materials';
 import type { PlaybackSettings } from '../../shared/recording/recording-playback';
 import { playbackSettings } from '../../shared/recording/recording-playback';
 import { writeImageProject } from '../capture/image-project';
-import {recordingProjectInfo} from '../recording/recording-project';
+import {recordingProjectInfo,verifyRecordingProject} from '../recording/recording-project';
 import { identity, type ImageDocument } from '../../shared/capture/image-document';
 import { defaultEffects } from '../../shared/capture/image-output';
 import { ImageMaterialLibrary } from './image-library';
@@ -19,6 +20,7 @@ import { atomicWrite } from './atomic-file';
 import { imageSize } from 'image-size';
 import {IMAGE_PROJECT_FORMAT,RECORDING_PROJECT_FORMAT} from '../../shared/media-project';
 import {MATERIAL_INDEX_FORMAT,validMaterialId as validId,recordingMaterial} from '../../shared/materials';
+const pendingFormat='one-recording-material-pending';
 
 /** One owns this root: callers resolve it from the active One profile. */
 export class MaterialLibrary {
@@ -39,14 +41,18 @@ export class MaterialLibrary {
     );
     await this.images.init();
     const entries = await readdir(join(this.directory, 'recordings'), { withFileTypes: true });
-    for (const entry of entries.filter((e) => e.isDirectory() && validId(e.name))) {
+    for (const entry of entries.filter((e) => e.isDirectory() && !e.isSymbolicLink() && validId(e.name))) {
       const marker = join(this.directory, 'recordings', entry.name, 'state.json');
       let data;
       try {
         if ((await stat(marker)).size > 16 * 1024 * 1024) throw Error('录制素材信息过大');
         data = JSON.parse(await readFile(marker, 'utf8'));
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          const recovered=await this.recoverRecording(entry.name);
+          if(recovered)this.recordings.push(recovered);
+          continue;
+        }
         throw error;
       }
       if (data.format!==MATERIAL_INDEX_FORMAT.recording||data.version!==1||data.id!==entry.name)
@@ -55,7 +61,32 @@ export class MaterialLibrary {
       await this.verifyRecording(join(this.folder(item.id),'project'+RECORDING_PROJECT_FORMAT.extension));
       if(data.playback!==undefined)playbackSettings(data.playback);
       this.recordings.push(item);
+      await this.clearPending(item.id).catch(()=>{});
     }
+  }
+  private clearPending(id:string){
+    return unlink(join(this.folder(id),'pending.json')).catch((error:NodeJS.ErrnoException)=>{if(error.code!=='ENOENT')throw error;});
+  }
+  private async recoverRecording(id:string,expected?:RecordingMaterial,latestPlayback?:PlaybackSettings):Promise<RecordingMaterial|undefined>{
+    const folder=this.folder(id),journal=join(folder,'pending.json'),project=join(folder,'project'+RECORDING_PROJECT_FORMAT.extension);
+    let item:RecordingMaterial,playback:PlaybackSettings|undefined;
+    try{
+      const marker=await lstat(journal),file=await lstat(project);
+      if(!marker.isFile()||marker.isSymbolicLink()||marker.nlink!==1||marker.size>64*1024||!file.isFile()||file.isSymbolicLink()||file.nlink!==1)return;
+      const data=JSON.parse(await readFile(journal,'utf8'));
+      if(data.format!==pendingFormat||data.version!==1||data.id!==id)return;
+      item=recordingMaterial(data);
+      if(expected&&(item.mode!==expected.mode||item.bytes!==expected.bytes||item.seconds!==expected.seconds))return;
+      playback=data.playback===undefined?undefined:playbackSettings(data.playback);
+      const contents=await verifyRecordingProject(project);
+      if(contents.project.options.mode!==item.mode||contents.project.seconds!==item.seconds||contents.bytes!==item.bytes)return;
+    }catch{
+      // An incomplete or unowned project stays intact and is never listed as a saved material.
+      return;
+    }
+    await this.state(item,latestPlayback??playback);
+    await this.clearPending(id).catch(()=>{});
+    return this.summary(item);
   }
   private summary(item: RecordingMaterial): RecordingMaterial {
     return {
@@ -137,8 +168,11 @@ export class MaterialLibrary {
       item=recordingMaterial(item);
       if(playback!==undefined)playback=playbackSettings(playback);
       if(this.recordings.some(value=>value.id===item.id))throw Error('录制素材已存在');
+      const recovered=await this.recoverRecording(item.id,item,playback);
+      if(recovered){this.recordings=[recovered,...this.recordings];this.changed();return;}
       const folder = this.folder(item.id);
       await mkdir(folder, { recursive: true });
+      await atomicWrite(join(folder,'pending.json'),JSON.stringify({format:pendingFormat,version:1,...item,...(playback===undefined?{}:{playback})}));
       await save(join(folder, 'project'+RECORDING_PROJECT_FORMAT.extension));
       await this.verifyRecording(join(folder,'project'+RECORDING_PROJECT_FORMAT.extension));
       await unlink(join(folder, 'thumbnail.png')).catch((error) => {
@@ -149,6 +183,7 @@ export class MaterialLibrary {
         this.summary(item),
         ...this.recordings.filter((value) => value.id !== item.id),
       ];
+      await this.clearPending(item.id).catch(()=>{});
       this.changed();
     });
   }
@@ -171,6 +206,8 @@ export class MaterialLibrary {
   removeRecording(id: string) {
     return this.serial(async () => {
       this.recordingPath(id);
+      // A crashed deletion must never be mistaken for an interrupted save on the next launch.
+      await this.clearPending(id);
       // Remove the index marker first; a failed deletion never exposes an incomplete project.
       await unlink(join(this.folder(id), 'state.json'));
       this.recordings = this.recordings.filter((item) => item.id !== id);

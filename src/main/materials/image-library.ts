@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, unlink, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, unlink, stat, lstat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { imageSize } from 'image-size';
@@ -73,17 +73,40 @@ export class ImageMaterialLibrary {
     return { ...value };
   }
   async read(id: string, thumbnail = false) {
+    if(thumbnail)return this.serial(()=>this.cachedThumbnail(id));
     const asset = this.get(id),
-      file = this.file(id, thumbnail ? '.thumb.png' : '.png'),
+      file = this.file(id),
       info = await stat(file);
     if (
       !info.isFile() ||
       info.size < 1 ||
-      info.size > (thumbnail ? 2 * 1024 * 1024 : 64 * 1024 * 1024)
+      info.size > 64 * 1024 * 1024
     )
       throw Error('素材文件无效');
     const bytes = await readFile(file);
-    if (!thumbnail && hash(bytes) !== asset.hash) throw Error('素材已损坏，请重新导入');
+    if (hash(bytes) !== asset.hash) throw Error('素材已损坏，请重新导入');
+    return bytes;
+  }
+  private validThumbnail(bytes:Buffer){
+    if(!Buffer.isBuffer(bytes)||bytes.length<24||bytes.length>2*1024*1024)return false;
+    try{return imageSize(bytes).type==='png';}catch{return false;}
+  }
+  private async cachedThumbnail(id:string){
+    this.get(id);
+    const file=this.file(id,'.thumb.png');
+    try{
+      const info=await lstat(file);
+      if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1)throw Error('素材缩略图位置已变化');
+      if(info.size>=24&&info.size<=2*1024*1024){
+        const cached=await readFile(file);
+        if(this.validThumbnail(cached))return cached;
+      }
+    }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
+    // Originals are hash-checked before rebuilding a disposable preview. Serialize with deletion.
+    const bytes=this.thumbnail(await this.read(id));
+    if(!this.validThumbnail(bytes))throw Error('素材缩略图无效');
+    // A read-only/full cache must not prevent viewing an intact original.
+    await atomicWrite(file,bytes).catch(()=>{});
     return bytes;
   }
   async detail(id: string): Promise<ImageMaterialDetail> {
@@ -134,7 +157,7 @@ export class ImageMaterialLibrary {
           source,
         };
       const thumbnail = this.thumbnail(png);
-      if(!Buffer.isBuffer(thumbnail)||thumbnail.length<24||thumbnail.length>2*1024*1024||imageSize(thumbnail).type!=='png')throw Error('素材缩略图无效');
+      if(!this.validThumbnail(thumbnail))throw Error('素材缩略图无效');
       try {
         await writeFile(this.file(id), png, { flag: 'wx', mode: 0o600 });
         await writeFile(this.file(id, '.thumb.png'), thumbnail, { flag: 'wx', mode: 0o600 });

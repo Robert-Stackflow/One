@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdir,mkdtemp,readFile,writeFile,readdir,rm,rmdir,realpath,rename} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,writeFile,readdir,rm,rmdir,realpath,rename,unlink,link} from 'node:fs/promises';
 import {join,resolve,sep} from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {MaterialLibrary} from '../../src/main/materials/library';
 import {readImageProject} from '../../src/main/capture/image-project';
 import {saveRecordingProject,recordingProjectInfo} from '../../src/main/recording/recording-project';
@@ -32,6 +32,90 @@ test('One materials preserve image originals, editable history, thumbnails and s
   assert.throws(()=>library.images.get('../escape'),/素材不存在/);
   await restarted.removeImage(asset.id);assert.deepEqual(restarted.images.list(),[]);
   assert.deepEqual((await readdir(join(library.directory,'images'))).sort(),['index.json']);
+}));
+
+test('Image previews rebuild from verified originals after eviction, without racing deletion or changing projects',()=>fixture(async root=>{
+  let renders=0;
+  const library=new MaterialLibrary(root,()=>{renders++;return png;});await library.init();
+  const asset=await library.images.add(png,'cached','file');
+  const thumbnail=join(root,'images',asset.id+'.thumb.png'),original=join(root,'images',asset.id+'.png');
+  const project=await readFile(library.imagePath(asset.id)),index=await readFile(join(root,'images','index.json'));
+  await unlink(thumbnail);
+  assert.deepEqual(await Promise.all([library.images.read(asset.id,true),library.images.read(asset.id,true)]),[png,png]);
+  assert.equal(renders,2,'one rebuild for concurrent reads');
+  await writeFile(thumbnail,'broken cache');assert.deepEqual(await library.images.read(asset.id,true),png);assert.equal(renders,3);
+  assert.deepEqual(await readFile(library.imagePath(asset.id)),project);assert.deepEqual(await readFile(join(root,'images','index.json')),index);
+  await unlink(thumbnail);await writeFile(original,Buffer.alloc(png.length));
+  await assert.rejects(library.images.read(asset.id,true),/素材已损坏/);assert.equal(renders,3);
+  await writeFile(original,png);await link(original,thumbnail);
+  await assert.rejects(library.images.read(asset.id,true),/位置已变化/);assert.deepEqual(await readFile(original),png);
+  await unlink(thumbnail);
+  const preview=library.images.read(asset.id,true),remove=library.removeImage(asset.id);
+  assert.deepEqual(await preview,png);await remove;
+  assert.deepEqual(await readdir(join(root,'images')),['index.json']);
+  await assert.rejects(library.images.read(asset.id,true),/素材不存在/);
+}));
+
+async function recordingSample(root:string){
+  const media=new RecordingFile(root,undefined,'wav');await media.create();
+  const wave=Buffer.alloc(44+960);wave.write('RIFF');wave.writeUInt32LE(wave.length-8,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(2,22);wave.writeUInt32LE(48000,24);wave.writeUInt32LE(192000,28);wave.writeUInt16LE(4,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(960,40);
+  await media.append(0,wave);await media.finish();
+  const playback={...defaultPlayback(),speed:1.5,system:.4};
+  const project={format:'one-recording' as const,version:1 as const,seconds:.005,options:{mode:'audio' as const,container:'wav' as const,sourceId:'',systemAudio:true,microphone:false,microphoneId:'',fps:30,maxWidth:1920},playback,inputs:[],annotations:[],layouts:[]};
+  const item={id:randomUUID(),title:'待完成归档',created:Date.now(),seconds:.005,bytes:wave.length,mode:'audio' as const};
+  return {media,project,item,playback,save:(path:string)=>saveRecordingProject(path,project,[{kind:'screen',file:media}],()=>true)};
+}
+
+test('A complete One recording survives a failed index commit and is published once on restart with its original playback',()=>fixture(async root=>{
+  const sample=await recordingSample(root),library=new MaterialLibrary(join(root,'materials'),()=>png);await library.init();
+  const folder=join(library.directory,'recordings',sample.item.id),state=join(folder,'state.json'),journal=join(folder,'pending.json'),project=join(folder,'project.onerec');
+  try{
+    await mkdir(state,{recursive:true});
+    await assert.rejects(library.addRecording(sample.item,sample.save,sample.playback));
+    assert.deepEqual(library.list(),[]);
+    const before=await readFile(project),hash=createHash('sha256').update(before).digest('hex');
+    const pending=await readFile(journal);assert.equal(JSON.parse(pending.toString()).format,'one-recording-material-pending');
+    await rmdir(state);
+    const restarted=new MaterialLibrary(library.directory,()=>png);await restarted.init();await restarted.init();
+    assert.deepEqual(restarted.list(),[sample.item]);assert.deepEqual(await restarted.playback(sample.item.id),sample.playback);
+    assert.equal(createHash('sha256').update(await readFile(project)).digest('hex'),hash);
+    await assert.rejects(readFile(journal),{code:'ENOENT'});
+    // A leftover pending marker from a successful commit cannot resurrect a subsequent deletion.
+    await writeFile(journal,pending);await restarted.removeRecording(sample.item.id);
+    await assert.rejects(readFile(journal),{code:'ENOENT'});
+    // Model a failed final file deletion: unindexed media with no pending transaction stays unlisted.
+    await writeFile(project,before);
+    const afterDelete=new MaterialLibrary(library.directory,()=>png);await afterDelete.init();assert.deepEqual(afterDelete.list(),[]);
+    assert.deepEqual(await readFile(project),before);
+  }finally{await sample.media.dispose();}
+}));
+
+test('Recovery rejects corrupt originals and foreign journals, preserving unfinished files without blocking valid materials',()=>fixture(async root=>{
+  const sample=await recordingSample(root),library=new MaterialLibrary(join(root,'materials'),()=>png);await library.init();
+  const image=await library.images.add(png,'still available','file');
+  const folder=join(library.directory,'recordings',sample.item.id),state=join(folder,'state.json'),journal=join(folder,'pending.json'),project=join(folder,'project.onerec');
+  try{
+    await mkdir(state,{recursive:true});await assert.rejects(library.addRecording(sample.item,sample.save,sample.playback));await rmdir(state);
+    const original=await readFile(project),pending=await readFile(journal),corrupt=Buffer.from(original);corrupt[corrupt.length-1]^=0xff;await writeFile(project,corrupt);
+    const restarted=new MaterialLibrary(library.directory,()=>png);await restarted.init();assert.deepEqual(restarted.list(),[]);assert.deepEqual(restarted.images.list(),[image]);
+    assert.deepEqual(await readFile(project),corrupt);assert.deepEqual(await readFile(journal),pending);
+    await writeFile(project,original);const foreign=JSON.parse(pending.toString());foreign.format='frame-recording';await writeFile(journal,JSON.stringify(foreign));
+    await restarted.init();assert.deepEqual(restarted.list(),[]);assert.deepEqual(await readFile(project),original);
+    await writeFile(journal,pending);await restarted.init();assert.deepEqual(restarted.list(),[sample.item]);
+  }finally{await sample.media.dispose();}
+}));
+
+test('Retrying an interrupted recording commit reuses its complete project and updates playback without duplicating media',()=>fixture(async root=>{
+  const sample=await recordingSample(root),library=new MaterialLibrary(join(root,'materials'),()=>png);await library.init();
+  const folder=join(library.directory,'recordings',sample.item.id),state=join(folder,'state.json');
+  try{
+    await mkdir(state,{recursive:true});await assert.rejects(library.addRecording(sample.item,sample.save,sample.playback));await rmdir(state);
+    const before=await readFile(join(folder,'project.onerec')),playback={...sample.playback,speed:2};
+    await library.addRecording(sample.item,async()=>assert.fail('a complete original must not be rewritten on retry'),playback);
+    assert.deepEqual(library.list(),[sample.item]);assert.deepEqual(await library.playback(sample.item.id),playback);
+    assert.deepEqual(await readFile(join(folder,'project.onerec')),before);
+    await library.init();assert.deepEqual(library.list(),[sample.item]);assert.deepEqual(await library.playback(sample.item.id),playback);
+  }finally{await sample.media.dispose();}
 }));
 
 test('Failed image index commit rolls back all new material files and retains the previous index and originals',()=>fixture(async root=>{

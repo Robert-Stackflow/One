@@ -164,6 +164,25 @@ export async function recordingProjectInfo(path:string){
   try{return (await readManifest(input)).manifest.project;}finally{await input.close();}
 }
 
+/** An interrupted material commit is publishable only after every original passes its stored hash. */
+export async function verifyRecordingProject(path:string){
+  const input=await open(path,'r');
+  try{
+    const {manifest,offset}=await readManifest(input);
+    let position=offset;
+    for(const asset of manifest.assets){
+      const hash=createHash('sha256');
+      let remaining=asset.bytes;
+      while(remaining){
+        const size=Math.min(RECORD_CHUNK,remaining);
+        hash.update(await read(input,size,position));position+=size;remaining-=size;
+      }
+      if(hash.digest('hex')!==asset.sha256)throw Error('录制工程原片校验失败');
+    }
+    return {project:manifest.project,bytes:manifest.assets.reduce((total,asset)=>total+asset.bytes,0)};
+  }finally{await input.close();}
+}
+
 export async function recordingProjectPreview(path: string, request: Request) {
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 });
   const input = await open(path, 'r');

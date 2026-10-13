@@ -12,7 +12,9 @@ const fs=require('node:fs/promises'),path=require('node:path'),http=require('nod
   const media=new RecordingFile(profile,undefined,'webm'),recordId=require('node:crypto').randomUUID(),raw=Buffer.concat([Buffer.from([0x1a,0x45,0xdf,0xa3]),Buffer.from('bounded-original-media-fixture')]);
   try{await media.create();await media.append(0,raw);await media.finish();
   const playback=defaultPlayback(),project={format:'one-recording',version:1,seconds:1,options:{mode:'video',container:'webm',sourceId:'screen:0:0',systemAudio:false,microphone:false,microphoneId:'',fps:30,maxWidth:1920},video:{width:480,height:240,fps:30,encoder:'fixture'},playback,inputs:[],annotations:[],layouts:[]};
-  await library.addRecording({id:recordId,title:'Range fixture',created:Date.now(),seconds:1,bytes:raw.length,mode:'video'},file=>saveRecordingProject(file,project,[{kind:'screen',file:media}],()=>true),playback);}finally{await media.dispose();}
+  const statePath=path.join(library.directory,'recordings',recordId,'state.json');await fs.mkdir(statePath,{recursive:true});
+  await assert.rejects(library.addRecording({id:recordId,title:'Range fixture',created:Date.now(),seconds:1,bytes:raw.length,mode:'video'},file=>saveRecordingProject(file,project,[{kind:'screen',file:media}],()=>true),playback));
+  await fs.rmdir(statePath);}finally{await media.dispose();}
   return {recordId,raw};};
   let networkRequests=0;const server=http.createServer((_,response)=>{networkRequests++;response.writeHead(200,{'Access-Control-Allow-Origin':'*'});response.end('network');});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -24,6 +26,8 @@ const fs=require('node:fs/promises'),path=require('node:path'),http=require('nod
     app=await electron.launch({args:[path.resolve('.')],env});let page=await app.firstWindow();await page.waitForFunction(()=>!!window.one);
     const errors=[];page.on('pageerror',error=>errors.push(String(error)));
     assert.equal((await page.evaluate(()=>window.one.materialsState())).error,'');
+    assert.deepEqual((await page.evaluate(()=>window.one.materialsState())).recordings.map(item=>item.id),[recordId]);
+    await assert.rejects(fs.readFile(path.join(profile,'materials','recordings',recordId,'pending.json')),{code:'ENOENT'});
     const recordURL=await page.evaluate(id=>window.one.materialsRecordingURL(id),recordId);
     const range=await page.evaluate(async url=>{const response=await fetch(url,{headers:{Range:'bytes=3-10'}});return {status:response.status,bytes:Array.from(new Uint8Array(await response.arrayBuffer())),length:response.headers.get('Content-Length')};},recordURL);
     assert.equal(range.status,206);assert.deepEqual(Buffer.from(range.bytes),raw.subarray(3,11));assert.equal(range.length,'8');
@@ -39,6 +43,10 @@ const fs=require('node:fs/promises'),path=require('node:path'),http=require('nod
     assert.ok(state.directory.startsWith(profile));assert.ok(state.images[0].thumbnail.startsWith('one-file://materials/'));
     const url=await page.evaluate(id=>window.one.materialsImageURL(id),ids[0]);
     assert.equal(await readable(page,state.images[0].thumbnail),true);assert.equal(await readable(page,url),true);
+    const thumbnail=path.join(profile,'materials','images',ids[0]+'.thumb.png'),imageProject=path.join(profile,'materials','images',ids[0]+'.oneimage');
+    const originalProject=await fs.readFile(imageProject);await fs.unlink(thumbnail);
+    assert.equal(await readable(page,state.images[0].thumbnail),true,'owned resource request rebuilds an evicted preview');
+    assert.ok((await fs.stat(thumbnail)).size>24);assert.deepEqual(await fs.readFile(imageProject),originalProject);
     const served=await page.evaluate(async url=>Array.from(new Uint8Array(await (await fetch(url)).arrayBuffer())),url);
     assert.deepEqual(Buffer.from(served),await fs.readFile(path.join(profile,'materials','images',ids[0]+'.png')));
     await page.evaluate(id=>window.one.materialsCopyImage(id),ids[0]);
@@ -78,7 +86,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),http=require('nod
     assert.match((await page.evaluate(()=>window.one.materialsState())).error,/索引损坏/);
     await assert.rejects(page.evaluate(()=>window.one.materialsImportImages()),/索引损坏/);
     assert.equal(await fs.readFile(index,'utf8'),broken);
-    console.log('Materials service: import/clipboard/copy/export, media ranges, protected paths, restart, owner/frame/network guards, revocation, shutdown drain and corrupt-index isolation passed.');
+    console.log('Materials service: interrupted commit recovery, thumbnail rebuild, import/clipboard/copy/export, media ranges, protected paths, restart, owner/frame/network guards, revocation, shutdown drain and corrupt-index isolation passed.');
   }finally{
     await app?.close();await new Promise(resolve=>server.close(resolve));await fs.unlink(fixture);
     const resolved=await fs.realpath(profile);assert.ok(resolved.startsWith(root+path.sep));await fs.rm(resolved,{recursive:true,force:true});

@@ -290,6 +290,7 @@ export class RecordingService {
   private importAbort?: AbortController;
   private projectName = '';
   private materialId = '';
+  private materialDraftId = '';
   private materialSaving?: Promise<void>;
   canStart = false;
   private projectRevision = 0;
@@ -1710,7 +1711,7 @@ export class RecordingService {
     if (!this.ctx.materials || !this.file || this.phase !== 'ready') return Promise.resolve();
     if (this.materialSaving) return this.materialSaving;
     if (this.materialId) return this.ctx.materials.updateRecording(this.materialId, this.playback);
-    const id = randomUUID(),
+    const id = this.materialDraftId ||= randomUUID(),
       generation = this.generation,
       revision = this.projectRevision;
     const valid = () => generation === this.generation && !this.ctx.blocked();
@@ -1785,6 +1786,7 @@ export class RecordingService {
     this.restored = undefined;
     this.projectName = '';
     this.materialId = '';
+    this.materialDraftId = '';
     this.projectRevision = 0;
     this.savedProjectRevision = undefined;
     this.cancelDelay?.();
