@@ -1,0 +1,21 @@
+body[data-view='recognition'] .source-preview:has(.text-image-workspace) { display: flex; flex-direction: column; overflow: hidden; }
+.text-image-workspace { display: flex; flex-direction: column; position: relative; min-height: 0; min-width: 0; flex: 1; width: 100%; }
+.text-image-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 8px; flex: none; border-bottom: 1px solid var(--line); }
+.text-image-tools button { padding: 5px 8px; font-size: calc(12px * var(--text-scale, 1)); }
+.text-image-status { font-size: calc(12px * var(--text-scale, 1)); color: var(--muted); overflow-wrap: anywhere; }
+.text-selection-actions { position: absolute; z-index: 2; bottom: 10px; right: 10px; max-width: calc(100% - 20px); display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 10px #0002; }
+.text-selection-actions[hidden] { display: none; }
+.text-selection-actions button { font-size: calc(12px * var(--text-scale, 1)); padding: 5px 8px; }
+.text-image-viewport { flex: 1; min-height: 0; overflow: auto; position: relative; outline-offset: -2px; touch-action: none; }
+.text-image-stage { position: relative; min-width: 1px; min-height: 1px; }
+.text-image-inner { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+body[data-view='recognition'] .source-preview img.text-selection-image { display: block; max-width: none; width: 100%; height: 100%; user-select: none; pointer-events: none; }
+.text-selection-layer { position: absolute; inset: 0; }
+.text-selection-unit { position: absolute; color: transparent; user-select: none; cursor: text; overflow: hidden; white-space: pre; }
+.text-selection-unit.selected { background: color-mix(in srgb, var(--fg) 24%, transparent); box-shadow: inset 0 0 0 1px var(--fg); }
+.text-image-viewport.panning, .text-image-viewport.panning .text-selection-unit { cursor: grab; }
+.text-image-viewport.panning:active, .text-image-viewport.panning:active .text-selection-unit { cursor: grabbing; }
+@media (max-width: 720px) {
+  body[data-view='recognition']:not(.formula-mode):not(.translation-mode) .recognition-content { grid-template-rows: minmax(180px, 1fr) minmax(120px, 1fr); }
+  body[data-view='recognition']:not(.formula-mode):not(.translation-mode) .source-preview { max-height: none; }
+}

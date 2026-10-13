@@ -30,12 +30,14 @@ async function run() {
       { text: true, blocks: true },
     );
     const words: OCRWord[] = [];
-    let line = 0;
-    for (const block of result.data.blocks || [])
+    let line = 0, blockIndex = 0, symbols = 0;
+    for (const block of result.data.blocks || []) {
       for (const paragraph of block.paragraphs)
         for (const row of paragraph.lines) {
           for (const word of row.words) {
             if (words.length >= 50000) throw Error('识别结果过多，请先裁剪图片');
+            symbols += word.symbols?.length || 0;
+            if (symbols > 200000) throw Error('识别字形过多，请先裁剪图片');
             const box = word.bbox;
             words.push({
               text: word.text,
@@ -45,10 +47,19 @@ async function run() {
               width: box.x1 - box.x0,
               height: box.y1 - box.y0,
               line,
+              block: blockIndex,
+              symbols: word.symbols?.map(symbol => ({
+                text: symbol.text,
+                confidence: Math.max(0, Math.min(100, symbol.confidence)),
+                x: symbol.bbox.x0, y: symbol.bbox.y0,
+                width: symbol.bbox.x1 - symbol.bbox.x0, height: symbol.bbox.y1 - symbol.bbox.y0,
+              })),
             });
           }
           line++;
         }
+      blockIndex++;
+    }
     parentPort!.postMessage({
       ok: true,
       result: {

@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import {
   ocrResult,
@@ -8,6 +9,7 @@ import {
   type OCRResult,
 } from '../../shared/recognition/ocr';
 import { OCRModels } from './ocr-models';
+import { textDocument } from '../../shared/recognition/text-document';
 export class OCRRunner {
   private abort?: AbortController;
   private active?: Promise<OCRResult>;
@@ -73,7 +75,12 @@ export class OCRRunner {
             }
             if (message?.ok) {
               try {
-                finish(undefined, ocrResult(message.result, size, language));
+                const result = ocrResult(message.result, size, language);
+                result.document = textDocument(result, createHash('sha256').update(png).digest('hex'), {
+                  id: 'tesseract', version: require('tesseract.js/package.json').version,
+                  model: 'tessdata_fast@87416418657359cb625c412a48b6e1d6d41c29bd', device: 'cpu', confidenceScale: 100,
+                });
+                finish(undefined, result);
               } catch (e) {
                 finish(e as Error);
               }

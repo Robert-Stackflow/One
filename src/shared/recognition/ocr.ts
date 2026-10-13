@@ -1,6 +1,14 @@
 import {ocrDimensions,OCR_TEXT} from './ocr-limits';
 export {ocrDimensions,OCR_PIXELS,OCR_EDGE,OCR_TEXT} from './ocr-limits';
 export type OCRLanguage = 'eng' | 'chi_sim+eng';
+export interface OCRSymbol {
+  text: string;
+  confidence: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 export interface OCRWord {
   text: string;
   confidence: number;
@@ -9,6 +17,8 @@ export interface OCRWord {
   width: number;
   height: number;
   line: number;
+  block?: number;
+  symbols?: OCRSymbol[];
 }
 export interface OCRResult {
   text: string;
@@ -17,6 +27,7 @@ export interface OCRResult {
   height: number;
   words: OCRWord[];
   language: OCRLanguage;
+  document?: import('./text-document').TextDocument;
 }
 export interface OCRState {
   uiScale:100|110|125|150;
@@ -72,6 +83,7 @@ export interface OCRWorkflowResult {
   words: number;
   confidence: number;
   translation?: TranslationResult;
+  document?: import('./text-document').TextDocument;
 }
 export function ocrLanguage(value: unknown): OCRLanguage {
   if (value !== 'eng' && value !== 'chi_sim+eng') throw Error('识别语言无效');
@@ -100,6 +112,7 @@ export function ocrResult(
     v.words.length > 50000
   )
     throw Error('文字识别结果无效');
+  let symbolCount = 0;
   const text = ocrText(v.text),
     words = v.words.map((w) => {
       if (
@@ -120,6 +133,18 @@ export function ocrResult(
         w.confidence > 100
       )
         throw Error('文字位置结果无效');
+      if (w.block !== undefined && (!Number.isSafeInteger(w.block) || w.block < 0 || w.block > 50000))
+        throw Error('文字段落结果无效');
+      if (w.symbols !== undefined && !Array.isArray(w.symbols)) throw Error('文字字形结果无效');
+      const symbols = w.symbols?.map(symbol => {
+        if (++symbolCount > 200000 || !symbol || typeof symbol.text !== 'string' || symbol.text.length > 64 ||
+            ![symbol.x, symbol.y, symbol.width, symbol.height].every(Number.isSafeInteger) ||
+            symbol.x < 0 || symbol.y < 0 || symbol.width < 0 || symbol.height < 0 ||
+            symbol.x + symbol.width > size.width || symbol.y + symbol.height > size.height ||
+            !Number.isFinite(symbol.confidence) || symbol.confidence < 0 || symbol.confidence > 100)
+          throw Error('文字字形位置结果无效');
+        return { text: symbol.text, confidence: symbol.confidence, x: symbol.x, y: symbol.y, width: symbol.width, height: symbol.height };
+      });
       return {
         text: w.text,
         confidence: w.confidence,
@@ -128,6 +153,8 @@ export function ocrResult(
         width: w.width,
         height: w.height,
         line: w.line,
+        ...(w.block === undefined ? {} : { block: w.block }),
+        ...(symbols === undefined ? {} : { symbols }),
       };
     });
   return {

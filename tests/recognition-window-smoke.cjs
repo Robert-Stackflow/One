@@ -51,7 +51,61 @@ async function main(){
     assert.match((await page.locator('#result').inputValue()).replace(/\s/g,''),/截图识别测试/);
     await page.locator('#copy').click();await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.length)).toBe(1);
     assert.match(await app.evaluate(()=>global.recognitionCopies[0].text),/sample@example.com/);
-    await page.screenshot({path:path.join(output,'recognition-window.png'),scale:'css'});
+    const fullText=await page.locator('#result').inputValue(),firstWord=fullText.trim().split(/\s+/)[0];
+    const viewport=page.locator('.text-image-viewport'),unit=page.locator('.text-selection-unit');
+    await viewport.evaluate(node=>{
+      window.textGesture=[];
+      for(const name of ['pointerdown','pointermove','pointerup'])node.addEventListener(name,event=>{
+        if(name==='pointermove'&&!event.buttons)return;
+        const stage=node.querySelector('.text-image-stage'),inner=node.querySelector('.text-image-inner'),rect=stage.getBoundingClientRect();
+        window.textGesture.push({type:name,x:event.clientX,y:event.clientY,stage:[rect.x,rect.y,rect.width,rect.height],inner:[inner.style.width,inner.style.height,inner.style.transform],scroll:[node.scrollLeft,node.scrollTop],range:[node.dataset.selectionStart,node.dataset.selectionEnd],hit:document.elementFromPoint(event.clientX,event.clientY)?.textContent?.slice(0,10)});
+        if(window.textGesture.length>16)window.textGesture.shift();
+      });
+    });
+    await expect(unit.first()).toHaveAttribute('data-geometry','character');
+    await unit.first().dblclick();await page.locator('[data-text-action=copy]').click();
+    await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe(firstWord);
+    await page.locator('[data-text-action=translate]').click();
+    await expect(page.locator('#translation-tab')).toHaveAttribute('aria-selected','true');
+    await expect(page.locator('#result')).toHaveValue(firstWord);assert.equal(requests.length,0);
+    await page.locator('#text-tab').click();await expect(page.locator('#result')).toHaveValue(fullText);
+    await viewport.focus();await viewport.press('Control+a');await viewport.press('Control+c');
+    await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe(fullText.trim());
+    async function dragChinese(){
+      await unit.filter({hasText:/^截$/}).waitFor({state:'attached',timeout:3000}).catch(async error=>{
+        console.error('Text viewport:',await viewport.evaluate(node=>({size:[node.clientWidth,node.clientHeight],scroll:[node.scrollLeft,node.scrollTop],stage:node.querySelector('.text-image-stage').getBoundingClientRect().toJSON(),transform:node.querySelector('.text-image-inner').style.transform,rendered:node.querySelector('.text-selection-layer').dataset.renderedTokens,characters:Array.from(node.querySelectorAll('.text-selection-unit')).slice(0,12).map(node=>node.textContent)})));throw error;
+      });
+      await unit.filter({hasText:/^截$/}).hover();
+      await unit.filter({hasText:/^图$/}).hover();
+      let pair;
+      await expect.poll(async()=>{pair=await page.evaluate(()=>{
+        const nodes=Array.from(document.querySelectorAll('.text-selection-unit'));
+        const first=nodes.find(node=>node.textContent==='截'),last=nodes.find(node=>node.textContent==='图');
+        return first&&last?[first.getBoundingClientRect().toJSON(),last.getBoundingClientRect().toJSON()]:null;
+      });return !!pair;}).toBe(true);
+      const [first,last]=pair;await page.mouse.move(first.x+first.width/2,first.y+first.height/2);await page.mouse.down();
+      await page.mouse.move(last.x+last.width/2,last.y+last.height/2,{steps:5});await page.mouse.up();
+      await page.locator('[data-text-action=copy]').click();
+      await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe('截图').catch(async error=>{
+        console.error('Drag coordinates:',JSON.stringify(await page.evaluate(()=>window.textGesture)));throw error;
+      });
+    }
+    await dragChinese();await viewport.focus();await viewport.press('Shift+ArrowRight');await viewport.press('Control+c');
+    await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe('截图识');
+    await unit.filter({hasText:/^截$/}).click({clickCount:3});await page.locator('[data-text-action=copy]').click();
+    await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe(fullText.split('\n').find(line=>line.includes('截图')).trim());
+    await page.locator('[data-text-action=zoom-in]').click();await page.locator('[data-text-action=zoom-in]').click();
+    await page.locator('[data-text-action=rotate]').click();await dragChinese();
+    await home.evaluate(()=>window.one.patchSettings({capture:{uiScale:150}}));await expect(page.locator('#app')).toHaveAttribute('data-capture-scale','150');
+    await dragChinese();
+    await sharp(await page.screenshot({scale:'css'})).resize({width:1280,height:1280,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(output,'recognition-text-selection.png'));
+    await home.evaluate(()=>window.one.patchSettings({capture:{uiScale:100}}));await expect(page.locator('#app')).toHaveAttribute('data-capture-scale','100');
+    const windowHandle=await app.browserWindow(page),originalSize=await windowHandle.evaluate(window=>window.getContentSize());
+    await windowHandle.evaluate(window=>window.setContentSize(680,760));
+    await page.locator('[data-text-action=fit]').click();
+    const narrow=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,image:document.querySelector('.text-image-viewport').getBoundingClientRect().height,result:document.getElementById('result').getBoundingClientRect().height}));
+    assert.ok(narrow.scroll<=narrow.width&&narrow.image>=170&&narrow.result>=100,JSON.stringify(narrow));
+    await windowHandle.evaluate((window,size)=>window.setContentSize(...size),originalSize);await windowHandle.dispose();
     await expect(page.locator('#table-tab')).toHaveCount(0);
     assert.deepEqual(await page.evaluate(() => ['table', 'copyTable', 'saveTable'].map(name => typeof window.one.recognition[name])), ['undefined', 'undefined', 'undefined']);
     await page.locator('#translation-tab').click();await page.locator('#translation-configure').click();await expect(page.locator('#translation-settings')).toBeVisible();

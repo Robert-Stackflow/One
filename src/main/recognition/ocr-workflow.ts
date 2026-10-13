@@ -61,6 +61,7 @@ export class OCRWorkflow {
         source: recognized.text,
         words: recognized.words.length,
         confidence: recognized.confidence,
+        document: recognized.document,
       };
       this.state!.status = 'translating';
       const translated = await this.host.translate(

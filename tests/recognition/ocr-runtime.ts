@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import {OCRModels,ocrPacks} from '../../src/main/recognition/ocr-models';
 import {OCRRunner} from '../../src/main/recognition/ocr-runner';
 import {detectSensitive} from '../../src/shared/recognition/sensitive-api';
+import {readingTokens,selectedText} from '../../src/shared/recognition/text-document';
 
 const cache=resolve('work/current/fixtures/recognition-models'),models=new OCRModels(cache);
 let png:Buffer;
@@ -24,14 +25,17 @@ test('built Tesseract worker loads verified English and Chinese packs and return
   assert.match(result.text,/ONE OCR 2026/i);assert.match(result.text,/sample@example\.com/i);assert.match(result.text.replace(/\s/g,''),/截图识别测试/);
   assert.ok(result.words.length>=5);assert.ok(result.words.every(word=>word.x>=0&&word.y>=0&&word.x+word.width<=size.width&&word.y+word.height<=size.height));
   assert.ok(progress.length>0&&progress.every(value=>value>=0&&value<=1));
+  assert.ok(result.document);assert.equal(result.document.engine.device,'cpu');
+  const tokens=readingTokens(result.document);assert.ok(tokens.some(token=>token.geometry==='character'));
+  assert.equal(result.document.alignment,'source');assert.equal(selectedText(tokens,0,tokens.length-1),result.text.trim());
   const sensitive=detectSensitive(result);assert.ok(sensitive.regions.some(region=>region.kind==='email'));assert.equal(JSON.stringify(sensitive).includes('sample@'),false);
 });
 
-test('real OCR cancellation rejects overlap, waits for worker shutdown and permits the next table recognition',async()=>{
+test('real OCR cancellation rejects overlap, waits for worker shutdown and permits the next text recognition',async()=>{
   const runner=new OCRRunner(models),pending=runner.run(png,size,'eng');
   const rejected=assert.rejects(pending,/取消/);
   await assert.rejects(runner.run(png,size,'eng'),/正在识别/);await runner.cancel();await rejected;
-  const result=await runner.run(png,size,'eng',()=>{},'table');assert.match(result.text,/ONE OCR 2026/i);assert.ok(result.words.length>=4);
+  const result=await runner.run(png,size,'eng');assert.match(result.text,/ONE OCR 2026/i);assert.ok(result.words.length>=4);
 });
 
 test('missing or corrupt language packs never trigger implicit networking and failed installation removes partial files',async()=>{

@@ -6,6 +6,7 @@ import { customControls } from '../controls';
 import type { OCRAPI, OCRLanguage, OCRState } from '../../shared/recognition/ocr';
 import { mountTranslation } from './translation-ui';
 import { mountFormula } from './formula-ui';
+import { mountTextSelection } from './text-selection';
 const api = window.one.recognition!;
 const back = document.createElement('button');
 back.id = 'workflow-back';
@@ -23,6 +24,7 @@ let state: OCRState,
 let mode: 'text' | 'translation' | 'formula' = 'text',
   ocrSummary = q('summary').textContent || '';
 let workflowRead = '';
+let fullTranslationSource: string | undefined;
 const workflowBusy = () => ['recognizing', 'translating'].includes(state?.workflow?.status || '');
 const message = (value: unknown) => {
   q('message').textContent = value instanceof Error ? value.message : String(value);
@@ -43,6 +45,21 @@ const formula = mountFormula(
     if (state) render();
   },
 );
+const selection = mountTextSelection(q<HTMLImageElement>('source'), {
+  copy: text => api.copy(text),
+  message,
+  selected: (start, end) => {
+    if (mode === 'text' && !requesting && !state?.running) q<HTMLTextAreaElement>('result').setSelectionRange(start, end);
+  },
+  translate: text => {
+    if (requesting || state.running || workflowBusy() || translation.busy() || formula.busy()) return;
+    fullTranslationSource = q<HTMLTextAreaElement>('result').value;
+    q<HTMLTextAreaElement>('result').value = text;
+    translation.sourceChanged();
+    q('translation-tab').click();
+    q('translate').click();
+  },
+});
 for (const next of ['text', 'translation', 'formula'] as const)
   q(next + '-tab').onclick = () => {
     if (
@@ -54,6 +71,11 @@ for (const next of ['text', 'translation', 'formula'] as const)
     )
       return;
     mode = next;
+    if (next === 'text' && fullTranslationSource !== undefined) {
+      q<HTMLTextAreaElement>('result').value = fullTranslationSource;
+      fullTranslationSource = undefined;
+      translation.sourceChanged();
+    }
     translation.setMode(next === 'translation');
     formula.setMode(next === 'formula');
     if (next === 'text') message('识别结果可修正或复制');
@@ -86,6 +108,7 @@ function render() {
     : state.progress;
   translation.render();
   formula.render();
+  selection.setEnabled(mode === 'text' && !requesting && !state.running && !workflowBusy() && !translation.busy() && !formula.busy(), mode === 'text');
   document.body.classList.toggle('formula-mode', mode === 'formula');
   q('text-result').hidden = mode === 'formula';
   q('copy').hidden = mode === 'formula';
@@ -144,6 +167,7 @@ async function syncWorkflow() {
   const result = await api.workflowResult(token, workflow.id);
   if (disposed || token !== state.token || workflow.id !== state.workflow?.id) return;
   q<HTMLTextAreaElement>('result').value = result.source;
+  selection.setDocument(result.document);
   ocrSummary = `${result.words} 个词块 · 可信度 ${Math.round(result.confidence)}% · 请核对结果`;
   await translation.workflowResult(result.translation, workflow.target, workflow.error);
 }
@@ -158,11 +182,12 @@ q('run').onclick = async () => {
       q<HTMLSelectElement>('language').value as OCRLanguage,
     );
     q<HTMLTextAreaElement>('result').value = result.text;
+    selection.setDocument(result.document);
     translation.sourceChanged();
     ocrSummary = result.text.trim()
       ? `${result.words.length} 个词块 · 可信度 ${Math.round(result.confidence)}% · 请核对结果`
       : '未识别到文字，可裁剪图片或更换语言后重试';
-    message(result.text.trim() ? '识别完成，可修正或复制文字' : '未识别到文字');
+    message(result.text.trim() ? '识别完成，可在图片上拖选文字；双击词语、三击整行' : '未识别到文字');
   } catch (error) {
     message(error);
   } finally {
@@ -188,6 +213,7 @@ q('copy').onclick = () =>
     .then(() => message('已复制文字'))
     .catch(message);
 q('result').oninput = () => {
+  if (mode === 'text') selection.setDocument(undefined);
   q<HTMLButtonElement>('copy').disabled = !q<HTMLTextAreaElement>('result').value.trim();
   translation.sourceChanged();
 };
@@ -207,5 +233,6 @@ void api
 const timer = setInterval(() => void refresh(), 400);
 window.addEventListener('beforeunload', () => {
   disposed = true;
+  selection.dispose();
   clearInterval(timer);
 });
