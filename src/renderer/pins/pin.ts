@@ -73,6 +73,7 @@ function render(next: PinWindowState) {
   const record = state.record,
     base = pinBase(record.content),
     documentView = pinDocument(record.content, record.view);
+  document.documentElement.classList.toggle('image-pin-window',!!content&&record.content.kind==='image');
   if (content) {
     if (contentId !== record.id) {
       contentId = record.id;

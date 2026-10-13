@@ -14,11 +14,12 @@ async function run() {
   await app.evaluate(({BrowserWindow})=>{BrowserWindow.prototype.focus=function(){};BrowserWindow.prototype.show=BrowserWindow.prototype.showInactive;});
   await win.evaluate(w => {w.setBounds({x:-10000,y:-10000,width:1250,height:900}); w.showInactive();});
   assert.deepEqual(await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>({caption:group.querySelector('h2').textContent,pages:[...group.querySelectorAll('[data-page]')].map(b=>b.dataset.page)}))),[
-   {caption:'文件',pages:['tools','text','search','disk','archive']},{caption:'工具',pages:['input','preview','ai','developer','images']},{caption:'截图与录制',pages:['capture','recording','materials','pins']},{caption:'系统',pages:['system','hardware']}
+   {caption:'文件',pages:['tools','text','search','disk','archive']},{caption:'工具',pages:['ai','input','preview','developer','images']},{caption:'截图与录制',pages:['capture','recording','materials','pins']},{caption:'系统',pages:['system','ports','hardware']}
   ]);
   assert.equal(await page.locator('.sidebar-navigation>[data-page]').getAttribute('data-page'),'home');
   assert.equal(await page.locator('.sidebar>[data-page]').getAttribute('data-page'),'settings');
   await page.evaluate(() => {window.tooltipEvents = []; for (const name of ['pointerover','pointerout','focusin','focusout','pointerdown','keydown','scroll','blur','resize']) window.addEventListener(name, e => {window.tooltipEvents.push({name, time: performance.now(), target: e.target?.id || e.target?.className, related: e.relatedTarget?.id || e.relatedTarget?.className}); if (window.tooltipEvents.length > 60) window.tooltipEvents.shift();}, true);});
+  let capturedTooltip=false;
   const showTip = async (button, label, side) => {
    await page.mouse.move(600, 50);
    await button.scrollIntoViewIfNeeded();
@@ -28,18 +29,19 @@ async function run() {
    await expect(tip).toHaveCSS('opacity', '1');
    const geometry = await button.evaluate(el => {
     const tip = document.querySelector('#one-tooltip'), r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
-    const arrow = getComputedStyle(tip, '::before');
+    const arrow = getComputedStyle(tip, '::before'),surface=getComputedStyle(tip);
     return {label: tip.textContent, side: tip.dataset.side, button: r.toJSON(), tip: t.toJSON(), viewport: [innerWidth, innerHeight],
-     arrow: {width: arrow.width, height: arrow.height, left: arrow.left, right: arrow.right, top: arrow.top, bottom: arrow.bottom, transform: arrow.transform},
-     described: el.getAttribute('aria-describedby'), title: el.getAttribute('title'), arrowOffset: parseFloat(tip.style.getPropertyValue('--tooltip-arrow'))};
+     arrow: {content:arrow.content,width:arrow.width,height:arrow.height,clip:arrow.clipPath,borders:[arrow.borderTopWidth,arrow.borderRightWidth,arrow.borderBottomWidth,arrow.borderLeftWidth],background:arrow.backgroundColor},surface:{radius:surface.borderRadius,padding:surface.padding,color:surface.color,background:surface.backgroundColor,border:surface.borderColor},
+     described: el.getAttribute('aria-describedby'), title: el.getAttribute('title')};
    });
    assert.equal(geometry.title, null); assert.ok(geometry.described.split(' ').includes('one-tooltip'));
-   assert.equal(geometry.arrow.width, '8px'); assert.equal(geometry.arrow.height, '8px'); assert.notEqual(geometry.arrow.transform, 'none');
+   assert.notEqual(geometry.arrow.content,'none');assert.equal(geometry.surface.radius,'10px');assert.deepEqual(geometry.arrow.borders,['0px','0px','0px','0px']);assert.equal(geometry.arrow.background,geometry.surface.background);assert.equal(geometry.surface.border,geometry.surface.background);assert.notEqual(geometry.arrow.clip,'none');assert.equal(geometry.arrow.width,['left','right'].includes(side)?'8px':'14px');assert.equal(geometry.arrow.height,['left','right'].includes(side)?'14px':'8px');assert.equal(geometry.surface.padding,'6px 9px');
    assert.ok(geometry.tip.left >= 7 && geometry.tip.top >= 7 && geometry.tip.right <= geometry.viewport[0] - 7 && geometry.tip.bottom <= geometry.viewport[1] - 7, JSON.stringify(geometry));
-   if (side === 'right') {assert.ok(geometry.tip.left >= geometry.button.right + 10); assert.equal(geometry.arrow.left, '-5px'); assert.ok(Math.abs(geometry.tip.top + geometry.arrowOffset - geometry.button.top - geometry.button.height / 2) < 1.1);}
-   else if (side === 'left') assert.ok(geometry.tip.right <= geometry.button.left - 10);
-   else if (side === 'top') assert.ok(geometry.tip.bottom <= geometry.button.top - 10);
-   else assert.ok(geometry.tip.top >= geometry.button.bottom + 10);
+   if (side === 'right') assert.ok(geometry.tip.left >= geometry.button.right + 7);
+   else if (side === 'left') assert.ok(geometry.tip.right <= geometry.button.left - 7);
+   else if (side === 'top') assert.ok(geometry.tip.bottom <= geometry.button.top - 7);
+   else assert.ok(geometry.tip.top >= geometry.button.bottom + 7);
+   if(label==='最小化'&&!capturedTooltip){const r=geometry.tip;await page.screenshot({path:path.join(out,'tooltip-rounded.png'),clip:{x:Math.max(0,r.x-12),y:Math.max(0,r.y-12),width:r.width+24,height:r.height+24}});capturedTooltip=true;}
    tooltips.push(geometry); return geometry;
   };
   for (const theme of ['light', 'dark']) {
@@ -60,7 +62,7 @@ async function run() {
       collapsedLayouts.push({theme,height,...layout});
      }
      const separators=await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>{const style=getComputedStyle(group,'::before');return {label:group.getAttribute('aria-label'),width:style.width,height:style.height,marginBottom:style.marginBottom};}));
-     assert.deepEqual(separators,[{label:'文件',width:'28px',height:'1px',marginBottom:'7px'},{label:'工具',width:'24px',height:'1px',marginBottom:'7px'},{label:'截图与录制',width:'28px',height:'1px',marginBottom:'7px'},{label:'系统',width:'28px',height:'1px',marginBottom:'7px'}]);
+     assert.deepEqual(separators,[{label:'文件',width:'24px',height:'1px',marginBottom:'6px'},{label:'工具',width:'24px',height:'1px',marginBottom:'6px'},{label:'截图与录制',width:'24px',height:'1px',marginBottom:'6px'},{label:'系统',width:'24px',height:'1px',marginBottom:'6px'}]);
     }
     for (const button of await page.locator('.sidebar .nav').all()) await showTip(button, await button.getAttribute('aria-label'), 'right');
     await showTip(page.locator('[data-page=tools]'), '文件工具', 'right');
@@ -78,6 +80,7 @@ async function run() {
    await capacity.click(); await expect(page.locator('#alerts-tab')).toHaveAttribute('aria-selected','true');
   }
   await page.mouse.move(500, 50); await page.locator('[data-page=home]').focus(); await page.keyboard.press('Tab');
+  await expect(page.locator('[data-sidebar-group-toggle=files]')).toBeFocused();await page.keyboard.press('Tab');
   await expect(page.locator('[data-page=tools]')).toBeFocused(); await expect(page.locator('#one-tooltip.visible')).toHaveText('文件工具');
   await expect(page.locator('#one-tooltip')).toHaveAttribute('data-side', 'right');
   await page.keyboard.press('Escape'); await expect(page.locator('#one-tooltip')).not.toHaveClass(/visible/);

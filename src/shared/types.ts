@@ -20,6 +20,7 @@ export interface Appearance { mode: 'system' | 'light' | 'dark'; accent: string;
 export interface ColorSample { hex: string; rgb: string; hsl: string }
 export interface ScreenCapture { url: string; data?:Uint8Array; width: number; height: number; hex: string; pixels: number; x:number; y:number; centerX?:number;centerY?:number;cropX?:number;cropY?:number;zoomFrozen?:boolean }
 export interface Settings {
+  sidebar:import('./sidebar').SidebarPreferences;
   capture:import('./capture/settings').CapturePreferences;
   displays:import('./display-management').DisplayPreferences;
   themeSchedule:import('./theme-schedule').ThemeSchedulePreferences;
@@ -28,7 +29,7 @@ export interface Settings {
   diskMonitor:import('./disk-monitor').DiskMonitorSettings;
   preview:import('./preview').PreviewPreferences;
   echo:import('./echo').EchoSettings;
-  general: { launchAtLogin: boolean; closeToTray: boolean };
+  general: { launchAtLogin: boolean; closeToTray: boolean;openShortcut:string };
   archive:import('./archive-preferences').ArchivePreferences;
   search:import('./search').SearchSettings;
   utilities:import('./utilities').UtilitySettings;
@@ -68,7 +69,7 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   aiInline(query:string,requestId:string):Promise<{text:string;model:string}>;aiCancel(requestId:string):Promise<void>;
   aiOpenLink(url:string):Promise<void>;
   searchHistoryAdd(query:string,command:string,result?:string,engineId?:string):Promise<void>;searchHistoryClear():Promise<void>;searchHistoryRemove(id:string):Promise<void>;
-  trayMenuState():Promise<import('../main/tray-menu').TrayMenuView>;trayMenuAction(id:import('../main/tray-menu').TrayMenuAction):Promise<void>;trayMenuReady():Promise<void>;trayMenuHide():Promise<void>;onTrayMenuChanged(callback:()=>void):()=>void;
+  trayMenuState():Promise<import('../main/tray-menu').TrayMenuView>;trayMenuAction(id:import('../main/tray-menu').TrayMenuAction,top?:number):Promise<void>;trayMenuMoreClose():Promise<void>;trayMenuReady():Promise<void>;trayMenuHide():Promise<void>;onTrayMenuChanged(callback:()=>void):()=>void;
   explorerMenuState():Promise<import('./explorer-menu').ExplorerMenuState>;setExplorerMenu(value:{locksmith:boolean;rename:boolean;archiveCreate:boolean;archiveExtract:boolean}):Promise<import('./explorer-menu').ExplorerMenuState>;
   fileActionData():Promise<import('./explorer-menu').FileActionTarget>;openFileAction(tool:import('./explorer-menu').FileAction,paths:string[]):Promise<void>;
   archiveTaskData():Promise<{action:import('./archive-actions').ArchiveOpenAction;paths:string[];suggestedPath:string;conflict:import('./archive').ArchiveConflict;closeOnComplete:boolean}>;
@@ -156,6 +157,7 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   captureShortcutStatus():Promise<import('./capture/shortcuts').CaptureShortcutState>;
   retryCaptureShortcuts():Promise<import('./capture/shortcuts').CaptureShortcutState>;
   onCaptureShortcutState(callback:(state:import('./capture/shortcuts').CaptureShortcutState)=>void):()=>void;
+  onSidebarChanged(callback:(value:import('./sidebar').SidebarPreferences)=>void):()=>void;
   settings(): Promise<Settings>; saveSettings(value: Settings): Promise<Settings>;
   transform(request: TextRequest): Promise<string>; openText(encoding: string): Promise<{ path: string; text: string } | null>; readTextPath(path:string,encoding:string):Promise<{path:string;text:string}>;
   saveText(text: string, encoding: string, suggestedName?: string): Promise<string | null>; copyText(text: string): Promise<void>;

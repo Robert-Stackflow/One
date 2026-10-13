@@ -38,7 +38,7 @@ export function setupTooltips() {
   if (visible) document.dispatchEvent(new CustomEvent(TOOLTIP_CHANGE_EVENT, {detail:false}));
  };
  const position = (el: HTMLElement) => {
-  const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), margin = 8, gap = 12;
+  const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), margin = 8, gap = 10;
   const requested = el.dataset.tooltipSide;
   const preferred: TooltipSide = requested === 'top' || requested === 'right' || requested === 'bottom' || requested === 'left'
    ? requested : el.matches('.sidebar .nav') ? 'right' : 'top';
@@ -55,11 +55,9 @@ export function setupTooltips() {
   else if (side === 'top') y = r.top - t.height - gap;
   else y = r.bottom + gap;
   x = Math.round(clamp(x, t.width, innerWidth)); y = Math.round(clamp(y, t.height, innerHeight));
-  const vertical = side === 'right' || side === 'left';
-  const arrow = Math.max(10, Math.min((vertical ? t.height : t.width) - 10,
-   vertical ? r.top + r.height / 2 - y : r.left + r.width / 2 - x));
+  const vertical=side==='right'||side==='left',extent=vertical?t.height:t.width,center=vertical?r.top+r.height/2-y:r.left+r.width/2-x;
+  const inset=Math.min(17,extent/2);tip.style.setProperty('--tooltip-arrow',Math.max(inset,Math.min(extent-inset,center))+'px');
   tip.dataset.side = side; tip.style.left = x + 'px'; tip.style.top = y + 'px';
-  tip.style.setProperty('--tooltip-arrow', arrow + 'px');
   if (tip.classList.contains('visible')) document.dispatchEvent(new CustomEvent(TOOLTIP_CHANGE_EVENT, {detail:true}));
  };
  const show = (el: HTMLElement) => {

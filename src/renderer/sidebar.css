@@ -1,0 +1,33 @@
+.sidebar-navigation{scrollbar-width:none}
+.sidebar-navigation::-webkit-scrollbar{display:none}
+.sidebar-group-header{display:flex;gap:4px;align-items:center;justify-content:space-between;min-height:16px;margin-bottom:3px}
+.sidebar-group-header .sidebar-group-caption{margin:0 0 0 10px;flex:none;min-width:0}
+.sidebar-group-toggle{margin-left:auto;width:24px;height:20px;min-height:20px;margin-right:3px;padding:3px 5px;border:0;border-radius:5px;background:transparent;color:var(--muted);box-shadow:none}
+.sidebar-group-toggle:hover,.sidebar-group-toggle:focus-visible{background:var(--hover);color:var(--fg)}
+.sidebar-group-toggle .icon{width:12px;height:12px;transition:rotate .15s var(--ease)}
+.group-collapsed .sidebar-group-toggle .icon{rotate:-90deg}
+.sidebar-group>.nav[hidden]{display:none}
+.sidebar-collapsed .sidebar-group::before{display:block}
+.sidebar-collapsed .sidebar-group-header{height:16px;min-height:16px;margin:0;justify-content:center}
+.sidebar-collapsed .sidebar-group-header .sidebar-group-caption{display:none}
+.sidebar-collapsed .sidebar-group-toggle{width:28px;height:16px;min-height:16px;margin:0;padding:2px 8px}
+.sidebar-order-dialog{width:min(640px,calc(100vw - 40px))}
+.sidebar-sort-help{margin:0 0 22px;color:var(--muted);font-size:12px;line-height:1.7}
+.sidebar-sort-group+.sidebar-sort-group{margin-top:24px}
+.sidebar-sort-group h3{margin:0 0 10px;color:var(--muted);font-size:12px;font-weight:550}
+.sidebar-sort-list{display:flex;flex-direction:column;gap:6px}
+.sidebar-sort-row{display:flex;align-items:center;gap:12px;min-height:46px;padding:6px 12px 6px 6px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.sidebar-sort-row>.icon{width:17px;height:17px;flex:none;color:var(--muted)}
+.sidebar-sort-handle{width:28px;height:30px;min-height:30px;padding:6px;border:0;background:transparent;color:var(--muted);box-shadow:none;cursor:grab;flex:none}
+.sidebar-sort-handle:active{cursor:grabbing}.sidebar-sort-handle .icon{width:15px;height:15px}
+.sidebar-sort-label{flex:1;min-width:0;font-size:12px}
+.sidebar-fold-option{display:flex;align-items:center;gap:7px;margin:0;color:var(--muted);font-size:11px;white-space:nowrap}
+.sidebar-sort-row.is-dragging{opacity:.45}
+.sidebar-sort-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.sidebar-sort-error{margin:16px 0 0;color:#c5332a;font-size:12px}
+@media(prefers-reduced-motion:reduce){.sidebar-group-toggle .icon{transition:none}}
+
+.sidebar-group-count{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:5px;background:color-mix(in srgb,var(--muted) 9%,transparent);color:var(--muted);font-size:9px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+.sidebar-group-count[hidden],.sidebar-collapsed .sidebar-group-count{display:none}
+.sidebar-sort-intro{display:flex;align-items:flex-start;gap:18px;margin-bottom:22px}.sidebar-sort-intro .sidebar-sort-help{flex:1;margin:0}.sidebar-sort-intro>button{flex:none;font-size:11px;min-height:30px;padding:4px 10px}
+@media(max-width:520px){.sidebar-sort-intro{flex-direction:column;gap:10px}}

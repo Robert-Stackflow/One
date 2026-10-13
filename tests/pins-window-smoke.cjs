@@ -42,10 +42,12 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await main.locator('[data-pin-menu=pins-manage-menu]').click();await main.locator('#pins-restore-group').click();await expect.poll(()=>main.evaluate(async id=>(await window.one.pinsState()).pins.find(p=>p.id===id).view.passThrough,id)).toBe(false);
     const trayAction=async action=>{
       await app.evaluate(()=>globalThis.oneTestTrayMenu.open({x:150,y:150,width:24,height:24}));
-      let tray;await expect.poll(()=>{tray=app.windows().find(page=>!page.isClosed()&&page.url().includes('view=tray-menu'));return!!tray;}).toBe(true);
+      const rootId=await app.evaluate(()=>globalThis.oneTestTrayMenu.window.webContents.id);
+      let tray;await expect.poll(async()=>{for(const page of app.windows())if(!page.isClosed()&&page.url().includes('view=tray-menu')&&await (await app.browserWindow(page)).evaluate(w=>w.webContents.id)===rootId){tray=page;return true;}return false;}).toBe(true);
+      if(!await tray.locator('[data-action='+action+']').count()){const parent=tray;await parent.locator('.tray-menu-heading').hover();await parent.locator('[data-action=more]').hover();await expect.poll(()=>app.evaluate(()=>globalThis.oneTestTrayMenu.moreWindow?.isVisible()??false)).toBe(true);await expect.poll(async()=>{for(const page of app.windows())if(page!==parent&&!page.isClosed()&&page.url().includes('view=tray-menu')&&await page.locator('body').evaluate(e=>e.classList.contains('tray-submenu-window'))){tray=page;return true;}return false;}).toBe(true);}
       const button=tray.locator('[data-action='+action+']');await expect(button).toBeVisible();
       assert.equal(await tray.locator('#tray-menu-items').evaluate(menu=>menu.scrollHeight>menu.clientHeight+1),false);
-      await button.dispatchEvent('click');await expect.poll(()=>app.evaluate(()=>globalThis.oneTestTrayMenu.window?.isVisible()??false)).toBe(false);
+      await button.click();await expect.poll(()=>app.evaluate(()=>globalThis.oneTestTrayMenu.window?.isVisible()??false)).toBe(false);
     };
     await main.evaluate(id=>window.one.pinsAction(id,{kind:'pass',value:true}),id);await trayAction('pins-restore');assert.equal((await main.evaluate(()=>window.one.pinsState())).pins[0].view.passThrough,false);
     await main.locator('[data-pin-menu=pins-manage-menu]').click();await main.locator('#pins-new-group').click();await main.locator('#pin-name').fill('参考图');await main.getByRole('button',{name:'保存',exact:true}).click();await expect(main.locator('#pin-name-dialog')).toHaveCount(0);
@@ -60,8 +62,8 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await main.locator('#pins-clipboard-add').click();await expect(main.locator('#page-pins .pin-card')).toHaveCount(2);
     await app.evaluate((_e,file)=>{global.pinFiles=[file];},textFile);await main.locator('#pins-file-add').click();await expect(main.locator('#page-pins .pin-card')).toHaveCount(3);
     const state=await main.evaluate(()=>window.one.pinsState());assert.equal(state.format,'one-pin-workspace');assert.deepEqual(state.pins.map(p=>p.content.kind).sort(),['files','image','text']);
-    await trayAction('pins-next-group');assert.equal((await main.evaluate(()=>window.one.pinsState())).pins.filter(p=>p.view.visible).length,2);
-    await trayAction('pins-next-group');assert.equal((await main.evaluate(()=>window.one.pinsState())).pins.filter(p=>p.view.visible).length,1);
+    await trayAction('pins-next-group');await expect.poll(()=>main.evaluate(async()=>(await window.one.pinsState()).pins.filter(p=>p.view.visible).length)).toBe(2);
+    await trayAction('pins-next-group');await expect.poll(()=>main.evaluate(async()=>(await window.one.pinsState()).pins.filter(p=>p.view.visible).length)).toBe(1);
     await main.evaluate(()=>window.one.pinsGroup(null,{kind:'show'}));
     await main.locator('[data-pin-menu=pins-manage-menu]').click();await main.locator('#pins-toggle-all').click();await expect.poll(()=>main.evaluate(async()=>(await window.one.pinsState()).pins.filter(p=>p.view.visible).length)).toBe(0);
     await main.locator('[data-pin-menu=pins-manage-menu]').click();await main.locator('#pins-toggle-all').click();await expect.poll(()=>main.evaluate(async()=>(await window.one.pinsState()).pins.filter(p=>p.view.visible).length)).toBe(3);

@@ -6,6 +6,7 @@ export type PinContent =
   | { kind: 'image'; hash: string; width: number; height: number }
   | { kind: 'text'; text: string }
   | { kind: 'files'; files: { path: string; name: string; directory: boolean }[] };
+export type PinPlacement=Rectangle&{scale?:number};
 export interface PinView {
   x: number;
   y: number;
@@ -90,6 +91,11 @@ export function pinBase(content: PinContent) {
     .split('\n')
     .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 24)), 0);
   return { width: 360, height: Math.max(100, Math.min(600, 48 + lines * 24)) };
+}
+/** Capture bounds are desktop DIPs; image pixels remain unchanged. */
+export function initialPinView(content:PinContent,point:{x:number;y:number},area:Rectangle,captured?:PinPlacement):PinView{
+ const base=pinBase(content),scale=captured?(captured.scale??captured.width/base.width):Math.min(1,600/base.width,500/base.height,(area.width-32)/base.width,(area.height-32)/base.height);
+ return {x:captured?.x??point.x,y:captured?.y??point.y,scale:Math.max(.01,scale),rotation:0,flipX:false,flipY:false,opacity:1,passThrough:false,visible:false};
 }
 export function pinSize(content: PinContent, view: PinView) {
   const base = pinBase(content),

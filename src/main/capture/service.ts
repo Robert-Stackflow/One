@@ -36,6 +36,7 @@ import {
   type CaptureResult,
 } from '../../shared/capture/capture-workflow';
 import { CaptureDelivery } from './capture-delivery';
+import {capturePinBounds} from '../../shared/capture/pin-placement';
 import { customCaptureSelection, type CustomCapture } from '../../shared/capture/custom-capture';
 
 export const CAPTURE_URL='one://app/index.html?view=capture';
@@ -49,6 +50,7 @@ interface Snapshot {
   signature: string;
   name: string;
   physical?: Rectangle;
+  pinPhysical?: Rectangle;
   png: Buffer;
   capturedAt: number;
 }
@@ -99,6 +101,7 @@ export interface CaptureHost extends AnnotationPreferencesHost {
     action: CaptureAction,
     workflow?: CaptureWorkflow,
     owner?: string,
+    captured?: import('../../shared/pins').PinPlacement,
   ): Promise<boolean>;
   cancelWorkflow?(owner: string): Promise<void>;
   workflows(): { workflows: CaptureWorkflow[]; workflowId: string };
@@ -361,6 +364,9 @@ export class CaptureService {
       if (header.width !== layout.width || header.height !== layout.height)
         throw Error('截图输出尺寸与选区不符');
       const png = decodePng(request.png!);
+      const physicalPin=request.actions.includes('pin')?capturePinBounds(current.shot.pinPhysical??current.shot.physical,current.shot.size,request.selection,layout):undefined;
+      const dipPin=physicalPin?screen.screenToDipRect(null,physicalPin):undefined;
+      const captured=dipPin&&physicalPin?{...dipPin,scale:physicalPin.width/layout.width/screen.getDisplayMatching(dipPin).scaleFactor}:undefined;
       current.busy = 'output';
       current.detectionRevision++;
       try {
@@ -370,11 +376,11 @@ export class CaptureService {
           (action) => {
             if (this.run !== current || current.ended || current.overlay.isDestroyed())
               return Promise.resolve(false);
-            return this.host.deliver(current.overlay, png.data, action, workflow, current.token);
+            return this.host.deliver(current.overlay, png.data, action, workflow, current.token,captured);
           },
           request.actions.includes('translate')
-            ? JSON.stringify([workflow!.id, workflow!.translationTarget])
-            : '',
+            ? JSON.stringify([workflow!.id, workflow!.translationTarget,physicalPin])
+            : physicalPin?JSON.stringify(physicalPin):'',
         );
         this.outcome = structuredClone(result);
         if (result.error) this.host.failed(Error(result.error));
@@ -766,6 +772,7 @@ export class CaptureService {
           capturedAt: Date.now(),
           displayId: display.id,
           sourceId: choice.id,
+          pinPhysical:{x:info.x,y:info.y,width:png.readUInt32BE(16),height:png.readUInt32BE(20)},
           signature: displaySignature(display),
           name: choice.name,
         };

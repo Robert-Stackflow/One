@@ -1,3 +1,4 @@
+import {captureAccelerator} from './capture/shortcuts';
 import {defaultDisplayPreferences,validateDisplayPreferences} from './display-management';
 import {defaultCapturePreferences,validateCapturePreferences} from './capture/settings';
 import {defaultThemeSchedule,validateThemeSchedule} from './theme-schedule';
@@ -10,6 +11,7 @@ import {validFont} from './fonts';
 import {defaultSearch,validateSearch} from './search';
 import {defaultArchivePreferences,validateArchivePreferences} from './archive-preferences';
 import type { Settings, Appearance } from './types';
+import {defaultSidebar,validateSidebar} from './sidebar';
 import {colorFormatNames,type ColorFormat} from './colors';
 /** Merge only known preference keys; arrays are replaced as a unit. */
 export function mergeSettings(current:Settings, patch:unknown):Settings {
@@ -27,13 +29,14 @@ export function mergeSettings(current:Settings, patch:unknown):Settings {
 }
 export const defaultAppearance = (): Appearance => ({mode:'system',accent:'#303030',font:'system',density:'comfortable',radius:10,lightBackground:'#ffffff',lightForeground:'#202020',darkBackground:'#1e1e1f',darkForeground:'#f4f4f5',toastPosition:'bottom-center',popupPlacement:{x:.5,y:.86,display:'cursor'}});
 const binding = () => ({shortcut:'',command:'',args:[] as string[],cwd:''});
-export const defaultSettings = (): Settings => ({ capture:defaultCapturePreferences(),displays:defaultDisplayPreferences(),themeSchedule:defaultThemeSchedule(),quickActions:defaultQuickActions(),capsLock:defaultCapsPreferences(),diskMonitor:defaultDiskMonitor(),preview:defaultPreview(),echo:defaultEcho(),general:{launchAtLogin:false,closeToTray:true},archive:defaultArchivePreferences(),search:defaultSearch(),utilities:defaultUtilities(),keyEcho: false, onlyCombinations: true, edgeScroll: false, copyMenu: false, explorerPreview: false, pauseFullscreen: true, excludedApps: '', dwellMs: 650, cornerPixels: 12, cooldownMs: 1200, copyIntervalMs: 450, volumeStep: 2, edgePixels: 8, corners: { TL: 'off', TR: 'off', BL: 'off', BR: 'off' }, edges: { top: { action: 'off', step: 2 }, right: { action: 'volume', step: 2 }, bottom: { action: 'off', step: 2 }, left: { action: 'volume', step: 2 } }, cornerBindings:{TL:binding(),TR:binding(),BL:binding(),BR:binding()},appearance:defaultAppearance(),colorShortcut:'Shift+Win+C',colorHistory:[],colorFormat:'hex',colorVisibleFormats:['hex','rgb','hsl','hsv','oklch','cmyk'],colorShowEditor:true,colorWheelZoom:false });
+export const defaultSettings = (): Settings => ({ sidebar:defaultSidebar(),capture:defaultCapturePreferences(),displays:defaultDisplayPreferences(),themeSchedule:defaultThemeSchedule(),quickActions:defaultQuickActions(),capsLock:defaultCapsPreferences(),diskMonitor:defaultDiskMonitor(),preview:defaultPreview(),echo:defaultEcho(),general:{launchAtLogin:false,closeToTray:true,openShortcut:'Ctrl+Alt+O'},archive:defaultArchivePreferences(),search:defaultSearch(),utilities:defaultUtilities(),keyEcho: false, onlyCombinations: true, edgeScroll: false, copyMenu: false, explorerPreview: false, pauseFullscreen: true, excludedApps: '', dwellMs: 650, cornerPixels: 12, cooldownMs: 1200, copyIntervalMs: 450, volumeStep: 2, edgePixels: 8, corners: { TL: 'off', TR: 'off', BL: 'off', BR: 'off' }, edges: { top: { action: 'off', step: 2 }, right: { action: 'volume', step: 2 }, bottom: { action: 'off', step: 2 }, left: { action: 'volume', step: 2 } }, cornerBindings:{TL:binding(),TR:binding(),BL:binding(),BR:binding()},appearance:defaultAppearance(),colorShortcut:'Shift+Win+C',colorHistory:[],colorFormat:'hex',colorVisibleFormats:['hex','rgb','hsl','hsv','oklch','cmyk'],colorShowEditor:true,colorWheelZoom:false });
 export function validateSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') throw new Error('设置格式无效');
   const v = value as Settings; const d = defaultSettings();d.displays=validateDisplayPreferences(v.displays);d.themeSchedule=validateThemeSchedule(v.themeSchedule);d.quickActions=validateQuickActions(v.quickActions);d.capsLock=validateCapsPreferences(v.capsLock);d.diskMonitor=validateDiskMonitor(v.diskMonitor);d.echo=validateEcho(v.echo);d.preview=validatePreview(v.preview);
   d.capture=validateCapturePreferences(v.capture);
+  d.sidebar=validateSidebar(v.sidebar);
   d.appearance.popupPlacement={x:d.echo.keys.x,y:d.echo.keys.y,display:d.echo.keys.display};
-  if(v.general !== undefined){if(!v.general||typeof v.general.launchAtLogin!=='boolean'||typeof v.general.closeToTray!=='boolean')throw new Error('基本设置无效');d.general={...v.general};}
+  if(v.general !== undefined){if(!v.general||typeof v.general.launchAtLogin!=='boolean'||typeof v.general.closeToTray!=='boolean')throw new Error('基本设置无效');d.general={...d.general,...v.general};if(typeof d.general.openShortcut!=='string')throw Error('打开 One 快捷键无效');captureAccelerator(d.general.openShortcut);}
   for (const k of ['keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen'] as const) { if (typeof v[k] !== 'boolean') throw new Error('开关格式无效'); d[k] = v[k]; }
   for (const [k, min, max] of [['dwellMs',150,5000],['cornerPixels',2,100],['cooldownMs',200,10000],['copyIntervalMs',150,1000],['volumeStep',1,20],['edgePixels',2,50]] as const) { if (!Number.isInteger(v[k]) || v[k] < min || v[k] > max) throw new Error(`${k} 参数超出范围`); d[k] = v[k]; }
   if (typeof v.excludedApps !== 'string' || v.excludedApps.length > 2000) throw new Error('排除列表格式无效'); d.excludedApps = v.excludedApps;

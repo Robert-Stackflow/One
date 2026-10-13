@@ -25,10 +25,10 @@ export class CaptureHost {
       watermark:()=>structuredClone(context.settings().watermark),
       workflows:()=>({workflows:context.settings().workflows,workflowId:context.settings().workflowId}),
       archive:async(png,document,original,history)=>{await materials.initialized();await materials.library.images.add(png,'截图 '+new Date().toLocaleString('zh-CN'),'capture',document,original,history);},
-      deliver:async(window,png,action,workflow,owner)=>{
+      deliver:async(window,png,action,workflow,owner,captured)=>{
         if(context.blocked())throw Error('One 正在退出');
         if(action==='copy')await writeClipboardPng(png);
-        else if(action==='pin')await pins.image('截图',png);
+        else if(action==='pin')await pins.image('截图',png,captured);
         else if(action==='save')return !!await saveImage(window,{payload:{png:png.toString('base64')}},protect,()=>!context.blocked()&&!window.isDestroyed(),{defaultPath:'One-capture.png'});
         else if(action==='ocr'){if(!context.recognize)throw Error('截图文字识别服务尚未接入');await context.recognize(png);}
         else if(action==='translate'){if(!context.translate)throw Error('截图翻译服务尚未接入');return context.translate(window,png,owner!,workflow!.translationTarget??'zh-Hans');}

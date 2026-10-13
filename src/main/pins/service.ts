@@ -15,12 +15,14 @@ import {
   pinBounds,
   pinSize,
   pinBase,
+  initialPinView,
   clampPin,
   zoomPin,
   pinName,
   PIN_VISIBLE_LIMIT,
   PIN_FILE_LIMIT,
   type PinContent,
+  type PinPlacement,
   type PinRecord,
   type PinAction,
   type PinGroupAction,
@@ -49,6 +51,8 @@ export interface PinContext {
   icon():Electron.NativeImage;
 }
 export class PinService {
+  private imageWindows=new WeakSet<BrowserWindow>();
+  isImageWindow(window:BrowserWindow){return this.imageWindows.has(window);}
   private entries = new Map<string, Presentation>();
   private controls?: Presentation;
   private drags = new Map<string, Drag>();
@@ -241,7 +245,7 @@ export class PinService {
   }
   private place(record: PinRecord) {
     const bounds = pinBounds(record.content, record.view);
-    const area = screen.getDisplayMatching(bounds).workArea;
+    const display=screen.getDisplayMatching(bounds),area=record.content.kind==='image'?display.bounds:display.workArea;
     return clampPin(bounds, area);
   }
   private capacity(record: PinRecord) {
@@ -274,7 +278,7 @@ export class PinService {
           entry.window.destroy();
       }, 250).unref();
   }
-  async open(input: { title: string; png?: Buffer; text?: string; files?: string[] }) {
+  async open(input: { title: string; png?: Buffer; text?: string; files?: string[]; captured?:PinPlacement }) {
     return this.serial(async () => {
       let content: PinContent;
       if (input.png) {
@@ -299,29 +303,11 @@ export class PinService {
         }
         content = { kind: 'files', files };
       } else content = { kind: 'text', text: input.text || '' };
-      const point = screen.getCursorScreenPoint(),
-        area = screen.getDisplayNearestPoint(point).workArea,
-        base = pinBase(content);
-      const scale = Math.min(
-        1,
-        600 / base.width,
-        500 / base.height,
-        (area.width - 32) / base.width,
-        (area.height - 32) / base.height,
-      );
+      const point=screen.getCursorScreenPoint(),area=screen.getDisplayNearestPoint(point).workArea;
+      const view=initialPinView(content,point,area,input.captured);
       let record: PinRecord;
       try {
-        record = await this.store.add(pinName(input.title), content, {
-          x: point.x,
-          y: point.y,
-          scale: Math.max(0.01, scale),
-          rotation: 0,
-          flipX: false,
-          flipY: false,
-          opacity: 1,
-          passThrough: false,
-          visible: false,
-        });
+        record = await this.store.add(pinName(input.title), content, view);
       } catch (error) {
         await this.store.collect();
         throw error;
@@ -361,22 +347,25 @@ export class PinService {
         if (size.width !== record.content.width || size.height !== record.content.height)
           throw Error('贴图原图尺寸不匹配');
       }
+      const image=record.content.kind==='image';
       const window = this.ctx.createWindow('pin',{
         ...this.place(record),
         useContentSize: true,
-        frame: true,
-        titleBarStyle: 'hidden',
+        minWidth:1,minHeight:1,roundedCorners:!image,
+        frame: !image,
+        titleBarStyle: image?'default':'hidden',
         titleBarOverlay: false,
-        thickFrame: true,
-        hasShadow: true,
-        transparent: false,
-        backgroundColor: this.ctx.dark() ? '#181818' : '#fff',
+        thickFrame: !image,
+        hasShadow: !image,
+        transparent: image,
+        backgroundColor: image?'#00000000':this.ctx.dark() ? '#181818' : '#fff',
         resizable: false,
         alwaysOnTop: true,
         skipTaskbar: true,
         show: false,
         title: 'One · ' + record.title,
       });
+      if(image)this.imageWindows.add(window);
       entry = { window, id, token: randomUUID() };
       this.entries.set(id, entry);
       const presentation = entry;

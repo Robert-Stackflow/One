@@ -1,3 +1,5 @@
+import {sidebarGroups} from '../shared/sidebar';
+import {setupSidebar} from './sidebar-view';
 import {dialogMarkup,openDialog,closeDialog} from './dialog';
 import {overviewPage,setupOverview} from './overview-view';
 import './styles.css';
@@ -41,21 +43,17 @@ function setupToolGroupTabs(page:HTMLElement,onChange:(id:string)=>void){
  return select;
 }
 export function renderMain() {
-  const groups = [
-    {name:'文件',items:[['tools','文件工具'],['text','文本处理'],['search','文件搜索'],['disk','空间分析'],['archive','压缩与解压']]},
-    {name:'工具',items:[['input','操作增强'],['preview','快速预览'],['ai','AI 对话'],['developer','开发工具'],['images','图片工具']]},
-    {name:'截图与录制',items:[['capture','截图'],['recording','录制'],['materials','素材'],['pins','贴图']]},
-    {name:'系统',items:[['system','系统维护'],['hardware','系统信息']]}
-  ];
-  const modules = [['home','概览'],...groups.flatMap(group=>group.items),['settings','设置']];
-  const nav = ([id,name]:string[]) => `<button class="nav ${id==='home'?'active':''}" data-page="${id}" title="${name}" aria-label="${name}" ${id==='home'?'aria-current="page"':''}>${icon(id)}<span class="nav-label">${name}</span></button>`;
-  const navigation = `<nav class="sidebar-navigation" aria-label="功能导航">${nav(['home','概览'])}${groups.map(group=>`<section class="sidebar-group" aria-label="${group.name}"><h2 class="sidebar-group-caption" aria-hidden="true">${group.name}</h2>${group.items.map(nav).join('')}</section>`).join('')}</nav>${nav(['settings','设置'])}`;
+  const groups = sidebarGroups;
+  const modules = [['home','概览'],...groups.flatMap(group=>group.items.map(item=>[...item])),['settings','设置']];
+  const nav = ([id,name]:readonly string[]) => `<button class="nav ${id==='home'?'active':''}" data-page="${id}" title="${name}" aria-label="${name}" ${id==='home'?'aria-current="page"':''}>${icon(id)}<span class="nav-label">${name}</span></button>`;
+  const navigation = `<nav class="sidebar-navigation" aria-label="功能导航">${nav(['home','概览'])}${groups.map(group=>`<section class="sidebar-group" data-sidebar-group="${group.id}" aria-label="${group.name}"><div class="sidebar-group-header"><h2 class="sidebar-group-caption">${group.name}</h2><span class="sidebar-group-count" hidden></span><button type="button" class="sidebar-group-toggle" data-sidebar-group-toggle="${group.id}" aria-expanded="true" aria-label="折叠${group.name}" title="折叠${group.name}">${icon('chevron-down')}</button></div>${group.items.map(nav).join('')}</section>`).join('')}</nav>${nav(['settings','设置'])}`;
   app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand drag-region"><img class="brand-mark" src="${appIconURL}" width="24" height="24" alt=""><span class="brand-name">One</span></div>${navigation}</aside><main class="workspace"><header class="workspace-header drag-region"><button class="quiet icon-button" id="sidebar-toggle" title="收起侧边栏" aria-label="收起侧边栏" aria-expanded="true">${icon('panel-left')}</button><div class="spacer"></div>${windowControls()}</header><div class="content" data-current-page="home"><div class="page-heading"><h1 id="page-name">概览</h1><div id="recording-heading-actions" class="recording-heading-actions" data-heading-for="recording" hidden></div><div id="capture-heading-actions" class="capture-heading-actions" data-heading-for="capture" hidden></div><div id="pins-heading-actions" class="pins-heading-actions" data-heading-for="pins" hidden></div><div id="materials-heading-actions" class="materials-heading-actions" data-heading-for="materials" hidden></div><div id="archive-heading-actions" data-heading-for="archive" hidden></div><div id="disk-heading-actions" data-heading-for="disk" hidden></div><div id="color-heading-actions" data-heading-for="images" data-heading-tab="color" hidden></div><div id="barcode-heading-actions" data-heading-for="developer" data-heading-tab="barcode" hidden></div></div>
-  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-recording" hidden></section><section class="page" id="page-capture" hidden></section><section class="page" id="page-pins" hidden></section><section class="page" id="page-materials" hidden></section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-ai" hidden></section><section class="page" id="page-developer" hidden></section><section class="page" id="page-images" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
+  <section class="page" id="page-home">${overviewPage()}</section><section class="page" id="page-recording" hidden></section><section class="page" id="page-capture" hidden></section><section class="page" id="page-pins" hidden></section><section class="page" id="page-materials" hidden></section><section class="page" id="page-tools" hidden></section><section class="page" id="page-archive" hidden></section><section class="page" id="page-text" hidden></section><section class="page" id="page-disk" hidden></section><section class="page" id="page-system" hidden></section><section class="page" id="page-ports" hidden></section><section class="page" id="page-hardware" hidden></section><section class="page" id="page-input" hidden></section><section class="page" id="page-preview" hidden></section><section class="page" id="page-ai" hidden></section><section class="page" id="page-developer" hidden></section><section class="page" id="page-images" hidden></section><section class="page" id="page-search" hidden></section><section class="page" id="page-settings" hidden></section>
   </div><div class="toast-layer"><div class="toast" id="toast" hidden role="status"></div></div></main></div>${dialogMarkup({id:"issues-dialog",title:"未完成的扫描项目",closeId:"issues-dismiss",className:"dialog-wide",body:`<pre id="issues-text"></pre>`,actions:`${button('close-issues','关闭')}`})}`;
   setupChrome(); customControls(app);
   const content=document.querySelector<HTMLElement>('.content')!;
   let toolsController:ReturnType<typeof import('./file-tools-view').setupFileTools>|undefined,archiveController:ReturnType<typeof import('./archive-view').setupArchiveView>|undefined,textController:ReturnType<typeof import('./text-view').setupText>|undefined,diskController:ReturnType<typeof import('./disk-view').setupDisk>|undefined;
+  let portsController:ReturnType<typeof import('./ports-view').setupPorts>|undefined;
   let maintenanceController:ReturnType<typeof import('./maintenance-view').setupMaintenance>|undefined,informationController:ReturnType<typeof import('./system-info-view').setupSystemInformation>|undefined;
   let barcodeController:ReturnType<typeof import('./barcode-view').setupBarcode>|undefined;
   let developerDataController:ReturnType<typeof import('./developer-data-view').setupDeveloperData>|undefined;
@@ -89,7 +87,8 @@ export function renderMain() {
     else if(id==='archive'){const {archivePage,setupArchiveView}=await import('./archive-view');page.innerHTML=archivePage();customControls(page);archiveController=setupArchiveView();q('archive-heading-actions').append(q('archive-header-utilities'));}
     else if(id==='text'){const {textPage,setupText}=await import('./text-view');page.innerHTML=textPage();customControls(page);textController=setupText();}
     else if(id==='disk'){const {diskPage,setupDisk}=await import('./disk-view');page.innerHTML=diskPage();customControls(page);q('disk-heading-actions').append(q('disk-actions'));diskController=setupDisk();}
-    else if(id==='system'){const [{maintenancePage,setupMaintenance},{portsPage,setupPorts}]=await Promise.all([import('./maintenance-view'),import('./ports-view')]);page.innerHTML=maintenancePage();const portsPanel=document.createElement('div');portsPanel.id='maintenance-ports-panel';portsPanel.hidden=true;portsPanel.innerHTML=portsPage();page.querySelector('.maintenance-page')!.append(portsPanel);customControls(page);maintenanceController=setupMaintenance(setupPorts());}
+    else if(id==='system'){const {maintenancePage,setupMaintenance}=await import('./maintenance-view');page.innerHTML=maintenancePage();customControls(page);maintenanceController=setupMaintenance();}
+    else if(id==='ports'){const {portsPage,setupPorts}=await import('./ports-view');page.innerHTML=portsPage();customControls(page);portsController=setupPorts();}
     else if(id==='hardware'){const {systemInformationPage,setupSystemInformation}=await import('./system-info-view');page.innerHTML=systemInformationPage();informationController=setupSystemInformation();}
     else if(id==='input'){const {inputPage,setupInput}=await import('./enhancement-view');page.innerHTML=inputPage();customControls(page);inputController=setupInput();}
     else if(id==='developer'){const [{barcodePage,setupBarcode},{developerDataPage,setupDeveloperData},{base64Page,setupBase64},{urlCodecPage,setupURLCodec},{timestampPage,setupTimestamp},{regexPage,setupRegex},{developerHashPage,setupDeveloperHash},{developerUuidPage,setupDeveloperUuid},{developerQrPage,setupDeveloperQr}]=await Promise.all([import('./barcode-view'),import('./developer-data-view'),import('./base64-view'),import('./url-codec-view'),import('./timestamp-view'),import('./regex-view'),import('./developer-hash-view'),import('./developer-uuid-view'),import('./developer-qr-view')]);page.innerHTML=toolGroupPage('开发工具',[{id:'barcode',label:'条码识别',body:barcodePage()},{id:'developer-data',label:'JSON / YAML',body:developerDataPage()},{id:'base64',label:'编解码',body:base64Page()},{id:'url-codec',label:'URL 编解码',body:urlCodecPage()},{id:'timestamp',label:'时间戳',body:timestampPage()},{id:'regex',label:'正则测试',body:regexPage()},{id:'developer-hash',label:'哈希',body:developerHashPage()},{id:'developer-uuid',label:'UUID',body:developerUuidPage()},{id:'developer-qr',label:'二维码',body:developerQrPage()}]);for(const panel of page.querySelectorAll<HTMLElement>('[role=tabpanel]:not(#page-barcode)'))customControls(panel);q('barcode-heading-actions').append(q('barcode-actions'));barcodeController=setupBarcode();developerDataController=setupDeveloperData();base64Controller=setupBase64();urlCodecController=setupURLCodec();timestampController=setupTimestamp();regexController=setupRegex();developerHashController=setupDeveloperHash();developerUuidController=setupDeveloperUuid();developerQrController=setupDeveloperQr();developerTabSelect=setupToolGroupTabs(page,tab=>{const visible=content.dataset.currentPage==='developer';barcodeController?.activate(visible&&tab==='barcode');developerDataController?.activate(visible&&tab==='developer-data');base64Controller?.activate(visible&&tab==='base64');urlCodecController?.activate(visible&&tab==='url-codec');timestampController?.activate(visible&&tab==='timestamp');regexController?.activate(visible&&tab==='regex');developerHashController?.activate(visible&&tab==='developer-hash');developerUuidController?.activate(visible&&tab==='developer-uuid');developerQrController?.activate(visible&&tab==='developer-qr');if(visible)updateHeadingActions('developer');});}
@@ -115,12 +114,13 @@ export function renderMain() {
     else if(id==='text')textController?.activate(value);
     else if(id==='disk')diskController?.activate(value);
     else if(id==='system')maintenanceController?.activate(value);
+    else if(id==='ports')portsController?.activate(value);
     else if(id==='hardware')informationController?.activate(value);
     else if(id==='settings')settingsController?.activate(value);
     else if(id==='input')inputController?.activate(value);
     else if(id==='developer'){const tab=q('page-developer').querySelector('[role=tab][aria-selected="true"]')?.id;barcodeController?.activate(value&&tab==='tool-tab-barcode');developerDataController?.activate(value&&tab==='tool-tab-developer-data');base64Controller?.activate(value&&tab==='tool-tab-base64');urlCodecController?.activate(value&&tab==='tool-tab-url-codec');timestampController?.activate(value&&tab==='tool-tab-timestamp');regexController?.activate(value&&tab==='tool-tab-regex');developerHashController?.activate(value&&tab==='tool-tab-developer-hash');developerUuidController?.activate(value&&tab==='tool-tab-developer-uuid');developerQrController?.activate(value&&tab==='tool-tab-developer-qr');}
   };
-  const canonicalPage=(id:string)=>id==='barcode'?'developer':id==='color'?'images':id==='ports'||id==='services'?'system':id;
+  const canonicalPage=(id:string)=>id==='barcode'?'developer':id==='color'?'images':id==='services'?'ports':id;
   const navigate=async(id:string)=>{
     id=canonicalPage(id);
     const revision=++navigationRevision,current=content.dataset.currentPage||'home';
@@ -133,6 +133,7 @@ export function renderMain() {
     document.querySelectorAll('.nav').forEach(node=>{const active=node.getAttribute('data-page')===id;node.classList.toggle('active',active);if(active)node.setAttribute('aria-current','page');else node.removeAttribute('aria-current');});
     q('page-name').textContent=modules.find(item=>item[0]===id)?.[1]||'One';return true;
   };
+  setupSidebar();
   document.querySelectorAll<HTMLButtonElement>('.nav[data-page]').forEach(node => node.addEventListener('click', () => void navigate(node.dataset.page!).catch(toast)));
   const collapse=(collapsed:boolean)=>{document.querySelector('.shell')!.classList.toggle('sidebar-collapsed',collapsed);const toggle=q('sidebar-toggle');toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'展开侧边栏':'收起侧边栏');toggle.title=toggle.getAttribute('aria-label')!;};
   collapse(localStorage.getItem('sidebar-collapsed')==='true');
@@ -145,7 +146,7 @@ export function renderMain() {
   api.onNavigatePage(target=>{const work=async()=>{
     const page=canonicalPage(target.page==='locksmith'?'tools':target.page);
     if(!modules.some(item=>item[0]===page)||!await navigate(page))return;
-    if(target.page==='ports'||target.page==='services')maintenanceController?.selectTab(target.page);
+    if(target.page==='ports'||target.page==='services')portsController?.select(target.page);
     if(target.page==='capture'&&target.action==='custom')await captureController!.custom();
     if(target.page==='barcode'){developerTabSelect?.('barcode');if(target.path)await barcodeController!.openPath(target.path);}
     else if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
