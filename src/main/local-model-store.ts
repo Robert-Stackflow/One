@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { copyFile, lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import type { LocalModelArtifact, LocalModelDescriptor, LocalModelProgress, LocalModelState } from '../shared/local-models';
+import type { LocalModelArtifact, LocalArtifactBundle, LocalModelProgress, LocalModelState } from '../shared/local-models';
 
 // The app has one main process. Locks also cover different store instances sharing its data directory.
 const operations = new Map<string, 'install' | 'delete'>();
@@ -29,9 +29,9 @@ async function verified(path: string, artifact: LocalModelArtifact, signal?: Abo
   return hash.digest('hex') === artifact.sha256;
 }
 
-export function localModelIdentity(input: LocalModelDescriptor) {
+export function localModelIdentity(input: LocalArtifactBundle) {
   if (!input || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.id) || !/^[a-zA-Z0-9._+-]{1,120}$/.test(input.revision) ||
-      !Array.isArray(input.artifacts) || !input.artifacts.length || input.artifacts.length > 32) throw Error('模型描述无效');
+      !Array.isArray(input.artifacts) || !input.artifacts.length || input.artifacts.length > 64) throw Error('模型描述无效');
   const names = new Set<string>(), roles = new Set<string>();
   for (const artifact of input.artifacts) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/.test(artifact.name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(artifact.name) ||
@@ -48,16 +48,16 @@ export function localModelIdentity(input: LocalModelDescriptor) {
   return input.id + '-' + hash.slice(0, 24);
 }
 
-/** Fixed-hash bundle cache. A directory becomes visible only when every artifact is verified. */
+/** Fixed-hash weights/runtime cache. A directory becomes visible only when every artifact is verified. */
 export class LocalModelStore {
   readonly root: string;
   constructor(root: string, private transport: typeof fetch = fetch, private idleTimeoutMs = 25000) { this.root = resolve(root); }
-  private paths(model: LocalModelDescriptor) {
+  private paths(model: LocalArtifactBundle) {
     const key = localModelIdentity(model);
     const installed = join(this.root, key);
     return { installed, stage: join(this.root, key + '.partial'), lock: process.platform === 'win32' ? installed.toLowerCase() : installed };
   }
-  async state(model: LocalModelDescriptor, signal?: AbortSignal, verifyIntegrity = true): Promise<LocalModelState> {
+  async state(model: LocalArtifactBundle, signal?: AbortSignal, verifyIntegrity = true): Promise<LocalModelState> {
     const paths = this.paths(model), totalBytes = model.artifacts.reduce((sum, a) => sum + a.bytes, 0);
     const rootExists = await directory(this.root);
     let installedBytes = 0, downloadedBytes = 0, ready = false;
@@ -75,7 +75,7 @@ export class LocalModelStore {
     return { ready, downloadedBytes: ready ? totalBytes : downloadedBytes, diskBytes: installedBytes + downloadedBytes,
       totalBytes, downloading: operations.get(paths.lock) === 'install', inUse: !!leases.get(paths.lock) };
   }
-  async install(input: LocalModelDescriptor, signal: AbortSignal, progress: (value: LocalModelProgress) => void = () => {}, localSources: Readonly<Record<string, string>> = {}) {
+  async install(input: LocalArtifactBundle, signal: AbortSignal, progress: (value: LocalModelProgress) => void = () => {}, localSources: Readonly<Record<string, string>> = {}) {
     const model = structuredClone(input), paths = this.paths(model), sources = { ...localSources };
     if (operations.has(paths.lock)) throw Error('模型正在下载或删除，请稍后重试');
     operations.set(paths.lock, 'install');
@@ -175,7 +175,7 @@ export class LocalModelStore {
     }
   }
   /** Keep model files alive for an inference task, including while the user's selection changes. */
-  async acquire(input: LocalModelDescriptor) {
+  async acquire<T extends LocalArtifactBundle>(input: T) {
     const model = structuredClone(input), paths = this.paths(model);
     if (operations.has(paths.lock)) throw Error('模型正在下载或删除');
     leases.set(paths.lock, (leases.get(paths.lock) || 0) + 1);
@@ -186,7 +186,7 @@ export class LocalModelStore {
       return { model, files: model.artifacts.map(artifact => ({ ...artifact, path: join(paths.installed, artifact.name) })), release };
     } catch (error) { release(); throw error; }
   }
-  async remove(model: LocalModelDescriptor) {
+  async remove(model: LocalArtifactBundle) {
     const paths = this.paths(model);
     if (operations.has(paths.lock) || leases.get(paths.lock)) throw Error('模型正在下载或使用，请完成或取消任务后删除');
     operations.set(paths.lock, 'delete');

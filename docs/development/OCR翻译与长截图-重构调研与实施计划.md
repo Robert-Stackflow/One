@@ -68,7 +68,11 @@ small/medium 各通过五组合成图像（英文、中英/邮箱、深色、180
 
 DeepSeek 原生可行性已核验：官方 [v1](https://huggingface.co/deepseek-ai/DeepSeek-OCR) / [v2](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) 的 Transformers 示例依赖 CUDA/PyTorch/Flash Attention；本应用采用无需用户安装 Python 的原生运行包路线。llama.cpp 的 [v1 支持](https://github.com/ggml-org/llama.cpp/pull/17400) 与 [v2 支持](https://github.com/ggml-org/llama.cpp/pull/20975) 已合入上游，固定候选运行包为 [b11588 Windows x64](https://github.com/ggml-org/llama.cpp/releases/tag/b11588)，发布物大小与官方 SHA-256 已核验。本机原生 CUDA 包识别 RTX 4060；两个版本的 Q8 语言模型和视觉投影文件均已固定版本/大小/SHA-256，来自 [ggml-org v1 转换](https://huggingface.co/ggml-org/DeepSeek-OCR-GGUF/tree/7086620c3e417c744eb30dd3090fd053c6bb2e5e) 与 [v2 支持作者转换](https://huggingface.co/sabafallah/DeepSeek-OCR-2-GGUF/tree/d08e5af400c64fa8a9b89b04ba373b600b02e05d)，不将转换文件标为 DeepSeek 官方 GGUF。
 
-两版分别通过原生 CUDA 英文和深色中英/邮箱合成图像，v1 进程启动至完成约 14.6/9.1 秒，v2 约 6.1/4.7 秒，语言层实际 13/13 卸载至 GPU。CPU 英文分别约 31.4/13.6 秒，已验证同模型 CPU 路线可用。Vulkan 包能枚举 NVIDIA/AMD，但 v1 的部分视觉算子回落 CPU，两段图像编码日志累计约 34.7 秒，不能据此宣传与 CUDA 同等加速。当前只是独立推理验证，尚未加入用户可下载目录；仍需接入运行包/模型缓存、CUDA 与 DXGI LUID 映射、后台进程/调度/取消/预算，以及真实文档、图上几何和窗口回归。权重验证与原型日志保存在 `work/current/capture-reconstruction/deepseek`，后续复用，不重复下载。
+两版分别通过原生 CUDA 英文和深色中英/邮箱合成图像，v1 进程启动至完成约 14.6/9.1 秒，v2 约 6.1/4.7 秒，语言层实际 13/13 卸载至 GPU。CPU 英文分别约 31.4/13.6 秒，已验证同模型 CPU 路线可用。Vulkan 包能枚举 NVIDIA/AMD，但 v1 的部分视觉算子回落 CPU，两段图像编码日志累计约 34.7 秒，不能据此宣传与 CUDA 同等加速。尚未加入用户可下载目录；运行包缓存与设备映射基础层已完成，仍需接入 GGUF 模型缓存、后台进程/调度/取消/预算，以及真实文档、图上几何和窗口回归。权重验证与原型日志保存在 `work/current/capture-reconstruction/deepseek`，后续复用，不重复下载。
+
+原生运行包由 `LlamaRuntimeStore` 单独管理，不加入安装器或模型侧栏。CPU 包固定 31 份文件，CUDA 包连同依赖固定 35 份文件；官方 ZIP 和解压后的服务器/DLL/包内许可文件均绑定大小与 SHA-256。使用已有 `yauzl` 流式解压，只写入固定清单；拒绝越界路径、符号链接、加密、重复名称、大小/哈希不符及超限内容。完整校验后原子发布，获取二进制时重新校验并持有租约；使用中不能删除，损坏后可从已缓存 ZIP 离线修复。准备任务可共享，每个调用方独立取消，最后一个调用方取消后才终止准备；重试等待旧任务清理完毕，退出后不再返回新的二进制租约。`node tests/llama-runtime-store.cjs` 覆盖解压边界，`--runtime` 验证实际 CPU/CUDA 包的离线安装、版本/设备加载、共享取消、独立进度、租约、损坏修复和清理。`node scripts/prepare-llama-runtime-benchmark.mjs --backend all` 只验证既有 ZIP，显式加 `--prepare` 才允许下载。
+
+CUDA 枚举只动态加载系统 `nvcuda.dll`，通过 `cuDeviceGet`/`cuDeviceGetLuid` 精确对应 DXGI LUID，独立记录 CUDA ordinal 和驱动版本；不以显卡名称匹配、不复用 DirectML 的原始索引，歧义节点不发布 CUDA 映射。当前按已核验的 CUDA 12.4 运行包筛选驱动。实机出现 5 个逻辑适配器，含多个同名 NVIDIA 条目，仅一个匹配 CUDA；`node tests/inference-devices.cjs` 验证两种索引独立重排、旧身份、旧驱动与强制/自动模式，`--runtime` 验证实际枚举、CUDA 身份及全部 5 个 DirectML 设备的真实 OCR。完整应用构建和重启后的 dev 已通过。
 
 模型管理显示名称、尺寸档、版本、语言/场景、下载大小、磁盘占用、CPU/GPU 兼容性、已测内存/显存和状态；未测需求明确标为未知。允许多个模型共存、切换、下载取消/继续、重试和删除，记忆每项功能的选择；切换只影响新任务。按需下载权重和运行包，不把所有大模型加入安装器。
 

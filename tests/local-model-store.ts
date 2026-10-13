@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { mkdtemp, readFile, writeFile, stat, mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LocalModelStore, localModelIdentity } from '../src/main/local-model-store';
-import { localModelCatalog } from '../src/main/local-model-catalog';
+import { localModelCatalog,miganModel } from '../src/main/local-model-catalog';
 import type { LocalModelDescriptor } from '../src/shared/local-models';
 
 test('shared model bundles resume, publish atomically and preserve active/versioned models', async () => {
@@ -95,6 +95,8 @@ test('shared model bundles resume, publish atomically and preserve active/versio
 
 test('model paths reject traversal, Windows aliases and symlink caches', async () => {
   for (const model of localModelCatalog) assert.ok(localModelIdentity(model).startsWith(model.id + '-'));
+  const native={...miganModel,artifacts:Array.from({length:65},(_,index)=>({...miganModel.artifacts[0],name:`binary-${index}.dll`,role:`binary-${index}`}))};
+  assert.throws(()=>localModelIdentity(native),/描述无效/);native.artifacts.length=35;assert.ok(localModelIdentity(native),'native CUDA bundles fit without removing the artifact-count bound');
   const descriptor = structuredClone(localModelCatalog[0]);
   for (const name of ['../model.onnx', 'C:\\escape.onnx', 'NUL.onnx', 'con', 'foo.', 'file.part']) {
     descriptor.artifacts[0].name = name; assert.throws(() => localModelIdentity(descriptor), /描述无效/);
@@ -114,7 +116,7 @@ test('verified legacy files import offline and are rechecked after copying', asy
   const directory = await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!, 'import-'));
   const bytes = Buffer.from('existing model cache'), legacy = join(directory, 'legacy.onnx');
   await writeFile(legacy, bytes);
-  const descriptor = structuredClone(localModelCatalog[1]);
+  const descriptor = structuredClone(miganModel);
   descriptor.artifacts[0].bytes = bytes.length; descriptor.artifacts[0].sha256 = createHash('sha256').update(bytes).digest('hex');
   const store = new LocalModelStore(join(directory, 'library'), async () => { throw Error('unexpected network'); });
   const installed = await store.install(descriptor, new AbortController().signal, () => {}, { repair: legacy });

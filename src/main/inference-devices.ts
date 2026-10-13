@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { inferenceDevices, inferencePreference, type InferenceDevices, type InferencePreference } from '../shared/inference-devices';
+import { inferenceDevices, inferencePreference, supportsCUDAInference, type InferenceDevices, type InferencePreference } from '../shared/inference-devices';
 
 export async function readInferenceDevices(signal?: AbortSignal, executable = join(__dirname, '../native/One.Monitor.exe').replace('app.asar\\', 'app.asar.unpacked\\')): Promise<InferenceDevices> {
   if (process.platform !== 'win32') return { gpus: [], error: '当前系统尚未适配本地 GPU 推理' };
@@ -29,4 +29,16 @@ export function resolveInferenceDevice(value: InferencePreference, devices: Infe
   // Current tiny-model measurements show that small inputs do not repay GPU startup overhead.
   if (preference.mode === 'auto' && pixels < 1_000_000) return { backend: 'cpu' as const };
   return { backend: 'dml' as const, gpu: selected };
+}
+
+/** Large language OCR uses CUDA's driver ordinal, independently of the DirectML ordering. */
+export function resolveCUDAInferenceDevice(value: InferencePreference, devices: InferenceDevices) {
+  const preference=inferencePreference(value);
+  if(preference.mode==='cpu')return {backend:'cpu' as const};
+  const all=inferenceDevices(devices.gpus),compatible=all.filter(supportsCUDAInference);
+  const selected=preference.gpu?compatible.find(gpu=>gpu.id===preference.gpu):[...compatible].sort((a,b)=>b.dedicatedMemory-a.dedicatedMemory||a.cudaDeviceId!-b.cudaDeviceId!)[0];
+  if(selected)return {backend:'cuda' as const,gpu:selected,deviceId:selected.cudaDeviceId!};
+  const reason=preference.gpu?(all.some(gpu=>gpu.id===preference.gpu)?'所选显卡或驱动不支持此模型的 CUDA 推理，请切换 CPU':'所选显卡已不可用，请刷新设备或切换 CPU'):devices.error||'没有可用的 CUDA 显卡或驱动，请切换 CPU';
+  if(preference.mode==='gpu')throw Error(reason);
+  return {backend:'cpu' as const,reason};
 }

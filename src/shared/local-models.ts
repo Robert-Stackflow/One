@@ -7,10 +7,14 @@ export interface LocalModelArtifact {
   bytes: number;
   sha256: string;
 }
-/** A preset owns a compatible set of weights, dictionaries and preprocessing configs. */
-export interface LocalModelDescriptor {
+/** Integrity and storage contract shared by model weights and native runtime packages. */
+export interface LocalArtifactBundle {
   id: string;
   revision: string;
+  artifacts: LocalModelArtifact[];
+}
+/** A preset owns a compatible set of weights, dictionaries and preprocessing configs. */
+export interface LocalModelDescriptor extends LocalArtifactBundle {
   title: string;
   size: string;
   purpose: LocalModelPurpose;
@@ -21,7 +25,6 @@ export interface LocalModelDescriptor {
   runtime: string;
   measuredMemoryMiB?: number;
   measuredVRAMMiB?: number;
-  artifacts: LocalModelArtifact[];
 }
 export interface LocalModelProgress {
   phase: 'checking' | 'downloading' | 'verifying' | 'ready';

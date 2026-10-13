@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import sharp from 'sharp';
-import { readInferenceDevices, resolveInferenceDevice } from '../src/main/inference-devices';
+import { readInferenceDevices, resolveInferenceDevice,resolveCUDAInferenceDevice } from '../src/main/inference-devices';
+import { supportsCUDAInference } from '../src/shared/inference-devices';
 import { PaddleRunner } from '../src/main/recognition/paddle-runner';
 import { paddleTinyModel } from '../src/main/local-model-catalog';
 import type { PaddleArtifact, PaddleModelFiles } from '../src/main/recognition/paddle-job';
 const root = resolve('work/current/capture-reconstruction');
 const devices = await readInferenceDevices(undefined, resolve(process.env.ONE_INFERENCE_MONITOR || 'dist/native/One.Monitor.exe'));
 assert.equal(devices.error, undefined); assert.ok(devices.gpus.length > 0);
+const cuda=devices.gpus.filter(supportsCUDAInference);
+for(const gpu of cuda){const selected=resolveCUDAInferenceDevice({mode:'gpu',gpu:gpu.id},devices);assert.equal(selected.gpu!.id,gpu.id);assert.equal(selected.deviceId,gpu.cudaDeviceId);}
 const artifact = (role: string, suffix: string): PaddleArtifact => {
   const value = paddleTinyModel.artifacts.find(file => file.role === role)!;
   return { path: join(root, 'pp-ocrv6-tiny-' + suffix), bytes: value.bytes, sha256: value.sha256 };
@@ -31,6 +34,6 @@ for (const gpu of devices.gpus.filter(gpu => gpu.d3d12)) {
   finally { await runner.close(); }
 }
 await writeFile(join(root, 'inference-devices-benchmark.json'), JSON.stringify({ created: new Date().toISOString(), model: model.id, runtime: 'onnxruntime-node@1.30.0', results }, null, 2));
-console.log(JSON.stringify({ adapters: devices.gpus.length, tested: results.length, passed: results.filter(r => r.success).length,
+console.log(JSON.stringify({ adapters: devices.gpus.length,cudaMapped:cuda.length, tested: results.length, passed: results.filter(r => r.success).length,
   failed: results.filter(r => !r.success).map(r => ({ deviceId: r.deviceId, error: r.error })) }));
 assert.ok(results.every(result => result.success), 'inspect inference-devices-benchmark.json for incompatible adapters');
