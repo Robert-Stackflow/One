@@ -87,6 +87,9 @@ export class LocalModelManager {
   }
   private async modelState(id: string, refresh = false) {
     const model = this.preset(id);
+    // UI reads installed-file metadata only. Download publication and acquire()
+    // verify SHA-256; opening/polling a dialog must never stream model weights.
+    if (model.purpose === 'ocr') return this.store.state(model, undefined, false);
     if (!this.states.has(id) || refresh) {
       this.states.set(id, await this.store.state(model));
       if (model.purpose === 'repair') this.legacyRepairReady = await validAiModel(this.dataDirectory, repairModel);

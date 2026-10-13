@@ -30,15 +30,26 @@ test('model choices persist per feature and do not mutate active tasks or allow 
   await manager.stop(); await assert.rejects(manager.install(paddleTinyModel.id), /关闭/);
 });
 
-test('OCR model state excludes repair verification', async () => {
+test('OCR dialog and selected state never verify weights or probe devices', async () => {
   const root=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'ocr-only-'));
-  const manager=new LocalModelManager(root,new OCRModels(join(root,'recognition','models')));
+  const manager=new LocalModelManager(root,new OCRModels(join(root,'recognition','models')),fetch,
+    async()=>{throw Error('UI state must not wait for a device probe');});
   const checked:string[]=[],inspect=manager.store.state.bind(manager.store);
-  manager.store.state=async(...args)=>{checked.push(args[0].id);return inspect(...args);};
+  manager.store.state=async(...args)=>{
+    checked.push(args[0].id);
+    assert.equal(args[2],false,'UI state must not read weights for SHA-256');
+    return inspect(...args);
+  };
   try {
     const state=await manager.state(true,'ocr');
     assert.ok(state.entries.length>1&&state.entries.every(entry=>entry.purpose==='ocr'));
     assert.ok(!checked.includes(miganModel.id),'opening OCR models never hashes repair weights');
+    await manager.save('ocr',{modelId:paddleTinyModel.id,device:{mode:'auto'}},state.revision);
+    assert.equal((await manager.selectedState()).title,'PP-OCRv6 tiny');
+    await manager.state(false,'ocr');
+    await manager.state(true,'ocr');
+    await assert.rejects(manager.store.acquire(paddleTinyModel),/SHA-256/,
+      'actual model acquisition still requires full integrity verification');
   } finally {await manager.stop();}
 });
 
