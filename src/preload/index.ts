@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { OneAPI, ScanSummary } from '../shared/types';
+import { recording } from './recording';
 const invoke = (name: string, ...args: unknown[]) => ipcRenderer.invoke('one:' + name, ...args);
 const listen = (name: string, callback: (value: any) => void) => { const handler = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value); ipcRenderer.on('one:' + name, handler); return () => ipcRenderer.removeListener('one:' + name, handler); };
 async function scan(path:string):Promise<ScanSummary>{
@@ -14,6 +15,7 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
+  recording,
   onCapturePreferences:callback=>listen('capture-preferences',callback),captureScroll:(displayId,options)=>invoke('capture-scroll',displayId,options),captureState:()=>invoke('capture-state'),captureDisplays:()=>invoke('capture-displays'),captureTake:(mode,displayId,options)=>invoke('capture-take',mode,displayId,options),captureCustom:(value,displayId,options)=>invoke('capture-custom',value,displayId,options),captureWindows:()=>invoke('capture-windows'),captureWindow:(token,options)=>invoke('capture-window',token,options),captureWindowSet:(tokens,options,placements)=>invoke('capture-window-set',tokens,options,placements),
   pinsState:()=>invoke('pins-state'),pinsOpenMaterial:id=>invoke('pins-material',id),pinsClipboard:()=>invoke('pins-clipboard'),pinsFiles:()=>invoke('pins-files'),pinsAction:(id,action)=>invoke('pins-action',id,action),pinsGroup:(id,action)=>invoke('pins-group',id,action),pinsToggle:()=>invoke('pins-toggle'),pinsNextGroup:()=>invoke('pins-next-group'),pinsPreview:id=>invoke('pins-preview',id),onPinsChanged:callback=>listen('pins-changed',callback),materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
   materialsImageURL:id=>invoke('materials-image-url',id),materialsRecordingURL:id=>invoke('materials-recording-url',id),
