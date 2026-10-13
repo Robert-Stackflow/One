@@ -44,9 +44,11 @@
 
 One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在独立推理 Worker 中运行检测、方向处理、识别和后处理，复用模型缓存；模型首次使用按需下载，记录版本、字典、前后处理配置、大小、哈希和许可，原子完成安装。代码许可和具体权重许可分别核对，不只看仓库首页。
 
-首批原型固定 [tiny 检测](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/tree/2ba1506c0380b8f0b03dd142459aac66d4421f6c) 与 [tiny 识别](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/tree/2612ab37152ae0a677521bae4e1e3d4fb4cf7c30) 官方 ONNX/YAML，权重许可标为 Apache-2.0；使用同版本字典和前后处理，不需要 Python。已实现 CPU/DirectML 推理、DB 文字框与透视裁剪，CTC 发射区间只标作近似对齐信息，不冒充实际字框。当前文档输出保留真实检测四边形，选择粒度为整行词框；精细对齐和方向模型仍待后续适配。推理已移入独立进程，校验后的权重字节直接交给 ONNX，避免校验与加载之间再打开可变化的文件；取消、超时和内存超限结束整个推理进程，旧输入保留。统一模型/设备管理、跨功能调度和各预设仍需接入，当前原型不改变用户的默认 OCR。
+首批原型固定 [tiny 检测](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/tree/2ba1506c0380b8f0b03dd142459aac66d4421f6c) 与 [tiny 识别](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/tree/2612ab37152ae0a677521bae4e1e3d4fb4cf7c30) 官方 ONNX/YAML，权重许可标为 Apache-2.0；使用同版本字典和前后处理，不需要 Python。已实现 CPU/DirectML 推理、DB 文字框与透视裁剪，CTC 发射区间只标作近似对齐信息，不冒充实际字框。当前文档输出保留真实检测四边形，选择粒度为整行词框；精细对齐和方向模型仍待后续适配。推理已移入独立进程，校验后的权重字节直接交给 ONNX，避免校验与加载之间再打开可变化的文件；取消、超时和内存超限结束整个推理进程，旧输入保留。首批用户模型/设备管理入口已接入，可明确切换实验阶段 tiny，默认 OCR 仍为 Tesseract；跨功能调度和其他预设仍待完成。
 
 可重复基准入口为 `node scripts/prepare-recognition-benchmark.mjs --prepare` 和 `node tests/recognition-paddle-runtime.cjs`，前者无 `--prepare` 时只验证已缓存文件。当前通过 60 张合成单行与中英三行、深色、顺时针 90°、紧裁剪单行四类整图的 CPU/DirectML 设备 0 核验；同图 Tesseract 也识别出预期文字，因此不能据此证明默认引擎应替换。结果记录文字、CER、冷启动、阶段耗时和进程 RSS，GPU 峰值显存尚未测量；DXGI 设备号/会话身份与指定设备推理已核验，真实分层样本与其他模型/尺寸仍按 A 门槛验收，不把合成样本成绩推广到真实使用场景。
+
+识别界面按最新交互要求统一为图片编辑器式工作台：顶栏识别/缩放/旋转图标、底栏复制，图片与结果可拖动调宽，默认图片更宽且结果栏可完全收起。OCR 原文与翻译同时置于右栏；选中文字翻译保留原文。LaTeX 识别使用独立窗口、图片副本、preload/IPC 和资源授权，关闭 OCR 不取消公式任务。“OCR 模型”弹窗仅管理 OCR，采用左侧模型、右侧设备/资源的结构，删除移至模型标题栏；翻译/视觉服务设置按连接与身份验证分组。OCR/公式共用无滚动条的图片画布，普通滚轮锚点缩放、空白/空格/中键拖动；处理时显示不透明纯色遮罩，无进度条、磨砂效果或常驻提示条。图上选字操作条使用实色表面，两按钮中间直角衔接；顶栏移除重复的取消识别按钮。真实窗口回归已覆盖分栏/收起、图上选字、翻译、独立公式与退出/重新打开；完整模型家族及其他阶段仍按本计划验收。
 
 ### 3.2 本地模型、尺寸与 GPU 管理
 
@@ -62,11 +64,11 @@ One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在�
 
 模型管理显示名称、尺寸档、版本、语言/场景、下载大小、磁盘占用、CPU/GPU 兼容性、已测内存/显存和状态；未测需求明确标为未知。允许多个模型共存、切换、下载取消/继续、重试和删除，记忆每项功能的选择；切换只影响新任务。按需下载权重和运行包，不把所有大模型加入安装器。
 
-共享缓存基础层已实现：预设绑定整套权重和配置的固定大小/SHA-256，下载取消或超时保留进度，Range 响应严格校验，不支持 Range 时安全重下；全部文件通过校验后才发布整个目录。版本可共存，推理租约阻止使用中删除，读取和安装拒绝缓存符号链接。PP-OCRv6 tiny 已通过新缓存的实际 CPU 推理；MI-GAN 修复已接入共享缓存和租约，旧缓存校验后离线复制迁入，仍保留旧位置供旧版使用；修复推理、EXIF/Alpha、原文件保护、界面双模式和中途取消回归通过。缓存与推理检查入口为 `node tests/local-model-store.cjs`、`node tests/local-model-runtime.cjs`，后者只使用已准备的官方模型文件，不自动下载。模型选择界面、设备枚举、其他预设及跨功能调度仍待接入，当前不改变默认 OCR。
+共享缓存基础层已实现：预设绑定整套权重和配置的固定大小/SHA-256，下载取消或超时保留进度，Range 响应严格校验，不支持 Range 时安全重下；全部文件通过校验后才发布整个目录。版本可共存，推理租约阻止使用中删除，读取和安装拒绝缓存符号链接。PP-OCRv6 tiny 已通过新缓存的实际 CPU 推理；MI-GAN 修复已接入共享缓存和租约，旧缓存校验后离线复制迁入，仍保留旧位置供旧版使用；修复推理、EXIF/Alpha、原文件保护、界面双模式和中途取消回归通过。缓存与推理检查入口为 `node tests/local-model-store.cjs`、`node tests/local-model-runtime.cjs`，后者只使用已准备的官方模型文件，不自动下载。首批模型选择界面、设备枚举与实际 OCR 切换已接入；其他预设及跨功能调度仍待完成，默认仍为 Tesseract。
 
 设备设置为“自动 / CPU / GPU”，可选具体显卡，高级设置中选择已适配后端；运行时显示实际设备。自动模式先探测模型和后端是否兼容，再决定设备；小任务 GPU 启动开销过大时也可选 CPU，不能承诺 GPU 对每张图都更快。
 
-设备基础层已按 ORT 的 DXGI 枚举顺序输出原始 `device_id`、会话 LUID、名称、PCI 标识和独立/共享显存容量，并检查 D3D12 前置能力；不把这个检查当作某模型的兼容性证明。`node tests/inference-devices.cjs` 检查枚举变化、失效设备及 CPU 回退；加 `--runtime` 用已准备的 tiny 模型逐个测试当前适配器。此次系统暴露 NVIDIA/AMD 共五个逻辑适配器，均通过指定设备的 DirectML 推理；相同名称不合并，也不把逻辑条目数当作物理显卡数。结果在 `work/current/capture-reconstruction/inference-devices-benchmark.json`。当前 LUID 只作为会话身份，失效后强制 GPU 报错、自动模式回退 CPU；跨重启的显卡偏好匹配、驱动/峰值显存记录和用户入口仍待实现。已运行 dev 占用 `One.Monitor.exe`，本次独立构建原生程序后通过 `ONE_INFERENCE_MONITOR` 指定验证；尚未替换运行中的辅助程序。
+设备基础层已按 ORT 的 DXGI 枚举顺序输出原始 `device_id`、会话 LUID、名称、PCI 标识和独立/共享显存容量，并检查 D3D12 前置能力；不把这个检查当作某模型的兼容性证明。`node tests/inference-devices.cjs` 检查枚举变化、失效设备及 CPU 回退；加 `--runtime` 用已准备的 tiny 模型逐个测试当前适配器。此次系统暴露 NVIDIA/AMD 共五个逻辑适配器，均通过指定设备的 DirectML 推理；相同名称不合并，也不把逻辑条目数当作物理显卡数。结果在 `work/current/capture-reconstruction/inference-devices-benchmark.json`。当前 LUID 只作为会话身份，失效后强制 GPU 报错、自动模式回退 CPU；用户入口已接入；跨重启的显卡偏好匹配与驱动/峰值显存记录仍待实现。原生辅助程序经独立构建验证后，已让 dev 正常退出、更新辅助程序并重启加载；没有强行结束应用或覆盖运行中的程序。
 
 - Windows ONNX 通路优先验证 DirectML，覆盖兼容的 NVIDIA/AMD/Intel 显卡；同时评估 WinML 的后续接入价值。ONNX Runtime 官方 Node 预编译支持表中 Windows 有 DirectML，Windows CUDA 并未列为预编译支持，不能靠修改一个参数就承诺 CUDA 可用。[Node 支持表](https://onnxruntime.ai/docs/get-started/with-javascript/node.html)、[DirectML/WinML 状态](https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html)
 - 对 NVIDIA 高性能推理，以及无法可靠转成 ONNX 的公式模型，另行适配按需安装的原生或 Paddle/PyTorch 推理运行包，验证 CUDA/驱动版本；不要求用户手动配置开发环境。Paddle 公式模块支持 CPU/GPU 设备参数，但不等于已在 One 中完成部署。[官方模块](https://www.paddleocr.ai/main/en/version3.x/module_usage/formula_recognition.html)
@@ -93,7 +95,7 @@ One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在�
 
 默认引擎必须在中英屏幕截图主样本上优于当前 Tesseract，并检查每类样本是否出现明显退化；具体阈值在 A 阶段测量后冻结。v6 未通过时选择更合适的 v5 配置或继续优化，不为追新直接替换。
 
-首批实现保留 Tesseract 的真实符号框，产出带图片 SHA-256、引擎/模型版本与坐标变换的 `TextDocument`；字符文字与词不匹配或没有字形框时保留实际词框，不均分伪造。共享选择层已接入独立识别窗口，支持跨行、词内、词/行选择、键盘复制扩选与缩放旋转；单次拖选期间冻结变换，避免 ResizeObserver 或工具栏换行改变取点坐标。只为可视区建立文字节点，过密视图要求放大但允许全选复制。原图翻译、长图分块 OCR、统一模型管理和预览/编辑器入口仍按后续批次推进，当前全文编辑后会关闭旧坐标选择层以防复制过期文字。
+首批实现保留 Tesseract 的真实符号框，产出带图片 SHA-256、引擎/模型版本与坐标变换的 `TextDocument`；字符文字与词不匹配或没有字形框时保留实际词框，不均分伪造。共享选择层已接入独立识别窗口，支持跨行、词内、词/行选择、键盘复制扩选与缩放旋转；单次拖选期间冻结变换，避免 ResizeObserver 或工具栏换行改变取点坐标。只为可视区建立文字节点，过密视图要求放大但允许全选复制。原图翻译、长图分块 OCR、其他模型预设和预览/编辑器入口仍按后续批次推进，当前全文编辑后会关闭旧坐标选择层以防复制过期文字。
 
 ## 4. 翻译与现有 AI 服务统一
 

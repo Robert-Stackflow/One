@@ -2,6 +2,7 @@ import { q } from '../ui';
 import { customControls } from '../controls';
 import {dialogMarkup,openDialog,closeDialog,lockDialogDismiss} from '../dialog';
 import type { TranslationConfig, TranslationSettings } from '../../shared/recognition/translation';
+import './service-settings.css';
 export function mountServiceSettings(
   prefix: 'translation' | 'formula',
   options: {
@@ -21,10 +22,7 @@ export function mountServiceSettings(
     saving = false,
     opening = false;
   const field = <T extends HTMLElement>(id: string) => dialog.querySelector<T>('#' + id)!;
-  const help = formula
-    ? '仅在点击“识别公式（发送图片）”后发送当前图片；请选择支持图片输入的模型。密钥使用系统加密保存，独立于翻译配置；留空保留，更换地址须重新填写。'
-    : '仅在点击翻译后发送原文。密钥使用系统加密保存；留空保留已有密钥，更换服务地址后须重新填写。';
-  const body = `<p class="translation-help">${help}</p><label class="field">服务类型<select id="${prefix}-provider"><option value="chat">Chat Completions 兼容服务</option>${formula ? '' : '<option value="azure">Azure Translator</option>'}</select></label><label id="${prefix}-endpoint-field" class="field">完整接口地址<input id="${prefix}-endpoint" type="url" maxlength="2048" placeholder="https://your-service.example/v1/chat/completions" autocomplete="off"></label><label id="${prefix}-model-field" class="field">${formula ? '视觉模型名称' : '模型名称'}<input id="${prefix}-model" maxlength="128" placeholder="填写服务提供的模型名称" autocomplete="off"></label><label id="${prefix}-region-field" class="field" hidden>Azure 区域<input id="${prefix}-region" maxlength="64" placeholder="例如 eastasia；全局资源可留空" autocomplete="off"></label><label class="field">密钥<input id="${prefix}-key" type="password" maxlength="4096" autocomplete="off" spellcheck="false"></label>`;
+  const body = `<section class="service-settings-section"><h3>连接</h3><label class="field">服务类型<select id="${prefix}-provider"><option value="chat">Chat Completions 兼容服务</option>${formula ? '' : '<option value="azure">Azure Translator</option>'}</select></label><label id="${prefix}-endpoint-field" class="field">接口地址<input id="${prefix}-endpoint" type="url" maxlength="2048" placeholder="https://your-service.example/v1/chat/completions" autocomplete="off"></label><label id="${prefix}-model-field" class="field">${formula ? '视觉模型' : '模型'}<input id="${prefix}-model" maxlength="128" placeholder="模型名称" autocomplete="off"></label><label id="${prefix}-region-field" class="field" hidden>Azure 区域<input id="${prefix}-region" maxlength="64" placeholder="例如 eastasia；全局资源可留空" autocomplete="off"></label></section><section class="service-settings-section"><h3>身份验证</h3><label class="field">密钥<input id="${prefix}-key" type="password" maxlength="4096" autocomplete="off" spellcheck="false"></label><span class="service-secret-note">系统加密保存 · 更换接口地址时需重新填写</span></section>`;
   const template=document.createElement('template');
   template.innerHTML=dialogMarkup({id:prefix+'-settings',title:label+'服务',titleId:modal+'-title',closeId:modal+'-close',className:'one-form-dialog recognition-settings',body:`<form id="${prefix}-form" novalidate>${body}<p id="${modal}-error" class="dialog-error" role="status"></p></form>`,actions:`<button id="${prefix}-remove" type="button" class="quiet" hidden>移除配置</button><button id="${prefix}-save" type="submit" form="${prefix}-form" class="primary">保存配置</button>`});
   dialog.replaceChildren(...template.content.firstElementChild!.childNodes);
@@ -36,7 +34,7 @@ export function mountServiceSettings(
     field(prefix + '-region-field').hidden = !azure;
   }
   const error = (value: unknown) => {
-    field(modal + '-error').textContent = value instanceof Error ? value.message : String(value);
+    const node = field(modal + '-error'); node.textContent = value instanceof Error ? value.message : String(value || ''); node.hidden = !node.textContent;
   };
   async function open() {
     if (saving || opening || !options.available()) return;

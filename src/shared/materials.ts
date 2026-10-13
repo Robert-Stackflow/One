@@ -23,6 +23,7 @@ export interface MaterialsAPI {
   materialsOpenDirectory():Promise<void>;
   materialsEditImage(id:string):Promise<void>;
   materialsRecognizeImage(id:string):Promise<void>;
+  materialsRecognizeFormula(id:string):Promise<void>;
   materialsOpenImageProject():Promise<void>;
   onMaterialsChanged(callback:()=>void):()=>void;
 }

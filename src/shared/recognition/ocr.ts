@@ -28,6 +28,7 @@ export interface OCRResult {
   words: OCRWord[];
   language: OCRLanguage;
   document?: import('./text-document').TextDocument;
+  inference?: { model: string; backend: 'cpu' | 'dml'; device: string; fallbackReason?: string };
 }
 export interface OCRState {
   uiScale:100|110|125|150;
@@ -44,8 +45,10 @@ export interface OCRState {
   progress: number;
   error: string;
   models: { ready: boolean; downloading: boolean; progress: number; error: string };
+  modelTitle?: string;
 }
 export interface OCRAPI {
+  openFormula(token:string):Promise<void>;
   returnToCapture(token: string, id: string): Promise<void>;
   workflowResult(token: string, id: string): Promise<OCRWorkflowResult>;
   state(): Promise<OCRState>;
@@ -53,6 +56,12 @@ export interface OCRAPI {
   cancel(): Promise<void>;
   install(): Promise<void>;
   cancelInstall(): Promise<void>;
+  localModels(refresh?: boolean): Promise<import('../local-models').LocalModelManagerState>;
+  saveLocalModel(purpose: import('../local-models').LocalModelPurpose, choice: import('../local-models').LocalModelChoice, revision: string): Promise<string>;
+  installLocalModel(id: string): Promise<void>;
+  cancelLocalModelInstall(id: string): Promise<void>;
+  deleteLocalModel(id: string): Promise<void>;
+  refreshInferenceDevices(): Promise<import('../inference-devices').InferenceDevices>;
   copy(text: string): Promise<void>;
   translationConfig(): Promise<TranslationConfig>;
   saveTranslation(value: TranslationSettings): Promise<TranslationConfig>;
@@ -64,6 +73,9 @@ export interface OCRAPI {
     revision: string,
   ): Promise<TranslationResult>;
   cancelTranslation(): Promise<void>;
+}
+export interface FormulaRecognitionAPI {
+  state():Promise<OCRState>;
   formulaConfig(): Promise<TranslationConfig>;
   saveFormula(value: TranslationSettings): Promise<TranslationConfig>;
   clearFormula(revision: string): Promise<TranslationConfig>;
@@ -84,6 +96,7 @@ export interface OCRWorkflowResult {
   confidence: number;
   translation?: TranslationResult;
   document?: import('./text-document').TextDocument;
+  inference?: OCRResult['inference'];
 }
 export function ocrLanguage(value: unknown): OCRLanguage {
   if (value !== 'eng' && value !== 'chi_sim+eng') throw Error('识别语言无效');

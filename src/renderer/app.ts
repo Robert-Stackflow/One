@@ -20,6 +20,7 @@ const render=async()=>{
   if(view==='recording-player'){await (await import('./recording-player-view')).renderRecordingPlayer();return;}
   if(view==='recording-export'){await (await import('./recording-player-view')).renderRecordingExport();return;}
   if(['recording-toolbar','recording-toolbar-menu','recording-input-overlay','recording-camera-overlay','recording-annotation-overlay','recording-region-overlay','recording-region-outline','recording-countdown'].includes(view))await (await import('./recording-overlay-view')).renderRecordingOverlay(view);
+  else if(view==='formula-recognition')await (await import('./formula-recognition-view')).renderFormulaRecognition();
   else if(view==='recognition')await (await import('./recognition-view')).renderRecognition();
   else if(view==='scroll-capture')(await import('./scroll-capture-view')).renderScrollCapture();
   else if(view==='capture')(await import('./capture-window-view')).renderCapture();

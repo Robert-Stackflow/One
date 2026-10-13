@@ -1,238 +1,83 @@
-import {applyCaptureScale} from '../capture/appearance';
+import { applyCaptureScale } from '../capture/appearance';
 import './ocr.css';
 import { q, icon, registerIcons } from '../ui';
 import { ScanText } from 'lucide';
 import { customControls } from '../controls';
-import type { OCRAPI, OCRLanguage, OCRState } from '../../shared/recognition/ocr';
+import type { OCRLanguage, OCRState, OCRResult } from '../../shared/recognition/ocr';
 import { mountTranslation } from './translation-ui';
-import { mountFormula } from './formula-ui';
 import { mountTextSelection } from './text-selection';
+import { mountLocalModels } from './local-models-ui';
+import { mountOCRWorkspace } from './workspace';
+import './workbench.css';
+import { recognitionNotice } from './notice';
 const api = window.one.recognition!;
-const back = document.createElement('button');
-back.id = 'workflow-back';
-back.type = 'button';
-back.textContent = '返回截图';
-back.hidden = true;
-q('message').after(back);
-back.onclick = () => {
-  if (state.workflow) void api.returnToCapture(state.token, state.workflow.id).catch(message);
-};
-let state: OCRState,
-  disposed = false,
-  requesting = false,
-  polling = false;
-let mode: 'text' | 'translation' | 'formula' = 'text',
-  ocrSummary = q('summary').textContent || '';
-let workflowRead = '';
-let fullTranslationSource: string | undefined;
+let state: OCRState, disposed = false, requesting = false, polling = false, workflowRead = '', reportedError = '';
+const workspace = mountOCRWorkspace();
 const workflowBusy = () => ['recognizing', 'translating'].includes(state?.workflow?.status || '');
-const message = (value: unknown) => {
-  q('message').textContent = value instanceof Error ? value.message : String(value);
-};
-const translation = mountTranslation(
-  api,
-  () => (state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined),
-  message,
-  () => {
-    if (state) render();
-  },
-);
-const formula = mountFormula(
-  api,
-  () => (state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined),
-  message,
-  () => {
-    if (state) render();
-  },
-);
+const message = recognitionNotice(q('message'));
+const translation = mountTranslation(api, () => state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined, message, () => { if (state) render(); });
 const selection = mountTextSelection(q<HTMLImageElement>('source'), {
-  copy: text => api.copy(text),
-  message,
-  selected: (start, end) => {
-    if (mode === 'text' && !requesting && !state?.running) q<HTMLTextAreaElement>('result').setSelectionRange(start, end);
-  },
-  translate: text => {
-    if (requesting || state.running || workflowBusy() || translation.busy() || formula.busy()) return;
-    fullTranslationSource = q<HTMLTextAreaElement>('result').value;
-    q<HTMLTextAreaElement>('result').value = text;
-    translation.sourceChanged();
-    q('translation-tab').click();
-    q('translate').click();
-  },
+  copy: text => api.copy(text), message,
+  selected: (start, end) => { if (!requesting && !state?.running) q<HTMLTextAreaElement>('result').setSelectionRange(start, end); },
+  translate: text => { if (!requesting && !state.running && !workflowBusy() && !translation.busy()) { workspace.show(true); translation.translateSelection(text); } },
 });
-for (const next of ['text', 'translation', 'formula'] as const)
-  q(next + '-tab').onclick = () => {
-    if (
-      requesting ||
-      state?.running ||
-      workflowBusy() ||
-      translation.busy() ||
-      formula.busy()
-    )
-      return;
-    mode = next;
-    if (next === 'text' && fullTranslationSource !== undefined) {
-      q<HTMLTextAreaElement>('result').value = fullTranslationSource;
-      fullTranslationSource = undefined;
-      translation.sourceChanged();
-    }
-    translation.setMode(next === 'translation');
-    formula.setMode(next === 'formula');
-    if (next === 'text') message('识别结果可修正或复制');
-    if (state) render();
-  };
+const tools = document.querySelector('.text-image-tools'); if (tools) q('ocr-image-tools').append(tools);
+const openLocalModels = mountLocalModels(api, refresh);
+q('local-model-configure').onclick = () => void openLocalModels().catch(message);
+q('open-formula').onclick = () => void api.openFormula(state.token).catch(message);
+q('workflow-back').onclick = () => { if (state.workflow) void api.returnToCapture(state.token, state.workflow.id).catch(message); };
+function inference(value: OCRResult['inference']) {
+  q('local-model-configure').title = value ? `${value.model} · ${value.device}${value.fallbackReason ? ' · 已回退 CPU：' + value.fallbackReason : ''}` : 'OCR 模型';
+  if (value?.fallbackReason) message(Error('已回退 CPU：' + value.fallbackReason));
+}
 function render() {
-  const root=q('app');if(root.dataset.captureScale!==String(state.uiScale))applyCaptureScale(root,state.uiScale);
-  back.hidden = !state.workflow?.returnToCapture;
-  q<HTMLTextAreaElement>('result').readOnly = state.running || workflowBusy();
-  q<HTMLTextAreaElement>('translated').readOnly = workflowBusy();
+  const root = q('app'); if (root.dataset.captureScale !== String(state.uiScale)) applyCaptureScale(root, state.uiScale);
+  const busy = requesting || state.running || workflowBusy();
+  q('model-download-note').textContent = `${state.modelTitle || 'Tesseract fast'} 模型尚未就绪。下载后在本机识别图片。`;
   q('models').hidden = state.models.ready && !state.models.downloading && !state.models.error;
-  q<HTMLButtonElement>('run').disabled =
-    requesting ||
-    workflowBusy() ||
-    state.running ||
-    translation.busy() ||
-    formula.busy() ||
-    state.models.downloading ||
-    !state.models.ready;
-  q('cancel').hidden = !state.running && !workflowBusy();
-  q<HTMLSelectElement>('language').disabled = state.running || requesting || workflowBusy();
-  q<HTMLButtonElement>('install').disabled =
-    state.models.downloading || state.running || workflowBusy();
+  q<HTMLButtonElement>('run').disabled = busy || translation.busy() || state.models.downloading || !state.models.ready;
+  q<HTMLSelectElement>('language').disabled = busy;
+  q<HTMLTextAreaElement>('result').readOnly = busy || translation.busy();
+  q<HTMLButtonElement>('install').disabled = state.models.downloading || busy;
   q('cancel-install').hidden = !state.models.downloading;
   q<HTMLButtonElement>('copy').disabled = !q<HTMLTextAreaElement>('result').value.trim();
-  const active = state.running || state.models.downloading;
-  q('progress').hidden = !active;
-  q<HTMLProgressElement>('progress').value = state.models.downloading
-    ? state.models.progress
-    : state.progress;
-  translation.render();
-  formula.render();
-  selection.setEnabled(mode === 'text' && !requesting && !state.running && !workflowBusy() && !translation.busy() && !formula.busy(), mode === 'text');
-  document.body.classList.toggle('formula-mode', mode === 'formula');
-  q('text-result').hidden = mode === 'formula';
-  q('copy').hidden = mode === 'formula';
-  if (mode === 'formula') q('ocr-tools').hidden = true;
-  for (const next of ['text', 'translation', 'formula']) {
-    const tab = q<HTMLButtonElement>(next + '-tab');
-    tab.disabled =
-      requesting ||
-      state.running ||
-      workflowBusy() ||
-      translation.busy() ||
-      formula.busy();
-    tab.ariaSelected = String(mode === next);
-    tab.classList.toggle('selected', mode === next);
-  }
-  q('summary').textContent =
-      mode === 'translation'
-        ? '译文请核对后使用'
-        : mode === 'formula'
-          ? '公式请对照原图核对，预览不验证识别准确率'
-          : ocrSummary;
-  if (workflowBusy()) {
-    message(
-      state.workflow?.status === 'translating'
-        ? '流程正在翻译文字，图片留在本机…'
-        : '流程正在本机识别文字…',
-    );
-    return;
-  }
-  if (translation.isTranslation() || mode === 'formula') return;
-  if (active) message(state.models.downloading ? '正在下载语言包…' : '正在本机识别文字…');
-  else if (state.error || state.models.error) message(state.error || state.models.error);
-}
-async function refresh() {
-  if (polling || disposed) return;
-  polling = true;
-  try {
-    state = await api.state();
-    await syncWorkflow();
-    if (!disposed) render();
-  } catch (error) {
-    if (!disposed) message(error);
-  } finally {
-    polling = false;
-  }
+  q('workflow-back').hidden = !state.workflow?.returnToCapture;
+  const loading = busy || state.models.downloading || translation.busy();
+  q('image-loading').hidden = !loading; q('source').parentElement!.ariaBusy = String(loading);
+  q('image-loading-label').textContent = state.models.downloading ? '下载模型中' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
+  q<HTMLButtonElement>('overlay-cancel').disabled = requesting && !state.running;
+  selection.setEnabled(!busy); translation.render();
+  const error = state.error || state.models.error || '';
+  if (error && error !== reportedError) message(Error(error)); reportedError = error;
 }
 async function syncWorkflow() {
-  const workflow = state.workflow;
-  if (!workflow || workflow.id === workflowRead) return;
-  mode = 'translation';
-  translation.setMode(true);
-  formula.setMode(false);
-  if (workflowBusy()) return;
-  workflowRead = workflow.id;
-  const token = state.token;
-  const result = await api.workflowResult(token, workflow.id);
-  if (disposed || token !== state.token || workflow.id !== state.workflow?.id) return;
-  q<HTMLTextAreaElement>('result').value = result.source;
-  selection.setDocument(result.document);
-  ocrSummary = `${result.words} 个词块 · 可信度 ${Math.round(result.confidence)}% · 请核对结果`;
+  const workflow = state.workflow; if (!workflow || workflow.id === workflowRead) return;
+  workspace.show(true); if (workflowBusy()) return;
+  workflowRead = workflow.id; const token = state.token, result = await api.workflowResult(token, workflow.id);
+  if (disposed || state.token !== token) return;
+  q<HTMLTextAreaElement>('result').value = result.source; selection.setDocument(result.document); inference(result.inference);
   await translation.workflowResult(result.translation, workflow.target, workflow.error);
 }
+async function refresh() {
+  if (polling || disposed) return; polling = true;
+  try { state = await api.state(); await syncWorkflow(); if (!disposed) render(); } catch (error) { if (!disposed) message(error); }
+  finally { polling = false; }
+}
 q('run').onclick = async () => {
-  if (requesting || state.running) return;
-  requesting = true;
-  render();
-  message('正在本机识别文字…');
+  if (requesting || state.running || workflowBusy() || translation.busy()) return;
+  requesting = true; render(); message('');
   try {
-    const result = await api.run(
-      state.token,
-      q<HTMLSelectElement>('language').value as OCRLanguage,
-    );
-    q<HTMLTextAreaElement>('result').value = result.text;
-    selection.setDocument(result.document);
-    translation.sourceChanged();
-    ocrSummary = result.text.trim()
-      ? `${result.words.length} 个词块 · 可信度 ${Math.round(result.confidence)}% · 请核对结果`
-      : '未识别到文字，可裁剪图片或更换语言后重试';
-    message(result.text.trim() ? '识别完成，可在图片上拖选文字；双击词语、三击整行' : '未识别到文字');
-  } catch (error) {
-    message(error);
-  } finally {
-    requesting = false;
-    await refresh();
-  }
+    const result = await api.run(state.token, q<HTMLSelectElement>('language').value as OCRLanguage);
+    q<HTMLTextAreaElement>('result').value = result.text; selection.setDocument(result.document); inference(result.inference); translation.sourceChanged();
+    if (!result.text.trim()) message('未识别到文字');
+  } catch (error) { message(error); } finally { requesting = false; await refresh(); }
 };
-q('cancel').onclick = () => void api.cancel().catch(message);
-q('install').onclick = () => {
-  void api
-    .install()
-    .then(() => {
-      message('语言包已就绪，可以开始识别');
-      return refresh();
-    })
-    .catch(message);
-  void refresh();
-};
+q('overlay-cancel').onclick = () => void (state.models.downloading ? api.cancelInstall() : translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);
+q('install').onclick = () => { void api.install().then(refresh).catch(message); void refresh(); };
 q('cancel-install').onclick = () => void api.cancelInstall().catch(message);
-q('copy').onclick = () =>
-  void api
-    .copy(q<HTMLTextAreaElement>('result').value)
-    .then(() => message('已复制文字'))
-    .catch(message);
-q('result').oninput = () => {
-  if (mode === 'text') selection.setDocument(undefined);
-  q<HTMLButtonElement>('copy').disabled = !q<HTMLTextAreaElement>('result').value.trim();
-  translation.sourceChanged();
-};
-registerIcons({ 'scan-text': ScanText });
-q('brand').innerHTML = icon('lucide:scan-text');
-customControls(document.body);
-void api
-  .state()
-  .then(async (value) => {
-    state = value;
-    q('source-name').textContent = state.name;
-    q<HTMLImageElement>('source').src = state.image;
-    await syncWorkflow();
-    render();
-  })
-  .catch(message);
+q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
+q('result').oninput = () => { selection.setDocument(undefined); translation.sourceChanged(); if (state) render(); };
+registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);
+void api.state().then(async value => { state = value; q('source-name').textContent = state.name; q<HTMLImageElement>('source').src = state.image; await syncWorkflow(); render(); }).catch(message);
 const timer = setInterval(() => void refresh(), 400);
-window.addEventListener('beforeunload', () => {
-  disposed = true;
-  selection.dispose();
-  clearInterval(timer);
-});
+window.addEventListener('beforeunload', () => { disposed = true; selection.dispose(); clearInterval(timer); }, { once: true });

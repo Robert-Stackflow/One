@@ -18,6 +18,7 @@ export const ocrPacks = [
 const modelRoot =
   'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/';
 export class OCRModels {
+  private preparing = 0;
   downloading = false;
   progress = 0;
   error = '';
@@ -46,21 +47,20 @@ export class OCRModels {
     return data;
   }
   async state() {
-    const ready = (
-      await Promise.all(
+    const parts = await Promise.all(
         ocrPacks.map(async (pack) => {
           try {
             const s = await lstat(this.path(pack.id));
-            return s.isFile() && !s.isSymbolicLink() && s.size === pack.bytes;
+            return { ready: s.isFile() && !s.isSymbolicLink() && s.size === pack.bytes, bytes: s.isFile() && !s.isSymbolicLink() ? s.size : 0 };
           } catch {
-            return false;
+            return { ready: false, bytes: 0 };
           }
         }),
-      )
-    ).every(Boolean);
-    return { ready, downloading: this.downloading, progress: this.progress, error: this.error };
+      );
+    return { ready: parts.every(part => part.ready), diskBytes: parts.reduce((sum, part) => sum + part.bytes, 0), downloading: this.downloading, progress: this.progress, error: this.error };
   }
   async prepare(language: OCRLanguage) {
+    this.preparing++;
     const result: { code: string; data: Uint8Array }[] = [];
     try {
       if (this.downloading) throw Error('正在下载识别语言包');
@@ -73,7 +73,14 @@ export class OCRModels {
       for (const p of result) p.data.fill(0);
       this.error = '识别语言包缺失或无效，请重新下载语言包';
       throw Error(this.error);
-    }
+    } finally { this.preparing--; }
+  }
+  async remove() {
+    if (this.downloading || this.preparing) throw Error('语言包正在下载或使用');
+    const root = await lstat(this.directory).catch(error => { if (error.code === 'ENOENT') return; throw error; });
+    if (root && (!root.isDirectory() || root.isSymbolicLink())) throw Error('识别语言包目录无效');
+    for (const pack of ocrPacks) await unlink(this.path(pack.id)).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    this.error = ''; this.progress = 0;
   }
   cancel() {
     this.abort?.abort();

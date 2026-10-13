@@ -18,6 +18,7 @@ export function resolveInferenceDevice(value: InferencePreference, devices: Infe
   const preference = inferencePreference(value);
   if (!Number.isSafeInteger(pixels) || pixels < 1) throw Error('推理图片尺寸无效');
   if (preference.mode === 'cpu') return { backend: 'cpu' as const };
+  if (preference.mode === 'auto' && pixels < 1_000_000 && !preference.gpu) return { backend: 'cpu' as const };
   const gpus = inferenceDevices(devices.gpus).filter(gpu => gpu.d3d12);
   const selected = preference.gpu ? gpus.find(gpu => gpu.id === preference.gpu) : [...gpus].sort((a, b) => b.dedicatedMemory - a.dedicatedMemory || a.deviceId - b.deviceId)[0];
   if (!selected) {

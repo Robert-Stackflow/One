@@ -36,7 +36,7 @@ const api: OneAPI = {
   materialsOpenRecording:id=>invoke('materials-open-recording',id),materialsImportRecording:kind=>invoke('materials-import-recording',kind),
   materialsRemoveImage:id=>invoke('materials-remove-image',id),materialsRemoveRecording:id=>invoke('materials-remove-recording',id),
   materialsOpenDirectory:()=>invoke('materials-open-directory'),onMaterialsChanged:callback=>listen('materials-changed',callback),
-  materialsRecognizeImage:id=>invoke('materials-recognize-image',id),materialsEditImage:id=>invoke('materials-edit-image',id),materialsOpenImageProject:()=>invoke('materials-open-image-project'),
+  materialsRecognizeImage:id=>invoke('materials-recognize-image',id),materialsRecognizeFormula:id=>invoke('materials-recognize-formula',id),materialsEditImage:id=>invoke('materials-edit-image',id),materialsOpenImageProject:()=>invoke('materials-open-image-project'),
   searchSuggest:(id,query)=>invoke('search-suggest',id,query),
   aiState:()=>invoke('ai-state'),onAIEvent:callback=>listen('ai-event',callback),onAIChatOpen:callback=>listen('ai-chat-open',callback),
   aiProfile:value=>invoke('ai-profile',value),aiProfileRemove:id=>invoke('ai-profile-remove',id),aiProfileDefault:id=>invoke('ai-profile-default',id),aiModels:id=>invoke('ai-models',id),aiModelCatalog:id=>invoke('ai-model-catalog',id),aiModelCatalogDraft:value=>invoke('ai-model-catalog-draft',value),

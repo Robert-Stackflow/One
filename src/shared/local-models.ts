@@ -37,3 +37,30 @@ export interface LocalModelState {
   downloading: boolean;
   inUse: boolean;
 }
+export interface LocalModelChoice {
+  modelId: string;
+  device: import('./inference-devices').InferencePreference;
+}
+export interface LocalModelEntry extends LocalModelState {
+  id: string;
+  title: string;
+  size: string;
+  purpose: LocalModelPurpose;
+  revision: string;
+  languages: string[];
+  backends: LocalModelBackend[];
+  weightLicense: string;
+  runtime: string;
+  precision: string;
+  measuredMemoryMiB?: number;
+  measuredVRAMMiB?: number;
+  progress: number;
+  error: string;
+  note: string;
+}
+export interface LocalModelManagerState {
+  revision: string;
+  choices: { ocr: LocalModelChoice; repair: LocalModelChoice };
+  entries: LocalModelEntry[];
+  devices: import('./inference-devices').InferenceDevices;
+}

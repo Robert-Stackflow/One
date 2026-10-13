@@ -1,5 +1,5 @@
 import {serviceCredentialCrypto,type ServiceConnectionStorage} from '../service-connections';
-import {clipboard,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
+import {clipboard,session,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { decodePng, pngDimensions } from '../capture/clipboard';
@@ -13,8 +13,13 @@ import { TranslationClient } from './translation-client';
 import type { TranslationResult } from '../../shared/recognition/translation';
 import { FormulaClient } from './formula-client';
 import { formulaText, type FormulaResult } from '../../shared/recognition/formula';
+import { LocalModelManager } from '../local-model-manager';
+import { PaddleRunner } from './paddle-runner';
+import { acquirePaddleModel } from './paddle-models';
+import { readInferenceDevices, resolveInferenceDevice } from '../inference-devices';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
+  openFormula?(png:Buffer,title:string):Promise<void>;
   blocked():boolean;
   background<T>(task:Promise<T>):Promise<T>;
   uiScale():100|110|125|150;
@@ -47,6 +52,10 @@ export class OCRService {
   private settling: Promise<unknown> = Promise.resolve();
   readonly models: OCRModels;
   private runner: OCRRunner;
+  readonly localModels: LocalModelManager;
+  private paddle = new PaddleRunner();
+  private recognitionAbort?: AbortController;
+  private recognitionTask?: Promise<OCRResult>;
   readonly translationStore: RecognitionConnectionStore;
   readonly translationClient: TranslationClient;
   readonly formulaStore: RecognitionConnectionStore;
@@ -54,9 +63,13 @@ export class OCRService {
   constructor(
     directory: string,
     private ctx: RecognitionContext,
+    private kind: 'ocr' | 'formula' = 'ocr',
   ) {
     this.models = new OCRModels(join(directory, 'models'));
     this.runner = new OCRRunner(this.models);
+    this.localModels = new LocalModelManager(join(directory, '..'), this.models,
+      (input, options) => session.fromPartition('one-model-download', { cache: false }).fetch(String(input), options),
+      signal => readInferenceDevices(signal, process.env.ONE_TEST_MODE === '1' ? process.env.ONE_INFERENCE_MONITOR : undefined));
     this.sensitive = new SensitiveScanner(this.models);
     this.workflow = new OCRWorkflow({
       prepare: async (png) => {
@@ -81,21 +94,23 @@ export class OCRService {
           : this.recognize(token, 'chi_sim+eng'),
       translate: (token, text, target, revision) => this.translate(token, text, target, revision),
       cancel: async () => {
-        await Promise.all([this.runner.cancel(), this.cancelTranslation()]);
+        await Promise.all([this.cancelRecognition(), this.cancelTranslation()]);
       },
     });
     this.translationStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto);
     this.translationClient = new TranslationClient();
     this.formulaStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'formula');
     this.formulaClient = new FormulaClient();
-    const handle=(name:string,fn:(...args:any[])=>unknown)=>ctx.register('recognition-'+name,(event,...args)=>{
-      if(ctx.blocked()||!this.window||event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||event.sender.mainFrame.frames.length||event.senderFrame.url!==RECOGNITION_URL)throw Error('拒绝访问文字识别');
+    const handle=(name:string,fn:(...args:any[])=>unknown)=>{
+      if(this.kind==='formula' ? name!=='state'&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
+      ctx.register(this.scope+'-'+name,(event,...args)=>{
+      if(ctx.blocked()||!this.window||event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||event.sender.mainFrame.frames.length||event.senderFrame.url!==this.url)throw Error('拒绝访问识别窗口');
       return ctx.background(Promise.resolve().then(()=>fn(...args)));
-    });
-    handle('state', async () => ({
+    }); };
+    handle('state', async () => { const selected = this.kind === 'formula' ? {ready:false,downloading:false,progress:0,error:'',title:''} : await this.localModels.selectedState(); return ({
       token: this.token,
       name: this.name,
-      image: 'one-file://recognition/' + this.token,
+      image: 'one-file://' + this.scope + '/' + this.token,
       uiScale:ctx.uiScale(),
       ...this.size,
       running: this.running,
@@ -104,9 +119,14 @@ export class OCRService {
       imageBytes: this.png?.length || 0,
       progress: this.progress,
       error: this.error,
-      models: await this.models.state(),
+      models: selected,
+      modelTitle: selected.title,
       workflow: this.workflow.state,
-    }));
+    }); });
+    handle('open-formula', async token => {
+      if (this.kind !== 'ocr' || token !== this.token || !this.png || !ctx.openFormula) throw Error('公式图片已失效');
+      const snapshot = Buffer.from(this.png); try { await ctx.openFormula(snapshot, this.name); } finally { snapshot.fill(0); }
+    });
     handle('run', (token, value, mode = 'text') => {
       if (this.workflow.active) throw Error('正在执行识别流程，请先取消当前任务');
       return this.recognize(token, value, mode);
@@ -124,14 +144,20 @@ export class OCRService {
       this.workflow.state.returnToCapture = false;
       this.window!.hide();
     });
-    handle('cancel', () => (this.workflow.active ? this.workflow.cancel() : this.runner.cancel()));
+    handle('cancel', () => (this.workflow.active ? this.workflow.cancel() : this.cancelRecognition()));
     handle('install', async () => {
       if (this.running || this.workflow.active) throw Error('请先取消识别，再下载语言包');
       const generation = this.token;
-      await this.models.install();
+      await this.localModels.install((await this.localModels.selection('ocr')).modelId);
       if (generation === this.token) this.error = '';
     });
-    handle('cancel-install', () => this.models.cancel());
+    handle('cancel-install', async () => this.localModels.cancel((await this.localModels.selection('ocr')).modelId));
+    handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh); });
+    handle('local-model-save', (purpose, choice, revision) => this.localModels.save(purpose, choice, revision));
+    handle('local-model-install', id => this.localModels.install(id));
+    handle('local-model-cancel', id => this.localModels.cancel(id));
+    handle('local-model-delete', id => this.localModels.remove(id));
+    handle('local-model-devices', () => this.localModels.refreshDevices());
     handle('copy', async (value) => {
       const text = ocrText(value);
       if (!text.trim()) throw Error('没有可复制的文字');
@@ -200,10 +226,12 @@ export class OCRService {
       await clipboard.writeText(text);
     });
   }
+  private get scope() { return this.kind === 'formula' ? 'formula-recognition' : 'recognition'; }
+  private get url() { return 'one://app/index.html?view=' + this.scope; }
   authorize(url:string,owner:number){
     // Chromium can attribute an inherited about:blank request to its parent frame.
     // This dedicated window has no child documents, so reject its resources if any appear.
-    return !!this.token&&!!this.png&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed()&&this.window.webContents.id===owner&&this.window.webContents.mainFrame.frames.length===0&&this.window.webContents.getURL()===RECOGNITION_URL&&url==='one-file://recognition/'+this.token;
+    return !!this.token&&!!this.png&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed()&&this.window.webContents.id===owner&&this.window.webContents.mainFrame.frames.length===0&&this.window.webContents.getURL()===this.url&&url==='one-file://'+this.scope+'/'+this.token;
   }
   resource(request:Request){
     if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
@@ -222,26 +250,53 @@ export class OCRService {
     this.running = true;
     this.progress = 0;
     this.error = '';
+    const abort = this.recognitionAbort = new AbortController();
+    const task = (async () => {
+      const choice = await this.localModels.selection('ocr');
+      abort.signal.throwIfAborted();
+      const releaseUse = this.localModels.use(choice.modelId);
+      try {
+        if (choice.modelId === 'tesseract') {
+          const result = await this.runner.run(this.png!, this.size, language, value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
+          result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
+        }
+        const lease = await acquirePaddleModel(this.localModels.store);
+        try {
+          abort.signal.throwIfAborted();
+          const pixels = this.size.width * this.size.height;
+          const devices = choice.device.mode === 'cpu' || choice.device.mode === 'auto' && pixels < 1_000_000 && !choice.device.gpu ? { gpus: [] }
+            : await readInferenceDevices(abort.signal, process.env.ONE_TEST_MODE === '1' ? process.env.ONE_INFERENCE_MONITOR : undefined);
+          const selected = resolveInferenceDevice(choice.device, devices, this.size.width * this.size.height);
+          abort.signal.throwIfAborted();
+          const result = await this.paddle.run(this.png!, this.size, language, lease.model,
+            { device: selected.backend === 'cpu' ? 'cpu' : choice.device.mode === 'auto' ? 'auto' : 'gpu', deviceId: selected.gpu?.deviceId ?? 0 },
+            value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
+          result.inference = { model: 'PP-OCRv6 tiny', backend: result.actualBackend, device: result.actualBackend === 'dml' ? selected.gpu!.name + ' · ' + selected.gpu!.deviceId : 'CPU',
+            fallbackReason: result.fallbackReason || selected.reason }; return result;
+        } finally { lease.release(); }
+      } finally { releaseUse(); }
+    })();
+    this.recognitionTask = task;
     try {
-      const result = await this.runner.run(
-        this.png,
-        this.size,
-        language,
-        (value) => {
-          if (this.token === generation) this.progress = Math.max(this.progress, value);
-        },
-      );
-      if (generation !== this.token || this.ctx.blocked()) throw Error('文字识别已取消');
+      const result = await task;
+      if (abort.signal.aborted || generation !== this.token || this.ctx.blocked()) throw Error('文字识别已取消');
       this.result = result;
       this.progress = 1;
       return result;
     } catch (error) {
+      const failure = abort.signal.aborted ? Error('文字识别已取消') : error;
       if (generation === this.token)
-        this.error = error instanceof Error ? error.message : '文字识别失败';
-      throw error;
+        this.error = failure instanceof Error ? failure.message : '文字识别失败';
+      throw failure;
     } finally {
+      if (this.recognitionTask === task) { this.recognitionTask = undefined; this.recognitionAbort = undefined; }
       if (generation === this.token) this.running = false;
     }
+  }
+  private async cancelRecognition() {
+    this.recognitionAbort?.abort();
+    await Promise.all([this.runner.cancel(), this.paddle.cancel()]);
+    await this.recognitionTask?.catch(() => {});
   }
   private async translate(token: unknown, text: unknown, target: unknown, revision: unknown) {
     if (token !== this.token || !this.png) throw Error('识别图片已失效');
@@ -293,14 +348,14 @@ export class OCRService {
     if (this.window && !this.png?.equals(png))
       throw Error('请先关闭当前文字识别窗口，再执行截图翻译');
   }
-  async openCapture(png: Buffer) {
+  async openCapture(png: Buffer, name = '截图') {
     if (this.ctx.blocked()) throw Error('应用正在退出');
     if (this.window && !this.window.isDestroyed() && this.png?.equals(png)) {
       this.window.show();
       this.window.focus();
       return;
     }
-    await this.open(png, '截图');
+    await this.open(png, name);
   }
   async endCaptureWorkflow(owner: string) {
     await this.workflow.cancel(owner);
@@ -328,7 +383,7 @@ export class OCRService {
     if (this.window || this.opening) {
       this.window?.show();
       this.window?.focus();
-      throw Error('请先关闭当前文字识别窗口，再识别其他图片');
+      throw Error(`请先关闭当前${this.kind === 'formula' ? '公式识别' : '文字识别'}窗口，再识别其他图片`);
     }
     this.opening = true;
     try {
@@ -365,7 +420,7 @@ export class OCRService {
           this.clear();
         }
       });
-      await window.loadURL(RECOGNITION_URL);
+      await window.loadURL(this.url);
       if (this.window === window && !window.isDestroyed()) window.show();
     } catch (error) {
       const window = this.window;
@@ -385,7 +440,8 @@ export class OCRService {
     this.result = undefined;
     this.models.cancel();
     this.settling = Promise.all([
-      this.runner.cancel(),
+      this.cancelRecognition(),
+      this.localModels.settle(),
       this.models.settle(),
       this.cancelTranslation(),
       this.translationStore.settle(),
@@ -400,5 +456,6 @@ export class OCRService {
     this.window = undefined;
     this.clear();
     await this.settling;
+    await Promise.all([this.paddle.close(), this.localModels.stop()]);
   }
 }

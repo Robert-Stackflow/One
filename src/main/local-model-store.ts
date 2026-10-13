@@ -57,7 +57,7 @@ export class LocalModelStore {
     const installed = join(this.root, key);
     return { installed, stage: join(this.root, key + '.partial'), lock: process.platform === 'win32' ? installed.toLowerCase() : installed };
   }
-  async state(model: LocalModelDescriptor, signal?: AbortSignal): Promise<LocalModelState> {
+  async state(model: LocalModelDescriptor, signal?: AbortSignal, verifyIntegrity = true): Promise<LocalModelState> {
     const paths = this.paths(model), totalBytes = model.artifacts.reduce((sum, a) => sum + a.bytes, 0);
     const rootExists = await directory(this.root);
     let installedBytes = 0, downloadedBytes = 0, ready = false;
@@ -65,8 +65,8 @@ export class LocalModelStore {
       if (await directory(paths.installed)) {
         ready = true;
         for (const artifact of model.artifacts) {
-          installedBytes += await fileBytes(join(paths.installed, artifact.name), artifact.bytes);
-          if (!await verified(join(paths.installed, artifact.name), artifact, signal)) ready = false;
+          const bytes = await fileBytes(join(paths.installed, artifact.name), artifact.bytes); installedBytes += bytes;
+          if (bytes !== artifact.bytes || verifyIntegrity && !await verified(join(paths.installed, artifact.name), artifact, signal)) ready = false;
         }
       }
       if (await directory(paths.stage)) for (const artifact of model.artifacts)

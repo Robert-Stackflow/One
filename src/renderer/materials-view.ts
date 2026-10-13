@@ -1,4 +1,4 @@
-import {AudioLines,Images,ScanText,Video} from 'lucide';
+import {AudioLines,Images,ScanText,Sigma,Video} from 'lucide';
 import {api,esc,icon,registerIcons,toast,errorMessage} from './ui';
 import {confirmDialog} from './dialog';
 import {onRemoval} from './dom-lifecycle';
@@ -7,10 +7,11 @@ import {applyCaptureScale} from './capture/appearance';
 import type {ImageMaterialView,RecordingMaterialView,MaterialsState} from '../shared/materials';
 import './materials-view.css';
 
-registerIcons({images:Images,video:Video,'audio-lines':AudioLines,'scan-text':ScanText});
+registerIcons({images:Images,video:Video,'audio-lines':AudioLines,'scan-text':ScanText,sigma:Sigma});
 /** Operations supplied by the recognition, pin and recording service controllers. */
 export interface MaterialsCommands {
   recognize?(id:string):Promise<unknown>;
+  recognizeFormula?(id:string):Promise<unknown>;
   pin?(id:string):Promise<unknown>;
   openRecording?(id:string):Promise<unknown>;
   importRecording?(kind:'project'|'video'):Promise<unknown>;
@@ -19,7 +20,7 @@ type Kind='images'|'recordings';
 const actionButton=(action:string,id:string,label:string,glyph:string)=>`<button type="button" class="icon-button quiet" data-material-action="${action}" data-material-id="${esc(id)}" title="${label}" aria-label="${label}">${icon(glyph)}</button>`;
 const titleButton=(action:string,label:string,glyph:string,primary=false)=>`<button type="button" class="${primary?'primary':'quiet'}" data-material-action="${action}">${icon(glyph)}${label}</button>`;
 function imageCard(item:ImageMaterialView){
-  return `<article class="asset-card" data-material-card="${item.id}"><button class="asset-preview" type="button" data-material-action="edit" data-material-id="${item.id}" aria-label="编辑 ${esc(item.title)}"><img src="${esc(item.thumbnail)}" alt="${esc(item.title)}" loading="lazy"></button><div class="asset-body"><h3 class="asset-title" title="${esc(item.title)}">${esc(item.title)}</h3><div class="asset-meta"><span>${item.width} × ${item.height}</span><span>${item.bytes<1048576?Math.round(item.bytes/1024)+' KB':(item.bytes/1048576).toFixed(1)+' MB'}</span><span>${new Date(item.created).toLocaleDateString('zh-CN')}</span></div></div><div class="asset-actions">${actionButton('recognize',item.id,'识别文字','lucide:scan-text')}${actionButton('pin',item.id,'贴出图片','pin')}${actionButton('copy',item.id,'复制图片','copy')}${actionButton('export',item.id,'导出图片','download')}${actionButton('remove',item.id,'删除素材','trash')}</div></article>`;
+  return `<article class="asset-card" data-material-card="${item.id}"><button class="asset-preview" type="button" data-material-action="edit" data-material-id="${item.id}" aria-label="编辑 ${esc(item.title)}"><img src="${esc(item.thumbnail)}" alt="${esc(item.title)}" loading="lazy"></button><div class="asset-body"><h3 class="asset-title" title="${esc(item.title)}">${esc(item.title)}</h3><div class="asset-meta"><span>${item.width} × ${item.height}</span><span>${item.bytes<1048576?Math.round(item.bytes/1024)+' KB':(item.bytes/1048576).toFixed(1)+' MB'}</span><span>${new Date(item.created).toLocaleDateString('zh-CN')}</span></div></div><div class="asset-actions">${actionButton('recognize',item.id,'识别文字','lucide:scan-text')}${actionButton('recognize-formula',item.id,'识别公式','lucide:sigma')}${actionButton('pin',item.id,'贴出图片','pin')}${actionButton('copy',item.id,'复制图片','copy')}${actionButton('export',item.id,'导出图片','download')}${actionButton('remove',item.id,'删除素材','trash')}</div></article>`;
 }
 function recordingCard(item:RecordingMaterialView){
   const duration=Math.floor(item.seconds/60).toString().padStart(2,'0')+':'+Math.floor(item.seconds%60).toString().padStart(2,'0');
@@ -37,7 +38,7 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
   const handlers:Record<string,((id:string)=>Promise<unknown>)|undefined>={
     directory:()=>api.materialsOpenDirectory(),'open-project':()=>api.materialsOpenImageProject(),'import-images':()=>api.materialsImportImages(),
     'import-project':commands.importRecording?()=>commands.importRecording!('project'):undefined,'import-video':commands.importRecording?()=>commands.importRecording!('video'):undefined,
-    edit:id=>api.materialsEditImage(id),recognize:commands.recognize,pin:commands.pin,copy:async id=>{await api.materialsCopyImage(id);toast('已复制图片');},
+    edit:id=>api.materialsEditImage(id),recognize:commands.recognize,'recognize-formula':commands.recognizeFormula,pin:commands.pin,copy:async id=>{await api.materialsCopyImage(id);toast('已复制图片');},
     export:id=>api.materialsExportImage(id),remove:id=>api.materialsRemoveImage(id),recording:commands.openRecording,
     'remove-recording':async id=>{if(await confirmDialog({title:'删除录制素材',message:'删除这份录制素材工程？',confirm:'删除',danger:true}))await api.materialsRemoveRecording(id);},
     refresh:async()=>{dirty=true;await refresh();},

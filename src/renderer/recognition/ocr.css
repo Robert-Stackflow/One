@@ -1,271 +1,35 @@
-body[data-view='recognition'] .tabs {
-  align-self: flex-start;
-  flex-shrink: 0;
-}
-body[data-view='recognition'] .result-actions {
-  display: flex;
-  gap: 8px;
-  flex: none;
-}
-body[data-view='recognition'].translation-mode .source-preview,
-body[data-view='recognition'].translation-mode #models {
-  display: none !important;
-}
-body[data-view='recognition'].translation-mode .recognition-content {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-body[data-view='recognition'] #translation-destination {
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--muted);
-  overflow-wrap: anywhere;
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-body[data-view='recognition'] .translation-help {
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--muted);
-  line-height: 1.5;
-  margin-top: 0;
-}
-body[data-view='recognition'] :is(#translation-settings, #formula-settings) .field {
-  font-weight: 400;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-body[data-view='recognition'] :is(#translation-settings, #formula-settings) .field:last-child {
-  margin-bottom: 0;
-}
-body[data-view='recognition'] :is(#translation-settings, #formula-settings) .one-dialog-body {
-  max-height: calc(100vh - 170px);
-  overflow: auto;
-}
-body[data-view='recognition'] :is(#translation-settings, #formula-settings) input, body[data-view='recognition'] :is(#translation-settings, #formula-settings) select {
-  width: 100%;
-}
-body[data-view='recognition'] :is(#translation-settings, #formula-settings) :is(#modal-error, #formula-modal-error) {
-  padding: 0 24px;
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--error, var(--fg));
-  overflow-wrap: anywhere;
-}
-body[data-view='recognition'] .media-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 0 0 18px;
-  height: 52px;
-  flex: none;
-  -webkit-app-region: drag;
-}
-body[data-view='recognition'] .media-header strong {
-  font-size: calc(14px * var(--text-scale, 1));
-}
-body[data-view='recognition'] .media-header #source-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  max-width: 55%;
-}
-body[data-view='recognition'] #app > main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  flex: 1;
-  padding: 12px 18px 18px;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-}
-body[data-view='recognition'] .recognition-tools {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-body[data-view='recognition'] .recognition-tools label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-body[data-view='recognition'] .model-note {
-  padding: 10px 14px;
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-body[data-view='recognition'] .model-note p {
-  margin: 0 0 8px;
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--muted);
-}
-body[data-view='recognition'] #message {
-  margin: 0;
-  min-height: 20px;
-  font-size: calc(12px * var(--text-scale, 1));
-  overflow-wrap: anywhere;
-}
-body[data-view='recognition'] progress {
-  width: 100%;
-  height: 5px;
-}
-body[data-view='recognition'] .recognition-content {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  flex: 1;
-  min-height: 0;
-  gap: 14px;
-}
-body[data-view='recognition'] .source-preview {
-  min-height: 0;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  background: var(--soft);
-}
-body[data-view='recognition'] .source-preview img {
-  max-width: 100%;
-  object-fit: contain;
-}
-body[data-view='recognition'] .text-result {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-}
-body[data-view='recognition'] .text-result label {
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--muted);
-}
-body[data-view='recognition'] textarea {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  resize: none;
-  padding: 12px;
-  line-height: 1.6;
-  font: inherit;
-  user-select: text;
-  white-space: pre-wrap;
-}
-body[data-view='recognition'] footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-body[data-view='recognition'] #summary {
-  color: var(--muted);
-  font-size: calc(12px * var(--text-scale, 1));
-  overflow-wrap: anywhere;
-}
-body[data-view='recognition'].formula-mode #models {
-  display: none !important;
-}
-body[data-view='recognition'].formula-mode .source-preview {
-  align-items: center;
-}
-body[data-view='recognition'].formula-mode .source-preview img {
-  max-height: 100%;
-  object-fit: contain;
-}
-body[data-view='recognition'] #formula-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  min-height: 0;
-}
-body[data-view='recognition'] #formula-panel label,
-body[data-view='recognition'] #formula-preview-status {
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--muted);
-  margin: 0;
-}
-body[data-view='recognition'] #formula-preview-status {
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-body[data-view='recognition'] #formula-text {
-  font-family: ui-monospace, monospace;
-  flex: 0 1 38%;
-  min-height: 60px;
-}
-body[data-view='recognition'] #formula-preview {
-  overflow: auto;
-  flex: 1;
-  min-height: 45px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
-  user-select: text;
-}
-body[data-view='recognition'] #formula-preview .katex-display {
-  margin: 0;
-}
-body[data-view='recognition'] #formula-destination {
-  font-size: calc(12px * var(--text-scale, 1));
-  color: var(--muted);
-  margin: 0;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-@media (max-width: 720px) {
-  body[data-view='recognition'].formula-mode .recognition-content {
-    grid-template-columns: 1fr;
-    grid-template-rows: 45px minmax(0, 1fr);
-    gap: 8px;
-  }
-  body[data-view='recognition'].formula-mode .source-preview {
-    max-height: 45px;
-  }
-  body[data-view='recognition'].formula-mode .source-preview img {
-    height: 100%;
-    width: 100%;
-    object-fit: contain;
-  }
-  body[data-view='recognition'].formula-mode #app > main {
-    gap: 8px;
-  }
-  body[data-view='recognition'].formula-mode #formula-text {
-    flex: none;
-    height: 60px;
-    padding: 7px 10px;
-  }
-}
-@media (max-width: 720px) {
-  body[data-view='recognition'] .recognition-content {
-    grid-template-columns: 1fr;
-  }
-  body[data-view='recognition'] .source-preview {
-    max-height: 90px;
-  }
-  body[data-view='recognition'] .text-result {
-    min-height: 120px;
-  }
-}
-
-body[data-view='recognition'] #app{height:100%;display:flex;flex-direction:column;overflow:hidden}
-body[data-view='recognition'] #app > main{height:auto;overflow:hidden}
-body[data-view='recognition'] .media-header .window-controls{position:static;margin-left:auto;align-self:stretch;-webkit-app-region:no-drag}
-body[data-view='recognition'] #brand{display:flex}
-body[data-view='recognition'] #brand svg{width:18px;height:18px}
-body[data-view='recognition'] .recognition-settings .field{display:flex;flex-direction:column}
-body[data-view='recognition'] .recognition-settings .dialog-error{padding:0}
+body[data-view='recognition'] #app { height: 100%; display: flex; flex-direction: column; }
+body[data-view='recognition'] .media-header { height: 52px; min-height: 52px; display: flex; align-items: center; gap: 10px; padding-left: 16px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
+body[data-view='recognition'] .media-header strong { font-size: calc(14px * var(--text-scale, 1)); }
+body[data-view='recognition'] #source-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; font-size: calc(12px * var(--text-scale, 1)); }
+body[data-view='recognition'] .window-controls { position: static; margin-left: auto; margin-right: 10px; align-self: stretch; -webkit-app-region: no-drag; }
+body[data-view='recognition'] main.ocr-workbench { display: flex; flex-direction: column; flex: 1; min-height: 0; max-width: none; width: 100%; margin: 0; padding: 0; gap: 0; overflow: hidden; }
+.ocr-commandbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.ocr-tool-group { display: flex; align-items: center; gap: 8px; }
+.ocr-tool-group + .ocr-tool-group { border-left: 1px solid var(--line); padding-left: 10px; }
+.ocr-tool-group label, .ocr-translation-tools label { display: flex; gap: 6px; align-items: center; font-size: calc(12px * var(--text-scale, 1)); white-space: nowrap; }
+.ocr-panel-toggle { margin-left: auto; display: grid; place-items: center; padding: 7px; }
+.ocr-panel-toggle svg { width: 18px; height: 18px; }
+.model-note { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 24px; background: var(--soft); font-size: calc(12px * var(--text-scale, 1)); }
+.model-note p { margin: 0; color: var(--muted); }
+.ocr-workspace { --ocr-image-width: 67%; display: grid; grid-template-columns: minmax(0, var(--ocr-image-width)) 8px minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; }
+.ocr-workspace.results-hidden { grid-template-columns: minmax(0, 1fr); }
+.ocr-workspace.results-hidden .ocr-results, .ocr-workspace.results-hidden .ocr-divider { display: none; }
+body[data-view='recognition'] .source-preview { position: relative; display: flex; min-width: 0; min-height: 0; overflow: hidden; background: var(--soft); }
+body[data-view='recognition'] .source-preview img { max-width: 100%; object-fit: contain; }
+.ocr-divider { position: relative; cursor: col-resize; touch-action: none; outline-offset: -2px; background: var(--surface); }
+.ocr-divider::before { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.ocr-divider:hover::before, .ocr-divider:focus-visible::before { width: 2px; background: var(--muted); }
+.ocr-results { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.ocr-result-section { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.ocr-result-section + .ocr-result-section { border-top: 1px solid var(--line); }
+.ocr-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 6px; font-size: calc(12px * var(--text-scale, 1)); }
+.ocr-result-heading span { font-size: calc(11px * var(--text-scale, 1)); color: var(--muted); }
+body[data-view='recognition'] textarea { min-height: 50px; flex: 1; width: 100%; resize: none; border: 0; border-radius: 0; padding: 10px 12px; background: transparent; line-height: 1.65; font: inherit; font-size: calc(13px * var(--text-scale, 1)); user-select: text; }
+.ocr-translation-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 0 12px 6px; }
+.ocr-translation-tools button { font-size: calc(11px * var(--text-scale, 1)); padding: 5px 7px; }
+.ocr-translation-tools .custom-select { max-width: 140px; }
+body[data-view='recognition'] #translation-destination { margin: 0; padding: 0 12px; color: var(--muted); font-size: calc(11px * var(--text-scale, 1)); overflow-wrap: anywhere; max-height: 3em; overflow: auto; }
+.ocr-footer { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--line); flex-shrink: 0; }
+.ocr-footer .result-actions { margin-left: auto; display: flex; gap: 6px; }
+@media (max-width: 850px) { .ocr-commandbar { gap: 6px; padding: 8px 10px; } .ocr-tool-group { gap: 5px; } .ocr-tool-group > button { padding: 6px 7px; font-size: calc(11px * var(--text-scale, 1)); } }

@@ -1,0 +1,13 @@
+.recognition-settings { width: min(560px, calc(100vw - 32px)); }
+.recognition-settings .one-dialog-body { padding: 4px 24px 24px; max-height: calc(100vh - 180px); overflow: auto; }
+.recognition-settings form { display: grid; gap: 22px; }
+.service-settings-section { display: grid; gap: 14px; min-width: 0; }
+.service-settings-section + .service-settings-section { border-top: 1px solid var(--line); padding-top: 18px; }
+.service-settings-section h3 { margin: 0; font-size: calc(12px * var(--text-scale, 1)); font-weight: 600; color: var(--muted); }
+.recognition-settings .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin: 0; font-size: calc(12px * var(--text-scale, 1)); font-weight: 400; }
+.recognition-settings .field[hidden] { display: none; }
+.recognition-settings input, .recognition-settings select, .recognition-settings .custom-select { width: 100%; min-width: 0; min-height: 36px; }
+.service-secret-note { font-size: calc(11px * var(--text-scale, 1)); color: var(--muted); line-height: 1.5; }
+.recognition-settings .dialog-error:empty { display: none; }
+.recognition-settings .one-dialog-actions { gap: 8px; }
+.recognition-settings .one-dialog-actions > .quiet { margin-right: auto; }

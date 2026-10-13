@@ -3,9 +3,9 @@ import 'katex/dist/katex.min.css';
 import { mountServiceSettings } from './service-settings';
 import { formulaText, FORMULA_TEXT, FORMULA_IMAGE } from '../../shared/recognition/formula';
 import type { TranslationConfig } from '../../shared/recognition/translation';
-import type { OCRAPI, OCRState } from '../../shared/recognition/ocr';
+import type { FormulaRecognitionAPI, OCRState } from '../../shared/recognition/ocr';
 export function mountFormula(
-  api: OCRAPI,
+  api: FormulaRecognitionAPI,
   state: () => OCRState | undefined,
   message: (value: unknown) => void,
   changed: () => void,
@@ -29,27 +29,18 @@ export function mountFormula(
       large = (state()?.imageBytes || 0) > FORMULA_IMAGE;
     q('formula-panel').hidden = !mode;
     q('formula-tools').hidden = !mode;
-    q('formula-destination').hidden = !mode;
+    q('formula-destination').hidden = true;
     q('formula-copy').hidden = !mode;
     q<HTMLButtonElement>('formula-recognize').disabled = active || other || large || !config?.ready;
     q<HTMLButtonElement>('formula-configure').disabled = active || other;
-    q('formula-cancel').hidden = !active;
     editor.readOnly = active || other;
     q<HTMLButtonElement>('formula-copy').disabled =
       active || !editor.value.trim() || editor.value.length > FORMULA_TEXT;
-    const bytes = state()?.imageBytes || 0;
-    q('formula-destination').textContent = config?.ready
-      ? `仅点击识别后向 ${config.endpoint} 发送当前 PNG 图片（${Math.ceil(bytes / 1024).toLocaleString()} KiB）。建议先裁剪到公式。`
-      : config?.error || '识别图片需要单独配置视觉服务；也可直接输入 LaTeX，在本机预览和复制。';
-    q('formula-destination').title = q('formula-destination').textContent || '';
-    if (mode)
-      message(
-        active
-          ? '正在发送图片并识别公式…'
-          : large
-            ? '公式图片最多 8 MiB，请先裁剪到公式区域'
-            : notice || '公式识别会发送当前图片，编辑和预览留在本机',
-      );
+    q('formula-configure').title = config?.ready ? config.endpoint : '配置视觉服务';
+    q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : '发送当前图片并识别公式';
+    q('image-loading').hidden = !active;
+    q('source').parentElement!.ariaBusy = String(active);
+    if (notice) { message(notice); notice = ''; }
   }
   const settings = mountServiceSettings('formula', {
     load: () => api.formulaConfig(),
@@ -78,7 +69,7 @@ export function mountFormula(
     const text = editor.value,
       id = serial;
     if (!text.trim()) {
-      previewState.textContent = '输入或识别公式后显示预览';
+      previewState.textContent = '';
       preview.removeAttribute('aria-busy');
       return;
     }
@@ -101,7 +92,7 @@ export function mountFormula(
           preview.removeAttribute('aria-busy');
           previewState.textContent = error
             ? '预览不可用：' + error
-            : '本机公式预览 · 请对照原图核对';
+            : '';
           if (html) preview.innerHTML = html;
         };
         current.onmessage = (event: MessageEvent<{ id: number; html: string; error: string }>) => {
@@ -131,7 +122,7 @@ export function mountFormula(
       const result = await api.recognizeFormula(state()!.token, config.revision);
       editor.value = result.text;
       updatePreview();
-      notice = '公式已识别，可校正、预览和复制 LaTeX';
+      notice = '';
     } catch (error) {
       notice = error instanceof Error ? error.message : String(error);
     } finally {
@@ -140,7 +131,7 @@ export function mountFormula(
       changed();
     }
   };
-  q('formula-cancel').onclick = () => void api.cancelFormula().catch(message);
+  q('overlay-cancel').onclick = () => void api.cancelFormula().catch(message);
   q('formula-copy').onclick = () =>
     void api
       .copyFormula(editor.value)

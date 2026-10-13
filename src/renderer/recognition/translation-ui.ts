@@ -14,12 +14,13 @@ export function mountTranslation(
   message: (value: unknown) => void,
   changed: () => void,
 ) {
-  let mode = false,
+  let mode = true,
+    selectionSource: string | undefined,
     config: TranslationConfig | undefined,
     requesting = false,
     notice = '',
     result: TranslationResult | undefined;
-  const source = () => q<HTMLTextAreaElement>('result').value,
+  const source = () => selectionSource ?? q<HTMLTextAreaElement>('result').value,
     target = () => q<HTMLSelectElement>('translation-language').value as TranslationLanguage;
   const busy = () => requesting || !!state()?.translating;
   const valid = () =>
@@ -34,15 +35,11 @@ export function mountTranslation(
     const active = busy(),
       ocr = !!state()?.running || !!state()?.formulaRecognizing;
     q('translation-tools').hidden = !mode;
-    q('translation-destination').hidden = !mode;
+    q('translation-destination').hidden = true;
     q('translation-result').hidden = !mode;
     q('translation-copy').hidden = !mode;
-    q('ocr-tools').hidden = mode;
-    document.body.classList.toggle('translation-mode', mode);
-    q('result-label').textContent = mode ? '原文' : '识别结果';
-    q('copy').textContent = mode ? '复制原文' : '复制文字';
-    q('copy').classList.toggle('primary', !mode);
-    q('copy').classList.toggle('quiet', mode);
+    q('ocr-tools').hidden = false;
+    q('translation-source-note').textContent = selectionSource === undefined ? '' : '选中文字';
     q<HTMLTextAreaElement>('result').readOnly = active || ocr;
     q<HTMLTextAreaElement>('translated').readOnly = active || ocr;
     q<HTMLSelectElement>('translation-language').disabled = active || ocr;
@@ -52,18 +49,8 @@ export function mountTranslation(
     q('translation-cancel').hidden = !active;
     q<HTMLButtonElement>('translation-copy').disabled =
       active || !valid() || !q<HTMLTextAreaElement>('translated').value.trim();
-    q('translation-destination').textContent = config?.ready
-      ? `将向 ${config.endpoint} 发送原文（${source().length.toLocaleString()} 个字符），图片留在本机。`
-      : config?.error || '请先配置翻译服务。配置不会发送文字或图片。';
-    q('translation-destination').title = q('translation-destination').textContent || '';
-    if (mode)
-      message(
-        active
-          ? '正在翻译原文…'
-          : source().length > TRANSLATION_INPUT
-            ? '每次最多翻译 20,000 个字符，请分段处理'
-            : notice || '可先修正原文，再主动翻译',
-      );
+    q('translation-configure').title = config?.ready ? config.endpoint : '配置翻译服务';
+    if (notice) { message(notice); notice = ''; }
   }
   function invalidate() {
     if (result && !valid()) notice = '原文、语言或服务已改动，请重新翻译';
@@ -84,7 +71,7 @@ export function mountTranslation(
   q('translation-configure').onclick = () => void settings.open();
   q('translation-language').onchange = invalidate;
   q('translated').oninput = render;
-  q('translate').onclick = async () => {
+  async function translate() {
     if (busy() || !config?.ready || !state()) return;
     requesting = true;
     notice = '';
@@ -93,7 +80,7 @@ export function mountTranslation(
     try {
       result = await api.translate(state()!.token, source(), target(), config.revision);
       q<HTMLTextAreaElement>('translated').value = result.text;
-      notice = '翻译完成，可核对、修正和复制译文';
+      notice = '';
     } catch (error) {
       notice = error instanceof Error ? error.message : String(error);
     } finally {
@@ -101,7 +88,8 @@ export function mountTranslation(
       render();
       changed();
     }
-  };
+  }
+  q('translate').onclick = () => { selectionSource = undefined; void translate(); };
   q('translation-cancel').onclick = () =>
     void api.cancelTranslation().catch((error) => {
       notice = String(error);
@@ -126,6 +114,7 @@ export function mountTranslation(
       language: TranslationLanguage,
       error: string,
     ) {
+      selectionSource = undefined;
       q<HTMLSelectElement>('translation-language').value = language;
       result = value;
       q<HTMLTextAreaElement>('translated').value = value?.text || '';
@@ -134,7 +123,8 @@ export function mountTranslation(
       render();
     },
     render,
-    sourceChanged: invalidate,
+    sourceChanged: () => { selectionSource = undefined; invalidate(); },
+    translateSelection: (text: string) => { selectionSource = text; if (!config?.ready) { message('请先配置翻译服务'); void settings.open(); return; } void translate(); },
     busy,
     isTranslation: () => mode,
     setMode: (value: boolean) => {

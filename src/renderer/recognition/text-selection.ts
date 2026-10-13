@@ -1,6 +1,8 @@
 import { readingTokens, selectedText, textBounds, textGroup, textVertical, type TextDocument, type TextToken } from '../../shared/recognition/text-document';
 import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type TextRotation, type TextView } from '../../shared/recognition/text-geometry';
 import './text-selection.css';
+import { icon, registerIcons } from '../ui';
+import { MoveHorizontal, ZoomIn, ZoomOut, RotateCw, Copy, Languages } from 'lucide';
 
 /** Shared image-space layer. Only visible lines create DOM nodes; selection always uses the full reading order. */
 export function mountTextSelection(image: HTMLImageElement, options: {
@@ -18,11 +20,12 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   };
   const viewport = document.createElement('div'); viewport.className = 'text-image-viewport'; viewport.tabIndex = 0;
   viewport.setAttribute('aria-label', '图片选字：拖动选择，双击词语，三击整行，Shift 与方向键扩选，Ctrl+A 全选，Ctrl+C 复制，空格拖动平移');
+  const canvas = document.createElement('div'); canvas.className = 'text-image-canvas';
   const stage = document.createElement('div'); stage.className = 'text-image-stage';
   const inner = document.createElement('div'); inner.className = 'text-image-inner';
   const layer = document.createElement('div'); layer.className = 'text-selection-layer';
   image.classList.add('text-selection-image');
-  inner.append(image, layer); stage.append(inner); viewport.append(stage); root.append(tools, viewport); host.append(root);
+  inner.append(image, layer); stage.append(inner); canvas.append(stage); viewport.append(canvas); root.append(tools, viewport); host.append(root);
   const status = document.createElement('span'); status.className = 'text-image-status'; status.setAttribute('aria-live', 'polite');
   let doc: TextDocument | undefined, tokens: TextToken[] = [], enabled = true, visible = true, anchor = -1, focus = -1;
   let zoom: number | undefined, rotation: TextRotation = 0, view: TextView = { width: 1, height: 1, scale: 1, rotation: 0 };
@@ -34,16 +37,32 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   let drag: { id: number; pan: boolean; x: number; y: number; left: number; top: number } | undefined;
   const text = () => selectedText(tokens, anchor, focus);
   const copy = () => { const value = text(); if (value) void options.copy(value).then(() => options.message('已复制选中文字')).catch(options.message); };
-  const fit = button('适应宽度', () => { zoom = undefined; layout(); }); fit.dataset.textAction = 'fit';
+  let initialized = false, resetView = false, viewportWidth = 0, viewportHeight = 0;
+  const fit = button('适应宽度', () => { zoom = undefined; resetView = true; layout(); }); fit.dataset.textAction = 'fit';
   const less = button('缩小', () => setZoom(view.scale / 1.25)); less.dataset.textAction = 'zoom-out';
   const more = button('放大', () => setZoom(view.scale * 1.25)); more.dataset.textAction = 'zoom-in';
   const rotate = button('旋转', () => { rotation = ((rotation + 1) % 4) as TextRotation; layout(); }); rotate.dataset.textAction = 'rotate';
+  registerIcons({ 'image-fit': MoveHorizontal, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages });
+  for (const [node, glyph] of [[fit, 'image-fit'], [less, 'image-zoom-out'], [more, 'image-zoom-in'], [rotate, 'image-rotate']] as const) {
+    node.title = node.ariaLabel = node.textContent; node.innerHTML = icon('lucide:' + glyph); node.classList.add('icon-button');
+  }
   const copyButton = button('复制选中文字', copy); copyButton.dataset.textAction = 'copy';
   const translateButton = button('翻译选中文字', () => { if (text()) options.translate(text()); }); translateButton.dataset.textAction = 'translate';
+  copyButton.ariaLabel = '复制选中文字'; translateButton.ariaLabel = '翻译选中文字';
+  copyButton.innerHTML = icon('lucide:selection-copy') + '<span>复制</span>';
+  translateButton.innerHTML = icon('lucide:selection-translate') + '<span>翻译</span>';
   const actions = document.createElement('div'); actions.className = 'text-selection-actions'; actions.hidden = true;
   actions.setAttribute('aria-label', '已选文字操作'); actions.append(copyButton, translateButton); root.append(actions);
   tools.append(status);
-  function setZoom(value: number) { zoom = Math.max(0.05, Math.min(8, value)); layout(); }
+  function setZoom(value: number, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) {
+    if (drag && !drag.pan) return;
+    const rect = stage.getBoundingClientRect(), bounds = viewport.getBoundingClientRect(), previous = view.scale;
+    const point = { x: x + bounds.left - rect.left, y: y + bounds.top - rect.top };
+    zoom = Math.max(0.05, Math.min(8, value)); layout();
+    viewport.scrollLeft = stage.offsetLeft + point.x * view.scale / previous - x;
+    viewport.scrollTop = stage.offsetTop + point.y * view.scale / previous - y;
+    schedule();
+  }
   function layout() {
     // ResizeObserver and toolbar wrapping can arrive after pointerdown. Keep one
     // image transform for the complete selection gesture, then apply the new fit.
@@ -51,14 +70,24 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     pendingLayout = false;
     const width = doc?.source.width || image.naturalWidth, height = doc?.source.height || image.naturalHeight;
     if (!width || !height) return;
+    const oldRect = stage.getBoundingClientRect(), bounds = viewport.getBoundingClientRect();
+    const center = textViewToImage({ x: bounds.left + viewportWidth / 2 - oldRect.left, y: bounds.top + viewportHeight / 2 - oldRect.top }, view);
     const fitScale = Math.max(0.01, viewport.clientWidth / (rotation % 2 ? height : width));
-    view = { width, height, rotation, scale: visible ? zoom ?? fitScale : Math.min(fitScale, viewport.clientHeight / (rotation % 2 ? width : height)) || fitScale };
+    view = { width, height, rotation, scale: zoom ?? fitScale };
     const size = textViewSize(view), w = width * view.scale, h = height * view.scale;
     stage.style.width = `${size.width}px`; stage.style.height = `${size.height}px`;
+    const padX = viewport.clientWidth, padY = viewport.clientHeight;
+    canvas.style.width = `${Math.max(size.width, padX) + padX * 2}px`;
+    canvas.style.height = `${Math.max(size.height, padY) + padY * 2}px`;
+    stage.style.left = `${padX + Math.max(0, padX - size.width) / 2}px`;
+    stage.style.top = `${padY + Math.max(0, padY - size.height) / 2}px`;
     inner.style.width = `${w}px`; inner.style.height = `${h}px`;
     inner.style.transform = rotation === 0 ? '' : rotation === 1 ? `translate(${h}px,0) rotate(90deg)` :
       rotation === 2 ? `translate(${w}px,${h}px) rotate(180deg)` : `translate(0,${w}px) rotate(270deg)`;
     status.textContent = `${Math.round(view.scale * 100)}%${tokens.length ? ` · ${anchor < 0 ? '拖动图片文字进行选择' : '已选择文字'}` : ''}`;
+    if (!initialized || resetView) { viewport.scrollLeft = padX; viewport.scrollTop = padY; }
+    else { const point = imageToTextView(center, view); viewport.scrollLeft = stage.offsetLeft + point.x - padX / 2; viewport.scrollTop = stage.offsetTop + point.y - padY / 2; }
+    initialized = true; resetView = false; viewportWidth = padX; viewportHeight = padY;
     schedule();
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); }); }
@@ -138,11 +167,10 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     return best;
   }
   viewport.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
-    const pan = space;
-    if (!pan && (!enabled || !visible)) return;
-    const index = pan ? -1 : hit(event);
-    if (!pan && index < 0) { anchor = focus = -1; schedule(); return; }
+    if (event.button !== 0 && event.button !== 1) return;
+    const index = enabled && visible && !space && event.button === 0 ? hit(event) : -1;
+    const pan = space || event.button === 1 || index < 0;
+    if (pan) { anchor = focus = -1; viewport.classList.add('panning'); schedule(); }
     event.preventDefault(); viewport.focus(); viewport.setPointerCapture(event.pointerId);
     drag = { id: event.pointerId, pan, x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
     if (!pan) choose(index, event.shiftKey);
@@ -159,7 +187,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
       choose(hit(event, true), true);
     }
   });
-  const stop = () => { drag = undefined; if (pendingLayout) layout(); };
+  const stop = () => { drag = undefined; if (!space) viewport.classList.remove('panning'); if (pendingLayout) layout(); };
   viewport.addEventListener('pointerup', stop); viewport.addEventListener('pointercancel', stop);
   viewport.addEventListener('lostpointercapture', stop);
   viewport.addEventListener('click', event => {
@@ -185,7 +213,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     else if (event.key === 'End') next = event.ctrlKey ? tokens.length - 1 : textGroup(tokens, Math.max(0, focus), 'line').focus;
     else return;
     event.preventDefault(); choose(next, event.shiftKey);
-    const box = textBounds(tokens[next].quad), p = imageToTextView({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, view);
+    const box = textBounds(tokens[next].quad), local = imageToTextView({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, view), p = { x: local.x + stage.offsetLeft, y: local.y + stage.offsetTop };
     if (p.x < viewport.scrollLeft || p.x > viewport.scrollLeft + viewport.clientWidth) viewport.scrollLeft = Math.max(0, p.x - viewport.clientWidth / 2);
     if (p.y < viewport.scrollTop || p.y > viewport.scrollTop + viewport.clientHeight) viewport.scrollTop = Math.max(0, p.y - viewport.clientHeight / 2);
   });
@@ -193,8 +221,8 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   viewport.addEventListener('blur', () => { space = false; stop(); viewport.classList.remove('panning'); });
   viewport.addEventListener('scroll', schedule, { passive: true });
   viewport.addEventListener('wheel', event => {
-    if (!event.ctrlKey) return;
-    event.preventDefault(); setZoom(view.scale * (event.deltaY > 0 ? 0.9 : 1.1));
+    event.preventDefault(); const rect = viewport.getBoundingClientRect();
+    setZoom(view.scale * Math.exp(-event.deltaY * 0.0015), event.clientX - rect.left, event.clientY - rect.top);
   }, { passive: false });
   image.addEventListener('load', layout);
   const resize = new ResizeObserver(layout); resize.observe(viewport);
