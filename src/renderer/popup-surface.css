@@ -27,6 +27,7 @@ body[data-view=capture] .capture-panel {
 :where([data-side=right]) { --popup-offset: -4px 0; }
 
 /* Individual translate preserves positioning transforms and editor measurements.
+   Release it after entry so fixed descendants keep their viewport coordinates.
    Anchored popovers and feedback use these same tokens through Web Animations. */
 dialog[open]:not(.closing),
 [popover]:popover-open:not(.anchored-popover):not(.feedback-motion),
@@ -34,7 +35,7 @@ dialog[open]:not(.closing),
   .breadcrumb-menu, .lock-path-popover, .preview-open-popover, .menu-add-popup,
   .command-picker, .picker-options, .echo-position-panel, .toast):not([hidden]):not([popover]):not(.feedback-motion),
 .popup-enter {
-  animation: one-popup-in var(--popup-enter-duration) var(--popup-easing) both;
+  animation: one-popup-in var(--popup-enter-duration) var(--popup-easing) backwards;
 }
 dialog.closing {
   pointer-events: none;

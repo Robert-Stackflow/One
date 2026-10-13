@@ -33,6 +33,8 @@
 
 组件校验：`node tests/renderer-components-smoke.cjs` 使用独立临时 profile 和隐藏 Electron 窗口，验证页签隐藏/显示、键盘跳过禁用项、动态增项与根节点移除/重挂载；验证弹层仅一次 detach 回调，以及对话框关闭锁对 Esc、标题关闭、背景点击、表单提交和嵌套操作的保护。测试未加载 One 主窗口全部业务。
 
+提示与重命名相邻回归：`tooltip-rename-smoke.cjs` 已按当前四组导航及重命名默认页签修订，保留原键盘、边界翻转、焦点说明、弹窗提示和重命名预览断言。实际 One 检查通过 83 次提示及 12 组重命名布局；浅深色下 600/900/1350 高度的收起导航均为 40 × 40 px，覆盖有/无滚动条。修复新增导航使滚动条挤窄按钮，以及弹窗入场动画残留位移导致内部提示偏移；公共对话框中断/重开及 352 项弹窗检查通过。
+
 下拉与字体：`renderer-controls-smoke.cjs` 覆盖同步选项/字段、筛选与键盘、取消后重开、旧请求拒绝、失败重试、移除清理和数字输入事件；`renderer-fonts-smoke.cjs` 覆盖字体预览释放、迟到的字体加载、缓存重试及保留当前 UI 字体。实际 One 主窗口的 `select-popup-boundary-smoke.cjs`、`fonts-smoke.cjs` 通过，包含边界定位、减少动画、中文字体实际渲染、刷新、预览窗口及重启后保留。使用独立 profile；构建沿用现有 Vite renderer 入口并复制既有 PDF/文件图标资源，未重建原生程序。
 
 反馈与弹层：`renderer-feedback-smoke.cjs` 覆盖持续/自动收起、同文案重显、键盘操作、运行中保留、失败恢复、过期回调、动画中断、One toast/弹窗分流及移除释放；`renderer-popovers-smoke.cjs` 覆盖容器宽度变化、可用高度、定位、关闭中重开、detach、减少动画及确认弹层取消/确认/外部关闭。图标仍由 One 唯一注册表维护；反馈样式纳入共用组件入口。TypeScript、文档检查、renderer 构建及现有组件/下拉/字体检查通过；实际 One 的 `ai-migration-smoke.cjs` 相邻回归通过。以上尚不代表迁入页面验收通过。

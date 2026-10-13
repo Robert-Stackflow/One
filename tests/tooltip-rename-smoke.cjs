@@ -7,19 +7,22 @@ async function run() {
  const profile = await fs.mkdtemp(path.join(out, 'profile-')), files = await fs.mkdtemp(path.join(out, 'files-'));
  await fs.writeFile(path.join(files, 'old-a.txt'), 'First fixture'); await fs.writeFile(path.join(files, 'old-b.md'), 'Second fixture');
  const env = {...process.env, ONE_TEST_MODE: '1', ONE_DATA_DIR: profile}; delete env.ELECTRON_RUN_AS_NODE;
- const app = await electron.launch({args: [path.resolve('.')], env}), errors = [], tooltips = [], layouts = [], overviewHovers = [];
+ const app = await electron.launch({args: [path.resolve('.')], env}), errors = [], tooltips = [], layouts = [], overviewHovers = [], collapsedLayouts = [];
  app.on('window', page => page.on('pageerror', error => errors.push(String(error))));
  try {
   const page = await app.firstWindow(); await page.waitForSelector('#overview-index'); const win = await app.browserWindow(page);
   await app.evaluate(({BrowserWindow})=>{BrowserWindow.prototype.focus=function(){};BrowserWindow.prototype.show=BrowserWindow.prototype.showInactive;});
   await win.evaluate(w => {w.setBounds({x:-10000,y:-10000,width:1250,height:900}); w.showInactive();});
   assert.deepEqual(await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>({caption:group.querySelector('h2').textContent,pages:[...group.querySelectorAll('[data-page]')].map(b=>b.dataset.page)}))),[
-   {caption:'文件',pages:['tools','text','search','disk','locksmith']},{caption:'工具',pages:['input','preview','color']},{caption:'系统',pages:['system','hardware','ports']}
+   {caption:'文件',pages:['tools','text','search','disk','archive']},{caption:'工具',pages:['input','preview','ai','developer','images']},{caption:'截图与录制',pages:['capture','recording','materials','pins']},{caption:'系统',pages:['system','hardware']}
   ]);
   assert.equal(await page.locator('.sidebar-navigation>[data-page]').getAttribute('data-page'),'home');
   assert.equal(await page.locator('.sidebar>[data-page]').getAttribute('data-page'),'settings');
   await page.evaluate(() => {window.tooltipEvents = []; for (const name of ['pointerover','pointerout','focusin','focusout','pointerdown','keydown','scroll','blur','resize']) window.addEventListener(name, e => {window.tooltipEvents.push({name, time: performance.now(), target: e.target?.id || e.target?.className, related: e.relatedTarget?.id || e.relatedTarget?.className}); if (window.tooltipEvents.length > 60) window.tooltipEvents.shift();}, true);});
   const showTip = async (button, label, side) => {
+   await page.mouse.move(600, 50);
+   await button.scrollIntoViewIfNeeded();
+   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
    await button.hover(); const tip = page.locator('#one-tooltip.visible');
    await expect(tip).toHaveText(label); await expect(tip).toHaveAttribute('data-side', side);
    await expect(tip).toHaveCSS('opacity', '1');
@@ -47,7 +50,18 @@ async function run() {
     await expect.poll(() => page.locator('.sidebar').evaluate(e => Math.round(e.getBoundingClientRect().width))).toBe(collapsed ? 56 : 208);
     const captions=await page.locator('.sidebar-group-caption').evaluateAll(nodes=>nodes.map(e=>({height:e.getBoundingClientRect().height,opacity:Number(getComputedStyle(e).opacity),font:getComputedStyle(e).fontSize})));
     for(const caption of captions){assert.equal(caption.height,collapsed?0:16);assert.ok(collapsed?caption.opacity===0:caption.opacity>.8);assert.equal(caption.font,'11px');}
-    if(collapsed){for(const shape of await page.locator('.sidebar .nav').evaluateAll(nodes=>nodes.map(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height}))))assert.deepEqual(shape,{width:40,height:40});const separators=await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>{const style=getComputedStyle(group,'::before');return {label:group.getAttribute('aria-label'),width:style.width,height:style.height,marginBottom:style.marginBottom};}));assert.deepEqual(separators,[{label:'文件',width:'28px',height:'1px',marginBottom:'7px'},{label:'工具',width:'24px',height:'1px',marginBottom:'7px'},{label:'系统',width:'28px',height:'1px',marginBottom:'7px'}]);}
+    if(collapsed){
+     for(const height of [600,1350,900]){
+      await win.evaluate((w,height)=>w.setSize(1250,height),height);
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      const layout=await page.locator('.sidebar-navigation').evaluate(e=>({clientWidth:e.clientWidth,scrollWidth:e.scrollWidth,scrolling:e.scrollHeight>e.clientHeight,buttons:[...document.querySelectorAll('.sidebar .nav')].map(b=>{const r=b.getBoundingClientRect();return {width:r.width,height:r.height};})}));
+      for(const shape of layout.buttons)assert.deepEqual(shape,{width:40,height:40});
+      assert.ok(layout.scrollWidth<=layout.clientWidth,'Collapsed navigation must not clip horizontally');
+      collapsedLayouts.push({theme,height,...layout});
+     }
+     const separators=await page.locator('.sidebar-group').evaluateAll(groups=>groups.map(group=>{const style=getComputedStyle(group,'::before');return {label:group.getAttribute('aria-label'),width:style.width,height:style.height,marginBottom:style.marginBottom};}));
+     assert.deepEqual(separators,[{label:'文件',width:'28px',height:'1px',marginBottom:'7px'},{label:'工具',width:'24px',height:'1px',marginBottom:'7px'},{label:'截图与录制',width:'28px',height:'1px',marginBottom:'7px'},{label:'系统',width:'28px',height:'1px',marginBottom:'7px'}]);
+    }
     for (const button of await page.locator('.sidebar .nav').all()) await showTip(button, await button.getAttribute('aria-label'), 'right');
     await showTip(page.locator('[data-page=tools]'), '文件工具', 'right');
     await page.screenshot({path: path.join(out, `sidebar-${theme}-${collapsed ? 'collapsed' : 'expanded'}.png`)});
@@ -85,9 +99,9 @@ async function run() {
 
   await page.locator('[data-page=tools]').click(); await page.locator('#tool-tab-rename').click();
   await expect(page.locator('#tool-run')).toContainText('预览重命名');
-  await expect(page.locator('#rename-settings-tab-scope')).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('#rename-settings-tab-rules')).toHaveAttribute('aria-selected','true');
   await expect(page.locator('#rename-settings-panel-format')).toBeHidden();
-  await page.locator('#rename-paths').fill(files); await page.locator('#rename-settings-tab-rules').click(); await page.locator('#rename-search').fill('old'); await page.locator('#rename-replace').fill('new');
+  await page.locator('#rename-settings-tab-scope').click(); await page.locator('#rename-paths').fill(files); await page.locator('#rename-settings-tab-rules').click(); await page.locator('#rename-search').fill('old'); await page.locator('#rename-replace').fill('new');
   await page.locator('#tool-run').click(); await expect(page.locator('#rename-apply')).toBeEnabled();
   await expect(page.locator('.rename-result-row')).toContainText(['new-a.txt', 'new-b.md']);
   await page.locator('#rename-settings-tab-format').click(); await expect(page.locator('#rename-settings-panel-format')).toBeVisible();
@@ -123,7 +137,7 @@ async function run() {
   assert.equal(await page.locator('#one-tooltip').evaluate(e => getComputedStyle(e).transitionDuration), '0s');
   await page.mouse.down(); await page.mouse.up(); await expect(page.locator('#one-tooltip')).not.toHaveClass(/visible/);
   assert.deepEqual(errors, []);
-  const result = {result: 'PASS', tooltips, layouts, overviewHovers, keyboardTip: true, existingDescriptionPreserved: true, dynamicEdges: true, modal: true, numberingPreview: true, advancedRulesPreserved: true, reducedMotion: true, errors};
+  const result = {result: 'PASS', tooltips, layouts, overviewHovers, collapsedLayouts, keyboardTip: true, existingDescriptionPreserved: true, dynamicEdges: true, modal: true, numberingPreview: true, advancedRulesPreserved: true, reducedMotion: true, errors};
   await fs.writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify({result: 'PASS', tooltipChecks: tooltips.length, layouts: layouts.length, errors}));
  } catch (error) {
