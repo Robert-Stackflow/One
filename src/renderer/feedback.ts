@@ -1,5 +1,6 @@
 import { mountNotice } from './notice';
 import {onRemoval} from './dom-lifecycle';
+import {popupMotion} from './popup-motion';
 
 interface FeedbackMotion {
   revision: number;
@@ -45,7 +46,7 @@ function animateFeedback(
       : phase === 'update'
         ? '.78'
         : '1';
-  const shift = document.documentElement.dataset.toastPosition?.startsWith('top') ? -6 : 6;
+  const shift = document.documentElement.dataset.toastPosition?.startsWith('top') ? -4 : 4;
   const translate = interrupted
     ? style.translate
     : phase === 'enter'
@@ -72,12 +73,11 @@ function animateFeedback(
       { opacity, translate },
       {
         opacity: phase === 'exit' ? 0 : 1,
-        translate: phase === 'exit' ? `0 ${shift / 2}px` : '0 0',
+        translate: phase === 'exit' ? `0 ${shift}px` : '0 0',
       },
     ],
     {
-      duration: phase === 'enter' ? 190 : phase === 'exit' ? 130 : 120,
-      easing: phase === 'exit' ? 'ease-in' : 'cubic-bezier(.2,.8,.2,1)',
+      ...popupMotion(style,phase === 'enter'),
       fill: 'both',
     },
   );

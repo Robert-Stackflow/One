@@ -1,4 +1,5 @@
 import {esc,iconButton} from './ui';
+import {popupMotion} from './popup-motion';
 
 interface DialogOptions {id:string;title:string;body:string;actions?:string;closeId?:string;titleId?:string;className?:string}
 /** Body and actions are trusted UI markup; titles and attributes are escaped here. */
@@ -8,9 +9,9 @@ export function dialogMarkup(options:DialogOptions){
 }
 interface DialogState {focus?:HTMLElement;timer?:ReturnType<typeof setTimeout>;resolve?: (closed:boolean)=>void;pending?:Promise<boolean>;backdropDown:boolean;dismissLocks:number}
 const states=new WeakMap<HTMLDialogElement,DialogState>();
-const motionProperties=['opacity','transform','backdrop','filter'];
+const motionProperties=['opacity','translate','backdrop','filter'];
 function continueMotion(dialog:HTMLDialogElement,phase:'enter'|'exit'){
- const style=getComputedStyle(dialog),backdrop=getComputedStyle(dialog,'::backdrop'),values=[style.opacity,style.transform,backdrop.backgroundColor,backdrop.backdropFilter];
+ const style=getComputedStyle(dialog),backdrop=getComputedStyle(dialog,'::backdrop'),values=[style.opacity,style.translate,backdrop.backgroundColor,backdrop.backdropFilter];
  motionProperties.forEach((property,index)=>dialog.style.setProperty(`--dialog-${phase}-${property}`,values[index]));
 }
 function focusField(dialog:HTMLDialogElement){
@@ -53,7 +54,7 @@ export function closeDialog(dialog:HTMLDialogElement,options:{force?:boolean}={}
   state.timer=undefined;state.pending=undefined;state.resolve=undefined;
   if(dialog.open)dialog.close();dialog.classList.remove('closing');
   const focus=state.focus;state.focus=undefined;if(focus?.isConnected)focus.focus({preventScroll:true});resolve(true);
- },matchMedia('(prefers-reduced-motion:reduce)').matches?0:120);});
+ },popupMotion(getComputedStyle(dialog),false).duration);});
  return state.pending;
 }
 let confirmationId=0;

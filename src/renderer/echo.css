@@ -14,7 +14,7 @@
 .echo-config-fields .preference-row{padding-inline:0}
 .echo-config-fields .preference-row:has(+[hidden]){border-bottom:0}
 .echo-editing .hud-stage{padding:12px}
-.echo-position-panel{width:100%;min-height:76px;border-radius:12px;padding:14px 16px;gap:14px;background:#242424;box-shadow:0 3px 10px #0002;cursor:grab;flex-wrap:wrap}
+.echo-position-panel{width:100%;min-height:76px;border-radius:12px;padding:14px 16px;gap:14px;background:#242424;cursor:grab;flex-wrap:wrap}
 .echo-position-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
 .echo-position-copy strong{font-size:14px;font-weight:500;color:#fff}
 .echo-position-copy>span{display:flex;align-items:center;gap:6px;color:#a5a5a5;font-size:11px}

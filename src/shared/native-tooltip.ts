@@ -1,5 +1,6 @@
 import {nativePreviewBounds,type NativePreviewBounds} from './native-preview';
-export const nativeTooltipMargin=12;
+// Leave room for the shared popup shadow instead of clipping it at the HWND edge.
+export const nativeTooltipMargin=24;
 export interface NativeTooltipData {bounds:NativePreviewBounds;text:string;side:'top'|'right'|'bottom'|'left';arrow:number;font:string}
 export function nativeTooltipData(value:unknown):NativeTooltipData|null{
  if(value===null)return null;

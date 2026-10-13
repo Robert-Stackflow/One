@@ -459,7 +459,6 @@ body[data-view="recording-player"] #gif-quality-dialog {
   max-height: calc(100vh - 48px);
   overflow: auto;
   padding: 20px;
-  border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
   color: var(--fg);

@@ -92,7 +92,7 @@
 .archive-browser-search input{width:100%;flex:1;min-width:0;font-size:12px;border:0!important;background:transparent!important;height:100%;outline:none}
 .archive-browser-search button{width:34px;min-width:34px;min-height:0;height:calc(var(--control-height) - 6px);margin:2px;padding:7px;flex:none}
 #archive-list-head{width:var(--control-height);min-width:var(--control-height);height:var(--control-height);padding:9px}
-.archive-more-menu{position:fixed;inset:auto;margin:0;width:210px;max-height:calc(100vh - 16px);overflow:auto;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.archive-more-menu{position:fixed;inset:auto;margin:0;width:210px;max-height:calc(100vh - 16px);overflow:auto;padding:6px;border-radius:12px;background:var(--surface);color:var(--fg)}
 .archive-more-menu button{display:flex;align-items:center;justify-content:flex-start;width:100%;min-height:34px;padding:8px 10px;gap:10px;border:0;border-radius:6px;background:transparent;font-size:12px;text-align:left;font-weight:400}
 .archive-more-menu button:hover:not(:disabled){background:var(--hover)}
 .archive-more-menu .icon{width:16px;height:16px;color:var(--muted);flex-shrink:0}

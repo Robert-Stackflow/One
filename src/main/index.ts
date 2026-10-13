@@ -44,6 +44,7 @@ import {ExplorerOverlay} from './explorer-overlay';
 import {inlineSearchBaseHeight} from '../shared/overlay';
 import {SearchMenu} from './search-menu';
 import {TrayMenuPanel} from './tray-menu-panel';
+import {bindPopupWindowMotion,popupWindowRoles} from './popup-window-motion';
 import {trayMenuEntries,type TrayMenuAction} from './tray-menu';
 import {DialogBar} from './dialog-bar';
 import {oneMenuTarget} from './one-menu-target';
@@ -344,6 +345,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
     ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','recognition','recording-player'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
     webPreferences: { preload: recordingRole ? (recordingPreloads[view as RecordingWindowRole] ? join(__dirname,'../preload/'+recordingPreloads[view as RecordingWindowRole]+'.cjs') : undefined) : join(__dirname, view==='recognition'?'../preload/recognition.cjs':view==='scroll-capture'?'../preload/scroll-capture.cjs':view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:view!=='capture'&&!recordingRole } });
   const windowId = window.webContents.id; roles.set(windowId, view);
+  if(popupWindowRoles.has(view))bindPopupWindowMotion(window);
   if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-created',`role=${view} id=${windowId}`);
   // The open-with submenu is cheap to recreate and rarely reopened after a pause.
   // Keep the parent menu warm for repeated right-clicks, but release its extra renderer sooner.

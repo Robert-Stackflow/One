@@ -96,11 +96,7 @@ body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-t
   scrollbar-color: color-mix(in srgb, var(--fg) 28%, transparent) transparent;
   background: var(--surface);
   color: var(--fg);
-  border: 1px solid color-mix(in srgb, var(--fg) 12%, var(--surface));
   border-radius: 9px;
-  box-shadow:
-    0 8px 24px #0003,
-    0 1px 4px #0001;
 }
 body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-tool-menu::backdrop {
   background: transparent;

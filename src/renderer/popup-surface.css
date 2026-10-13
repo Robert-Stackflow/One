@@ -1,0 +1,72 @@
+/* One surface and motion contract for dialogs, menus and transient panels.
+   Functional styles own layout; they must not redefine this outer chrome. */
+:root {
+  --popup-border-color: var(--line);
+  --popup-border: 1px solid var(--popup-border-color);
+  --popup-shadow: var(--shadow);
+  --popup-enter-duration: 180ms;
+  --popup-exit-duration: 120ms;
+  --popup-easing: cubic-bezier(.2,.8,.2,1);
+  --popup-offset: 0 -4px;
+}
+
+:where(dialog, [popover], .one-tooltip, .map-tooltip, .disk-context,
+  .select-popup, .custom-date-popup, .custom-time-popup, .color-ruler-menu,
+  .archive-more-menu, .breadcrumb-menu, .confirmation-popover, .lock-path-popover,
+  .preview-open-popover, .menu-add-popup, .command-picker, .picker-options,
+  .dialog-companion-shell, .menu-preview-surface,
+  .echo-position-panel, .toast, #tray-menu-notice),
+body[data-view=capture] .capture-panel {
+  border: var(--popup-border);
+  box-shadow: var(--popup-shadow);
+}
+
+:where(dialog, [popover]) { outline: none; }
+:where([data-side=above], [data-placement=above]) { --popup-offset: 0 4px; }
+:where([data-side=left]) { --popup-offset: 4px 0; }
+:where([data-side=right]) { --popup-offset: -4px 0; }
+
+/* Individual translate preserves positioning transforms and editor measurements.
+   Anchored popovers and feedback use these same tokens through Web Animations. */
+dialog[open]:not(.closing),
+[popover]:popover-open:not(.anchored-popover):not(.feedback-motion),
+:where(.map-tooltip, .disk-context, .color-ruler-menu, .archive-more-menu,
+  .breadcrumb-menu, .lock-path-popover, .preview-open-popover, .menu-add-popup,
+  .command-picker, .picker-options, .echo-position-panel, .toast):not([hidden]):not([popover]):not(.feedback-motion),
+.popup-enter {
+  animation: one-popup-in var(--popup-enter-duration) var(--popup-easing) both;
+}
+dialog.closing {
+  pointer-events: none;
+  animation: one-popup-out var(--popup-exit-duration) var(--popup-easing) both;
+}
+[popover].is-closing:popover-open {
+  pointer-events: none;
+  animation: one-popup-out var(--popup-exit-duration) var(--popup-easing) both;
+}
+@keyframes one-popup-in {
+  from { opacity: var(--dialog-enter-opacity, 0); translate: var(--dialog-enter-translate, var(--popup-offset)); }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes one-popup-out {
+  from { opacity: var(--dialog-exit-opacity, 1); translate: var(--dialog-exit-translate, 0 0); }
+  to { opacity: 0; translate: 0 4px; }
+}
+
+/* Tooltip content is inverted, so the same subtle border uses its foreground. */
+.one-tooltip { --popup-border-color: color-mix(in srgb, currentColor 12%, transparent); }
+
+/* These surfaces already have one native Windows frame/shadow. An inner copy
+   would create a second border and a clipped shadow. Embedded previews do not. */
+.shortcut-menu-window .shortcut-menu { border: 0; box-shadow: none; }
+.shortcut-menu-window .popup-enter { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --popup-enter-duration: 0ms; --popup-exit-duration: 0ms; --popup-offset: 0 0; }
+  dialog[open], [popover]:popover-open, .popup-enter,
+  :where(.map-tooltip, .disk-context, .color-ruler-menu, .archive-more-menu,
+    .breadcrumb-menu, .lock-path-popover, .preview-open-popover, .menu-add-popup,
+    .command-picker, .picker-options, .echo-position-panel, .toast) {
+    animation: none !important;
+  }
+}

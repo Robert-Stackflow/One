@@ -83,7 +83,7 @@
 .file-action-locksmith .lock-targets small{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;color:var(--muted)}
 .file-action-locksmith .lock-targets .icon-button{width:25px;height:25px;min-width:25px;min-height:25px;padding:5px;color:var(--muted);opacity:0}
 .file-action-locksmith .lock-targets>div:hover .icon-button,.file-action-locksmith .lock-targets .icon-button:focus-visible{opacity:1}
-.lock-path-popover{--bubble-line:var(--line);position:fixed;inset:auto;margin:0;padding:7px 8px;width:350px;max-width:calc(100vw - 16px);border:1px solid var(--bubble-line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:var(--shadow);overflow:visible;animation:popup-in .14s var(--ease)}
+.lock-path-popover{--bubble-line:var(--line);position:fixed;inset:auto;margin:0;padding:7px 8px;width:350px;max-width:calc(100vw - 16px);border-radius:12px;background:var(--surface);color:var(--fg);overflow:visible}
 .lock-path-popover:focus-within{--bubble-line:color-mix(in srgb,var(--fg) 23%,var(--surface))}
 .lock-path-popover:before{content:"";position:absolute;left:var(--arrow-left);width:8px;height:8px;background:var(--surface);transform:rotate(45deg)}
 .lock-path-popover[data-side=below]:before{top:-5px;border-top:1px solid var(--bubble-line);border-left:1px solid var(--bubble-line)}

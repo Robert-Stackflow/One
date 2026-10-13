@@ -31,9 +31,7 @@
   padding: 14px;
   border-radius: 16px;
   background: var(--surface);
-  border: 1px solid var(--line);
   color: var(--fg);
-  box-shadow: 0 12px 38px #0002;
   overflow: auto;
 }
 .color-picker-plane {

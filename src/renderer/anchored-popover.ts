@@ -1,4 +1,5 @@
 import {onRemoval} from './dom-lifecycle';
+import {popupMotion} from './popup-motion';
 import {inheritCaptureScale} from './capture/appearance';
 type Side='above'|'below'|'left'|'right';
 interface Placement {preferred:Side;gap:number;edge?:number;width?:number;maxHeight?:number|(()=>number);boundary?:HTMLElement;bottom?:number|(()=>number)}
@@ -46,10 +47,10 @@ const popovers=new WeakMap<HTMLElement,PopoverState>();
 function animatePopover(popup:HTMLElement,state:PopoverState,opening:boolean,finish:()=>void):Promise<boolean>{
  const revision=++state.revision,style=getComputedStyle(popup),interrupted=!!state.animation;
  const offset=(distance:number)=>popup.dataset.side==='left'?`${distance}px 0`:popup.dataset.side==='right'?`${-distance}px 0`:`0 ${popup.dataset.side==='above'?distance:-distance}px`;
- const from={opacity:interrupted?style.opacity:opening?'0':'1',translate:interrupted?style.translate:opening?offset(6):'0 0',scale:interrupted?style.scale:opening?'.985':'1'};
+ const from={opacity:interrupted?style.opacity:opening?'0':'1',translate:interrupted?style.translate:opening?offset(4):'0 0'};
  state.animation?.cancel();state.animation=undefined;
  if(!popup.isConnected||matchMedia('(prefers-reduced-motion:reduce)').matches){finish();return Promise.resolve(true);}
- const animation=popup.animate([from,{opacity:opening?'1':'0',translate:opening?'0 0':offset(3),scale:opening?'1':'.985'}],{duration:opening?180:120,easing:opening?'cubic-bezier(.2,.8,.2,1)':'ease-in',fill:'both'});
+ const animation=popup.animate([from,{opacity:opening?'1':'0',translate:opening?'0 0':offset(4)}],{...popupMotion(style,opening),fill:'both'});
  state.animation=animation;
  return animation.finished.then(()=>{if(state.revision!==revision)return false;animation.cancel();state.animation=undefined;finish();return true;},()=>false);
 }

@@ -1,11 +1,11 @@
-.one-tooltip{position:fixed;z-index:2147483647;pointer-events:none;max-width:min(340px,calc(100vw - 16px));padding:7px 10px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:#272727;color:#fff;font-size:11px;font-weight:400;line-height:1.45;box-shadow:0 3px 12px #00000012;opacity:0;--tooltip-x:0px;--tooltip-y:3px;transform:translate(var(--tooltip-x),var(--tooltip-y));transition:opacity 120ms ease,transform 160ms cubic-bezier(.2,.8,.2,1);overflow-wrap:anywhere;user-select:none}
+.one-tooltip{position:fixed;z-index:2147483647;pointer-events:none;max-width:min(340px,calc(100vw - 16px));padding:7px 10px;border-radius:8px;background:#272727;color:#fff;font-size:11px;font-weight:400;line-height:1.45;opacity:0;--tooltip-x:0px;--tooltip-y:4px;transform:translate(var(--tooltip-x),var(--tooltip-y));transition:opacity var(--popup-enter-duration) var(--popup-easing),transform var(--popup-enter-duration) var(--popup-easing);overflow-wrap:anywhere;user-select:none}
 .one-tooltip::before{content:"";position:absolute;width:8px;height:8px;background:inherit;border:inherit;border-width:0;transform:rotate(45deg)}
 .one-tooltip[data-side=top]::before{left:calc(var(--tooltip-arrow) - 4px);bottom:-5px;border-right-width:1px;border-bottom-width:1px}
-.one-tooltip[data-side=bottom]{--tooltip-y:-3px}
+.one-tooltip[data-side=bottom]{--tooltip-y:-4px}
 .one-tooltip[data-side=bottom]::before{left:calc(var(--tooltip-arrow) - 4px);top:-5px;border-top-width:1px;border-left-width:1px}
-.one-tooltip[data-side=right]{--tooltip-x:-3px;--tooltip-y:0px}
+.one-tooltip[data-side=right]{--tooltip-x:-4px;--tooltip-y:0px}
 .one-tooltip[data-side=right]::before{top:calc(var(--tooltip-arrow) - 4px);left:-5px;border-left-width:1px;border-bottom-width:1px}
-.one-tooltip[data-side=left]{--tooltip-x:3px;--tooltip-y:0px}
+.one-tooltip[data-side=left]{--tooltip-x:4px;--tooltip-y:0px}
 .one-tooltip[data-side=left]::before{top:calc(var(--tooltip-arrow) - 4px);right:-5px;border-top-width:1px;border-right-width:1px}
 .one-tooltip.visible{transform:translate(0,0);opacity:1}
 .native-office-active #one-tooltip{visibility:hidden}
@@ -28,7 +28,7 @@ html.native-tooltip-window,html.native-tooltip-window body,html.native-tooltip-w
 .writer-empty>svg{width:22px;height:22px;opacity:.6}.writer-empty small{display:block;margin-top:5px;font-size:11px;opacity:.75}
 .disk-warning .writer-table{min-height:0}.writer-table-head{font-size:11px}.writer-row summary{min-height:64px}
 @media(max-width:1000px){.writer-heading{flex-wrap:wrap;gap:8px}.disk-statusbar{gap:8px}.disk-statusbar .disk-summary{gap:8px}}
-@media(prefers-reduced-motion:reduce){.one-tooltip{transition:none;transform:none}}
+@media(prefers-reduced-motion:reduce){.one-tooltip{transition:opacity var(--popup-enter-duration) var(--popup-easing),transform var(--popup-enter-duration) var(--popup-easing);transform:none}}
 /* Search is its own title bar; Explorer input has a light, attached treatment. */
 .search-window #app{height:100%}
 .search-window .search-shell{position:absolute;inset:0;height:auto;min-height:0;border:0;border-radius:0}
@@ -73,12 +73,12 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .shortcut-menu-window .shortcut-item>span{font-size:12px}
 .shortcut-menu-window .shortcut-menu footer{height:39px;padding:4px 7px;background:var(--surface)}
 .shortcut-menu-window .shortcut-menu footer .icon-button{width:28px;height:28px;min-height:28px;padding:6px;border-radius:6px}
-.shortcut-menu-window .toast{left:50%;width:max-content;max-width:calc(100vw - 24px);font-size:12px;line-height:1.5;padding:8px 12px;bottom:44px;text-align:center;overflow-wrap:anywhere;border-radius:8px;box-shadow:0 3px 12px #0002}
+.shortcut-menu-window .toast{left:50%;width:max-content;max-width:calc(100vw - 24px);font-size:12px;line-height:1.5;padding:8px 12px;bottom:44px;text-align:center;overflow-wrap:anywhere;border-radius:8px}
 .shortcut-menu-window .toast{pointer-events:none}
 
 .menu-command-select{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;padding:9px 12px;font-weight:400}
 .menu-command-select>.icon{flex:0 0 16px;width:16px;height:16px;color:var(--muted)}
-.command-picker{position:fixed;inset:auto;margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);box-shadow:0 6px 24px #0002;overflow:hidden;display:flex;flex-direction:column;animation:command-picker-in .14s var(--ease);transform-origin:left top}
+.command-picker{position:fixed;inset:auto;margin:0;padding:6px;border-radius:12px;background:var(--surface);color:var(--fg);overflow:hidden;display:flex;flex-direction:column;transform-origin:left top}
 .command-picker[data-side=top]{transform-origin:left bottom}
 @keyframes command-picker-in{from{opacity:0;translate:0 4px;scale:.985}to{opacity:1;translate:0 0;scale:1}}
 @media(prefers-reduced-motion:reduce){.command-picker{animation:none}}
@@ -99,8 +99,6 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .command-picker-list small{color:var(--muted);font-size:10px}
 .command-picker-list>button[aria-selected=true]{background:var(--hover)}
 .command-picker button{color:var(--fg);transition:background 100ms ease}
-
-.popup-enter{animation:popup-content-enter 120ms cubic-bezier(.2,.8,.2,1) both}@keyframes popup-content-enter{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.popup-enter{animation:none}}
 
 .search-idle .search-results,.search-idle .search-filter-row,.search-idle .search-footer{display:none}
@@ -191,15 +189,13 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 #menu-shell-fields{display:flex;flex-direction:column;gap:14px}
 .menu-inspector #menu-script{height:106px;min-height:80px;font-family:Consolas,monospace;line-height:1.65;resize:vertical}
 .menu-inspector .menu-field-hint{font-size:10px;color:var(--muted);line-height:1.65;overflow-wrap:anywhere;margin-top:-6px}
-.confirmation-popover{position:fixed;inset:auto;margin:0;width:240px;max-width:calc(100vw - 16px);padding:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);overflow:visible}
+.confirmation-popover{position:fixed;inset:auto;margin:0;width:240px;max-width:calc(100vw - 16px);padding:12px;background:var(--surface);color:var(--fg);border-radius:9px;overflow:visible}
 .confirmation-popover:not(:popover-open){display:none}
 .confirmation-popover strong{display:block;font-size:12px;font-weight:550;overflow-wrap:anywhere}.confirmation-popover p{margin:6px 0 0;font-size:11px;color:var(--muted)}
 .confirmation-popover>div{display:flex;justify-content:flex-end;gap:6px;margin-top:12px}.confirmation-popover button{min-height:28px;padding:4px 10px;font-size:11px}
 .confirmation-popover:before{content:"";position:absolute;left:var(--arrow-left);width:8px;height:8px;background:var(--surface);transform:rotate(45deg)}
 .confirmation-popover[data-side=above]:before{bottom:-5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 .confirmation-popover[data-side=below]:before{top:-5px;border-left:1px solid var(--line);border-top:1px solid var(--line)}
-.confirmation-popover:popover-open{animation:confirmation-enter 140ms cubic-bezier(.2,.8,.2,1) both}
-@keyframes confirmation-enter{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.confirmation-popover:popover-open{animation:none}}
 .menu-confirm-window #app{height:100%;background:var(--surface);color:var(--fg)}
 .menu-confirm-window button{transition:opacity .12s,transform .12s var(--ease)}
@@ -211,7 +207,7 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 #command-confirm-accept{background:#ad463b;border-color:#ad463b;color:white}#command-confirm-accept:hover{background:#993e35;border-color:#993e35}
 .menu-tree-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:180px;gap:12px;color:var(--muted);font-size:12px}
 .menu-tree-empty>.icon{width:24px;height:24px;opacity:.6}
-.menu-add-popup{position:fixed;inset:auto;margin:0;width:190px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);color:var(--fg);animation:popup-content-enter 120ms var(--ease)}
+.menu-add-popup{position:fixed;inset:auto;margin:0;width:190px;padding:5px;background:var(--surface);border-radius:9px;color:var(--fg)}
 .menu-add-popup button{display:flex;justify-content:flex-start;gap:10px;width:100%;height:34px;padding:5px 9px;border-radius:6px;font-size:12px}
 .menu-add-popup button>.icon{width:16px;height:16px;color:var(--muted)}
 .menu-inspector .menu-console{flex-direction:row;align-items:center;gap:8px}.menu-inspector .menu-console input{width:16px}
@@ -222,7 +218,7 @@ html:has(body.search-inline),body.search-inline,.search-inline #app{background:t
 .menu-preview-canvas{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0;min-height:0;padding:18px;background:var(--soft);overflow:hidden}
 .menu-preview-heading{display:flex;align-items:center;gap:8px;width:286px;max-width:100%;flex-shrink:0}
 .menu-preview-heading>.section-label{flex:1;margin:0;font-size:11px;color:var(--muted);white-space:nowrap}
-.menu-preview-surface.shortcut-menu{width:286px;max-width:100%;height:auto;max-height:100%;min-height:82px;flex-shrink:1;border-radius:9px;box-shadow:var(--shadow);overflow:hidden}
+.menu-preview-surface.shortcut-menu{width:286px;max-width:100%;height:auto;max-height:100%;min-height:82px;flex-shrink:1;border-radius:9px;overflow:hidden}
 .menu-preview-surface #menu-editor-list{min-height:40px;padding:7px;flex:1;overflow:auto;scrollbar-gutter:auto}
 .menu-preview-surface .menu-editor-row{min-height:35px;height:35px;padding:0;gap:0;border-radius:7px;position:relative}
 .menu-preview-surface .menu-item-label{width:100%;height:35px;min-height:35px;padding:6px 10px;gap:11px;font-size:12px}
