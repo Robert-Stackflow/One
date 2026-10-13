@@ -36,12 +36,14 @@ export function setupCapture(root:HTMLElement,heading:HTMLElement,commands:Captu
     if(busy||disposed)return;busy=true;clearError();sync();
     try{await work();}catch(value){report(value);}finally{busy=false;if(!disposed)sync();}
   }
+  function showCustom(hideMainWindow:boolean){
+    if(busy||!ready||!state||!preferences)return;
+    closeCustom?.();
+    closeCustom=openCustomCapture({patchSettings:async value=>{const settings=await api.patchSettings(value);preferences=settings.capture;return settings;},captureCustom:(...args)=>run(()=>api.captureCustom(...args))},()=>({screens:state!.screens,displayId,custom:preferences!.custom,uiScale:preferences!.uiScale}),report,displayId,{hideMainWindow});
+  }
   function drawActions(){
     closeMenus();heading.innerHTML=splitAction('custom-capture','自定义','lucide:settings')+splitAction('take-capture',labels[mode],'lucide:camera',true);
-    const custom=bindSplitAction(heading,'custom-capture',hideMainWindow=>{
-      if(busy||!state||!preferences)return;
-      closeCustom=openCustomCapture({patchSettings:async value=>{const settings=await api.patchSettings(value);preferences=settings.capture;return settings;},captureCustom:(...args)=>run(()=>api.captureCustom(...args))},()=>({screens:state!.screens,displayId,custom:preferences!.custom,uiScale:preferences!.uiScale}),report,displayId,{hideMainWindow});
-    });
+    const custom=bindSplitAction(heading,'custom-capture',showCustom);
     const capture=bindSplitAction(heading,'take-capture',hideMainWindow=>{if(take)void run(()=>take!({hideMainWindow}));});
     closeMenus=()=>{custom();capture();};sync();
   }
@@ -99,5 +101,5 @@ export function setupCapture(root:HTMLElement,heading:HTMLElement,commands:Captu
   const stopPreferences=api.onCapturePreferences(value=>{++scaleRevision;if(!disposed)applyScale(value.uiScale);});
   const dispose=()=>{if(disposed)return;disposed=true;active=false;++revision;closeMenus();closeCustom?.();stopPreferences();sources.replaceChildren();};
   onRemoval(root,dispose);
-  return {activate(value:boolean){active=value;if(value)void refreshState();else{++revision;closeMenus();closeCustom?.();closeControls();}},dispose};
+  return {activate(value:boolean){active=value;if(value)void refreshState();else{++revision;closeMenus();closeCustom?.();closeControls();}},async custom(){await refreshState();if(active&&!disposed)showCustom(true);},dispose};
 }

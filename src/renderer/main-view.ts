@@ -146,6 +146,7 @@ export function renderMain() {
     const page=canonicalPage(target.page==='locksmith'?'tools':target.page);
     if(!modules.some(item=>item[0]===page)||!await navigate(page))return;
     if(target.page==='ports'||target.page==='services')maintenanceController?.selectTab(target.page);
+    if(target.page==='capture'&&target.action==='custom')await captureController!.custom();
     if(target.page==='barcode'){developerTabSelect?.('barcode');if(target.path)await barcodeController!.openPath(target.path);}
     else if(target.page==='disk'&&target.folder)await diskController!.openFolder(target.folder);
     else if(target.page==='tools'&&target.tool==='rename')await toolsController!.openSelection(target.paths||[]);

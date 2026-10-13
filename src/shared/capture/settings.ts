@@ -1,6 +1,7 @@
 import {defaultWorkflows,workflowsFrom,type CaptureWorkflow} from './capture-workflow';
 import {defaultWatermarkPreset,watermarkPreset,type WatermarkPreset} from './watermark';
 import {defaultCustomCapture,customCaptureFrom,type CustomCapture} from './custom-capture';
+import {defaultCaptureShortcuts,validateCaptureShortcuts,type CaptureShortcuts} from './shortcuts';
 
 export const captureScales=[100,110,125,150] as const;
 /** Preferences owned by One; live capture state and service credentials are kept elsewhere. */
@@ -10,12 +11,13 @@ export interface CapturePreferences {
   watermark:WatermarkPreset;
   remoteCompatible:boolean;
   custom:CustomCapture;
+  shortcuts:CaptureShortcuts;
   /** Scale for screenshot/recording pages and their independent windows only. */
   uiScale:(typeof captureScales)[number];
 }
 export const defaultCapturePreferences=():CapturePreferences=>({
   workflows:defaultWorkflows(),workflowId:'copy',watermark:defaultWatermarkPreset(),
-  remoteCompatible:true,custom:defaultCustomCapture(),uiScale:100,
+  remoteCompatible:true,custom:defaultCustomCapture(),shortcuts:defaultCaptureShortcuts(),uiScale:100,
 });
 export function validateCapturePreferences(value:unknown):CapturePreferences {
   if(value===undefined)return defaultCapturePreferences();
@@ -25,5 +27,5 @@ export function validateCapturePreferences(value:unknown):CapturePreferences {
   const workflows=workflowsFrom(v.workflows);
   if(typeof v.workflowId!=='string'||!workflows.some(item=>item.id===v.workflowId))throw Error('默认输出流程不存在');
   return {workflows,workflowId:v.workflowId,watermark:watermarkPreset(v.watermark),
-    remoteCompatible:v.remoteCompatible,custom:customCaptureFrom(v.custom),uiScale:v.uiScale};
+    remoteCompatible:v.remoteCompatible,custom:customCaptureFrom(v.custom),shortcuts:validateCaptureShortcuts(v.shortcuts),uiScale:v.uiScale};
 }

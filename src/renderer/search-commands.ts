@@ -22,6 +22,18 @@ const commands=[
  ['page:ports','打开网络端口','查看端口、进程与连接','da kai wang luo duan kou'],
  ['page:services','打开系统服务','查看服务状态与启动方式','da kai xi tong fu wu'],
  ['page:color','打开屏幕取色','从屏幕拾取颜色','da kai ping mu qu se'],
+ ['page:capture','打开截图','区域、窗口与多显示器截图','da kai jie tu'],
+ ['page:recording','打开录制','屏幕、窗口、摄像头与录音','da kai lu zhi'],
+ ['page:materials','打开素材','图片与录制工程','da kai su cai'],
+ ['page:pins','打开贴图','管理桌面贴图与分组','da kai tie tu'],
+ ['capture-region','区域截图','选择屏幕区域','qu yu jie tu'],
+ ['capture-copy','截屏并自动复制','选区后复制到剪贴板','jie ping bing zi dong fu zhi'],
+ ['capture-custom','自定义截屏','配置位置、尺寸与延迟','zi ding yi jie ping'],
+ ['capture-screen','显示器截图','截取当前显示器','xian shi qi jie tu'],
+ ['capture-clipboard','编辑剪贴板图片','打开图片编辑器','bian ji jian tie ban tu pian'],
+ ['pins-clipboard','贴出剪贴板','将图片、文字或文件贴到桌面','tie chu jian tie ban'],
+ ['pins-toggle','隐藏 / 显示全部贴图','切换桌面贴图可见性','yin cang xian shi quan bu tie tu'],
+ ['pins-next-group','切换贴图分组','切换显示的桌面贴图组','qie huan tie tu fen zu'],
  ['page:settings','打开设置','外观与通用设置','da kai she zhi']
 ] as const;
 const keywords:Record<string,string>={'page:ports':'port ports network 网络 端口','page:services':'service services 系统 服务','page:hardware':'hardware system info 系统 硬件 信息','page:disk':'storage space 磁盘 空间','page:locksmith':'lock file occupied 占用 锁定','page:color':'color picker colour 取色 颜色','page:tools':'file tools 文件 工具','page:text':'text markdown 文本','page:input':'utility utilities 操作 增强'};

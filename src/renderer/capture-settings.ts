@@ -5,6 +5,8 @@ import {captureScales,defaultCapturePreferences,type CapturePreferences} from '.
 import type {SettingsPatch} from '../shared/types';
 import {openCustomCapture} from './capture/custom-dialog';
 import {mountWorkflowSettings} from './capture/workflow-settings';
+import {captureShortcutsMarkup,setupCaptureShortcuts} from './capture-shortcuts-view';
+import {onRemoval} from './dom-lifecycle';
 
 export function captureSettingsPage(){return `<div class="capture-settings">
   <h2 class="settings-title">截图与录制</h2>
@@ -14,8 +16,9 @@ export function captureSettingsPage(){return `<div class="capture-settings">
     <div class="setting-row"><div class="setting-copy"><h2>自定义截屏</h2><p>设置位置、预设尺寸与延迟。</p></div>${button('capture-pref-custom','设置','settings')}</div>
     <div class="setting-row"><div class="setting-copy"><h2>素材文件夹</h2></div>${button('capture-pref-directory','打开','folder')}</div>
   </div>
+  ${captureShortcutsMarkup()}
   <h3 class="settings-section-title">输出流程</h3><div class="settings-card"><div id="capture-pref-workflows"></div></div>
-  <div class="settings-card"><div class="setting-row"><div class="setting-copy"><h2>恢复截图设置</h2><p>恢复输出流程、水印、自定义截屏、远程控制和功能缩放的默认值。素材、草稿、贴图及服务密钥会保留。</p></div>${button('capture-pref-reset','恢复默认','refresh')}</div></div>
+  <div class="settings-card"><div class="setting-row"><div class="setting-copy"><h2>恢复截图设置</h2><p>恢复快捷键、输出流程、水印、自定义截屏、远程控制和功能缩放的默认值。素材、草稿、贴图及服务密钥会保留。</p></div>${button('capture-pref-reset','恢复默认','refresh')}</div></div>
   <p id="capture-pref-message" class="muted" role="status" aria-live="polite"></p>
 </div>`;}
 
@@ -28,8 +31,11 @@ export function setupCaptureSettings(){
   const message=q('capture-pref-message');
   panel.inert=true;
   const report=(error:unknown)=>{message.textContent=String(error instanceof Error?error.message:error).replace(/^Error invoking remote method '[^']+': Error: /,'');};
+  const shortcuts=setupCaptureShortcuts(panel,report);
+  onRemoval(panel,()=>shortcuts.dispose());
   function fill(value:CapturePreferences){
     preferences=value;scale.value=String(value.uiScale);remote.checked=value.remoteCompatible;
+    shortcuts.load(value.shortcuts);
     if(workflows)workflows.update(value);
     else workflows=mountWorkflowSettings(root,value,async patch=>{await save({capture:patch});},report);
     panel.inert=false;
@@ -61,7 +67,7 @@ export function setupCaptureSettings(){
       ()=>({screens:state.screens,displayId:state.screens[0]?.id||0,custom:preferences!.custom,uiScale:preferences!.uiScale}),report);
   })().catch(report);
   q('capture-pref-reset').onclick=()=>void (async()=>{
-    if(!await confirmDialog({title:'恢复截图设置',message:'恢复输出流程、水印、自定义截屏、远程控制和功能缩放的默认值？素材、草稿、贴图及服务密钥会保留。',confirm:'恢复默认'}))return;
+    if(!await confirmDialog({title:'恢复截图设置',message:'恢复快捷键、输出流程、水印、自定义截屏、远程控制和功能缩放的默认值？素材、草稿、贴图及服务密钥会保留。',confirm:'恢复默认'}))return;
     panel.inert=true;
     try{const settings=await save({capture:defaultCapturePreferences()});fill(settings.capture);message.textContent='已恢复默认设置。';}
     finally{panel.inert=false;}

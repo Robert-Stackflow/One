@@ -1,6 +1,6 @@
 export type OneMenuPage='home'|'tools'|'archive'|'text'|'disk'|'system'|'ports'|'services'|'hardware'|'locksmith'|'settings'|'preview'|'barcode'|'developer'|'images'|'capture'|'recording'|'materials'|'pins';
-export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'|'archive'|'barcode'>}|{page:'barcode';path?:string}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]}|{page:'archive';action?:import('./archive-actions').ArchiveOpenAction;paths?:string[]};
-export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'|'screen-ruler'}
+export type OneMenuTarget={page:'home';section?:'tasks'}|{page:Exclude<OneMenuPage,'home'|'disk'|'tools'|'locksmith'|'archive'|'barcode'|'capture'>}|{page:'capture';action?:'custom'}|{page:'barcode';path?:string}|{page:'disk';folder?:string}|{page:'tools';folder?:string;tool?:'diff'|'rename'|'integrity';paths?:string[]}|{page:'locksmith';paths?:string[]}|{page:'archive';action?:import('./archive-actions').ArchiveOpenAction;paths?:string[]};
+export interface MenuBuiltin {id:string;label:string;category:string;icon:string;systemIcon?:boolean;keywords?:string;confirm?:string;onePage?:OneMenuPage;oneContext?:'folder'|'paths';oneAction?:'pick-color'|'screen-ruler'|import('./capture/shortcuts').CaptureSystemCommand}
 export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'opened',label:'已打开的文件夹',category:'文件操作',icon:'folder'},
  {id:'bookmarks',label:'收藏文件夹',category:'文件操作',icon:'star'},
@@ -39,6 +39,14 @@ export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'capture',label:'截图',category:'One',icon:'capture',onePage:'capture',keywords:'截图 截屏 窗口 多窗口 区域 显示器'},
  {id:'recording',label:'录制',category:'One',icon:'recording',onePage:'recording',keywords:'录制 屏幕 窗口 区域 摄像头 录音'},
  {id:'materials',label:'素材',category:'One',icon:'materials',onePage:'materials',keywords:'截图 图片 录制 工程'},
+ {id:'capture-region',label:'区域截图',category:'One',icon:'capture',oneAction:'capture-region',keywords:'截图 截屏 选区'},
+ {id:'capture-copy',label:'截屏并自动复制',category:'One',icon:'copy',oneAction:'capture-copy',keywords:'截图 剪贴板'},
+ {id:'capture-custom',label:'自定义截屏',category:'One',icon:'settings',oneAction:'capture-custom',keywords:'截图 尺寸 延迟'},
+ {id:'capture-screen',label:'显示器截图',category:'One',icon:'monitor',oneAction:'capture-screen',keywords:'截图 屏幕'},
+ {id:'capture-clipboard',label:'编辑剪贴板图片',category:'One',icon:'clipboard',oneAction:'capture-clipboard',keywords:'图片 标注'},
+ {id:'pins-clipboard',label:'贴出剪贴板',category:'One',icon:'pin',oneAction:'pins-clipboard',keywords:'图片 文字 文件 贴图'},
+ {id:'pins-toggle',label:'隐藏 / 显示全部贴图',category:'One',icon:'preview',oneAction:'pins-toggle'},
+ {id:'pins-next-group',label:'切换贴图分组',category:'One',icon:'refresh',oneAction:'pins-next-group'},
  {id:'image-tools',label:'图片工具',category:'One',icon:'color',onePage:'images',keywords:'屏幕 取色'},
  {id:'space-analysis',label:'空间分析',category:'One',icon:'disk',onePage:'disk',oneContext:'folder',keywords:'当前目录 扫描'},
  {id:'file-locks',label:'文件占用',category:'One',icon:'lock',onePage:'locksmith',oneContext:'paths',keywords:'当前目录 选中文件'},
