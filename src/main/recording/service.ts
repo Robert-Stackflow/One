@@ -1233,8 +1233,8 @@ export class RecordingService {
       this.seconds = result.samples / 48000;
       this.mime = 'audio/wav';
       this.phase = 'ready';
-      await this.presentPreview();
       this.message = '已恢复为 WAV，请预览并保存';
+      await this.presentPreview();
     } catch (error) {
       // No original is removed until an explicit save/discard after recovery.
       if (generation === this.generation)
