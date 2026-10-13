@@ -57,7 +57,7 @@ async function run(){
     await main.evaluate(()=>window.one.recording.openPlayer());const player=await pageFor(app,'recording-player');await player.waitForFunction(()=>!!window.one?.recordingPlayer);
     await player.evaluate(async()=>{const state=await window.one.recordingPlayer.state();if(state.playback.speed!==1.5)throw Error('original playback lost');await window.one.recordingPlayer.edit(state.token,{...state.playback,speed:1.75});});
     await expect.poll(async()=> (await main.evaluate(()=>window.one.recording.state())).projectDirty).toBe(true);
-    await expect.poll(async()=> /素材工程保存失败/.test((await main.evaluate(()=>window.one.recording.state())).message)).toBe(true);
+    await expect.poll(async()=> (await main.evaluate(()=>window.one.recording.state())).message).toMatch(/^素材工程保存失败：/);
     await invoke(app,[`--one-project=${files.otherRecording}`]);await expect.poll(async()=>(await dialogs(app)).some(item=>item.message==='替换当前尚未保存的录制？')).toBe(true);
     await expect.poll(async()=> (await main.evaluate(()=>window.one.recording.state())).projectBusy).toBe(false);
     assert.equal((await main.evaluate(()=>window.one.recording.state())).token,first.token);
@@ -92,7 +92,10 @@ async function run(){
     }
     await fs.writeFile(path.join(out,'failure.json'),JSON.stringify({error:String(error),records},null,2));throw error;
   }finally{
-    for(const app of apps.reverse())await app.close();
+    for(const app of apps.reverse()){
+      await app.evaluate(({app})=>app.exit(0)).catch(()=>{});
+      await app.close().catch(()=>{});
+    }
     const actual=await fs.realpath(root);assert.ok(actual.startsWith(out+path.sep));await fs.rm(actual,{recursive:true,force:true});
   }
 }
