@@ -34,8 +34,14 @@ import { customControls } from '../controls';
 import { strokeStyleControl } from '../editor/stroke-style-control';
 import { strokeStyles } from '../../shared/capture/stroke-style';
 import { captureProperties } from '../editor/capture-properties';
+import {icon as controlIcon} from '../ui';
 const api = window.one!.recordingToolbar!;
 const q = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+function menuLabel(id:string,text:string){
+  const button=q(id);let label=button.querySelector('span');
+  if(!label){label=document.createElement('span');button.replaceChildren(label);button.insertAdjacentHTML('beforeend',controlIcon('chevron-down'));}
+  label.textContent=text;
+}
 let state: RecordingState | undefined,
   busy = false,
   stopPending = false,
@@ -287,16 +293,16 @@ async function refresh() {
     q<HTMLInputElement>('mark-italic').checked = !!annotationStyle.italic;
     q<HTMLInputElement>('mark-outline').checked = !!annotationStyle.textOutline;
     propertyUI.refresh();
-    q('mark-stroke-trigger').textContent = strokeStyles.find(
+    menuLabel('mark-stroke-trigger',strokeStyles.find(
       (s) => s.value === annotationStyle.strokeStyle,
-    )!.label;
-    q('mark-family-trigger').textContent = annotationStyle.fontFamily;
-    q('mark-weight-trigger').textContent =
+    )!.label);
+    menuLabel('mark-family-trigger',annotationStyle.fontFamily);
+    menuLabel('mark-weight-trigger',
       annotationStyle.fontWeight === 400
         ? '常规'
         : annotationStyle.fontWeight === 600
           ? '半粗'
-          : '粗体';
+          : '粗体');
     document.documentElement.dataset.phase = next.phase;
     q('time').textContent =
       next.countdown !== undefined ? `${next.countdown} s` : format(next.seconds);

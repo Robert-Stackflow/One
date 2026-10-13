@@ -10,37 +10,22 @@
 .capture-page .filter-field input{width:0;min-width:0}
 .capture-page .filter-field .search-clear{width:26px;min-height:26px;padding:5px}
 .capture-page .capture-mode {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 25px;
-  background: var(--soft);
-  margin-bottom: 22px;
   width: max-content;
   max-width: 100%;
-}
-.capture-page .capture-mode button {
-  border: 0;
-  border-radius: 22px;
-  background: transparent;
-  color: var(--muted);
-  padding: 7px 16px;
-  min-height: 36px;
-}
-.capture-page .capture-mode button[aria-pressed='true'] {
-  background: var(--surface);
-  color: var(--fg);
-  box-shadow: 0 1px 3px #0000000c;
-}
-@media (prefers-reduced-motion: no-preference) {
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 /* Page chrome is fixed; only the page's content owner may scroll. */
 .capture-page .capture-mode {
   flex-shrink: 0;
   align-self: flex-start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
+.capture-page .capture-mode > button { flex-shrink: 0; }
+.capture-source-loading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 160px; color: var(--muted); font-size: var(--control-font); }
+.capture-loading-indicator { width: 14px; height: 14px; border: 1.5px solid var(--line); border-top-color: var(--muted); border-radius: 50%; animation: capture-loading-spin .8s linear infinite; }
+@keyframes capture-loading-spin { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .capture-loading-indicator { animation: none; } }
 /* Screenshot sources are direct cards on the page, with one optional list scrollbar. */
 .capture-page .capture-source-heading {
   display: flex;

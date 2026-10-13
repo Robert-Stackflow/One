@@ -8,8 +8,10 @@ import {
 } from '../../shared/capture/custom-capture';
 import {dialogMarkup,openDialog,closeDialog} from '../dialog';
 import {customControls,closeControls,selectSource} from '../controls';
-import { icon } from '../ui';
+import { icon, registerIcons } from '../ui';
+import {Plus, Pencil, Trash2} from 'lucide';
 import './custom-dialog.css';
+registerIcons({plus:Plus,pencil:Pencil,trash:Trash2});
 
 export function openCustomCapture(
   api: Pick<OneAPI,'patchSettings'> & {captureCustom(...args:Parameters<OneAPI['captureCustom']>):Promise<unknown>},
@@ -33,18 +35,20 @@ export function openCustomCapture(
     `<input type="number" id="${id}" value="${v}" min="${min}" max="${max}" step="${step}" aria-label="${{ cx: '左上角 X', cy: '左上角 Y', cw: '截屏宽度', ch: '截屏高度', cd: '延迟秒数' }[id] || id}">`;
   const template=document.createElement('template');
   template.innerHTML=dialogMarkup({id:'custom-capture-dialog',title:'自定义截屏',closeId:'modal-close',className:'custom-capture-dialog',body:`
-    <p class="custom-capture-note">位置相对于所选显示器的左上角，尺寸使用实际像素。未指定位置时，选区居中显示，可继续移动和编辑。</p>
     <label class="custom-capture-screen">显示器<select id="custom-display">${get()
       .screens.map(
         (s) =>
           `<option value="${s.id}">${s.name.replace(/[&<>"']/g, '')} · ${s.width} × ${s.height}</option>`,
       )
       .join('')}</select></label>
-    <div class="custom-capture-row"><label><input type="checkbox" id="use-position" ${value.position ? 'checked' : ''}>左上角</label><div class="custom-capture-pair">${number('cx', value.x)}<span>×</span>${number('cy', value.y)}<span>px</span></div></div>
-    <div class="custom-capture-row"><label><input type="checkbox" id="use-size" ${value.size ? 'checked' : ''}>固定尺寸</label><div class="custom-capture-pair">${number('cw', value.width, 2)}<span>×</span>${number('ch', value.height, 2)}<span>px</span></div></div>
-    <div class="custom-capture-presets"><select id="custom-presets" aria-label="尺寸预设"></select><button type="button" class="quiet" id="preset-add">${icon('lucide:plus')}保存为预设</button><button type="button" class="quiet icon-button" id="presets-edit" aria-label="编辑尺寸预设">${icon('lucide:pencil')}</button></div>
-    <div class="custom-presets-editor" hidden><div id="custom-preset-rows"></div></div>
-    <div class="custom-capture-row"><label><input type="checkbox" id="use-delay" ${value.delayed ? 'checked' : ''}>延迟截屏</label><div class="custom-capture-delay">${number('cd', value.delay, 0, 60, 0.1)}<span>秒（0–60）</span></div></div>
+    <section class="custom-capture-section"><div class="custom-capture-row"><label><input type="checkbox" id="use-size" ${value.size ? 'checked' : ''}>固定尺寸</label><span class="custom-capture-unit">实际像素 · px</span></div>
+    <div class="custom-capture-pair"><label>宽度${number('cw', value.width, 2)}</label><span aria-hidden="true">×</span><label>高度${number('ch', value.height, 2)}</label></div>
+    <div class="custom-capture-presets"><select id="custom-presets" aria-label="尺寸预设"></select><button type="button" class="quiet" id="preset-add">${icon('lucide:plus')}保存预设</button><button type="button" class="quiet" id="presets-edit" aria-label="编辑尺寸预设" aria-expanded="false">${icon('lucide:pencil')}管理</button></div>
+    <div class="custom-presets-editor" hidden><div class="custom-presets-heading"><span>宽度 × 高度</span><span>px</span></div><div id="custom-preset-rows"></div></div></section>
+    <section class="custom-capture-section"><div class="custom-capture-row"><label><input type="checkbox" id="use-position" ${value.position ? 'checked' : ''}>指定位置</label><span class="custom-capture-unit">相对显示器左上角</span></div>
+    <div class="custom-capture-pair"><label>水平 X${number('cx', value.x)}</label><span></span><label>垂直 Y${number('cy', value.y)}</label></div>
+    <p class="custom-capture-note">未指定时，选区居中；进入截图后仍可移动和调整。</p></section>
+    <div class="custom-capture-row custom-capture-delay-row"><label><input type="checkbox" id="use-delay" ${value.delayed ? 'checked' : ''}>延迟截屏</label><div class="custom-capture-delay">${number('cd', value.delay, 0, 60, 0.1)}<span>秒</span></div></div>
     <div class="custom-capture-status" role="status" aria-live="polite"></div>`+ '<p id="modal-error" role="alert" class="custom-capture-error"></p>',actions:'<button type="button" id="custom-cancel" class="quiet">取消</button><button type="button" id="custom-save">保存设置</button><button type="submit" class="primary" id="custom-start">开始截图</button>'});
   const dialog=template.content.firstElementChild as HTMLDialogElement;
   const form=document.createElement('form');form.noValidate=true;form.append(...dialog.childNodes);dialog.append(form);
@@ -118,6 +122,7 @@ export function openCustomCapture(
   });
   q('#presets-edit').onclick = () => {
     q('.custom-presets-editor').hidden = !q('.custom-presets-editor').hidden;
+    q('#presets-edit').setAttribute('aria-expanded',String(!q('.custom-presets-editor').hidden));
   };
   q<HTMLSelectElement>('#custom-presets').onchange = () => {
     const index = select('#custom-presets').value;

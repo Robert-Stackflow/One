@@ -196,7 +196,7 @@ export class RecordingRegionOverlay {
       { x: frameWidth - edge, y: edge, width: edge, height: rect.height },
     ]);
     const area = screen.getDisplayMatching(rect).bounds,
-      width = Math.min(184, area.width);
+      width = Math.min(232, area.width);
     handle.setContentBounds(
       {
         x: Math.round(
@@ -205,9 +205,9 @@ export class RecordingRegionOverlay {
             Math.min(rect.x + (rect.width - width) / 2, area.x + area.width - width),
           ),
         ),
-        y: Math.round(Math.max(area.y, rect.y - 42)),
+        y: Math.round(Math.max(area.y, rect.y - 46)),
         width,
-        height: 36,
+        height: 40,
       },
       false,
     );

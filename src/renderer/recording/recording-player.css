@@ -182,8 +182,8 @@ body[data-view="recording-player"] .player-transport .custom-select {
   min-height: 28px;
   height: 28px;
   padding: 3px 8px;
-  color: var(--text);
-  border-color: var(--border);
+  color: var(--fg);
+  border-color: var(--line);
   background: var(--surface);
   font-size: 12px;
 }
@@ -226,6 +226,35 @@ body[data-view="recording-player"] #player-properties .player-tool-panel label {
 }
 body[data-view="recording-player"] #player-properties .player-tool-panel fieldset {
   min-width: 0;
+}
+body[data-view="recording-player"] #annotation-preview-settings > .help {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+body[data-view="recording-player"] .editor-form-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+}
+body[data-view="recording-player"] .editor-form-pair > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+body[data-view="recording-player"] .editor-form-pair :is(.custom-select,.color-picker-control) {
+  width: 100%;
+  min-width: 0;
+}
+body[data-view="recording-player"] #player-properties .input-style-grid > label:has(.custom-select) {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
 }
 body[data-view="recording-player"] #player-properties .export-note {
   display: none;

@@ -26,8 +26,8 @@ html:has(> :is(body[data-view="recording-region-overlay"],body[data-view="record
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 14px;
   border: 0;
   border-radius: 0;
   background: var(--surface);
@@ -35,17 +35,20 @@ html:has(> :is(body[data-view="recording-region-overlay"],body[data-view="record
   font:
     12px var(--ui-font);
   font-variant-numeric: tabular-nums;
-  cursor: move;
+  cursor: grab;
   touch-action: none;
   user-select: none;
 }
 :is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #drag:hover,
 :is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #drag[data-active='true'] {
-  background: var(--hover);
-  border-color: #e54b4b;
+  background: var(--soft);
 }
+body[data-view="recording-region-overlay"] #drag[data-active='true'] { cursor: grabbing; }
+body[data-view="recording-region-overlay"] .region-handle-label { white-space: nowrap; }
+body[data-view="recording-region-overlay"] #size { padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--line); color: var(--muted); font-size: 11px; white-space: nowrap; }
 :is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #icon {
   display: flex;
+  color: var(--muted);
 }
 :is(body[data-view="recording-region-overlay"],body[data-view="recording-region-outline"]) #icon svg {
   width: 16px;

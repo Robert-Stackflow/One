@@ -71,6 +71,10 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await expect.poll(()=>editor.evaluate(family=>[...document.fonts].some(font=>font.family.replaceAll('"','')===family&&font.status==='loaded'),font.family)).toBe(true);
     await editor.getByRole('button',{name:'文字工具',exact:true}).click();await editor.getByRole('menuitemradio',{name:'文字水印',exact:true}).click();
     await expect(editor.locator('#steps')).toHaveText('3 个标注');await editor.locator('.watermark-menu-button').last().click();
+    const watermarkBounds=()=>editor.locator('.watermark-menu:popover-open').boundingBox();
+    await expect.poll(async()=>(await watermarkBounds())?.width||0).toBeGreaterThan(240);
+    await editor.keyboard.press('Escape');await editor.locator('.watermark-menu-button').last().click();
+    await expect.poll(async()=>(await watermarkBounds())?.width||0).toBeGreaterThan(240);
     await editor.locator('#watermark-position').click();await editor.getByRole('option',{name:'居中',exact:true}).click();
     await expect(editor.locator('.watermark-menu-button').last()).toContainText('居中');await editor.keyboard.press('Escape');
     await editor.locator('#copy').click();await expect.poll(()=>app.evaluate(()=>global.editorCopies.length)).toBe(2);

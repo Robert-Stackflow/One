@@ -57,7 +57,7 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > b
   color: var(--fg);
   box-shadow: none;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-panel svg {
+:where(body:is([data-view='capture'],[data-view='recording-toolbar'])) .capture-panel svg {
   width: 19px;
   height: 19px;
   stroke-width: 1.7;
@@ -132,9 +132,7 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu[pop
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--fg) 28%, transparent) transparent;
-  box-shadow:
-    0 8px 24px #0003,
-    0 1px 4px #0001;
+  box-shadow: var(--shadow);
 }
 body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu::backdrop {
   background: transparent;

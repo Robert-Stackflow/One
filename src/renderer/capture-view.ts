@@ -17,6 +17,7 @@ type Mode=typeof modes[number][0];
 const labels:Record<Mode,string>={region:'选择区域',free:'绘制选区',polygon:'绘制选区',screen:'截取显示器',desktop:'截取所有屏幕',window:'截取窗口',windows:'组合截图',scroll:'开始长截图'};
 const notes:Record<Mode,string>={region:'拖动选择区域，截图后继续编辑。',free:'自由绘制选区，保留轮廓内的画面。',polygon:'逐点绘制选区，按 Enter 完成。',screen:'选择一个显示器，截取完整画面。',desktop:'将所有显示器按桌面位置合成一张图片。',window:'选择窗口，双击即可截图。',windows:'选择多个窗口，按桌面位置组合，可调整上下层级。',scroll:'选择内容区域，滚动拼接成长图。'};
 export interface CapturePageCommands {scroll?(displayId:number|undefined,options:CaptureOptions):Promise<unknown>}
+const sourceLoading=(label:string)=>`<div class="capture-source-loading" role="status" aria-live="polite"><span class="capture-loading-indicator" aria-hidden="true"></span><span>${label}</span></div>`;
 export function capturePage(){
   return `<div class="capture-page"><div id="capture-modes" class="capture-mode tabs" role="tablist" aria-label="截图方式">${modes.map(([id,label])=>`<button type="button" data-capture-mode="${id}" role="tab" aria-selected="${id==='region'}" aria-controls="capture-sources" class="${id==='region'?'selected':''}">${label}</button>`).join('')}</div><div class="capture-error" role="alert" hidden><span></span><button type="button" class="quiet" data-capture-retry>重试</button></div><div id="capture-sources" role="tabpanel" class="capture-sources"><p class="page-note">正在读取显示器…</p></div><footer class="capture-quick-actions"><span></span><div><button type="button" class="quiet" data-capture-action="clipboard">${icon('clipboard')}剪贴板图片</button><button type="button" class="quiet" data-capture-action="import">${icon('plus')}导入图片</button></div></footer></div>`;
 }
@@ -52,7 +53,7 @@ export function setupCapture(root:HTMLElement,heading:HTMLElement,commands:Captu
     const request=++revision,kind=mode,current=()=>!disposed&&active&&request===revision;
     take=undefined;clearError();
     const windowMode=kind==='window'||kind==='windows';
-    sources.innerHTML=`${kind==='windows'?'':`<div class="capture-source-heading"><div><h2>${windowMode?'选择窗口':kind==='desktop'?'全部显示器':'选择显示器'}</h2><p>${notes[kind]}</p></div><button type="button" id="refresh-capture-sources" class="quiet icon-button" title="刷新来源" aria-label="刷新来源">${icon('lucide:refresh-cw')}</button></div>`}<div class="capture-source-scroll"><div id="capture-windows" class="${windowMode?'window-grid':'display-grid'}">${windowMode?'<p class="page-note">正在读取窗口…</p>':state.screens.map(item=>sourceCard({key:item.id,attribute:'data-display',name:item.name,meta:item.width+' × '+item.height,selected:displayId===item.id||kind==='desktop',disabled:kind==='desktop',kind:'screen',previewKey:item.id})).join('')}</div></div>`;
+    sources.innerHTML=`${kind==='windows'?'':`<div class="capture-source-heading"><div><h2>${windowMode?'选择窗口':kind==='desktop'?'全部显示器':'选择显示器'}</h2><p>${notes[kind]}</p></div><button type="button" id="refresh-capture-sources" class="quiet icon-button" title="刷新来源" aria-label="刷新来源">${icon('lucide:refresh-cw')}</button></div>`}<div class="capture-source-scroll"><div id="capture-windows" class="${windowMode?'window-grid':'display-grid'}">${windowMode?sourceLoading('正在读取窗口…'):state.screens.map(item=>sourceCard({key:item.id,attribute:'data-display',name:item.name,meta:item.width+' × '+item.height,selected:displayId===item.id||kind==='desktop',disabled:kind==='desktop',kind:'screen',previewKey:item.id})).join('')}</div></div>`;
     drawActions();
     const refresh=sources.querySelector<HTMLButtonElement>('#refresh-capture-sources');if(refresh)refresh.onclick=()=>void refreshState();
     const grid=sources.querySelector<HTMLElement>('#capture-windows')!;
@@ -75,7 +76,7 @@ export function setupCapture(root:HTMLElement,heading:HTMLElement,commands:Captu
         const thumbnails=await api.captureDisplays();if(!current())return;
         for(const item of thumbnails){const box=grid.querySelector<HTMLElement>(`[data-display-preview="${item.id}"]`);if(box&&item.thumbnail){const image=new Image();image.src=item.thumbnail;image.alt='';box.replaceChildren(image);}}
       }
-    }catch(value){if(current())report(value);}
+     }catch(value){if(current()){grid.querySelector('.capture-source-loading')?.remove();report(value);}}
   }
   async function refreshState(){
     if(!active||disposed||busy)return;

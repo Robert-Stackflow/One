@@ -1,5 +1,5 @@
 import './recording-region-overlay.css';
-import { createElement, GripVertical } from 'lucide';
+import { createElement, Move } from 'lucide';
 import type { RecordingRegionState } from '../../shared/recording/recording-region';
 const api = window.one?.recordingRegion;
 if (api) {
@@ -8,7 +8,7 @@ if (api) {
   button.hidden = false;
   document
     .getElementById('icon')!
-    .replaceChildren(createElement(GripVertical, { 'aria-hidden': 'true' }));
+    .replaceChildren(createElement(Move, { 'aria-hidden': 'true', 'stroke-width': 1.6 }));
   let state: RecordingRegionState | undefined;
   const refresh = async () => {
     try {

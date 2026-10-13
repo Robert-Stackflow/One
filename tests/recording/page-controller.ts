@@ -80,6 +80,14 @@ Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async()=>{thr
     root.querySelector<HTMLButtonElement>('[data-config-tab=basic]')!.click();
     check(element('record-container').getAttribute('role')==='combobox','One select not applied');
     check(!!root.querySelector('.color-picker-control'),'One color control not applied');
+    element('record-audio').click();
+    check(element('record-config-tabs').hidden&&!element('config-basic').hidden,'Audio mode should expose one settings form');
+    check(element('quality-settings').closest('.record-output-card')!==null,'Audio quality should remain with output settings');
+    select('record-container','wav');
+    check(!element('quality-empty').hidden&&element('audio-bitrate-field').hidden,'WAV should explain its uncompressed quality');
+    element('screens').click();
+    check(!element('record-config-tabs').hidden&&element('quality-settings').parentElement===element('config-quality'),'Video mode should restore quality tab');
+    check((element('record-container') as HTMLSelectElement).value==='mp4','Audio format leaked into video mode');
     root.style.width='610px';controller.scale(150);await delay(40);
     check(getComputedStyle(root.querySelector('.record-setup-scroll')!).display==='block','Narrow One page did not switch layout');
     check(root.scrollWidth<=root.clientWidth+1,'Scaled recording page overflows horizontally');

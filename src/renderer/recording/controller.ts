@@ -25,7 +25,6 @@ import {
   Camera,
   Eye,
   EyeOff,
-  Circle,
   ScanLine,
   RefreshCw,
   RotateCcw,
@@ -63,6 +62,7 @@ export function setupRecording(root:HTMLElement,heading:HTMLElement,api:Recorder
 let configTab = 'basic';
 function selectConfigTab(name = configTab) {
   const previous = configTab;
+  const audio = recordMode === 'audio';
   configTab = name;
   if (
     ['input', 'camera'].includes(configTab) &&
@@ -77,9 +77,11 @@ function selectConfigTab(name = configTab) {
       ['input', 'camera'].includes(button.dataset.configTab || '') &&
       (recordMode === 'audio' || sourceMode === 'camera' || !nativeMode());
   });
-  document
+  page
     .querySelectorAll<HTMLElement>('.record-config-panel')
-    .forEach((panel) => (panel.hidden = panel.id !== 'recording-config-' + configTab));
+    .forEach((panel) => (panel.hidden = panel.id !== 'recording-config-' + (audio ? 'basic' : configTab)));
+  q('record-config-tabs').hidden = audio;
+  q('config-basic').setAttribute('role', audio ? 'group' : 'tabpanel');
   q('record-config-tabs').querySelector<HTMLElement>('[data-config-tab=quality]')!.textContent =
     recordMode === 'audio' ? '音质' : '画质';
   q('config-quality').setAttribute(
@@ -238,7 +240,7 @@ function command(id: string, shape: IconNode, label: string, key: string) {
   const caption = document.createElement('span');
   caption.textContent = label;
   button.replaceChildren(
-    createElement(shape, { 'aria-hidden': 'true', 'stroke-width': 1.75 }),
+    createElement(shape, { class: 'icon', 'aria-hidden': 'true', 'stroke-width': 1.75 }),
     caption,
   );
 }
@@ -533,7 +535,7 @@ function updateSetupSummary() {
             : []),
           ...(nativeMode() && delay ? [tr`${delay} 秒后开始`] : []),
         ].join(' · ');
-  command('start', Circle, recordMode === 'audio' ? tr('开始录音') : tr('开始录制'), recordMode);
+  command('start', recordMode === 'audio' ? Mic : Video, recordMode === 'audio' ? tr('开始录音') : tr('开始录制'), recordMode);
 }
 const elapsed = (r: Run) =>
   r.started ? ((r.pausedAt || performance.now()) - r.started - r.pausedMs) / 1000 : 0;
@@ -1205,7 +1207,15 @@ function changeRecordMode(mode: 'video' | 'audio', reloadSources = true) {
     button.setAttribute('aria-selected', String(value === mode));
   }
   q('video-settings').hidden = mode === 'audio';
-  q('audio-placeholder').hidden = mode !== 'audio';
+  q('video-settings').closest<HTMLElement>('.record-source-pane')!.hidden = mode === 'audio';
+  const outputCard = q('output-heading').parentElement!;
+  const soundCard = q('sound-heading').closest<HTMLElement>('.record-sound-card')!;
+  // Reuse the live controls so switching recording modes retains device and quality choices.
+  q('config-basic').insertBefore(mode === 'audio' ? soundCard : outputCard, mode === 'audio' ? outputCard : soundCard);
+  (mode === 'audio' ? outputCard : q('config-quality')).append(q('quality-settings'));
+  q('quality-title').closest<HTMLElement>('.record-card-heading')!.hidden = mode === 'audio';
+  q('output-heading').classList.toggle('sr-only', mode !== 'audio');
+  q('output-heading').textContent = mode === 'audio' ? tr('录音设置') : tr('基本设置');
   q('audio-settings').hidden = mode !== 'audio';
   q('mode-description').textContent =
     mode === 'audio'

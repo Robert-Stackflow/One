@@ -55,9 +55,11 @@ export function toggleCaptureMenu(
         passive: type === 'wheel',
       });
   }
-  panel.classList.add('capture-menu');
+  panel.classList.add('capture-menu','one-popover');
   panel.hidden=false;anchor.setAttribute('aria-expanded','true');
-  if(!openAnchoredPopover(anchor,panel,{preferred:options.side?'right':'below',gap:options.side?8:6,width:panel.offsetWidth,maxHeight:()=>innerHeight-16,bottom:menuBottom(anchor),onDetach:closeCaptureMenu}))return;
+  // Closed native popovers have no box. Let the shared host show the panel
+  // before measuring its CSS width; measuring here would pin it to zero.
+  if(!openAnchoredPopover(anchor,panel,{preferred:options.side?'right':'below',gap:options.side?8:6,width:undefined,maxHeight:()=>innerHeight-16,bottom:menuBottom(anchor),onDetach:closeCaptureMenu}))return;
   panel
     .querySelector<HTMLElement>('button:not(:disabled),input:not([hidden]),[tabindex="0"]')
     ?.focus({ preventScroll: true });

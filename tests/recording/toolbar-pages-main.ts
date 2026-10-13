@@ -40,6 +40,9 @@ async function openMenu(menu:RecordingToolbarMenu){
   assert.equal(windows.length,previous+1);const window=windows.at(-1)!;await ready(window,'recording-toolbar-menu');
   await until(()=>js(window,"document.getElementById('menu').children.length>0"),'menu '+menu.kind);
   await until(()=>calls.filter(c=>c.name==='recording-toolbar-menu-fit').length>fits,'menu fit');
+  // Let the native size change reach the renderer before opening a select;
+  // the shared select correctly closes on a subsequent window resize.
+  await js(window,'document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))');
   assert.equal(await js(window,"document.documentElement.scrollWidth>innerWidth"),false);return window;
 }
 async function dismiss(window:BrowserWindow){window.webContents.send('one:recording-menu-dismiss');await until(()=>window.isDestroyed(),'menu dismiss');}

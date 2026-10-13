@@ -135,15 +135,6 @@ body[data-view="recording-toolbar"] #capture-properties .custom-select {
   align-items: center;
   gap: 9px;
 }
-body[data-view="recording-toolbar"] #capture-properties .custom-select::after {
-  content: '';
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border: solid var(--muted);
-  border-width: 0 1px 1px 0;
-  transform: rotate(45deg);
-}
 body[data-view="recording-toolbar"] .sound-panel {
   top: var(--property-top, 64px);
   width: 100%;

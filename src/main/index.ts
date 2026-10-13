@@ -126,6 +126,9 @@ import { pick, pickerData, pickerPlaces, pickerOpened, pickerPreferences, picker
 import {restorePickerBounds} from '../shared/picker';
 const execute = promisify(execFile);
 app.setName('One');
+// Match Frame's Aura visibility fix: native DWM policy alone cannot disable
+// the scale/fade applied to transparent capture and region-selection windows.
+app.commandLine.appendSwitch('wm-window-animations-disabled');
 const testMode = process.env.ONE_TEST_MODE === '1';
 const developmentMode = !app.isPackaged && process.env.ONE_DEVELOPMENT === '1';
 const loginStartupArg = '--one-login-startup';

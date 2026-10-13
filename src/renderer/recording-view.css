@@ -276,6 +276,10 @@
 }
 .recording-page #recording-record-config-tabs {
   flex-shrink: 0;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .recording-page .record-panel {
   min-width: 0;
@@ -467,47 +471,8 @@
   padding: 0;
   border: 0;
 }
-.recording-page .record-audio-placeholder {
-  margin: 2px;
-  min-height: 260px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 24px;
-}
 .recording-page #recording-source-heading {
   white-space: nowrap;
-}
-.recording-page .record-audio-placeholder > span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  background: var(--soft);
-  color: #668e81;
-  border-radius: 20px;
-}
-.recording-page .record-audio-placeholder svg {
-  width: 36px;
-  height: 36px;
-  stroke-width: 1.25;
-}
-.recording-page .record-audio-placeholder h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-}
-.recording-page .record-audio-placeholder p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-  text-align: center;
 }
 
 .recording-page .record-cursor-field {
@@ -594,6 +559,47 @@
     border-top: 1px solid var(--line);
     margin-top: 20px;
   }
+}
+
+.recording-page[data-record-mode='audio'] .record-setup-scroll {
+  display: block;
+  overflow-y: auto;
+}
+.recording-page[data-record-mode='audio'] .record-options-column {
+  width: 100%;
+  max-width: 680px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+}
+.recording-page[data-record-mode='audio'] .record-options-scroll {
+  padding: 0 12px 20px 2px;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+.recording-page[data-record-mode='audio'] .sounds {
+  gap: 12px;
+}
+.recording-page[data-record-mode='audio'] .sound-source {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.recording-page[data-record-mode='audio'] .record-output-card {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.recording-page[data-record-mode='audio'] #recording-output-heading {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.recording-page[data-record-mode='audio'] #recording-quality-settings {
+  margin-top: 12px;
+}
+.recording-page[data-record-mode='audio'] :is(.record-output-fields,.record-advanced-fields) .field {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 220px);
 }
 
 .recording-page .audio-drafts {
