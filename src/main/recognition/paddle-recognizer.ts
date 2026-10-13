@@ -86,12 +86,13 @@ export function decodePaddleCTC(probabilities: Float32Array, dims: readonly numb
 /** Owned by an inference worker; callers release the session when the model/device changes. */
 export class PaddleRecognizer {
   private constructor(private session: ort.InferenceSession, readonly config: PaddleRecConfig, readonly backend: 'cpu' | 'dml', readonly deviceId?: number) {}
-  static async create(model: string, config: PaddleRecConfig, backend: 'cpu' | 'dml' = 'cpu', deviceId = 0) {
+  static async create(model: string | Uint8Array, config: PaddleRecConfig, backend: 'cpu' | 'dml' = 'cpu', deviceId = 0) {
     if (!Number.isSafeInteger(deviceId) || deviceId < 0 || deviceId > 31) throw Error('OCR 推理设备无效');
-    const session = await ort.InferenceSession.create(model, {
+    const options: ort.InferenceSession.SessionOptions = {
       executionProviders: backend === 'dml' ? [{ name: 'dml', deviceId }] : ['cpu'],
       intraOpNumThreads: 2, interOpNumThreads: 1, logSeverityLevel: 3,
-    });
+    };
+    const session = typeof model === 'string' ? await ort.InferenceSession.create(model, options) : await ort.InferenceSession.create(model, options);
     if (session.inputNames.length !== 1 || session.outputNames.length !== 1) {
       await session.release(); throw Error('OCR 识别模型输入输出不兼容');
     }

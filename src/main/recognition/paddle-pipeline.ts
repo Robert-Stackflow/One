@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { ocrDimensions } from '../../shared/recognition/ocr';
 import { textBounds, textDocument, type TextQuad } from '../../shared/recognition/text-document';
 import type { OCRLanguage, OCRResult } from '../../shared/recognition/ocr';
-import { PaddleDetector, type PaddleDetConfig } from './paddle-detector';
+import { PaddleDetector, mergePaddleTextBoxes, type PaddleDetConfig } from './paddle-detector';
 import { PaddleRecognizer, type PaddleRecConfig } from './paddle-recognizer';
 export interface PaddleOCRResult extends OCRResult {
   truncated: boolean;
@@ -54,7 +54,7 @@ export function rectifyPaddleText(rgb: Uint8Array, sourceWidth: number, sourceHe
 /** Prototype/full-image pipeline. Worker ownership and shared model management wrap this engine. */
 export class PaddleOCRPipeline {
   private constructor(private detector: PaddleDetector, private recognizer: PaddleRecognizer, readonly backend: 'cpu' | 'dml', readonly modelRevision: string) {}
-  static async create(models: { det: string; rec: string; detection: PaddleDetConfig; recognition: PaddleRecConfig; revision: string }, backend: 'cpu' | 'dml', deviceId = 0) {
+  static async create(models: { det: string | Uint8Array; rec: string | Uint8Array; detection: PaddleDetConfig; recognition: PaddleRecConfig; revision: string }, backend: 'cpu' | 'dml', deviceId = 0) {
     if (models.detection.name.replace(/_det$/, '') !== models.recognition.name.replace(/_rec$/, '')) throw Error('OCR 检测与识别模型预设不匹配');
     const detector = await PaddleDetector.create(models.det, models.detection, backend, deviceId);
     try { return new PaddleOCRPipeline(detector, await PaddleRecognizer.create(models.rec, models.recognition, backend, deviceId), backend, models.revision); }
@@ -73,7 +73,7 @@ export class PaddleOCRPipeline {
       const detection = await this.detector.run(rgb, width, height);
       signal?.throwIfAborted();
       // Baseline reading order follows Paddle's top-to-bottom, left-to-right line order.
-      const boxes = detection.boxes.sort((a, b) => a.quad[0].y - b.quad[0].y || a.quad[0].x - b.quad[0].x);
+      const boxes = mergePaddleTextBoxes(detection.boxes, width, height).sort((a, b) => a.quad[0].y - b.quad[0].y || a.quad[0].x - b.quad[0].x);
       for (let i = 1; i < boxes.length; i++) for (let j = i; j > 0; j--)
         if (Math.abs(boxes[j].quad[0].y - boxes[j - 1].quad[0].y) < 10 && boxes[j].quad[0].x < boxes[j - 1].quad[0].x)
           [boxes[j], boxes[j - 1]] = [boxes[j - 1], boxes[j]];

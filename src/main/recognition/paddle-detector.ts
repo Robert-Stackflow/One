@@ -115,12 +115,47 @@ export function paddleDetBoxes(probabilities: Float32Array, dims: readonly numbe
   }
   return { boxes, truncated: candidates >= config.maxCandidates };
 }
+/** DB expansion can make neighbouring pieces of one line overlap. Recognize their geometric union once,
+ * rather than concatenating two readings of the same edge character. Separate rows/columns remain separate.
+ */
+export function mergePaddleTextBoxes(input: PaddleTextBox[], width: number, height: number) {
+  const boxes = [...input].sort((a, b) => a.quad[0].y - b.quad[0].y || a.quad[0].x - b.quad[0].x);
+  const output: PaddleTextBox[] = [];
+  const axes = (box: PaddleTextBox) => {
+    const [a, b, , d] = box.quad, horizontal = Math.hypot(b.x - a.x, b.y - a.y), vertical = Math.hypot(d.x - a.x, d.y - a.y);
+    const end = horizontal >= vertical ? b : d, length = Math.max(horizontal, vertical);
+    return { ux: (end.x - a.x) / length, uy: (end.y - a.y) / length };
+  };
+  const project = (box: PaddleTextBox, ux: number, uy: number) => {
+    const u = box.quad.map(point => point.x * ux + point.y * uy), v = box.quad.map(point => -point.x * uy + point.y * ux);
+    return { minU: Math.min(...u), maxU: Math.max(...u), minV: Math.min(...v), maxV: Math.max(...v) };
+  };
+  for (const box of boxes) {
+    let current = box;
+    for (let index = output.length - 1; index >= 0; index--) {
+      const other = output[index], a = axes(current), b = axes(other);
+      if (!Number.isFinite(a.ux) || !Number.isFinite(b.ux) || Math.abs(a.ux * b.ux + a.uy * b.uy) < 0.99) continue;
+      const p = project(current, a.ux, a.uy), q = project(other, a.ux, a.uy);
+      const overlapU = Math.min(p.maxU, q.maxU) - Math.max(p.minU, q.minU);
+      const overlapV = Math.min(p.maxV, q.maxV) - Math.max(p.minV, q.minV);
+      if (overlapU <= 0 || overlapV < Math.max(p.maxV - p.minV, q.maxV - q.minV) * 0.7) continue;
+      const rect = rectangle([...current.quad, ...other.quad]); if (!rect) continue;
+      current = { confidence: Math.min(current.confidence, other.confidence), quad: corners(rect).map(point => ({
+        x: Math.max(0, Math.min(width, Math.round(point.x))), y: Math.max(0, Math.min(height, Math.round(point.y))),
+      })) as TextQuad };
+      output.splice(index, 1);
+    }
+    output.push(current);
+  }
+  return output;
+}
 export class PaddleDetector {
   private constructor(private session: ort.InferenceSession, readonly config: PaddleDetConfig) {}
-  static async create(model: string, config: PaddleDetConfig, backend: 'cpu' | 'dml' = 'cpu', deviceId = 0) {
+  static async create(model: string | Uint8Array, config: PaddleDetConfig, backend: 'cpu' | 'dml' = 'cpu', deviceId = 0) {
     if (!Number.isSafeInteger(deviceId) || deviceId < 0 || deviceId > 31) throw Error('OCR 推理设备无效');
-    const session = await ort.InferenceSession.create(model, { executionProviders: backend === 'dml' ? [{ name: 'dml', deviceId }] : ['cpu'],
-      intraOpNumThreads: 2, interOpNumThreads: 1, logSeverityLevel: 3 });
+    const options: ort.InferenceSession.SessionOptions = { executionProviders: backend === 'dml' ? [{ name: 'dml', deviceId }] : ['cpu'],
+      intraOpNumThreads: 2, interOpNumThreads: 1, logSeverityLevel: 3 };
+    const session = typeof model === 'string' ? await ort.InferenceSession.create(model, options) : await ort.InferenceSession.create(model, options);
     if (session.inputNames.length !== 1 || session.outputNames.length !== 1) { await session.release(); throw Error('OCR 检测模型输入输出不兼容'); }
     return new PaddleDetector(session, config);
   }

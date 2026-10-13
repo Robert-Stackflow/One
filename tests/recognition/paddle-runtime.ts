@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { paddleRecConfig, PaddleRecognizer } from '../../src/main/recognition/paddle-recognizer';
 import { paddlePipelineBench } from './paddle-pipeline-runtime';
+import { paddleWorkerBench } from './paddle-worker-runtime';
 
 const directory = process.env.ONE_PADDLE_PROBE_ROOT!;
 function cer(expected: string, actual: string) {
@@ -18,6 +19,7 @@ function cer(expected: string, actual: string) {
   return previous[b.length] / Math.max(1, a.length);
 }
 async function main() {
+  if (process.argv.includes('--worker-only')) { await paddleWorkerBench(directory); return; }
   const config = paddleRecConfig(await readFile(join(directory, 'pp-ocrv6-tiny-rec.yml'), 'utf8'));
   const texts = ['ONE OCR 2026', '截图识别测试 One 2026', 'Hello, world!', '0123456789 3.14', '中文 English 混排', 'The quick brown fox.',
     '用户设置与文件搜索', 'Copy and translate text', 'Copyright 2026 One', '本地文字识别'];
@@ -67,5 +69,6 @@ async function main() {
   }
   await writeFile(join(directory, 'paddle-rec-benchmark.json'), JSON.stringify(report, null, 2));
   await paddlePipelineBench(directory);
+  await paddleWorkerBench(directory);
 }
 void main().catch(error => { console.error(String(error)); process.exitCode = 1; });
