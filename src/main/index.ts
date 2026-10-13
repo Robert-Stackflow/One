@@ -545,6 +545,7 @@ function backupFileName(){const stamp=new Date().toISOString().replace(/[:.]/g,'
 async function exportSettingsBackup(){
   const result=await dialog.showSaveDialog(main,{title:'导出 One 设置',defaultPath:join(app.getPath('documents'),backupFileName()),filters:[{name:'One 设置备份',extensions:['json']}]});
   if(result.canceled||!result.filePath)return {saved:false};
+  await saving.catch(()=>{});
   const backup:SettingsBackup={format:'one-settings-backup',schema:1,exportedAt:new Date().toISOString(),settings};
   await writeFile(result.filePath,JSON.stringify(backup,null,2),'utf8');return {saved:true,path:result.filePath};
 }

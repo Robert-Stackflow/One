@@ -1,0 +1,40 @@
+.capture-settings .settings-workflow-editor{padding:16px 0}
+.capture-settings .workflow-intro{margin:0 0 14px;color:var(--muted);font-size:12px;line-height:1.7}
+.capture-settings .workflow-editor-bar{display:flex;align-items:center;gap:8px;padding:0 0 16px;border-bottom:1px solid var(--line)}
+.capture-settings .workflow-editor-bar>.custom-select{flex:1;min-width:0;max-width:320px}
+.capture-settings .workflow-make-default{font-size:12px;white-space:nowrap}
+.capture-settings .workflow-bar-divider{height:20px;width:1px;background:var(--line);margin:0 2px 0 auto;flex:none}
+.capture-settings .workflow-delete{padding:8px}
+.capture-settings .workflow-detail{padding:18px 0}
+.capture-settings .workflow-name-field{display:flex;align-items:center;gap:20px;font-size:12px}
+.capture-settings .workflow-name-field>span{color:var(--muted);flex:none}
+.capture-settings .workflow-name-field input{flex:1;min-width:0;max-width:320px;margin-left:auto}
+.capture-settings .workflow-subheading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 10px;font-size:12px}
+.capture-settings .workflow-subheading small{font-size:11px;color:var(--muted)}
+.capture-settings .workflow-action-order{display:flex;flex-direction:column;gap:8px;padding:0;margin:0 0 10px;list-style:none}
+.capture-settings .workflow-action-order li{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--hover)}
+.capture-settings .workflow-action-order li>span{flex:1;font-size:12px}
+.capture-settings .workflow-action-order button{width:30px;height:30px;min-width:30px;min-height:30px;padding:6px}
+.capture-settings .workflow-step-number{display:grid;place-items:center;width:22px;height:22px;margin-right:6px;background:var(--bg);border:1px solid var(--line);border-radius:5px;font-size:11px;font-weight:500;color:var(--muted)}
+.capture-settings .workflow-action-add{display:flex;flex-wrap:wrap;gap:8px}
+.capture-settings .workflow-action-add>button{border:1px dashed var(--line);font-size:11px;padding:7px 10px;min-height:32px;border-radius:6px}
+.capture-settings .workflow-action-add .icon{width:13px;height:13px}
+.capture-settings .workflow-translation>label{display:flex;align-items:center;gap:20px;margin-top:18px;color:var(--muted);font-size:12px}
+.capture-settings .workflow-translation .custom-select{flex:1;min-width:0;max-width:320px;margin-left:auto}
+.capture-settings .output-effect-panel{margin:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.capture-settings .output-effect-panel summary{padding:14px 0;font-size:12px;cursor:pointer}
+.capture-settings .output-effect-fields{display:block}
+.capture-settings .output-effect-fields>label{justify-content:space-between;min-width:0;font-size:12px;font-weight:400;padding:16px 0;border-bottom:1px solid var(--line)}
+.capture-settings .output-effect-fields .number-control{width:165px;max-width:165px}
+.capture-settings .output-effect-fields .color-field{max-width:none}
+.capture-settings .output-effect-reset{margin-top:12px;font-size:12px}
+.capture-settings .workflow-help,.capture-settings .workflow-feedback{color:var(--muted);font-size:11px;line-height:1.65}
+.capture-settings .workflow-help{margin:12px 0}
+.capture-settings .workflow-feedback{margin:0 0 12px}
+.capture-settings .workflow-feedback:empty{display:none}
+@media(max-width:650px){
+  .capture-settings .workflow-editor-bar{flex-wrap:wrap}
+  .capture-settings .workflow-editor-bar>.custom-select{flex-basis:100%;max-width:none}
+  .capture-settings .workflow-name-field{gap:10px}
+  .capture-settings .workflow-subheading{flex-wrap:wrap}
+}
