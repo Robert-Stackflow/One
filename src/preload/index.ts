@@ -20,6 +20,7 @@ const api: OneAPI = {
   pinsState:()=>invoke('pins-state'),pinsOpenMaterial:id=>invoke('pins-material',id),pinsClipboard:()=>invoke('pins-clipboard'),pinsFiles:()=>invoke('pins-files'),pinsAction:(id,action)=>invoke('pins-action',id,action),pinsGroup:(id,action)=>invoke('pins-group',id,action),pinsToggle:()=>invoke('pins-toggle'),pinsNextGroup:()=>invoke('pins-next-group'),pinsPreview:id=>invoke('pins-preview',id),onPinsChanged:callback=>listen('pins-changed',callback),materialsState:()=>invoke('materials-state'),materialsImportImages:()=>invoke('materials-import-images'),materialsImportClipboard:()=>invoke('materials-import-clipboard'),
   materialsImageURL:id=>invoke('materials-image-url',id),materialsRecordingURL:id=>invoke('materials-recording-url',id),
   materialsCopyImage:id=>invoke('materials-copy-image',id),materialsExportImage:id=>invoke('materials-export-image',id),
+  materialsOpenRecording:id=>invoke('materials-open-recording',id),materialsImportRecording:kind=>invoke('materials-import-recording',kind),
   materialsRemoveImage:id=>invoke('materials-remove-image',id),materialsRemoveRecording:id=>invoke('materials-remove-recording',id),
   materialsOpenDirectory:()=>invoke('materials-open-directory'),onMaterialsChanged:callback=>listen('materials-changed',callback),
   materialsRecognizeImage:id=>invoke('materials-recognize-image',id),materialsEditImage:id=>invoke('materials-edit-image',id),materialsOpenImageProject:()=>invoke('materials-open-image-project'),

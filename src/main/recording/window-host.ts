@@ -21,3 +21,14 @@ export interface RecordingWindowHost {
 }
 
 export const recordingWindowURL = (role: RecordingWindowRole) => 'one://app/index.html?view=' + role;
+
+export const recordingPreloads:Record<RecordingWindowRole,string|undefined>={
+  'recording-player':'recording-player','recording-export':'recording-export',
+  'recording-toolbar':'recording-toolbar','recording-toolbar-menu':'recording-toolbar',
+  'recording-input-overlay':'recording-input-overlay','recording-camera-overlay':'recording-camera-overlay',
+  'recording-annotation-overlay':'recording-annotation-overlay','recording-region-overlay':'recording-region-overlay',
+  'recording-region-outline':undefined,'recording-countdown':'recording-countdown',
+};
+export const recordingWindowRoles=Object.keys(recordingPreloads) as RecordingWindowRole[];
+export const recordingBridgeRoles=recordingWindowRoles.filter(role=>recordingPreloads[role]);
+export const recordingResourceHosts=new Set(['recording','recording-camera','recording-system','recording-microphone','recording-camera-live','recording-camera-setup']);

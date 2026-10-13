@@ -78,6 +78,7 @@ export interface RecordingContext {
     totalMs: number;
   }): void;
   materials?: import('../materials/library').MaterialLibrary;
+  materialsReady?(): Promise<void>;
   openMaterials?(): void;
   chooseRegion(displayId: number, hideMain?: boolean): Promise<Region | null>;
   cancelRegion(): void;
@@ -845,6 +846,7 @@ export class RecordingService {
     this.changed();
   }
   private changed() {
+    this.ctx.availabilityChanged?.();
     if (this.contents && !this.contents.isDestroyed()) this.contents.send('one:recording-changed');
     this.toolbar?.changed();
     this.inputOverlay?.changed();
@@ -1719,8 +1721,11 @@ export class RecordingService {
     if (this.cameraFile) media.push({ kind: 'camera', file: this.cameraFile });
     for (const kind of RECORDING_AUDIO_SOURCES)
       if (this.audioFiles[kind]) media.push({ kind, file: this.audioFiles[kind]! });
-    const promise = this.ctx.materials
-      .addRecording(
+    const promise = Promise.resolve()
+      .then(() => this.ctx.materialsReady?.())
+      .then(() => {
+        if (!valid()) throw Error('录制素材保存已取消');
+        return this.ctx.materials!.addRecording(
         {
           id,
           title:
@@ -1733,7 +1738,8 @@ export class RecordingService {
         },
         (destination) => saveRecordingProject(destination, snapshot, media, valid),
         this.playback,
-      )
+      );
+      })
       .then(() => {
         if (valid()) {
           this.materialId = id;
@@ -2329,8 +2335,10 @@ export class RecordingService {
     if (this.finishTask) return this.finishTask;
     this.draining = true;
     const task = (async () => {
+      if (this.picking) this.ctx.cancelRegion();
+      this.importAbort?.abort();
       await this.pageActive(false);
-      if (this.capture) await this.nativeFinish();
+      if (this.capture && this.active) await this.nativeFinish();
       else if (this.phase === 'arming') await this.reset();
       else if (this.active) {
         if (!this.clientValid(this.contents)) throw Error('录制页面已关闭，无法完成录制');
@@ -2341,6 +2349,8 @@ export class RecordingService {
             reject(Error('录制数据尚未写入完成，请保留应用并重试'));
           }, 20000);
           this.finishWaiter = done;
+          this.phase = 'stopping';
+          this.changed();
           this.contents!.send('one:recording-stop');
         });
       }
@@ -2354,6 +2364,7 @@ export class RecordingService {
     if (!this.owner) throw Error('录制页面已关闭');
     return this.saveProject(this.owner);
   }
+  cancelExport() { return this.exporter.reset(); }
   /** One calls this only after saving, or with explicit discard intent from its close flow. */
   dispose(discard = false): Promise<void> {
     if (this.disposal) return this.disposal;

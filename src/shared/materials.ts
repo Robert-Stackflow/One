@@ -17,6 +17,8 @@ export interface MaterialsAPI {
   materialsCopyImage(id:string):Promise<void>;
   materialsExportImage(id:string):Promise<boolean>;
   materialsRemoveImage(id:string):Promise<void>;
+  materialsOpenRecording(id:string):Promise<void>;
+  materialsImportRecording(kind:'project'|'video'):Promise<void>;
   materialsRemoveRecording(id:string):Promise<void>;
   materialsOpenDirectory():Promise<void>;
   materialsEditImage(id:string):Promise<void>;

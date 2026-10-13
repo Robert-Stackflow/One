@@ -2,6 +2,9 @@ import {previewArchive} from './preview-archive';
 import {MaterialsService} from './materials/service';
 import {PinsHost} from './pins/host';
 import {RecognitionHost} from './recognition/host';
+import {RecordingHost} from './recording/host';
+import {recordingPreloads,recordingWindowRoles,recordingBridgeRoles,recordingResourceHosts,type RecordingWindowRole} from './recording/window-host';
+import {copyFileToClipboard} from './file-clipboard';
 import {CaptureHost} from './capture/host';
 import {ScrollCaptureHost} from './capture/scroll-host';
 import {CAPTURE_URL} from './capture/service';
@@ -88,7 +91,7 @@ import { readFile, writeFile, mkdir, mkdtemp, rm, rmdir, stat, readdir, rename, 
 import {createReadStream,createWriteStream} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {pipeline} from 'node:stream/promises';
-import { join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
+import { sep, join, dirname, basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { execFile } from 'node:child_process';
@@ -322,13 +325,15 @@ let pins:PinsHost|undefined;
 let recognition:RecognitionHost|undefined;
 let capture:CaptureHost|undefined;
 let scrollCapture:ScrollCaptureHost|undefined;
+let recording:RecordingHost|undefined;
 let settings: Settings = defaultSettings(); let input: InputService; let quitting = false;let finishingQuit:Promise<unknown>|undefined;let pickerQuitReady=false;
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 function windowFor(view: string, options: Electron.BrowserWindowConstructorOptions = {},query='',load=true) {
   const a=themeAutomation?.appearance()||settings.appearance;const dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;
+  const recordingRole=recordingWindowRoles.includes(view as RecordingWindowRole);
   const window = new BrowserWindow({ width: 1240, height: 840, minWidth: 840, minHeight: 620, backgroundColor: dark?a.darkBackground:a.lightBackground, title: 'One', show: false,
-    ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','recognition'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
-    webPreferences: { preload: join(__dirname, view==='recognition'?'../preload/recognition.cjs':view==='scroll-capture'?'../preload/scroll-capture.cjs':view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:view!=='capture' } });
+    ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','recognition','recording-player'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
+    webPreferences: { preload: recordingRole ? (recordingPreloads[view as RecordingWindowRole] ? join(__dirname,'../preload/'+recordingPreloads[view as RecordingWindowRole]+'.cjs') : undefined) : join(__dirname, view==='recognition'?'../preload/recognition.cjs':view==='scroll-capture'?'../preload/scroll-capture.cjs':view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:view!=='capture'&&!recordingRole } });
   const windowId = window.webContents.id; roles.set(windowId, view);
   if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-created',`role=${view} id=${windowId}`);
   // The open-with submenu is cheap to recreate and rarely reopened after a pause.
@@ -640,7 +645,7 @@ async function pickColor(mode:'live'|'frozen'='live'){
   catch(error){if(colorWorker===worker)closeColors();throw error;}
   finally{clearTimeout(timeout);}
 }
-function refreshWindowAppearance(){const a=themeAutomation?.appearance()||settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu','image-editor','pin','pin-controls'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
+function refreshWindowAppearance(){const a=themeAutomation?.appearance()||settings.appearance,dark=a.mode==='dark'||a.mode==='system'&&nativeTheme.shouldUseDarkColors;for(const w of BrowserWindow.getAllWindows()){if(w.isDestroyed()||w.webContents.isDestroyed())continue;const role=roles.get(w.webContents.id);if(['main','preview','picker','search','color-editor','command-confirm','tray-menu','image-editor','pin','pin-controls','recording-player','recording-toolbar-menu'].includes(role||'')){w.setBackgroundColor(dark?a.darkBackground:a.lightBackground);}w.webContents.send('one:appearance',a);}}
 function syncThemeAfterWake(){void themeAutomation?.sync();}
 function colorShortcutStatus(){return {active:!!registeredColorShortcut,error:colorShortcutError};}
 function hotkeyConflict(shortcut:string,field:string){
@@ -694,7 +699,9 @@ function registerIPC() {
   handle('materials-copy-image',(event,id)=>materials!.copyImage(event.sender.id,id));
   handle('materials-export-image',(event,id)=>materials!.exportImage(event.sender.id,id));
   handle('materials-remove-image',(event,id)=>{if(imageEditor?.usesMaterial(id))throw Error('请先关闭当前图片编辑，再删除素材');return materials!.removeImage(event.sender.id,id);});
-  handle('materials-remove-recording',(event,id)=>materials!.removeRecording(event.sender.id,id));
+  handle('materials-remove-recording',(_event,id)=>recording!.removeMaterial(id));
+  handle('materials-open-recording',(_event,id)=>recording!.openMaterial(id));
+  handle('materials-import-recording',(_event,kind)=>recording!.importMaterial(kind));
   handle('materials-open-directory',event=>materials!.openDirectory(event.sender.id));
   handle('capture-scroll',(_event,displayId,options)=>scrollCapture!.open(displayId,options));
   handle('capture-state',()=>capture!.state());
@@ -756,7 +763,7 @@ function registerIPC() {
   handle('diagnostics-delete',(_event,ids)=>diagnosticsDelete(app.getPath('userData'),app.getPath('crashDumps'),ids),['main']);
   handle('diagnostics-export',async(_event,ids)=>{if(!Array.isArray(ids)||ids.length>100)throw new Error('导出列表无效');const target=await pickPath('directory','选择诊断资料保存位置');return target?diagnosticsExport(app.getPath('userData'),app.getPath('crashDumps'),target,ids):null;},['main']);
   handle('diagnostics-open',()=>shell.openPath(join(app.getPath('userData'),'logs')),['main']);
-  handle('diagnostics-report',(_event,kind,detail)=>{if(typeof kind!=='string'||kind.length>60||typeof detail!=='string'||detail.length>16*1024)throw new Error('错误报告无效');runtimeError(app.getPath('userData'),`renderer:${kind}`,detail);},['main','image-editor','pin','pin-controls','capture','scroll-capture','recognition']);
+  handle('diagnostics-report',(_event,kind,detail)=>{if(typeof kind!=='string'||kind.length>60||typeof detail!=='string'||detail.length>16*1024)throw new Error('错误报告无效');runtimeError(app.getPath('userData'),`renderer:${kind}`,detail);},['main','image-editor','pin','pin-controls','capture','scroll-capture','recognition',...recordingBridgeRoles]);
   handle('explorer-menu-state',()=>explorerMenuState());
   handle('explorer-menu-set',(_event,value)=>setExplorerMenu(value));
   handle('file-action-data',event=>{const target=fileActions.get(event.sender.id);if(!target)throw Error('文件操作窗口无效');return target;});
@@ -903,8 +910,8 @@ function registerIPC() {
   handle('inspect-locks',(_event,value)=>{const path=filePath(value);showMain();main.webContents.send('one:lock-target',path);},['main','preview','search']);
   handle('lock-state',event=>locksFor(event.sender.id).state());handle('lock-scan',(event,paths)=>locksFor(event.sender.id).scan(paths));handle('lock-cancel',event=>locksFor(event.sender.id).cancel());handle('lock-end',(event,token)=>locksFor(event.sender.id).end(token));
   handle('utility-state',()=>utilityState());handle('topmost-windows',()=>topmost.list());handle('topmost-toggle',(_event,id)=>topmost.toggle(id));handle('topmost-clear',()=>topmost.clear());handle('clicker-state',()=>clicker.state());handle('clicker-start',()=>clicker.start());handle('clicker-stop',()=>clicker.stop());handle('clicker-capture',()=>clicker.capture());
-  handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','pin','pin-controls','scroll-capture','recognition']);
-  handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','ai-chat','image-editor','pin','pin-controls','scroll-capture','recognition']);
+  handle('window-action', (event, action) => { const window = BrowserWindow.fromWebContents(event.sender); if (!window) return; if (action === 'minimize') window.minimize(); else if (action === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } else if (action === 'close') window.close(); else throw new Error('窗口操作无效'); }, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','pin','pin-controls','scroll-capture','recognition','recording-player']);
+  handle('window-state', event => {const w=BrowserWindow.fromWebContents(event.sender);return {maximized:w?.isMaximized()??false,visible:!!w?.isVisible()&&!w.isMinimized()};}, ['main','preview','picker','search','color-editor','command-confirm','dialog-bar','ai-chat','image-editor','pin','pin-controls','scroll-capture','recognition','recording-player']);
   handle('brightness-status', () => brightness.status());
   handle('settings', () => settings);
   handle('tray-menu-state',event=>trayMenuPanel?.view(event.sender),['tray-menu']);
@@ -934,7 +941,7 @@ function registerIPC() {
   handle('restart',()=>restartOne());
   handle('settings-backup-export',()=>exportSettingsBackup());
   handle('settings-backup-import',()=>importSettingsBackup());
-  handle('appearance',()=>themeAutomation?.appearance()||settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','ai-chat','image-editor','pin','pin-controls','capture','scroll-capture','recognition']);
+  handle('appearance',()=>themeAutomation?.appearance()||settings.appearance,['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','ai-chat','image-editor','pin','pin-controls','capture','scroll-capture','recognition',...recordingBridgeRoles]);
   handle('installed-fonts',(_event,refresh)=>{if(refresh===true)fontSources.clear();return installedFonts(refresh===true);});
   handle('ui-font-source',async(event,family)=>{
     if(roles.get(event.sender.id)!=='main'&&family!==settings.appearance.font.slice(10)&&!imageEditor?.editor.allowsFont(event.sender.id,family)&&!capture?.service.allowsFont(event.sender.id,family))throw new Error('字体未被选择');
@@ -942,7 +949,7 @@ function registerIPC() {
     let pending=fontSources.get(family);
     if(!pending){pending=fontSource(family).then(source=>{if(!source)return null;let url:string|undefined;if(source.path){const token=randomUUID();fontAssets.set(token,{path:source.path,mime:extname(source.path).toLowerCase()==='.otf'?'font/otf':'font/ttf'});url=`one-file://asset/${token}/font`;}return{url,local:source.local};}).catch(error=>{fontSources.delete(family);throw error;});fontSources.set(family,pending);}
     return pending;
-  },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','image-editor','pin','pin-controls','capture','scroll-capture','recognition']);
+  },['main','preview','copy','picker','echo','color-picker','color-editor','command-confirm','search','search-menu','tray-menu','file-context','dialog-bar','image-editor','pin','pin-controls','capture','scroll-capture','recognition',...recordingBridgeRoles]);
   handle('pick-color',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='frozen')throw new Error('取色模式无效');return pickColor(mode);},['main','color-editor']);
   handle('color-frozen-status',()=>colorFreezeWindows.length>0,['color-picker']);
   handle('screen-ruler-open',(_event,mode)=>{if(mode!==undefined&&mode!=='live'&&mode!=='static')throw new Error('屏幕尺模式无效');return openScreenRuler(mode);},['main']);
@@ -1215,6 +1222,22 @@ async function start() {
     edit:async(png,title)=>{await materials!.initialized();const item=await materials!.library.images.add(png,title,'capture');if(!main||main.isDestroyed())throw Error('One 主窗口已关闭');await imageEditor!.openMaterial(main,item.id);},
     failed:error=>runtimeError(app.getPath('userData'),'scroll-capture',error),
   });
+  recording=new RecordingHost({
+    directory:join(app.getPath('userData'),'recording'),mainWindow:()=>main,
+    windowHost:{createWindow:(role,options)=>windowFor(role,{minWidth:1,minHeight:1,...options},'',false),register:(name,handler,allowed)=>handle(name,handler,[...allowed])},
+    register:(name,handler)=>handle(name,handler,['main']),
+    openPage:()=>{showMain();main.webContents.send('one:navigate-page',{page:'recording'});},
+    openMaterials:()=>{showMain();main.webContents.send('one:navigate-page',{page:'materials'});},
+    materials:materials.library,materialsReady:()=>materials!.initialized(),confirm:(owner,options)=>dialog.showMessageBox(owner,options),
+    chooseRegion:(id,hide=true)=>{if(capture!.service.active||scrollCapture!.service.active)throw Error('请先完成当前截图');return capture!.service.choose(id,hide&&main&&!main.isDestroyed()?[main]:[]);},
+    cancelRegion:()=>capture!.service.cancel(),blocked:()=>quitting,
+    dark:()=>{const value=themeAutomation?.appearance()||settings.appearance;return value.mode==='dark'||value.mode==='system'&&nativeTheme.shouldUseDarkColors;},
+    prepare:()=>{if(finishingQuit||capture!.service.active||scrollCapture!.service.active)throw Error('请先完成当前截图或退出操作');},
+    protect:file=>{materials!.library.protect(file);const local=relative(resolve(app.getPath('userData')),resolve(file));if(!local||!isAbsolute(local)&&local!=='..'&&!local.startsWith('..'+sep))throw Error('请保存到 One 数据目录之外');},
+    copy:async(file,valid)=>{if(!valid())throw Error('复制已取消');copyFileToClipboard(file);},
+    windows:()=>BrowserWindow.getAllWindows(),timing:value=>runtimeLog(app.getPath('userData'),'recording-ready',JSON.stringify(value)),
+  });
+  await recording.initialized;
   // Upgrade existing login items without changing an entry disabled in Windows settings.
   if(app.isPackaged&&!testMode&&settings.general.launchAtLogin&&app.getLoginItemSettings().openAtLogin&&!app.getLoginItemSettings({args:[loginStartupArg]}).openAtLogin)
     app.setLoginItemSettings({openAtLogin:true,args:[loginStartupArg]});
@@ -1233,14 +1256,16 @@ async function start() {
   powerMonitor.on('resume',()=>displayManagement.invalidate());
   const renderer = resolve(__dirname, '../renderer');
   protocol.handle('one', async request => { const url = new URL(request.url); const path = resolve(renderer, '.' + decodeURIComponent(url.pathname)); const rel = relative(renderer, path); if (url.host !== 'app' || rel.startsWith('..') || isAbsolute(rel)) return new Response('Forbidden', { status: 403 }); const response=await net.fetch(pathToFileURL(path).toString());if(url.pathname==='/index.html'&&url.searchParams.get('view')==='recognition'){const headers=new Headers(response.headers);headers.set('Content-Security-Policy',"frame-src 'none'");return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}return response; });
-  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(url.host==='recognition')return recognition?recognition.service.resource(request):new Response(null,{status:404});if(url.host==='capture')return capture?capture.service.resource(request):new Response(null,{status:404});if(url.host==='pins')return pins?pins.service.resource(request):new Response(null,{status:404});if(url.host==='image-editor')return imageEditor?imageEditor.editor.resource(request):new Response(null,{status:404});if(url.host==='materials')return materials?materials.resources.response(request):new Response(null,{status:404});if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request,'segment' in asset?asset.segment:undefined); });
+  protocol.handle('one-file', async request => { const url = new URL(request.url); const token=url.pathname.split('/')[1];if(recordingResourceHosts.has(url.host))return recording?recording.service.resource(request):new Response(null,{status:404});if(url.host==='recognition')return recognition?recognition.service.resource(request):new Response(null,{status:404});if(url.host==='capture')return capture?capture.service.resource(request):new Response(null,{status:404});if(url.host==='pins')return pins?pins.service.resource(request):new Response(null,{status:404});if(url.host==='image-editor')return imageEditor?imageEditor.editor.resource(request):new Response(null,{status:404});if(url.host==='materials')return materials?materials.resources.response(request):new Response(null,{status:404});if(url.host==='display'){const asset=displayAssets.get(token);if(!asset)return new Response('Not found',{status:404});const headers={'Content-Type':'image/png','Content-Length':String(asset.bytes.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'};return new Response(request.method==='HEAD'?null:Uint8Array.from(asset.bytes),{headers});}const asset = assets.get(token)||fontAssets.get(token); if (!asset || url.host !== 'asset') return new Response('Not found', { status: 404 }); return fileResponse(asset.path,asset.mime,request,'segment' in asset?asset.segment:undefined); });
   const canFullscreen=(contents:Electron.WebContents|null,permission:string,details:{isMainFrame:boolean;requestingUrl?:string})=>{
     if(permission!=='fullscreen'||!contents||contents.isDestroyed()||roles.get(contents.id)!=='preview'||!details.isMainFrame)return false;
     return contents.getURL()==='one://app/index.html?view=preview'&&details.requestingUrl===contents.getURL();
   };
-  session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>callback(canFullscreen(contents,permission,details)));
-  session.defaultSession.setPermissionCheckHandler((contents,permission,_origin,details)=>canFullscreen(contents,permission,details));
-  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*','one-file://materials/*','one-file://image-editor/*','one-file://pins/*','one-file://capture/*','one-file://recognition/*']},(details,callback)=>{
+  session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>{if(canFullscreen(contents,permission,details))callback(true);else if(recording)recording.service.permissionRequest(contents,permission,callback,details);else callback(false);});
+  session.defaultSession.setPermissionCheckHandler((contents,permission,origin,details)=>canFullscreen(contents,permission,details)||!!recording?.service.permissionCheck(contents,permission,origin,details));
+  session.defaultSession.setDisplayMediaRequestHandler((request,callback)=>{if(recording)recording.service.displayMediaRequest(request,callback);else callback({});});
+  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*','one-file://materials/*','one-file://image-editor/*','one-file://pins/*','one-file://capture/*','one-file://recognition/*',...Array.from(recordingResourceHosts,host=>'one-file://'+host+'/*')]},(details,callback)=>{
+    if(recordingResourceHosts.has(new URL(details.url).host)){const owner=details.webContents;callback({cancel:!owner||owner.isDestroyed()||details.frame!==owner.mainFrame||!recording?.service.authorize(details.url,owner.id)});return;}
     if(details.url.startsWith('one-file://recognition/')){const owner=details.webContents;callback({cancel:!owner||owner.isDestroyed()||details.frame!==owner.mainFrame||!recognition?.service.authorize(details.url,owner.id)});return;}
     if(details.url.startsWith('one-file://capture/')){const owner=details.webContents;callback({cancel:!owner||owner.isDestroyed()||details.frame!==owner.mainFrame||!capture?.service.authorize(details.url,owner.id)});return;}
     if(details.url.startsWith('one-file://pins/')){const owner=details.webContents;callback({cancel:!owner||owner.isDestroyed()||details.frame!==owner.mainFrame||!pins?.service.authorize(details.url,owner.id)});return;}
@@ -1274,14 +1299,14 @@ async function start() {
   colorEditor=new ColorEditor(()=>windowFor('color-editor',{width:420,height:360,minWidth:320,minHeight:200,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,title:'颜色 · One'}),()=>({history:settings.colorHistory,formats:settings.colorVisibleFormats,format:settings.colorFormat,showEditor:settings.colorShowEditor}));
   dialogBar=new DialogBar(()=>windowFor('dialog-bar',{width:700,height:60,minWidth:240,minHeight:60,frame:false,transparent:true,backgroundColor:'#00000000',roundedCorners:false,hasShadow:false,thickFrame:false,resizable:false,skipTaskbar:true}),searchBridge,()=>settings.search,menuService);
   searchBridge.update(settings.search);
-  registerIPC(); main = windowFor('main');
+  registerIPC(); main = windowFor('main');recording.bindClient(main);
   trayMenuPanel=new TrayMenuPanel(()=>windowFor('tray-menu',{width:296,height:356,minWidth:296,minHeight:200,frame:false,resizable:false,maximizable:false,minimizable:false,skipTaskbar:true,alwaysOnTop:true,hasShadow:true,roundedCorners:true,title:'One 菜单'}),()=>({entries:trayMenuEntries({paused:inputPaused,launchAtLogin:settings.general.launchAtLogin}),paused:inputPaused}));
   if(testMode&&process.env.ONE_TEST_TRAY_MENU==='1')(globalThis as typeof globalThis&{oneTestTrayMenu?:TrayMenuPanel}).oneTestTrayMenu=trayMenuPanel;
   main.once('ready-to-show', () => {if(!process.argv.includes(loginStartupArg)&&!process.argv.some(a=>a.startsWith('--one-shell-request=')||a.startsWith('--one-archive=')))main.show();setTimeout(()=>{if(!quitting){warmSearchPopups();}},500).unref();});
   nativeTheme.on('updated',refreshWindowAppearance);
   powerMonitor.on('resume',syncThemeAfterWake);powerMonitor.on('unlock-screen',syncThemeAfterWake);
   main.on('blur',()=>stopShortcutRecording());
-  main.on('close', event => { if(!quitting&&!testMode){event.preventDefault();if(settings.general.closeToTray)main.hide();else app.quit();} });
+  main.on('close', event => { if(!quitting&&(!testMode||recording?.needsQuitPreparation)){event.preventDefault();if(settings.general.closeToTray)main.hide();else app.quit();} });
   if (!testMode) {
     const trayIcon=nativeImage.createFromBuffer(await iconBytes(trayIconSize,false));
     for(const size of iconSizes)if(size>trayIconSize)trayIcon.addRepresentation({scaleFactor:size/trayIconSize,buffer:await iconBytes(size,false)});
@@ -1304,5 +1329,5 @@ if (!testMode && !app.requestSingleInstanceLock()) app.quit(); else if(process.a
   if(!testMode)void repairExplorerMenu().catch(error=>runtimeLog(app.getPath('userData'),'explorer-menu-repair',String(error)));
  }).catch(error => { runtimeLog(app.getPath('userData'),'main-start-error',String(error));console.error(error); app.quit(); });
 }
-app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(scrollCapture?.needsQuitPreparation){event.preventDefault();finishingQuit=scrollCapture.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();},error=>{finishingQuit=undefined;runtimeError(app.getPath('userData'),'scroll-quit',error);});return;}if(imageEditor&&(imageEditor.editor.window||imageEditor.pendingTasks)){event.preventDefault();finishingQuit=imageEditor.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();else scrollCapture?.resetQuitApproval();},error=>{finishingQuit=undefined;scrollCapture?.resetQuitApproval();runtimeError(app.getPath('userData'),'editor-quit',error);});return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageAi.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks||materials?.pendingTasks||pins?.pendingTasks||capture?.pendingTasks||scrollCapture?.pendingTasks||recognition?.pendingTasks){event.preventDefault();finishingQuit=(scrollCapture?.stop()||Promise.resolve()).then(()=>capture?.stop()).then(()=>recognition?.stop()).then(()=>Promise.all([pins?.stop(),materials?.stop(),fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageAi.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]));void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;imageEditor?.stop();void pins?.stop();void materials?.stop();aiService?.dispose();nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
+app.on('before-quit', event => { if(finishingQuit){event.preventDefault();return;}if(recording?.needsQuitPreparation){event.preventDefault();finishingQuit=recording.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();},error=>{finishingQuit=undefined;runtimeError(app.getPath('userData'),'recording-quit',error);});return;}if(scrollCapture?.needsQuitPreparation){event.preventDefault();finishingQuit=scrollCapture.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();else void recording?.resetQuitApproval();},error=>{finishingQuit=undefined;void recording?.resetQuitApproval();runtimeError(app.getPath('userData'),'scroll-quit',error);});return;}if(imageEditor&&(imageEditor.editor.window||imageEditor.pendingTasks)){event.preventDefault();finishingQuit=imageEditor.prepareQuit();void finishingQuit.then(accepted=>{finishingQuit=undefined;if(accepted)app.quit();else {scrollCapture?.resetQuitApproval();void recording?.resetQuitApproval();}},error=>{finishingQuit=undefined;scrollCapture?.resetQuitApproval();void recording?.resetQuitApproval();runtimeError(app.getPath('userData'),'editor-quit',error);});return;}if(!pickerQuitReady||fileTools?.pendingTasks||textService?.pendingTasks||archiveService?.pendingTasks||imageConvert.pendingTasks||imageAi.pendingTasks||imageMetadata.pendingTasks||developerHash.pendingTasks||materials?.pendingTasks||pins?.pendingTasks||capture?.pendingTasks||scrollCapture?.pendingTasks||recognition?.pendingTasks||recording?.pendingTasks){event.preventDefault();finishingQuit=(recording?.stop()||Promise.resolve()).then(()=>scrollCapture?.stop()).then(()=>capture?.stop()).then(()=>recognition?.stop()).then(()=>Promise.all([pins?.stop(),materials?.stop(),fileTools?.stop(),textService?.stop(),archiveService?.stop(),imageConvert.stopAll(),imageAi.stopAll(),imageMetadata.stopAll(),developerHash.stopAll(),flushPickerState()]));void finishingQuit.then(()=>{pickerQuitReady=true;finishingQuit=undefined;app.quit();},error=>{finishingQuit=undefined;runtimeError(app.getPath('userData'),'quit-cleanup',error);});return;}fileTools?.stop();void archiveService?.stop(); quitting=true;imageEditor?.stop();void pins?.stop();void materials?.stop();aiService?.dispose();nativeOfficePreview.stopAll();nativeTooltips.stopAll();barcodeCapture.stop();displayShortcuts?.stop();displayManagement.stop();themeLocation.cancel();themeAutomation?.stop();powerMonitor.removeListener('resume',syncThemeAfterWake);powerMonitor.removeListener('unlock-screen',syncThemeAfterWake);cancelHotkeyOwner();shellInbox?.stop();runtimeLog(app.getPath('userData'),'main-quit');menuConfirmation.stop();colorEditor?.stop();popupLifecycle.stop();launcher?.stop();fileMenu?.hide(false);trayMenuPanel?.dispose();maintenance?.stop();systemInformation?.stop();proxyDiagnostics?.stop();diskMonitor?.stop();diskService?.stop();echoes?.stop();void textService?.stop();dialogBar?.stop();searchBridge?.stop();void search?.stop();locksmith?.stop();for(const service of fileLocks.values())service.stop();awake?.stop();topmost?.stop();clicker?.stop();closeScreenRuler();closeColors(); brightness.stop(); input?.stop(); globalShortcut.unregisterAll(); for (const worker of workers) void worker.terminate(); tray?.destroy(); });
 app.on('window-all-closed', () => { if (testMode) app.quit(); });
