@@ -46,7 +46,7 @@ One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在�
 
 首批原型固定 [tiny 检测](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/tree/2ba1506c0380b8f0b03dd142459aac66d4421f6c) 与 [tiny 识别](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/tree/2612ab37152ae0a677521bae4e1e3d4fb4cf7c30) 官方 ONNX/YAML，权重许可标为 Apache-2.0；使用同版本字典和前后处理，不需要 Python。已实现 CPU/DirectML 推理、DB 文字框与透视裁剪，CTC 发射区间只标作近似对齐信息，不冒充实际字框。当前文档输出保留真实检测四边形，选择粒度为整行词框；精细对齐和方向模型仍待后续适配。推理已移入独立进程，校验后的权重字节直接交给 ONNX，避免校验与加载之间再打开可变化的文件；取消、超时和内存超限结束整个推理进程，旧输入保留。统一模型/设备管理、跨功能调度和各预设仍需接入，当前原型不改变用户的默认 OCR。
 
-可重复基准入口为 `node scripts/prepare-recognition-benchmark.mjs --prepare` 和 `node tests/recognition-paddle-runtime.cjs`，前者无 `--prepare` 时只验证已缓存文件。当前通过 60 张合成单行与三类合成整图的 CPU/DirectML 设备 0 核验；同图 Tesseract 也识别出三类整图的预期文字，因此不能据此证明默认引擎应替换。结果记录文字、CER、冷启动、阶段耗时和进程 RSS，GPU 显存与物理适配器映射尚未测量；真实分层样本与其他模型/尺寸仍按 A 门槛验收，不把合成样本成绩推广到真实使用场景。
+可重复基准入口为 `node scripts/prepare-recognition-benchmark.mjs --prepare` 和 `node tests/recognition-paddle-runtime.cjs`，前者无 `--prepare` 时只验证已缓存文件。当前通过 60 张合成单行与中英三行、深色、顺时针 90°、紧裁剪单行四类整图的 CPU/DirectML 设备 0 核验；同图 Tesseract 也识别出预期文字，因此不能据此证明默认引擎应替换。结果记录文字、CER、冷启动、阶段耗时和进程 RSS，GPU 峰值显存尚未测量；DXGI 设备号/会话身份与指定设备推理已核验，真实分层样本与其他模型/尺寸仍按 A 门槛验收，不把合成样本成绩推广到真实使用场景。
 
 ### 3.2 本地模型、尺寸与 GPU 管理
 
@@ -65,6 +65,8 @@ One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在�
 共享缓存基础层已实现：预设绑定整套权重和配置的固定大小/SHA-256，下载取消或超时保留进度，Range 响应严格校验，不支持 Range 时安全重下；全部文件通过校验后才发布整个目录。版本可共存，推理租约阻止使用中删除，读取和安装拒绝缓存符号链接。PP-OCRv6 tiny 已通过新缓存的实际 CPU 推理；MI-GAN 修复已接入共享缓存和租约，旧缓存校验后离线复制迁入，仍保留旧位置供旧版使用；修复推理、EXIF/Alpha、原文件保护、界面双模式和中途取消回归通过。缓存与推理检查入口为 `node tests/local-model-store.cjs`、`node tests/local-model-runtime.cjs`，后者只使用已准备的官方模型文件，不自动下载。模型选择界面、设备枚举、其他预设及跨功能调度仍待接入，当前不改变默认 OCR。
 
 设备设置为“自动 / CPU / GPU”，可选具体显卡，高级设置中选择已适配后端；运行时显示实际设备。自动模式先探测模型和后端是否兼容，再决定设备；小任务 GPU 启动开销过大时也可选 CPU，不能承诺 GPU 对每张图都更快。
+
+设备基础层已按 ORT 的 DXGI 枚举顺序输出原始 `device_id`、会话 LUID、名称、PCI 标识和独立/共享显存容量，并检查 D3D12 前置能力；不把这个检查当作某模型的兼容性证明。`node tests/inference-devices.cjs` 检查枚举变化、失效设备及 CPU 回退；加 `--runtime` 用已准备的 tiny 模型逐个测试当前适配器。此次系统暴露 NVIDIA/AMD 共五个逻辑适配器，均通过指定设备的 DirectML 推理；相同名称不合并，也不把逻辑条目数当作物理显卡数。结果在 `work/current/capture-reconstruction/inference-devices-benchmark.json`。当前 LUID 只作为会话身份，失效后强制 GPU 报错、自动模式回退 CPU；跨重启的显卡偏好匹配、驱动/峰值显存记录和用户入口仍待实现。已运行 dev 占用 `One.Monitor.exe`，本次独立构建原生程序后通过 `ONE_INFERENCE_MONITOR` 指定验证；尚未替换运行中的辅助程序。
 
 - Windows ONNX 通路优先验证 DirectML，覆盖兼容的 NVIDIA/AMD/Intel 显卡；同时评估 WinML 的后续接入价值。ONNX Runtime 官方 Node 预编译支持表中 Windows 有 DirectML，Windows CUDA 并未列为预编译支持，不能靠修改一个参数就承诺 CUDA 可用。[Node 支持表](https://onnxruntime.ai/docs/get-started/with-javascript/node.html)、[DirectML/WinML 状态](https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html)
 - 对 NVIDIA 高性能推理，以及无法可靠转成 ONNX 的公式模型，另行适配按需安装的原生或 Paddle/PyTorch 推理运行包，验证 CUDA/驱动版本；不要求用户手动配置开发环境。Paddle 公式模块支持 CPU/GPU 设备参数，但不等于已在 One 中完成部署。[官方模块](https://www.paddleocr.ai/main/en/version3.x/module_usage/formula_recognition.html)
