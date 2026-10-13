@@ -5,7 +5,6 @@ import { ScanText } from 'lucide';
 import { customControls } from '../controls';
 import type { OCRAPI, OCRLanguage, OCRState } from '../../shared/recognition/ocr';
 import { mountTranslation } from './translation-ui';
-import { mountTable } from './table-ui';
 import { mountFormula } from './formula-ui';
 const api = window.one.recognition!;
 const back = document.createElement('button');
@@ -21,7 +20,7 @@ let state: OCRState,
   disposed = false,
   requesting = false,
   polling = false;
-let mode: 'text' | 'translation' | 'table' | 'formula' = 'text',
+let mode: 'text' | 'translation' | 'formula' = 'text',
   ocrSummary = q('summary').textContent || '';
 let workflowRead = '';
 const workflowBusy = () => ['recognizing', 'translating'].includes(state?.workflow?.status || '');
@@ -29,14 +28,6 @@ const message = (value: unknown) => {
   q('message').textContent = value instanceof Error ? value.message : String(value);
 };
 const translation = mountTranslation(
-  api,
-  () => (state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined),
-  message,
-  () => {
-    if (state) render();
-  },
-);
-const table = mountTable(
   api,
   () => (state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined),
   message,
@@ -52,23 +43,20 @@ const formula = mountFormula(
     if (state) render();
   },
 );
-for (const next of ['text', 'translation', 'table', 'formula'] as const)
+for (const next of ['text', 'translation', 'formula'] as const)
   q(next + '-tab').onclick = () => {
     if (
       requesting ||
       state?.running ||
       workflowBusy() ||
       translation.busy() ||
-      table.busy() ||
       formula.busy()
     )
       return;
     mode = next;
     translation.setMode(next === 'translation');
-    table.setMode(next === 'table');
     formula.setMode(next === 'formula');
-    if (next === 'table') message('可校正文字与行列，按住 Shift 选择合并区域');
-    else if (next === 'text') message('识别结果可修正或复制');
+    if (next === 'text') message('识别结果可修正或复制');
     if (state) render();
   };
 function render() {
@@ -82,7 +70,6 @@ function render() {
     workflowBusy() ||
     state.running ||
     translation.busy() ||
-    table.busy() ||
     formula.busy() ||
     state.models.downloading ||
     !state.models.ready;
@@ -98,28 +85,23 @@ function render() {
     ? state.models.progress
     : state.progress;
   translation.render();
-  table.render();
   formula.render();
-  document.body.classList.toggle('table-mode', mode === 'table');
   document.body.classList.toggle('formula-mode', mode === 'formula');
-  q('text-result').hidden = mode === 'table' || mode === 'formula';
-  q('copy').hidden = mode === 'table' || mode === 'formula';
+  q('text-result').hidden = mode === 'formula';
+  q('copy').hidden = mode === 'formula';
   if (mode === 'formula') q('ocr-tools').hidden = true;
-  q('run').textContent = mode === 'table' ? '识别表格' : '识别文字';
-  for (const next of ['text', 'translation', 'table', 'formula']) {
+  for (const next of ['text', 'translation', 'formula']) {
     const tab = q<HTMLButtonElement>(next + '-tab');
     tab.disabled =
       requesting ||
       state.running ||
       workflowBusy() ||
       translation.busy() ||
-      table.busy() ||
       formula.busy();
     tab.ariaSelected = String(mode === next);
     tab.classList.toggle('selected', mode === next);
   }
-  if (mode !== 'table')
-    q('summary').textContent =
+  q('summary').textContent =
       mode === 'translation'
         ? '译文请核对后使用'
         : mode === 'formula'
@@ -155,7 +137,6 @@ async function syncWorkflow() {
   if (!workflow || workflow.id === workflowRead) return;
   mode = 'translation';
   translation.setMode(true);
-  table.setMode(false);
   formula.setMode(false);
   if (workflowBusy()) return;
   workflowRead = workflow.id;
@@ -175,7 +156,6 @@ q('run').onclick = async () => {
     const result = await api.run(
       state.token,
       q<HTMLSelectElement>('language').value as OCRLanguage,
-      mode === 'table' ? 'table' : 'text',
     );
     q<HTMLTextAreaElement>('result').value = result.text;
     translation.sourceChanged();
@@ -183,7 +163,6 @@ q('run').onclick = async () => {
       ? `${result.words.length} 个词块 · 可信度 ${Math.round(result.confidence)}% · 请核对结果`
       : '未识别到文字，可裁剪图片或更换语言后重试';
     message(result.text.trim() ? '识别完成，可修正或复制文字' : '未识别到文字');
-    await table.recognized();
   } catch (error) {
     message(error);
   } finally {

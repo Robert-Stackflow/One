@@ -25,7 +25,6 @@ export class OCRRunner {
     size: { width: number; height: number },
     language: OCRLanguage,
     progress: (value: number) => void = () => {},
-    mode: 'text' | 'table' = 'text',
   ): Promise<OCRResult> {
     if (this.active) return Promise.reject(Error('正在识别，请先取消当前任务'));
     ocrDimensions(size.width, size.height);
@@ -37,7 +36,7 @@ export class OCRRunner {
       try {
         if (abort.signal.aborted) throw Error('文字识别已取消');
         worker = new Worker(this.workerFile, {
-          workerData: { png: Uint8Array.from(png), ...size, language, packs, mode },
+          workerData: { png: Uint8Array.from(png), ...size, language, packs },
           resourceLimits: { maxOldGenerationSizeMb: 192 },
         });
         for (const pack of packs) pack.data.fill(0);

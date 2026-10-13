@@ -2,7 +2,7 @@ const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),sharp=require('sharp');
 async function main(){
   const output=path.resolve('work/current/capture-migration');await fs.mkdir(output,{recursive:true});
-  const root=await fs.mkdtemp(path.join(output,'recognition-window-')),profile=path.join(root,'profile'),input=path.join(root,'recognition.png'),exported=path.join(root,'table.xlsx');
+  const root=await fs.mkdtemp(path.join(output,'recognition-window-')),profile=path.join(root,'profile'),input=path.join(root,'recognition.png');
   await fs.mkdir(path.join(profile,'recognition/models'),{recursive:true});
   for(const language of ['eng','chi_sim'])await fs.copyFile(path.resolve('work/current/fixtures/recognition-models',language+'.traineddata'),path.join(profile,'recognition/models',language+'.traineddata'));
   const png=await sharp(Buffer.from('<svg width="1400" height="320" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><g fill="black" font-family="Arial" font-size="64"><text x="50" y="95">ONE OCR 2026</text><text x="50" y="190">sample@example.com</text></g><text x="50" y="280" fill="black" font-family="Microsoft YaHei" font-size="54">截图识别测试</text></svg>')).png().toBuffer();await fs.writeFile(input,png);
@@ -17,13 +17,12 @@ async function main(){
     const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
     app=await electron.launch({args:[path.resolve('.')],env});
     const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
-    await app.evaluate(({dialog,clipboard},{input,exported})=>{
-      global.recognitionCopies=[];global.recognitionExport=exported;
+    await app.evaluate(({dialog,clipboard},{input})=>{
+      global.recognitionCopies=[];
       dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});
-      dialog.showSaveDialog=async()=>({canceled:!global.recognitionExport,filePath:global.recognitionExport});
       clipboard.writeText=async text=>{global.recognitionCopies.push({text});};
       clipboard.write=async items=>{const item=items[0];global.recognitionCopies.push({text:await(await item.getType('text/plain')).text(),html:await(await item.getType('text/html')).text()});};
-    },{input,exported});
+    },{input});
     await home.locator('[data-page=materials]').click();await home.getByRole('button',{name:'导入图片',exact:true}).click();
     const cards=home.locator('#material-results .asset-card');await expect(cards).toHaveCount(1);
     const materialId=await cards.first().getAttribute('data-material-card');
@@ -53,14 +52,8 @@ async function main(){
     await page.locator('#copy').click();await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.length)).toBe(1);
     assert.match(await app.evaluate(()=>global.recognitionCopies[0].text),/sample@example.com/);
     await page.screenshot({path:path.join(output,'recognition-window.png'),scale:'css'});
-    await page.locator('#table-tab').click();await page.locator('#table-new').click();await expect(page.locator('#table-grid .table-cell')).not.toHaveCount(0);
-    await page.locator('#table-grid .table-cell').first().click();await page.locator('#table-cell-text').fill('One table correction');await page.locator('#summary').click();
-    await expect(page.locator('#table-grid .table-cell').first()).toHaveText('One table correction');
-    await page.locator('#table-copy').click();await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.length)).toBe(2);assert.match(await app.evaluate(()=>global.recognitionCopies[1].html),/One table correction/);
-    await page.locator('#table-save').click();await expect.poll(async()=>{try{return (await fs.readFile(exported)).subarray(0,2).toString();}catch{return '';}}).toBe('PK');
-    await app.evaluate((_e,file)=>{global.recognitionExport=file;},path.join(profile,'blocked.xlsx'));
-    await page.locator('#table-save').click();await expect(page.locator('#message')).toContainText('One 数据目录');await assert.rejects(fs.stat(path.join(profile,'blocked.xlsx')),/ENOENT/);
-    await app.evaluate((_e,file)=>{global.recognitionExport=file;},exported);
+    await expect(page.locator('#table-tab')).toHaveCount(0);
+    assert.deepEqual(await page.evaluate(() => ['table', 'copyTable', 'saveTable'].map(name => typeof window.one.recognition[name])), ['undefined', 'undefined', 'undefined']);
     await page.locator('#translation-tab').click();await page.locator('#translation-configure').click();await expect(page.locator('#translation-settings')).toBeVisible();
     await page.locator('#translation-endpoint').fill(endpoint+'/translate/exact/completions');await page.locator('#translation-model').fill('fixture-translation');await page.locator('#translation-key').fill('translation-fixture-key');
     await page.locator('#translation-save').click();await expect(page.locator('#translation-settings')).not.toBeVisible();
@@ -96,7 +89,7 @@ async function main(){
     assert.equal(await page.evaluate(async token=>{try{await window.one.recognition.run(token,'eng');return false;}catch{return true;}},initial.token),true);
     await page.locator('#formula-tab').click();await page.locator('#formula-recognize').click();await expect.poll(()=>requests.length).toBe(4);
     const appProcess=app.process();await app.evaluate(({app})=>app.quit());await expect.poll(()=>appProcess.exitCode,{timeout:15000}).not.toBeNull();app=undefined;
-    assert.deepEqual(errors,[]);console.log('Recognition window passed: real OCR, correction/copy/table export, encrypted exact endpoints, formula worker, cancellation, resource isolation, reopen, scale and active-request exit.');
+    assert.deepEqual(errors,[]);console.log('Recognition window passed: real OCR, correction/copy and removed table bridge, encrypted exact endpoints, formula worker, cancellation, resource isolation, reopen, scale and active-request exit.');
   }finally{
     if(app)await app.close().catch(()=>{});server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
     const actual=await fs.realpath(root);assert.equal(path.dirname(actual),await fs.realpath(output));assert.ok(path.basename(actual).startsWith('recognition-window-'));await fs.rm(actual,{recursive:true,force:true,maxRetries:3,retryDelay:100});

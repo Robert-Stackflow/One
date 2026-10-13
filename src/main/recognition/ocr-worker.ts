@@ -21,7 +21,7 @@ async function run() {
       },
     });
     await worker.setParameters({
-      tessedit_pageseg_mode: workerData.mode === 'table' ? PSM.SPARSE_TEXT : PSM.AUTO,
+      tessedit_pageseg_mode: PSM.AUTO,
       preserve_interword_spaces: '1',
     });
     const result = await worker.recognize(

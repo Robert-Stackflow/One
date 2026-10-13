@@ -38,7 +38,7 @@ export interface OCRAPI {
   returnToCapture(token: string, id: string): Promise<void>;
   workflowResult(token: string, id: string): Promise<OCRWorkflowResult>;
   state(): Promise<OCRState>;
-  run(token: string, language: OCRLanguage, mode?: 'text' | 'table'): Promise<OCRResult>;
+  run(token: string, language: OCRLanguage): Promise<OCRResult>;
   cancel(): Promise<void>;
   install(): Promise<void>;
   cancelInstall(): Promise<void>;
@@ -53,9 +53,6 @@ export interface OCRAPI {
     revision: string,
   ): Promise<TranslationResult>;
   cancelTranslation(): Promise<void>;
-  table(token: string): Promise<TableDocument>;
-  copyTable(token: string, value: TableDocument): Promise<void>;
-  saveTable(token: string, value: TableDocument): Promise<string | null>;
   formulaConfig(): Promise<TranslationConfig>;
   saveFormula(value: TranslationSettings): Promise<TranslationConfig>;
   clearFormula(revision: string): Promise<TranslationConfig>;
@@ -148,5 +145,4 @@ import type {
   TranslationLanguage,
   TranslationResult,
 } from './translation';
-import type { TableDocument } from './table';
 import type { FormulaResult } from './formula';

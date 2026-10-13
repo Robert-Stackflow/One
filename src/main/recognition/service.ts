@@ -1,5 +1,5 @@
 import {serviceCredentialCrypto,type ServiceConnectionStorage} from '../service-connections';
-import {clipboard,nativeImage,ClipboardItem,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
+import {clipboard,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { decodePng, pngDimensions } from '../capture/clipboard';
@@ -11,9 +11,6 @@ import { ocrDimensions, ocrLanguage, ocrText, type OCRResult } from '../../share
 import { RecognitionConnectionStore } from './connections';
 import { TranslationClient } from './translation-client';
 import type { TranslationResult } from '../../shared/recognition/translation';
-import { recognizeTable } from '../../shared/recognition/table-recognition';
-import { tableClipboard } from '../../shared/recognition/table';
-import { saveTable } from './table-export';
 import { FormulaClient } from './formula-client';
 import { formulaText, type FormulaResult } from '../../shared/recognition/formula';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
@@ -45,7 +42,6 @@ export class OCRService {
   private translationSerial = 0;
   private translationTask?: Promise<TranslationResult>;
   private configuring = false;
-  private exportingTable = false;
   private error = '';
   private opening = false;
   private settling: Promise<unknown> = Promise.resolve();
@@ -141,42 +137,6 @@ export class OCRService {
       if (!text.trim()) throw Error('没有可复制的文字');
       await clipboard.writeText(text);
     });
-    const tableReady = (token: unknown) => {
-      if (token !== this.token || !this.png) throw Error('识别图片已失效');
-      if (this.running || this.translating || this.formulaRecognizing || this.workflow.active)
-        throw Error('请等待当前识别或翻译完成');
-    };
-    handle('table', (token) => {
-      tableReady(token);
-      if (!this.result) throw Error('请先识别图片，再重建表格');
-      return recognizeTable(this.result, nativeImage.createFromBuffer(this.png!).toBitmap());
-    });
-    handle('table-copy', async (token, value) => {
-      tableReady(token);
-      const content = tableClipboard(value);
-      await clipboard.write([
-        new ClipboardItem({
-          'text/plain': new Blob([content.text], { type: 'text/plain' }),
-          'text/html': new Blob([content.html], { type: 'text/html' }),
-        }),
-      ]);
-    });
-    handle('table-save', async (token, value) => {
-      tableReady(token);
-      if (this.exportingTable) throw Error('请先完成当前表格导出');
-      const window = this.window!;
-      this.exportingTable = true;
-      try {
-        return await saveTable(
-          window,
-          value,
-          () => this.window === window && this.token === token && !ctx.blocked(),
-          ctx.protect,
-        );
-      } finally {
-        this.exportingTable = false;
-      }
-    });
     handle('translation-config', () => this.translationStore.state());
     handle('translation-save', (value) => {
       return this.configureTranslation(() => this.translationStore.save(value));
@@ -255,7 +215,8 @@ export class OCRService {
     if (this.running) throw Error('正在识别，请先取消当前任务');
     if (this.translating) throw Error('请先取消翻译，再识别文字');
     if (this.formulaRecognizing) throw Error('请先取消公式识别');
-    if (mode !== 'text' && mode !== 'table') throw Error('识别模式无效');
+    if (mode === 'table') throw Error('表格识别已移除，请使用普通文字识别');
+    if (mode !== 'text') throw Error('识别模式无效');
     const language = ocrLanguage(value),
       generation = this.token;
     this.running = true;
@@ -269,7 +230,6 @@ export class OCRService {
         (value) => {
           if (this.token === generation) this.progress = Math.max(this.progress, value);
         },
-        mode,
       );
       if (generation !== this.token || this.ctx.blocked()) throw Error('文字识别已取消');
       this.result = result;
