@@ -21,7 +21,7 @@
 - [x] 文件搜索快捷入口支持配置打开 One 的快捷键；搜索建议统一左对齐，点击或键盘确认立即搜索。
 - [x] 工具提示重做圆角、三角、留白、阴影与反色主题，修正继承边框导致的亮边。
 
-验证入口：`tests/sidebar-config.test.cjs`、`tests/capture-pin-placement-smoke.cjs`、`tests/sidebar-smoke.cjs`、`tests/tray-menu-smoke.cjs`、`tests/ports-smoke.cjs`、`tests/tooltip-rename-smoke.cjs`、`tests/main-shortcut-smoke.cjs`、`tests/search-suggestions-smoke.cjs`；证据在 `verification/0.16.24`。交付版本为 0.16.24；安装器与校验记录归入 release/0.16.24，最终以 verified.json 和 Git 提交为准。本轮不执行安装；以下迁移暂停状态保持。
+验证入口：`tests/sidebar-config.test.cjs`、`tests/capture-pin-placement-smoke.cjs`、`tests/sidebar-smoke.cjs`、`tests/tray-menu-smoke.cjs`、`tests/ports-smoke.cjs`、`tests/tooltip-rename-smoke.cjs`、`tests/main-shortcut-smoke.cjs`、`tests/search-suggestions-smoke.cjs`；证据在 `verification/0.16.24`。0.16.24 安装器已生成，位于 `work/current/sidebar-tray/installer-0.16.24/One-0.16.24-Setup-x64.exe`，同目录 `verified.json` 记录源码提交、资源和 SHA-256；2536 个构建资源及打包应用、安装器界面验证通过。本轮不执行安装。旧版及打包中间文件清理被自动审批策略拒绝，候选保留原目录，release 仍保留 0.16.22/0.16.23；以下迁移暂停状态保持。
 
 ## 截图与录制迁入 One
 
