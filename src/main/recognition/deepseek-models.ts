@@ -1,6 +1,6 @@
 import type { LocalModelDescriptor } from '../../shared/local-models';
 export interface DeepSeekOCRPreset extends LocalModelDescriptor { generation:'v1'|'v2'; memoryBudgetMiB:number; contextTokens:number; outputTokens:number }
-/** Qualified converted weights; registered in the UI only after complete task integration. */
+/** Fixed, qualified community GGUF conversions of the original MIT-licensed models. */
 export const deepseekOCRPresets: readonly DeepSeekOCRPreset[] = [
   {
     "id": "deepseek-ocr-v1",
@@ -20,6 +20,7 @@ export const deepseekOCRPresets: readonly DeepSeekOCRPreset[] = [
       "cuda"
     ],
     "memoryBudgetMiB": 8192,
+    "measuredMemoryMiB": 4993,
     "contextTokens": 16384,
     "outputTokens": 8192,
     "weightLicense": {
@@ -61,6 +62,7 @@ export const deepseekOCRPresets: readonly DeepSeekOCRPreset[] = [
       "cuda"
     ],
     "memoryBudgetMiB": 8192,
+    "measuredMemoryMiB": 5909,
     "contextTokens": 16384,
     "outputTokens": 8192,
     "weightLicense": {

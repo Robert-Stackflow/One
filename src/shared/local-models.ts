@@ -53,6 +53,9 @@ export interface LocalModelEntry extends LocalModelState {
   languages: string[];
   backends: LocalModelBackend[];
   weightLicense: string;
+  weightLicenseSource?: string;
+  source?: string;
+  runtimeReady?:{cpu:boolean;cuda:boolean};
   runtime: string;
   precision: string;
   measuredMemoryMiB?: number;

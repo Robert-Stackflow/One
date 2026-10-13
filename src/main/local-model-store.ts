@@ -51,6 +51,7 @@ export function localModelIdentity(input: LocalArtifactBundle) {
 /** Fixed-hash weights/runtime cache. A directory becomes visible only when every artifact is verified. */
 export class LocalModelStore {
   readonly root: string;
+  private invalid = new Set<string>();
   constructor(root: string, private transport: typeof fetch = fetch, private idleTimeoutMs = 25000) { this.root = resolve(root); }
   private paths(model: LocalArtifactBundle) {
     const key = localModelIdentity(model);
@@ -72,6 +73,8 @@ export class LocalModelStore {
       if (await directory(paths.stage)) for (const artifact of model.artifacts)
         downloadedBytes += await fileBytes(join(paths.stage, artifact.name), artifact.bytes) + await fileBytes(join(paths.stage, artifact.name + '.part'), artifact.bytes);
     }
+    if(verifyIntegrity){if(ready)this.invalid.delete(paths.lock);else this.invalid.add(paths.lock);}
+    else if(this.invalid.has(paths.lock))ready=false;
     return { ready, downloadedBytes: ready ? totalBytes : downloadedBytes, diskBytes: installedBytes + downloadedBytes,
       totalBytes, downloading: operations.get(paths.lock) === 'install', inUse: !!leases.get(paths.lock) };
   }
@@ -112,6 +115,7 @@ export class LocalModelStore {
       // An existing invalid bundle has no active readers and is removed only after its replacement is complete.
       if (await directory(paths.installed)) await rm(paths.installed, { recursive: true });
       await rename(paths.stage, paths.installed);
+      this.invalid.delete(paths.lock);
       progress({ phase: 'ready', received: total, total });
       return paths.installed;
     } finally { operations.delete(paths.lock); }
@@ -184,7 +188,7 @@ export class LocalModelStore {
     try {
       if (!(await this.state(model,signal)).ready) throw Error('模型缺失或校验失败，请下载或修复模型');
       return { model, files: model.artifacts.map(artifact => ({ ...artifact, path: join(paths.installed, artifact.name) })), release };
-    } catch (error) { release(); throw error; }
+    } catch (error) { if(!signal?.aborted)this.invalid.add(paths.lock);release(); throw error; }
   }
   async remove(model: LocalArtifactBundle) {
     const paths = this.paths(model);
@@ -193,6 +197,7 @@ export class LocalModelStore {
     try {
       if (!await directory(this.root)) return;
       for (const path of [paths.installed, paths.stage]) if (await directory(path)) await rm(path, { recursive: true });
+      this.invalid.delete(paths.lock);
     } finally { operations.delete(paths.lock); }
   }
 }

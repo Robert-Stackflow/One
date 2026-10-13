@@ -1,4 +1,5 @@
 import type { LocalModelDescriptor } from '../shared/local-models';
+import { deepseekOCRPresets } from './recognition/deepseek-models';
 
 const paddle = (repository: string, revision: string, name: string, role: string, remote: string, bytes: number, sha256: string) =>
   ({ name, role, bytes, sha256, url: `https://huggingface.co/PaddlePaddle/${repository}/resolve/${revision}/${remote}` });
@@ -55,4 +56,4 @@ export const miganModel: LocalModelDescriptor = {
   artifacts: [{ name: 'migan.onnx', role: 'repair', bytes: 28079181, sha256: '6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b',
     url: 'https://huggingface.co/andraniksargsyan/migan/resolve/406830d0fa60666da0071c342ad2fbc8f30c5c64/migan_pipeline_v2.onnx' }],
 };
-export const localModelCatalog: readonly LocalModelDescriptor[] = [...paddleOCRPresets, miganModel];
+export const localModelCatalog: readonly LocalModelDescriptor[] = [...paddleOCRPresets, ...deepseekOCRPresets, miganModel];

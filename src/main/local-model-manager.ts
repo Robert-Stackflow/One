@@ -8,6 +8,14 @@ import { localModelCatalog } from './local-model-catalog';
 import { readInferenceDevices } from './inference-devices';
 import { OCRModels, ocrPacks } from './recognition/ocr-models';
 import { aiModelPath, repairModel, validAiModel } from './image-ai-model';
+import { resolveCUDAInferenceDevice } from './inference-devices';
+import type { LlamaRuntimeStore } from './recognition/llama-runtime-store';
+import { llamaRuntimeProfiles } from './recognition/llama-runtime-catalog';
+
+export interface LocalModelManagerOptions {
+  runtimes?: LlamaRuntimeStore;
+  unloadNative?:(id?:string)=>Promise<void>;
+}
 
 const defaults = () => ({ ocr: { modelId: 'tesseract', device: { mode: 'auto' as const } }, repair: { modelId: 'migan-pipeline-v2', device: { mode: 'auto' as const } } });
 export class LocalModelManager {
@@ -27,7 +35,7 @@ export class LocalModelManager {
   private legacyRepairReady = false;
   private stopped = false;
   constructor(private dataDirectory: string, private tesseract: OCRModels, transport: typeof fetch = fetch,
-      private deviceReader: typeof readInferenceDevices = readInferenceDevices) {
+      private deviceReader: typeof readInferenceDevices = readInferenceDevices, private options:LocalModelManagerOptions={}) {
     this.dataDirectory = resolve(dataDirectory);
     this.store = new LocalModelStore(join(dataDirectory, 'models', 'library'), transport);
   }
@@ -44,7 +52,7 @@ export class LocalModelManager {
       const model = this.preset(value.modelId); if (model.purpose !== purpose) throw Error('模型与功能不匹配'); return model.backends;
     })();
     const device = inferencePreference(value.device);
-    if (device.mode === 'gpu' && !backends.includes('dml')) throw Error('此模型尚未适配 GPU，请使用 CPU 或自动模式');
+    if (device.mode === 'gpu' && !backends.includes('dml') && !backends.includes('cuda')) throw Error('此模型尚未适配 GPU，请使用 CPU 或自动模式');
     return { modelId: value.modelId, device };
   }
   private load() {
@@ -89,7 +97,11 @@ export class LocalModelManager {
     const model = this.preset(id);
     // UI reads installed-file metadata only. Download publication and acquire()
     // verify SHA-256; opening/polling a dialog must never stream model weights.
-    if (model.purpose === 'ocr') return this.store.state(model, undefined, false);
+    if (model.purpose === 'ocr') {
+      const state=await this.store.state(model,undefined,false);
+      if(model.backends.includes('cuda'))state.ready=state.ready&&!!(await this.options.runtimes?.state('cpu'))?.ready;
+      return state;
+    }
     if (!this.states.has(id) || refresh) {
       this.states.set(id, await this.store.state(model));
       if (model.purpose === 'repair') this.legacyRepairReady = await validAiModel(this.dataDirectory, repairModel);
@@ -105,6 +117,7 @@ export class LocalModelManager {
   }
   async state(refresh = false, purpose?: LocalModelPurpose): Promise<LocalModelManagerState> {
     await this.load();
+    let runtimeReady:Promise<{cpu:boolean;cuda:boolean}>|undefined;
     const legacy = await this.tesseract.state(), legacyBytes = ocrPacks.reduce((sum, file) => sum + file.bytes, 0);
     const entries: LocalModelEntry[] = [{ id: 'tesseract', title: 'Tesseract', size: 'fast', purpose: 'ocr', revision: 'tessdata_fast@8741641',
       languages: ['中文', 'English'], backends: ['cpu'], weightLicense: 'Apache-2.0', runtime: 'tesseract.js', precision: 'traineddata',
@@ -114,11 +127,15 @@ export class LocalModelManager {
     for (const model of localModelCatalog) {
       if(purpose&&model.purpose!==purpose)continue;
       const cached = await this.modelState(model.id, refresh), progress = this.progress.get(model.id), downloading = this.tasks.has(model.id);
-      entries.push({ ...cached, downloading, inUse: cached.inUse || !!this.usage.get(model.id), id: model.id, title: model.title, size: model.size,
+      const native=model.backends.includes('cuda');
+      if(native&&!runtimeReady)runtimeReady=Promise.all([this.options.runtimes?.state('cpu'),this.options.runtimes?.state('cuda')]).then(([cpu,cuda])=>({cpu:!!cpu?.ready,cuda:!!cuda?.ready}));
+      entries.push({ ...cached, downloading, inUse: native ? !!this.usage.get(model.id) : cached.inUse || !!this.usage.get(model.id), id: model.id, title: model.title, size: model.size,
         purpose: model.purpose, revision: model.revision, languages: [...model.languages], backends: [...model.backends], weightLicense: model.weightLicense.name,
         runtime: model.runtime, precision: model.precision, measuredMemoryMiB: model.measuredMemoryMiB, measuredVRAMMiB: model.measuredVRAMMiB,
-        progress: progress ? progress.received / progress.total : 0, downloadedBytes: downloading && progress ? progress.received : cached.downloadedBytes,
-        error: this.errors.get(model.id) || '', note: model.purpose === 'ocr' ? '实验阶段；已验证 CPU/DirectML；当前选择粒度为真实整行框' : '已验证 CPU；保留旧缓存供旧版使用' });
+        weightLicenseSource:model.weightLicense.source,source:native?model.artifacts[0].url.split('/resolve/')[0]:undefined,
+        runtimeReady:native?await runtimeReady:undefined,
+        progress: progress ? progress.received / progress.total : 0, downloadedBytes: downloading && progress ? Math.min(cached.totalBytes,progress.received) : cached.downloadedBytes,
+        error: this.errors.get(model.id) || '', note: native?'CPU / NVIDIA CUDA；当前仅提供文字结果，不提供图上选字':model.purpose === 'ocr' ? '实验阶段；已验证 CPU/DirectML；当前选择粒度为真实整行框' : '已验证 CPU；保留旧缓存供旧版使用' });
     }
     return { revision: this.revision, choices: structuredClone(this.choices), entries, devices: structuredClone(this.devices) };
   }
@@ -126,22 +143,47 @@ export class LocalModelManager {
     const selected = await this.selection('ocr');
     if (selected.modelId === 'tesseract') return { ...await this.tesseract.state(), title: 'Tesseract fast' };
     const model = this.preset(selected.modelId), state = await this.modelState(model.id), progress = this.progress.get(model.id);
+    if(model.backends.includes('cuda')&&selected.device.mode==='gpu')state.ready=state.ready&&!!(await this.options.runtimes?.state('cuda'))?.ready;
     return { ready: state.ready, downloading: this.tasks.has(model.id), progress: progress ? progress.received / progress.total : 0,
       error: this.errors.get(model.id) || '', title: model.title + ' ' + model.size };
   }
-  install(id: unknown) {
+  install(id: unknown, preference?:unknown) {
     if (this.stopped) return Promise.reject(Error('本地模型服务已关闭'));
     if (id === 'tesseract') return this.tesseract.install();
     const model = this.preset(id);
     if (this.tasks.has(model.id)) return Promise.reject(Error('正在下载此模型'));
-    const abort = new AbortController(); this.errors.delete(model.id);
+    const abort = new AbortController(); this.errors.delete(model.id);this.progress.delete(model.id);
     // The legacy MI-GAN file can migrate without another download.
     const sources: Record<string, string> = model.purpose === 'repair' ? { repair: aiModelPath(this.dataDirectory, repairModel) } : {};
-    const task = this.store.install(model, abort.signal, value => this.progress.set(model.id, value), sources).catch(error => {
+    const task = (model.backends.includes('cuda')?this.installNative(model.id,preference,abort.signal):this.store.install(model, abort.signal, value => this.progress.set(model.id, value), sources)).catch(error => {
       if (!abort.signal.aborted) this.errors.set(model.id, error instanceof Error ? error.message : '模型下载失败'); throw error;
     }).finally(async () => { this.tasks.delete(model.id); this.states.delete(model.id); await this.modelState(model.id).catch(() => {}); });
     this.tasks.set(model.id, { abort, promise: task });
     return task;
+  }
+  private async installNative(id:string,input:unknown,signal:AbortSignal){
+    const runtime=this.options.runtimes;if(!runtime)throw Error('原生模型运行包服务未初始化');
+    await this.load();signal.throwIfAborted();const model=this.preset(id);
+    const preference=inferencePreference(input??(this.choices.ocr.modelId===id?this.choices.ocr.device:{mode:'auto'}));
+    const selected=resolveCUDAInferenceDevice(preference,preference.mode==='cpu'?{gpus:[]}:await this.deviceReader(signal));
+    const backends:('cpu'|'cuda')[]=selected.backend==='cuda'?['cpu','cuda']:['cpu'];
+    const weightBytes=model.artifacts.reduce((sum,file)=>sum+file.bytes,0);
+    const bytes=(backend:'cpu'|'cuda')=>llamaRuntimeProfiles.find(value=>value.backend===backend)!.archives.reduce((sum,file)=>sum+file.bytes,0);
+    const weightReady=(await this.store.state(model,undefined,false)).ready;
+    const ready=new Map(await Promise.all(backends.map(async backend=>[backend,(await runtime.state(backend)).ready] as const)));
+    if((!weightReady||backends.some(backend=>!ready.get(backend)))&&!this.usage.size)await this.options.unloadNative?.();
+    const total=weightBytes+backends.reduce((sum,backend)=>sum+bytes(backend),0);
+    let completed=(weightReady?weightBytes:0)+backends.reduce((sum,backend)=>sum+(ready.get(backend)?bytes(backend):0),0);
+    const report=(phase:LocalModelProgress['phase'],received:number,artifact?:string)=>this.progress.set(id,{phase,received:Math.min(total,completed+received),total,artifact});
+    report('checking',0);
+    for(const backend of backends){
+      signal.throwIfAborted();
+      if(!ready.get(backend)){await runtime.install(backend,signal,value=>report(value.phase,value.received,value.artifact));completed+=bytes(backend);}
+      report('checking',0);
+    }
+    signal.throwIfAborted();
+    if(!weightReady){await this.store.install(model,signal,value=>report(value.phase,value.received,value.artifact));completed+=weightBytes;}
+    signal.throwIfAborted();report('ready',0);
   }
   cancel(id: unknown) { if (id === 'tesseract') this.tesseract.cancel(); else this.tasks.get(this.preset(id).id)?.abort.abort(); }
   async remove(id: unknown) {
@@ -149,7 +191,12 @@ export class LocalModelManager {
     if (typeof id !== 'string' || this.usage.get(id)) throw Error('模型正在使用，请结束当前任务后删除');
     if (id === 'tesseract') await this.tesseract.remove();
     else {
-      const preset = this.preset(id); await this.store.remove(preset);
+      const preset = this.preset(id);
+      if(preset.backends.includes('cuda')){
+        await this.options.unloadNative?.(preset.id);
+        if(this.usage.get(id))throw Error('模型正在使用，请结束当前任务后删除');
+      }
+      await this.store.remove(preset);
       if (preset.purpose === 'repair') {
         const root = await lstat(join(this.dataDirectory, 'models')).catch(error => { if (error.code !== 'ENOENT') throw error; });
         if (root && (!root.isDirectory() || root.isSymbolicLink())) throw Error('旧模型缓存目录无效');

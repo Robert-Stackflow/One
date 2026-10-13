@@ -1,5 +1,5 @@
 import {serviceCredentialCrypto,type ServiceConnectionStorage} from '../service-connections';
-import {clipboard,session,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
+import {clipboard,session,shell,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pngDimensions } from '../capture/clipboard';
@@ -15,6 +15,11 @@ import { FormulaClient } from './formula-client';
 import { formulaText, type FormulaResult } from '../../shared/recognition/formula';
 import { LocalModelManager } from '../local-model-manager';
 import { PaddleRunner } from './paddle-runner';
+import { LlamaRunner } from './llama-runner';
+import { LlamaRuntimeStore } from './llama-runtime-store';
+import { deepseekOCRPresets } from './deepseek-models';
+import { localModelCatalog } from '../local-model-catalog';
+import { nativeRuntimeLicenses } from '../../shared/recognition/model-sources';
 import { acquirePaddleModel } from './paddle-models';
 import { readInferenceDevices, resolveInferenceDevice } from '../inference-devices';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
@@ -55,6 +60,9 @@ export class OCRService {
   private runner: OCRRunner;
   readonly localModels: LocalModelManager;
   private paddle = new PaddleRunner();
+  private native:LlamaRunner;
+  private runtimes:LlamaRuntimeStore;
+  private ownsRuntimes:boolean;
   private recognitionAbort?: AbortController;
   private recognitionTask?: Promise<OCRResult>;
   readonly translationStore: RecognitionConnectionStore;
@@ -65,12 +73,16 @@ export class OCRService {
     directory: string,
     private ctx: RecognitionContext,
     private kind: 'ocr' | 'formula' = 'ocr',
+    runtimes?:LlamaRuntimeStore,
   ) {
     this.models = new OCRModels(join(directory, 'models'));
     this.runner = new OCRRunner(this.models);
-    this.localModels = new LocalModelManager(join(directory, '..'), this.models,
-      (input, options) => session.fromPartition('one-model-download', { cache: false }).fetch(String(input), options),
-      signal => readInferenceDevices(signal, process.env.ONE_TEST_MODE === '1' ? process.env.ONE_INFERENCE_MONITOR : undefined));
+    const transport:typeof fetch=(input,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(String(input),options);
+    this.ownsRuntimes=!runtimes;this.runtimes=runtimes||new LlamaRuntimeStore(join(directory,'..','models','runtimes','llama'),transport);
+    const helper=process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined;
+    this.localModels = new LocalModelManager(join(directory, '..'), this.models,transport,
+      signal => readInferenceDevices(signal,helper),{runtimes:this.runtimes,unloadNative:id=>this.native.unload(id)});
+    this.native=new LlamaRunner(this.localModels.store,this.runtimes,join(directory,'native-sessions'),{helper});
     this.sensitive = new SensitiveScanner(this.models);
     this.workflow = new OCRWorkflow({
       prepare: async (png) => {
@@ -116,7 +128,7 @@ export class OCRService {
       uiScale:ctx.uiScale(),
       ...this.size,
       running: this.running,
-      waitingForInference: this.runner.waiting || this.paddle.waiting,
+      waitingForInference: this.runner.waiting || this.paddle.waiting || this.native.waiting,
       translating: this.translating,
       formulaRecognizing: this.formulaRecognizing,
       imageBytes: this.png?.length || 0,
@@ -157,7 +169,7 @@ export class OCRService {
     handle('cancel-install', async () => this.localModels.cancel((await this.localModels.selection('ocr')).modelId));
     handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh,'ocr'); });
     handle('local-model-save', (purpose, choice, revision) => this.localModels.save(purpose, choice, revision));
-    handle('local-model-install', id => this.localModels.install(id));
+    handle('local-model-install', (id,preference) => this.localModels.install(id,preference));
     handle('local-model-cancel', id => this.localModels.cancel(id));
     handle('local-model-delete', id => this.localModels.remove(id));
     handle('local-model-devices', () => this.localModels.refreshDevices());
@@ -263,6 +275,9 @@ export class OCRService {
           const result = await this.runner.run(this.png!, this.size, language, value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
           result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
         }
+        if(deepseekOCRPresets.some(model=>model.id===choice.modelId)){
+          return await this.native.run(this.png!,this.size,language,choice.modelId,choice.device);
+        }
         const lease = await acquirePaddleModel(this.localModels.store, choice.modelId);
         try {
           abort.signal.throwIfAborted();
@@ -298,7 +313,7 @@ export class OCRService {
   }
   private async cancelRecognition() {
     this.recognitionAbort?.abort();
-    await Promise.all([this.runner.cancel(), this.paddle.cancel()]);
+    await Promise.all([this.runner.cancel(), this.paddle.cancel(),this.native.cancel()]);
     await this.recognitionTask?.catch(() => {});
   }
   private async translate(token: unknown, text: unknown, target: unknown, revision: unknown) {
@@ -407,7 +422,12 @@ export class OCRService {
       this.formulaRecognizing = false;
       const window = this.ctx.createWindow();
       this.window = window;
-      window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      const sources=new Set([...localModelCatalog.map(model=>model.weightLicense.source),
+        ...deepseekOCRPresets.map(model=>model.artifacts[0].url.split('/resolve/')[0]),...nativeRuntimeLicenses.map(value=>value.url)]);
+      window.webContents.setWindowOpenHandler(({url}) => {
+        if(sources.has(url))void this.ctx.background(shell.openExternal(url)).catch(()=>{this.error='无法打开模型资源链接';});
+        return { action: 'deny' };
+      });
       window.webContents.on('will-navigate', (e) => e.preventDefault());
       window.webContents.on('will-attach-webview', (e) => e.preventDefault());
       window.webContents.once('render-process-gone',()=>{if(!window.isDestroyed())window.destroy();});
@@ -464,6 +484,7 @@ export class OCRService {
     this.window = undefined;
     this.clear();
     await this.settling;
-    await Promise.all([this.paddle.close(), this.localModels.stop()]);
+    await Promise.all([this.paddle.close(), this.native.close(),this.localModels.stop()]);
+    if(this.ownsRuntimes)await this.runtimes.stop();
   }
 }

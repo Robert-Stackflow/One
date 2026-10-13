@@ -104,7 +104,10 @@ export class LlamaRunner {
     signal.throwIfAborted();
     if(!this.cached){
       progress('verifying');const weights=await this.weights.acquire(model,signal);let runtime:Awaited<ReturnType<LlamaRuntimeStore['acquire']>>;
-      try{runtime=await this.runtimes.acquire(device.backend,signal);}catch(error){weights.release();throw error;}
+      try{
+        if(device.backend==='cuda'&&!(await this.runtimes.state('cuda')).ready)throw new NativeInferenceError('CUDA 运行包尚未准备，请重新应用模型或使用 CPU','loading');
+        runtime=await this.runtimes.acquire(device.backend,signal);
+      }catch(error){weights.release();throw error;}
       let session:LlamaSession;
       try{
         session=(this.options.sessionFactory||((options)=>new LlamaSession(options)))({helper:this.helper,executable:runtime.executable,

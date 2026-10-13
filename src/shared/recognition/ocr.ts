@@ -60,7 +60,7 @@ export interface OCRAPI {
   cancelInstall(): Promise<void>;
   localModels(refresh?: boolean): Promise<import('../local-models').LocalModelManagerState>;
   saveLocalModel(purpose: import('../local-models').LocalModelPurpose, choice: import('../local-models').LocalModelChoice, revision: string): Promise<string>;
-  installLocalModel(id: string): Promise<void>;
+  installLocalModel(id: string,preference?:import('../inference-devices').InferencePreference): Promise<void>;
   cancelLocalModelInstall(id: string): Promise<void>;
   deleteLocalModel(id: string): Promise<void>;
   refreshInferenceDevices(): Promise<import('../inference-devices').InferenceDevices>;

@@ -1,10 +1,11 @@
-import type {BrowserWindow} from 'electron';
+import {session,type BrowserWindow} from 'electron';
 import {isAbsolute,relative,resolve,sep,join} from 'node:path';
 import {OCRService,type RecognitionContext} from './service';
 import {captureTranslation} from './capture-translation';
 import {translationLanguage} from '../../shared/recognition/translation';
 import type {SensitiveAPI} from '../../shared/recognition/sensitive-api';
 import type {MaterialsService} from '../materials/service';
+import {LlamaRuntimeStore} from './llama-runtime-store';
 
 /** One owns the profile, window, requests and cancellation across feature entry points. */
 export class RecognitionHost {
@@ -14,10 +15,12 @@ export class RecognitionHost {
   private tasks=new Set<Promise<unknown>>();
   private closing=false;
   private stopping?:Promise<void>;
+  private runtimes:LlamaRuntimeStore;
   constructor(directory:string,private materials:MaterialsService,private context:Omit<RecognitionContext,'protect'|'background'> & {createFormulaWindow():BrowserWindow}){
     const protect=(file:string)=>{materials.library.protect(file);const local=relative(resolve(directory),resolve(file));if(!local||!isAbsolute(local)&&local!=='..'&&!local.startsWith('..'+sep))throw Error('请保存到 One 数据目录之外');};
-    this.formula=new OCRService(join(directory,'recognition'),{...context,protect,createWindow:()=>context.createFormulaWindow(),blocked:()=>this.closing||context.blocked(),background:task=>this.track(task)},'formula');
-    this.service=new OCRService(join(directory,'recognition'),{...context,protect,openFormula:(png,title)=>this.run(()=>this.formula.openCapture(png,title)),blocked:()=>this.closing||context.blocked(),background:task=>this.track(task)});
+    this.runtimes=new LlamaRuntimeStore(join(directory,'models','runtimes','llama'),(input,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(String(input),options));
+    this.formula=new OCRService(join(directory,'recognition'),{...context,protect,createWindow:()=>context.createFormulaWindow(),blocked:()=>this.closing||context.blocked(),background:task=>this.track(task)},'formula',this.runtimes);
+    this.service=new OCRService(join(directory,'recognition'),{...context,protect,openFormula:(png,title)=>this.run(()=>this.formula.openCapture(png,title)),blocked:()=>this.closing||context.blocked(),background:task=>this.track(task)},'ocr',this.runtimes);
     this.sensitive={scanSensitive:(owner,png)=>this.run(()=>this.service.sensitive.run(owner,png)),cancelSensitive:owner=>this.service.sensitive.cancel(owner)};
   }
   private track<T>(task:Promise<T>){this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;}
@@ -39,5 +42,5 @@ export class RecognitionHost {
   get pendingTasks(){return this.tasks.size;}
   authorize(url:string,owner:number){return this.service.authorize(url,owner)||this.formula.authorize(url,owner);}
   resource(request:Request){return new URL(request.url).host==='formula-recognition'?this.formula.resource(request):this.service.resource(request);}
-  stop(){if(this.stopping)return this.stopping;this.closing=true;return this.stopping=(async()=>{await Promise.all([this.service.stop(),this.formula.stop()]);await Promise.allSettled([...this.tasks]);})();}
+  stop(){if(this.stopping)return this.stopping;this.closing=true;return this.stopping=(async()=>{await Promise.all([this.service.stop(),this.formula.stop()]);await this.runtimes.stop();await Promise.allSettled([...this.tasks]);})();}
 }

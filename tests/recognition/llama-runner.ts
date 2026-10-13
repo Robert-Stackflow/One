@@ -13,7 +13,7 @@ import type { InferenceDevices } from '../../src/shared/inference-devices';
 const gpu={id:'00000000:00000003',deviceId:19,name:'NVIDIA fixture',vendorId:0x10de,pciDeviceId:1,dedicatedMemory:8*1024**3,sharedMemory:0,d3d12:true,cudaDeviceId:3,cudaDriverVersion:12040};
 const devices:InferenceDevices={gpus:[gpu]};
 const png=()=>sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
-async function setup(config:{failGPU?:string;failWeights?:boolean;failClose?:boolean;idleMs?:number}={}){
+async function setup(config:{failGPU?:string;failWeights?:boolean;failClose?:boolean;idleMs?:number;missingCUDA?:boolean}={}){
   const directory=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'runner-'));
   const files=[{role:'language',path:join(directory,'language')},{role:'vision',path:join(directory,'vision')}],executable=join(directory,'server.exe');
   for(const path of [...files.map(file=>file.path),executable])await writeFile(path,'fixture');
@@ -21,7 +21,7 @@ async function setup(config:{failGPU?:string;failWeights?:boolean;failClose?:boo
   let failClose=!!config.failClose;
   const weights={async acquire(model:any,signal?:AbortSignal){signal?.throwIfAborted();stats.acquires++;if(config.failWeights)throw Error('模型校验失败');stats.weightLeases++;
     return {model,files,release(){stats.weightLeases--;}};}} as unknown as LocalModelStore;
-  const runtimes={async acquire(){stats.runtimeLeases++;return {executable,release(){stats.runtimeLeases--;}};}} as unknown as LlamaRuntimeStore;
+  const runtimes={async state(backend:string){return {ready:backend!=='cuda'||!config.missingCUDA};},async acquire(){stats.runtimeLeases++;return {executable,release(){stats.runtimeLeases--;}};}} as unknown as LlamaRuntimeStore;
   const scheduler=new LocalInferenceScheduler();
   const runner=new LlamaRunner(weights,runtimes,join(directory,'control'),{scheduler,idleMs:config.idleMs,deviceReader:async()=>{stats.deviceQueries++;return devices;},
     sessionFactory:options=>{
@@ -63,6 +63,15 @@ test('auto CUDA failure retries the same model once on CPU using the matched CUD
     assert.equal(result.actualBackend,'cpu');assert.match(result.fallbackReason!,/fixture GPU/);
     assert.deepEqual(stats.starts.map(value=>[value.preset.id,value.backend,value.deviceId]),[['deepseek-ocr-v2','cuda',3],['deepseek-ocr-v2','cpu',undefined]]);
     assert.equal(stats.closed,1);assert.equal(stats.weightLeases,1);
+  }finally{await runner.close();}
+});
+test('auto can use the same model on CPU when a newly available GPU package has not been prepared',async()=>{
+  const {runner,stats}=await setup({missingCUDA:true});
+  try{
+    const result=await runner.run(await png(),{width:8,height:8},'eng','deepseek-ocr-v2',{mode:'auto'});
+    assert.equal(result.actualBackend,'cpu');assert.match(result.fallbackReason!,/CUDA 运行包尚未准备/);
+    assert.deepEqual(stats.starts.map(value=>[value.preset.id,value.backend]),[['deepseek-ocr-v2','cpu']]);
+    assert.equal(stats.weightLeases,1);assert.equal(stats.runtimeLeases,1);
   }finally{await runner.close();}
 });
 for(const config of [{failGPU:'resource',mode:'gpu'},{failGPU:'protocol',mode:'auto'},{failWeights:true,mode:'auto'}] as const)

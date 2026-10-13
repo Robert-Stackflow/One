@@ -62,6 +62,7 @@ test('shared model bundles resume, publish atomically and preserve active/versio
     await writeFile(join(installed, 'model.onnx'), Buffer.alloc(content.length, 0));
     assert.equal((await store.state(descriptor)).ready, false);
     await assert.rejects(store.acquire(descriptor), /校验/);
+    assert.equal((await store.state(descriptor,undefined,false)).ready,false,'metadata reads retain a known integrity failure for repair');
     await store.install(descriptor, signal()); assert.equal((await store.state(descriptor)).ready, true);
     await store.remove(descriptor);
 
