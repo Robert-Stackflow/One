@@ -9,7 +9,7 @@ async function verifyCanvas(page) {
   await expect.poll(async()=>(await stage.boundingBox()).width).toBeGreaterThan(before.width*1.15);
   const after=await stage.boundingBox();assert.ok(Math.abs((x-before.x)/before.width-(x-after.x)/after.width)<.01,'wheel zoom must preserve the image point under the pointer');
   const panBefore=await stage.boundingBox();await page.mouse.move(box.x+box.width*.5,box.y+box.height-35);await page.mouse.down();await page.mouse.move(box.x+box.width*.5+40,box.y+box.height-10,{steps:5});await page.mouse.up();
-  const panAfter=await stage.boundingBox();assert.ok(Math.abs(panAfter.x-panBefore.x-40)<2&&Math.abs(panAfter.y-panBefore.y-25)<2,'background drag must pan the canvas');
+  const panAfter=await stage.boundingBox();assert.ok(Math.abs(panAfter.x-panBefore.x-40)<2&&Math.abs(panAfter.y-panBefore.y-25)<2,'background drag must pan the canvas: '+JSON.stringify({before:panBefore,after:panAfter}));
   await page.locator('[data-text-action=fit]').click();
   for(const action of ['fit','zoom-in','zoom-out','rotate']) { const button=page.locator(`[data-text-action=${action}]`);await expect(button.locator('svg')).toHaveCount(1);assert.equal(await button.evaluate(node=>!!node.closest('.ocr-commandbar,.formula-commandbar')),true); }
 }

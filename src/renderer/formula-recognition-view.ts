@@ -8,6 +8,7 @@ import './recognition/formula-window.css';
 import './recognition/workbench.css';
 import { mountTextSelection } from './recognition/text-selection';
 import { recognitionNotice } from './recognition/notice';
+import { recognitionReady, prepareRecognitionImage } from './recognition/ready';
 export async function renderFormulaRecognition() {
   document.body.dataset.view = 'formula-recognition';
   q('app').innerHTML = `<header class="media-header"><strong>公式识别</strong><span id="source-name"></span>${windowControls()}</header><main class="formula-workbench">
@@ -18,9 +19,11 @@ export async function renderFormulaRecognition() {
   const message = recognitionNotice(q('message'));
   const canvas = mountTextSelection(q<HTMLImageElement>('source'), { copy: async () => {}, translate: () => {}, message });
   q('formula-image-tools').append(document.querySelector('.text-image-tools')!);
+  const loadImage=prepareRecognitionImage(q<HTMLImageElement>('source'),message);
   const formula = mountFormula(window.one.formulaRecognition!, () => state, message, () => {}); formula.setMode(true);
   async function refresh() { try { const next = await window.one.formulaRecognition!.state(); if (disposed) return; state = next; applyCaptureScale(q('app'), state.uiScale); formula.render(); } catch (error) { if (!disposed) message(error); } }
-  await refresh(); if (state) { q('source-name').textContent = state.name; q<HTMLImageElement>('source').src = state.image; }
+  void refresh().then(()=>{if(state){q('source-name').textContent=state.name;loadImage(state.image);}});
   customControls(document.body); const timer = setInterval(() => void refresh(), 500);
   window.addEventListener('beforeunload', () => { disposed = true; canvas.dispose(); clearInterval(timer); }, { once: true });
+  await recognitionReady(()=>window.one.formulaRecognition!.ready());
 }

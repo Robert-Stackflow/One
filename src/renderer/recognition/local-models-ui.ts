@@ -11,10 +11,10 @@ export function mountLocalModels(api:OCRAPI, updated:()=>Promise<void>) {
   registerIcons({ 'ocr-model-delete': Trash2 });
   const template = document.createElement('template');
   template.innerHTML = dialogMarkup({id:'local-model-settings',title:'OCR 模型',className:'one-form-dialog local-model-settings',
-    body:`<div class="model-browser"><div id="local-model-list" class="model-list" aria-label="OCR 模型列表"></div><section class="model-detail"><div class="model-detail-heading"><span id="local-model-title"></span><span id="local-model-status"></span>${iconButton('local-model-delete','删除模型','lucide:ocr-model-delete')}</div><section class="model-device-settings"><h3>推理设置</h3>
+    body:`<div id="local-model-loading" class="model-dialog-loading" role="status" aria-label="读取模型"><span class="model-action-spinner" aria-hidden="true"></span></div><div class="model-browser" hidden><div id="local-model-list" class="model-list" aria-label="OCR 模型列表"></div><section class="model-detail"><div class="model-detail-heading"><span id="local-model-title"></span><span id="local-model-status"></span>${iconButton('local-model-delete','删除模型','lucide:ocr-model-delete')}</div><section class="model-device-settings"><h3>推理设置</h3>
       <label class="model-device-row">推理设备<select id="local-model-device"><option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">GPU · DirectML</option></select></label>
       <label class="model-device-row" id="local-model-gpu-field">显卡<select id="local-model-gpu"></select></label><div class="model-device-hint"><span id="local-model-gpu-info"></span><button id="local-model-devices" class="quiet">刷新显卡</button></div></section>
-      <section class="model-resource-settings"><h3>模型资源</h3><dl id="local-model-metadata"></dl></section><p id="local-model-error" class="model-error" role="alert" hidden></p></section></div>`,
+      <section class="model-resource-settings"><h3>模型资源</h3><dl id="local-model-metadata"></dl></section></section></div><p id="local-model-error" class="model-error" role="alert" hidden></p>`,
     actions:'<button id="local-model-save" class="primary"><span class="model-action-spinner" aria-hidden="true" hidden></span><span id="local-model-action-label" aria-live="polite">使用此模型</span></button>'});
   const dialog = template.content.firstElementChild as HTMLDialogElement; (document.getElementById('app')||document.body).append(dialog);
   const field = <T extends HTMLElement>(id:string)=>dialog.querySelector<T>('#local-model-'+id)!;
@@ -47,6 +47,7 @@ export function mountLocalModels(api:OCRAPI, updated:()=>Promise<void>) {
   }
   function render() {
     if(!state)return;const entries=state.entries.filter(value=>value.purpose===purpose),key=entries.map(value=>value.id).join('|');
+    field('loading').hidden=true;dialog.querySelector<HTMLElement>('.model-browser')!.hidden=false;
     if(listKey!==key){listKey=key;field('list').innerHTML=entries.map(value=>`<button class="model-option" data-select-model="${esc(value.id)}" type="button"><span class="model-option-heading"><span class="model-option-name">${esc(value.title)}</span><span class="model-current" hidden>使用中</span></span><span class="model-option-meta"><span class="model-size">${esc(value.size)}</span><span>${size(value.totalBytes)}</span></span><span class="model-option-state" data-model-state></span></button>`).join('');}
     for(const value of entries){
       const card=dialog.querySelector<HTMLButtonElement>(`[data-select-model="${value.id}"]`)!,current=state.choices.ocr.modelId===value.id;
@@ -61,11 +62,11 @@ export function mountLocalModels(api:OCRAPI, updated:()=>Promise<void>) {
     field('metadata').innerHTML=`<dt>模型大小</dt><dd>${size(value.totalBytes)}</dd><dt>磁盘占用</dt><dd>${size(value.diskBytes)}</dd><dt>兼容设备</dt><dd>${value.backends.includes('dml')?'CPU / DirectML GPU':'CPU'}</dd><dt>内存 / 显存</dt><dd>${value.measuredMemoryMiB===undefined?'未知':size(value.measuredMemoryMiB*1024**2)} / ${value.measuredVRAMMiB===undefined?'未知':size(value.measuredVRAMMiB*1024**2)}</dd><dt>许可 / 精度</dt><dd>${esc(value.weightLicense)} · ${esc(value.precision)}</dd><dt>版本</dt><dd>${esc(value.revision)}</dd>`;
     field<HTMLButtonElement>('delete').disabled=downloading||value.inUse||!value.diskBytes;
     field<HTMLButtonElement>('save').disabled=cancelling.has(value.id)||saving&&!downloading;
-    dialog.querySelector<HTMLElement>('.model-action-spinner')!.hidden=!downloading;
+    field('save').querySelector<HTMLElement>('.model-action-spinner')!.hidden=!downloading;
     field('action-label').textContent=cancelling.has(value.id)?'正在取消…':downloading?`取消下载 · ${Math.round(value.progress*100)}%`:value.ready?'使用此模型':value.downloadedBytes?'继续下载并使用':'下载并使用';
     if(value.error&&!cancelled.has(value.id))error(Error(value.error));
   }
-  async function refresh(force=false){if(polling||disposed)return;polling=true;try{state=await api.localModels(force);if(!disposed)render();}catch(value){if(!disposed)error(value);}finally{polling=false;}}
+  async function refresh(force=false){if(polling||disposed)return;polling=true;try{state=await api.localModels(force);if(!disposed)render();}catch(value){if(!disposed){error(value);if(!state){field('loading').hidden=true;field<HTMLButtonElement>('save').disabled=false;field('action-label').textContent='重试';}}}finally{polling=false;}}
   field('list').onclick=event=>{const card=(event.target as HTMLElement).closest<HTMLElement>('[data-select-model]');if(card&&card.dataset.selectModel!==modelId)choose(card.dataset.selectModel!);};
   device.onchange=syncDeviceOptions;
   gpu.onchange=syncDeviceOptions;
@@ -73,6 +74,7 @@ export function mountLocalModels(api:OCRAPI, updated:()=>Promise<void>) {
   field('devices').onclick=()=>loadDevices();
   field('delete').onclick=()=>{error('');void api.deleteLocalModel(modelId).then(()=>refresh(true)).then(updated).catch(error);};
   field('save').onclick=()=>{
+    if(!state){field('loading').hidden=false;field<HTMLButtonElement>('save').disabled=true;error('');void refresh().then(()=>{if(state)choose(state.choices.ocr.modelId,true);});return;}
     if(entry()?.downloading||installing===modelId){
       const selected=modelId;if(cancelling.has(selected))return;
       cancelled.add(selected);cancelling.add(selected);error('');render();
@@ -85,5 +87,5 @@ export function mountLocalModels(api:OCRAPI, updated:()=>Promise<void>) {
   };
   dialog.querySelector<HTMLButtonElement>('[data-dialog-dismiss]')!.onclick=()=>void closeDialog(dialog);
   const timer=setInterval(()=>{if(dialog.open)void refresh();},800);window.addEventListener('beforeunload',()=>{disposed=true;clearInterval(timer);},{once:true});
-  return async()=>{await refresh(true);if(!state||disposed)return;choose(state.choices.ocr.modelId,true);openDialog(dialog);customControls(dialog);};
+  return async()=>{if(disposed)return;error('');if(state)choose(state.choices.ocr.modelId,true);else{field('loading').hidden=false;field<HTMLButtonElement>('save').disabled=true;field('action-label').textContent='读取中…';}openDialog(dialog);customControls(dialog);await refresh();if(state&&!disposed&&dialog.open&&!modelId)choose(state.choices.ocr.modelId,true);};
 }

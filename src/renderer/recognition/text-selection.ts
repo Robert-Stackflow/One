@@ -2,7 +2,7 @@ import { readingTokens, selectedText, textBounds, textGroup, textVertical, type 
 import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type TextRotation, type TextView } from '../../shared/recognition/text-geometry';
 import './text-selection.css';
 import { icon, registerIcons } from '../ui';
-import { MoveHorizontal, ZoomIn, ZoomOut, RotateCw, Copy, Languages } from 'lucide';
+import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages } from 'lucide';
 
 /** Shared image-space layer. Only visible lines create DOM nodes; selection always uses the full reading order. */
 export function mountTextSelection(image: HTMLImageElement, options: {
@@ -38,11 +38,11 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const text = () => selectedText(tokens, anchor, focus);
   const copy = () => { const value = text(); if (value) void options.copy(value).then(() => options.message('已复制选中文字')).catch(options.message); };
   let initialized = false, resetView = false, viewportWidth = 0, viewportHeight = 0;
-  const fit = button('适应宽度', () => { zoom = undefined; resetView = true; layout(); }); fit.dataset.textAction = 'fit';
+  const fit = button('适应画布', () => { zoom = undefined; resetView = true; layout(); }); fit.dataset.textAction = 'fit';
   const less = button('缩小', () => setZoom(view.scale / 1.25)); less.dataset.textAction = 'zoom-out';
   const more = button('放大', () => setZoom(view.scale * 1.25)); more.dataset.textAction = 'zoom-in';
   const rotate = button('旋转', () => { rotation = ((rotation + 1) % 4) as TextRotation; layout(); }); rotate.dataset.textAction = 'rotate';
-  registerIcons({ 'image-fit': MoveHorizontal, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages });
+  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages });
   for (const [node, glyph] of [[fit, 'image-fit'], [less, 'image-zoom-out'], [more, 'image-zoom-in'], [rotate, 'image-rotate']] as const) {
     node.title = node.ariaLabel = node.textContent; node.innerHTML = icon('lucide:' + glyph); node.classList.add('icon-button');
   }
@@ -58,7 +58,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     if (drag && !drag.pan) return;
     const rect = stage.getBoundingClientRect(), bounds = viewport.getBoundingClientRect(), previous = view.scale;
     const point = { x: x + bounds.left - rect.left, y: y + bounds.top - rect.top };
-    zoom = Math.max(0.05, Math.min(8, value)); layout();
+    zoom = Math.max(0.0001, Math.min(8, value)); layout();
     viewport.scrollLeft = stage.offsetLeft + point.x * view.scale / previous - x;
     viewport.scrollTop = stage.offsetTop + point.y * view.scale / previous - y;
     schedule();
@@ -72,7 +72,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     if (!width || !height) return;
     const oldRect = stage.getBoundingClientRect(), bounds = viewport.getBoundingClientRect();
     const center = textViewToImage({ x: bounds.left + viewportWidth / 2 - oldRect.left, y: bounds.top + viewportHeight / 2 - oldRect.top }, view);
-    const fitScale = Math.max(0.01, viewport.clientWidth / (rotation % 2 ? height : width));
+    const fitScale = Math.min(1, Math.max(1,viewport.clientWidth-32)/(rotation%2?height:width), Math.max(1,viewport.clientHeight-32)/(rotation%2?width:height));
     view = { width, height, rotation, scale: zoom ?? fitScale };
     const size = textViewSize(view), w = width * view.scale, h = height * view.scale;
     stage.style.width = `${size.width}px`; stage.style.height = `${size.height}px`;
@@ -85,7 +85,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     inner.style.transform = rotation === 0 ? '' : rotation === 1 ? `translate(${h}px,0) rotate(90deg)` :
       rotation === 2 ? `translate(${w}px,${h}px) rotate(180deg)` : `translate(0,${w}px) rotate(270deg)`;
     status.textContent = `${Math.round(view.scale * 100)}%${tokens.length ? ` · ${anchor < 0 ? '拖动图片文字进行选择' : '已选择文字'}` : ''}`;
-    if (!initialized || resetView) { viewport.scrollLeft = padX; viewport.scrollTop = padY; }
+    if (!initialized || resetView || zoom===undefined) { viewport.scrollLeft = padX; viewport.scrollTop = padY; }
     else { const point = imageToTextView(center, view); viewport.scrollLeft = stage.offsetLeft + point.x - padX / 2; viewport.scrollTop = stage.offsetTop + point.y - padY / 2; }
     initialized = true; resetView = false; viewportWidth = padX; viewportHeight = padY;
     schedule();

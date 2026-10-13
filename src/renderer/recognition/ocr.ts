@@ -10,6 +10,8 @@ import { mountLocalModels } from './local-models-ui';
 import { mountOCRWorkspace } from './workspace';
 import './workbench.css';
 import { recognitionNotice } from './notice';
+import { recognitionReady, prepareRecognitionImage } from './ready';
+export function mountOCR() {
 const api = window.one.recognition!;
 let state: OCRState, disposed = false, requesting = false, polling = false, workflowRead = '', reportedError = '';
 const workspace = mountOCRWorkspace();
@@ -22,6 +24,7 @@ const selection = mountTextSelection(q<HTMLImageElement>('source'), {
   translate: text => { if (!requesting && !state.running && !workflowBusy() && !translation.busy()) { workspace.show(true); translation.translateSelection(text); } },
 });
 const tools = document.querySelector('.text-image-tools'); if (tools) q('ocr-image-tools').append(tools);
+const loadImage=prepareRecognitionImage(q<HTMLImageElement>('source'),message);
 const openLocalModels = mountLocalModels(api, refresh);
 q('local-model-configure').onclick = () => void openLocalModels().catch(message);
 q('open-formula').onclick = () => void api.openFormula(state.token).catch(message);
@@ -78,6 +81,8 @@ q('cancel-install').onclick = () => void api.cancelInstall().catch(message);
 q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
 q('result').oninput = () => { selection.setDocument(undefined); translation.sourceChanged(); if (state) render(); };
 registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);
-void api.state().then(async value => { state = value; q('source-name').textContent = state.name; q<HTMLImageElement>('source').src = state.image; await syncWorkflow(); render(); }).catch(message);
+void api.state().then(async value => { state = value; q('source-name').textContent = state.name;loadImage(state.image);await syncWorkflow(); render(); }).catch(message);
+void recognitionReady(()=>api.ready()).catch(message);
 const timer = setInterval(() => void refresh(), 400);
 window.addEventListener('beforeunload', () => { disposed = true; selection.dispose(); clearInterval(timer); }, { once: true });
+}

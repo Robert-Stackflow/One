@@ -5,6 +5,7 @@
 .image-header-tools .text-image-status { display: none; }
 .image-loading { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: var(--soft); }
 .image-loading[hidden] { display: none; }
+.recognition-image-placeholder { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: var(--soft); color: var(--muted); font-size: calc(12px * var(--text-scale, 1)); }
 .image-loading-card { display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--soft); font-size: calc(13px * var(--text-scale, 1)); }
 .image-loading-card > .quiet { margin-top: 4px; min-width: 72px; padding: 6px 16px; border: 1px solid var(--line); border-radius: var(--field-radius); background: var(--surface); font-size: calc(12px * var(--text-scale, 1)); }
 .recognition-spinner { width: 22px; height: 22px; flex: none; display: inline-block; border: 2px solid var(--line); border-top-color: var(--fg); border-radius: 50%; animation: recognition-spin .8s linear infinite; }

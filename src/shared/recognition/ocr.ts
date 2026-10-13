@@ -49,6 +49,7 @@ export interface OCRState {
   modelTitle?: string;
 }
 export interface OCRAPI {
+  ready(): Promise<void>;
   openFormula(token:string):Promise<void>;
   returnToCapture(token: string, id: string): Promise<void>;
   workflowResult(token: string, id: string): Promise<OCRWorkflowResult>;
@@ -76,6 +77,7 @@ export interface OCRAPI {
   cancelTranslation(): Promise<void>;
 }
 export interface FormulaRecognitionAPI {
+  ready(): Promise<void>;
   state():Promise<OCRState>;
   formulaConfig(): Promise<TranslationConfig>;
   saveFormula(value: TranslationSettings): Promise<TranslationConfig>;

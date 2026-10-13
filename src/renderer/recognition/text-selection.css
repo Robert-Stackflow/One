@@ -10,6 +10,7 @@ body[data-view='recognition'] .source-preview:has(.text-image-workspace) { displ
 .text-selection-actions button + button { border-left: 1px solid var(--line); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .text-selection-actions svg { width: 16px; height: 16px; flex: none; }
 .text-image-viewport { flex: 1; min-height: 0; overflow: hidden; overflow-anchor: none; position: relative; outline-offset: -2px; touch-action: none; cursor: grab; overscroll-behavior: contain; }
+.text-image-viewport:focus, .text-image-viewport:focus-visible { outline: none; box-shadow: none; }
 .text-image-canvas { position: relative; flex: none; }
 .text-image-stage { position: absolute; min-width: 1px; min-height: 1px; }
 .text-image-inner { position: absolute; top: 0; left: 0; transform-origin: 0 0; }

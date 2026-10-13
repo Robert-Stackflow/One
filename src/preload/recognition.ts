@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { OCRAPI } from '../shared/recognition/ocr';
 const call = (name: string, ...args: unknown[]) => ipcRenderer.invoke('one:recognition-' + name, ...args);
 const api: OCRAPI = {
+  ready: () => call('ready'),
   openFormula: token => call('open-formula', token),
   returnToCapture: (token, id) => call('workflow-back', token, id),
   workflowResult: (token, id) => call('workflow-result', token, id),

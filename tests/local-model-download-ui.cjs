@@ -11,8 +11,9 @@ const fs = require('node:fs/promises'), path = require('node:path'), assert = re
       const installed={...entry,id:'installed',title:'Tesseract',ready:true};
       const state={revision:'fixture',choices:{ocr:{modelId:'fixture',device:{mode:'cpu'}}},entries:[entry,installed],devices:{gpus:[],error:''}};
       let pending;
-      window.fixture={saved:0,cancelled:0,mode:'pending',complete(){entry.downloading=false;entry.ready=true;entry.progress=1;pending.resolve();}};
-      const api={localModels:async()=>structuredClone(state),installLocalModel:async()=>{
+      let releaseModels;const modelsReady=new Promise(resolve=>releaseModels=resolve);
+      window.fixture={saved:0,cancelled:0,mode:'pending',forcedRefreshes:0,releaseModels:()=>releaseModels(),complete(){entry.downloading=false;entry.ready=true;entry.progress=1;pending.resolve();}};
+      const api={localModels:async(force)=>{if(force)window.fixture.forcedRefreshes++;await modelsReady;return structuredClone(state);},installLocalModel:async()=>{
         entry.error='';entry.downloading=true;entry.progress=.13;entry.diskBytes=entry.downloadedBytes=13;
         if(window.fixture.mode==='fail'){entry.downloading=false;entry.error='下载失败，请重试';throw Error(entry.error);}
         return new Promise((resolve,reject)=>pending={resolve,reject});
@@ -25,7 +26,9 @@ const fs = require('node:fs/promises'), path = require('node:path'), assert = re
     app=await electron.launch({args:[path.join(directory,'main.cjs')],env}); const page=await app.firstWindow(),errors=[];
     page.on('pageerror',error=>errors.push(String(error)));
     const dialog=page.locator('#local-model-settings'),action=dialog.locator('#local-model-save');
-    await expect(dialog).toBeVisible(); await expect(dialog.locator('.one-dialog-actions button')).toHaveCount(1);
+    await expect(dialog).toBeVisible();await expect(dialog.locator('#local-model-loading')).toBeVisible();await expect(action).toBeDisabled();
+    assert.equal(await page.evaluate(()=>fixture.forcedRefreshes),0);await page.evaluate(()=>fixture.releaseModels());
+    await expect(dialog.locator('.one-dialog-actions button')).toHaveCount(1);
     await expect(action).toHaveText('下载并使用'); await action.click();
     await expect(action).toHaveText('取消下载 · 13%'); await expect(action).toBeEnabled();
     await dialog.locator('[data-select-model=installed]').click(); await expect(action).toBeDisabled();

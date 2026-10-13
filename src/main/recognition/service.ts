@@ -2,7 +2,7 @@ import {serviceCredentialCrypto,type ServiceConnectionStorage} from '../service-
 import {clipboard,session,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { decodePng, pngDimensions } from '../capture/clipboard';
+import { pngDimensions } from '../capture/clipboard';
 import { OCRModels } from './ocr-models';
 import { OCRRunner } from './ocr-runner';
 import { SensitiveScanner } from './sensitive-scanner';
@@ -49,6 +49,7 @@ export class OCRService {
   private configuring = false;
   private error = '';
   private opening = false;
+  private rendererReady?: () => void;
   private settling: Promise<unknown> = Promise.resolve();
   readonly models: OCRModels;
   private runner: OCRRunner;
@@ -102,11 +103,12 @@ export class OCRService {
     this.formulaStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'formula');
     this.formulaClient = new FormulaClient();
     const handle=(name:string,fn:(...args:any[])=>unknown)=>{
-      if(this.kind==='formula' ? name!=='state'&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
+      if(this.kind==='formula' ? !['state','ready'].includes(name)&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
       ctx.register(this.scope+'-'+name,(event,...args)=>{
       if(ctx.blocked()||!this.window||event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||event.sender.mainFrame.frames.length||event.senderFrame.url!==this.url)throw Error('拒绝访问识别窗口');
       return ctx.background(Promise.resolve().then(()=>fn(...args)));
     }); };
+    handle('ready', () => { this.rendererReady?.(); });
     handle('state', async () => { const selected = this.kind === 'formula' ? {ready:false,downloading:false,progress:0,error:'',title:''} : await this.localModels.selectedState(); return ({
       token: this.token,
       name: this.name,
@@ -153,7 +155,7 @@ export class OCRService {
       if (generation === this.token) this.error = '';
     });
     handle('cancel-install', async () => this.localModels.cancel((await this.localModels.selection('ocr')).modelId));
-    handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh); });
+    handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh,'ocr'); });
     handle('local-model-save', (purpose, choice, revision) => this.localModels.save(purpose, choice, revision));
     handle('local-model-install', id => this.localModels.install(id));
     handle('local-model-cancel', id => this.localModels.cancel(id));
@@ -261,7 +263,7 @@ export class OCRService {
           const result = await this.runner.run(this.png!, this.size, language, value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
           result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
         }
-        const lease = await acquirePaddleModel(this.localModels.store);
+        const lease = await acquirePaddleModel(this.localModels.store, choice.modelId);
         try {
           abort.signal.throwIfAborted();
           const pixels = this.size.width * this.size.height;
@@ -393,13 +395,7 @@ export class OCRService {
       const base64 = png.toString('base64'),
         header = pngDimensions(base64);
       ocrDimensions(header.width, header.height);
-      const decoded = decodePng(base64);
-      try {
-        ocrDimensions(decoded.size.width, decoded.size.height);
-        this.size = decoded.size;
-      } finally {
-        decoded.data.fill(0);
-      }
+      this.size = header;
       this.png = Buffer.from(png);
       this.token = randomUUID();
       this.name = name.slice(0, 180);
@@ -421,7 +417,18 @@ export class OCRService {
           this.clear();
         }
       });
-      await window.loadURL(this.url);
+      let readyTimer: ReturnType<typeof setTimeout> | undefined;
+      let closedBeforeReady: () => void = () => {};
+      const prepared = new Promise<void>((resolve,reject) => {
+        this.rendererReady=resolve;
+        readyTimer=setTimeout(()=>reject(Error('识别窗口初始化超时')),15000);
+        closedBeforeReady=()=>reject(Error('识别窗口已关闭'));
+        window.once('closed',closedBeforeReady);
+      });
+      // loadURL resolves before dynamically imported CSS and initial view layout.
+      // Observe both promises immediately so a close/load failure cannot leak a rejection.
+      try { await Promise.all([window.loadURL(this.url),prepared]); }
+      finally { clearTimeout(readyTimer);this.rendererReady=undefined;window.removeListener('closed',closedBeforeReady); }
       if (this.window === window && !window.isDestroyed()) window.show();
     } catch (error) {
       const window = this.window;

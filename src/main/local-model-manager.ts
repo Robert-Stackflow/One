@@ -100,7 +100,7 @@ export class LocalModelManager {
     }
     return { ...current, ready: current.ready && verified.ready };
   }
-  async state(refresh = false): Promise<LocalModelManagerState> {
+  async state(refresh = false, purpose?: LocalModelPurpose): Promise<LocalModelManagerState> {
     await this.load();
     const legacy = await this.tesseract.state(), legacyBytes = ocrPacks.reduce((sum, file) => sum + file.bytes, 0);
     const entries: LocalModelEntry[] = [{ id: 'tesseract', title: 'Tesseract', size: 'fast', purpose: 'ocr', revision: 'tessdata_fast@8741641',
@@ -109,6 +109,7 @@ export class LocalModelManager {
       diskBytes: legacy.diskBytes, downloadedBytes: legacy.ready ? legacyBytes : 0,
       progress: legacy.progress, error: legacy.error, note: '兼容引擎；支持真实字符框选择' }];
     for (const model of localModelCatalog) {
+      if(purpose&&model.purpose!==purpose)continue;
       const cached = await this.modelState(model.id, refresh), progress = this.progress.get(model.id), downloading = this.tasks.has(model.id);
       entries.push({ ...cached, downloading, inUse: cached.inUse || !!this.usage.get(model.id), id: model.id, title: model.title, size: model.size,
         purpose: model.purpose, revision: model.revision, languages: [...model.languages], backends: [...model.backends], weightLicense: model.weightLicense.name,

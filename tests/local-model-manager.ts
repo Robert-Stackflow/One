@@ -30,6 +30,18 @@ test('model choices persist per feature and do not mutate active tasks or allow 
   await manager.stop(); await assert.rejects(manager.install(paddleTinyModel.id), /关闭/);
 });
 
+test('OCR model state excludes repair verification', async () => {
+  const root=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'ocr-only-'));
+  const manager=new LocalModelManager(root,new OCRModels(join(root,'recognition','models')));
+  const checked:string[]=[],inspect=manager.store.state.bind(manager.store);
+  manager.store.state=async(...args)=>{checked.push(args[0].id);return inspect(...args);};
+  try {
+    const state=await manager.state(true,'ocr');
+    assert.ok(state.entries.length>1&&state.entries.every(entry=>entry.purpose==='ocr'));
+    assert.ok(!checked.includes(miganModel.id),'opening OCR models never hashes repair weights');
+  } finally {await manager.stop();}
+});
+
 test('manager resumes cancelled downloads and removes shared and legacy repair caches together', async () => {
   const root = await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!, 'downloads-'));
   const models = new OCRModels(join(root, 'recognition', 'models'));
