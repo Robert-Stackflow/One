@@ -1,0 +1,181 @@
+<main>
+      <section id="capture-actions" class="capture-panel" aria-label="录制操作栏">
+        <div class="capture-main-row">
+          <button
+            id="move"
+            class="drag"
+            aria-label="拖动操作栏，双击复位"
+            title="拖动操作栏 · 双击复位"
+          ></button>
+          <div class="record-status">
+            <span id="indicator" class="record-indicator" aria-hidden="true"></span
+            ><strong id="time" role="timer">00:00</strong><span id="fps">30 FPS</span
+            ><span id="phase" class="sr-only">正在准备</span>
+          </div>
+          <div class="capture-tool-row record-controls">
+            <button id="pause" aria-label="暂停录制" title="暂停录制" disabled></button>
+            <button id="stop" aria-label="停止并预览" title="停止并预览" disabled></button>
+            <button
+              id="sound"
+              aria-label="声源音量"
+              aria-expanded="false"
+              title="声源音量"
+            ></button>
+            <button
+              id="camera"
+              aria-label="摄像头画面设置"
+              title="摄像头画面设置"
+              aria-haspopup="dialog"
+              hidden
+            ></button>
+            <button
+              id="input-settings"
+              class="video-only"
+              aria-label="键鼠记录设置"
+              title="键鼠记录设置"
+              aria-haspopup="dialog"
+            ></button>
+          </div>
+          <span class="capture-divider video-only" role="separator"></span>
+          <div
+            id="annotation-tools"
+            class="capture-tool-row video-only"
+            role="toolbar"
+            aria-label="标注工具"
+          ></div>
+          <span class="capture-divider video-only" role="separator"></span>
+          <div id="annotation-actions" class="capture-tool-row video-only">
+            <button id="annotation-undo" title="撤销 · Ctrl+Z" aria-label="撤销标注"></button
+            ><button id="annotation-redo" title="重做 · Ctrl+Y" aria-label="重做标注"></button>
+          </div>
+          <span class="capture-divider video-only" role="separator"></span>
+          <div class="capture-output-row video-only">
+            <button
+              id="region-move"
+              aria-label="移动录制区域"
+              title="移动录制区域 · 保持像素尺寸"
+              aria-pressed="false"
+              hidden
+            ></button>
+            <button
+              id="annotation-interact"
+              aria-label="返回桌面操作"
+              title="返回桌面操作"
+            ></button>
+            <button
+              id="annotation-more"
+              title="更多标注操作"
+              aria-label="更多标注操作"
+              aria-haspopup="menu"
+            ></button>
+          </div>
+          <button id="annotation-clear" hidden></button>
+        </div>
+      </section>
+      <section
+        id="capture-properties"
+        class="capture-panel capture-tool-row"
+        aria-label="标注属性"
+        hidden
+      >
+        <label id="mark-font-field" hidden
+          >字号<input
+            id="mark-font"
+            type="number"
+            min="8"
+            max="240"
+            value="28"
+            aria-label="标注字号"
+        /></label>
+        <label id="mark-filled-field" hidden
+          >填充<input id="mark-filled" type="checkbox" aria-label="图形填充"
+        /></label>
+        <div id="mark-color-field" class="capture-property">
+          <span class="capture-property-name">颜色</span>
+          <div id="mark-palette" role="group" aria-label="预置标注颜色"></div>
+          <input id="mark-color" type="color" value="#e34e4e" aria-label="标注颜色" />
+        </div>
+        <label id="mark-width-field"
+          >线宽<input id="mark-width" type="range" min="1" max="80" value="3" aria-label="标注线宽"
+        /></label>
+        <label id="mark-strength-field" hidden
+          ><span>强度</span
+          ><input id="mark-strength" type="range" min="1" max="64" value="12" aria-label="遮盖强度"
+        /></label>
+        <label id="mark-size-field" hidden
+          >笔刷<input id="mark-size" type="range" min="6" max="80" value="24" aria-label="笔刷大小"
+        /></label>
+        <label id="mark-redaction-field" hidden
+          >方式<select id="mark-redaction">
+            <option value="rectangle">矩形</option>
+            <option value="brush">笔刷</option>
+          </select></label
+        >
+        <label id="mark-stroke-field" hidden
+          >线型<select
+            id="mark-stroke"
+            aria-label="标注线型"
+            data-custom-control="true"
+            hidden
+          ></select
+          ><button id="mark-stroke-trigger" class="custom-select" aria-haspopup="menu">
+            实线
+          </button></label
+        >
+        <label id="mark-family-field" hidden
+          >字体<select id="mark-family" data-custom-control="true" hidden>
+            <option>Segoe UI</option>
+            <option>Microsoft YaHei</option>
+            <option>Arial</option>
+            <option>Consolas</option></select
+          ><button id="mark-family-trigger" class="custom-select" aria-haspopup="menu">
+            Segoe UI
+          </button></label
+        >
+        <label id="mark-weight-field" hidden
+          >字重<select id="mark-weight" data-custom-control="true" hidden>
+            <option value="400">常规</option>
+            <option value="600">半粗</option>
+            <option value="700">粗体</option></select
+          ><button id="mark-weight-trigger" class="custom-select" aria-haspopup="menu">
+            常规
+          </button></label
+        >
+        <div class="text-emphasis" data-text-emphasis hidden>
+          <input id="mark-italic" type="checkbox" hidden /><input
+            id="mark-outline"
+            type="checkbox"
+            hidden
+          />
+        </div>
+      </section>
+      <section id="sound-panel" class="capture-panel sound-panel" aria-label="声源音量" hidden>
+        <div id="system-channel" class="sound-channel">
+          <button id="system-mute" aria-label="静音系统声音"></button
+          ><label for="system-gain">系统声音</label
+          ><input
+            id="system-gain"
+            type="range"
+            min="0"
+            max="200"
+            value="100"
+            aria-label="系统声音音量"
+          /><output id="system-value">100%</output>
+        </div>
+        <div id="microphone-channel" class="sound-channel">
+          <button id="microphone-mute" aria-label="静音麦克风"></button
+          ><label for="microphone-gain">麦克风</label
+          ><input
+            id="microphone-gain"
+            type="range"
+            min="0"
+            max="200"
+            value="100"
+            aria-label="麦克风音量"
+          /><output id="microphone-value">100%</output>
+        </div>
+        <p id="sound-empty" hidden>本次录制未启用声音</p>
+        <p id="message" role="status" aria-live="polite"></p>
+      </section>
+      <p id="annotation-message" role="status" hidden></p>
+    </main>

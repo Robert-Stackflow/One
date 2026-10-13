@@ -1,3 +1,4 @@
+@import './recording/recording-properties.css';
 .recording-page .record-result-card {
   max-width: 680px;
   margin: 28px auto;
@@ -668,61 +669,6 @@
   font-size: 12px;
   line-height: 1.6;
   margin: 12px 0;
-}
-.recording-page .input-style-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px 20px;
-  padding-top: 14px;
-}
-.recording-page .input-style-grid > label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  min-width: 0;
-}
-.recording-page .input-style-grid > .input-toggle {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-.recording-page .input-style-grid .custom-select {
-  width: 100%;
-}
-.recording-page .input-range {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.recording-page .input-range input {
-  flex: 1;
-  min-width: 40px;
-}
-.recording-page .input-range output {
-  min-width: 44px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.recording-page .input-style-grid input[type='color'] {
-  padding: 3px;
-  height: 36px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  width: 100%;
-  background: var(--surface);
-}
-
-.recording-page .property-section-title {
-  grid-column: 1 / -1;
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-}
-.recording-page .input-style-grid > .property-section-title:first-child {
-  margin-top: 0;
 }
 .recording-page .switch:has(input:disabled) {
   opacity: 0.45;

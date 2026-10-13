@@ -1,0 +1,225 @@
+@import '../capture/capture-controls.css';
+html:has(> body[data-view="recording-toolbar"]),
+body[data-view="recording-toolbar"] {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface);
+}
+body[data-view="recording-toolbar"] {
+  color: var(--fg);
+  user-select: none;
+}
+body[data-view="recording-toolbar"] main {
+  position: relative;
+  height: 100%;
+}
+/* The OS owns the outline and shadow; the content fills its native surface. */
+body[data-view="recording-toolbar"] .capture-panel {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  flex-shrink: 0;
+  animation: none;
+}
+body[data-view="recording-toolbar"] .capture-main-row,
+body[data-view="recording-toolbar"] .capture-tool-row {
+  flex-wrap: nowrap;
+}
+body[data-view="recording-toolbar"] #capture-actions {
+  top: var(--action-top, 0px);
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  overflow: hidden;
+}
+body[data-view="recording-toolbar"] #capture-actions .capture-main-row {
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+body[data-view="recording-toolbar"] #capture-actions .capture-tool-row,
+body[data-view="recording-toolbar"] #capture-actions .capture-output-row,
+body[data-view="recording-toolbar"] #capture-actions .record-status {
+  flex-shrink: 0;
+}
+body[data-view="recording-toolbar"] #capture-actions .capture-output-row {
+  margin-left: 0;
+}
+body[data-view="recording-toolbar"] #capture-actions .drag {
+  touch-action: none;
+  cursor: grab;
+  color: var(--muted);
+}
+body[data-view="recording-toolbar"] #capture-actions .drag:active {
+  cursor: grabbing;
+}
+body[data-view="recording-toolbar"] .record-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 2px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+body[data-view="recording-toolbar"] #time {
+  min-width: 41px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+body[data-view="recording-toolbar"] #fps {
+  font-size: 11px;
+  color: var(--muted);
+}
+body[data-view="recording-toolbar"] .record-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #dc4545;
+  flex-shrink: 0;
+}
+[data-phase='paused'] body[data-view="recording-toolbar"] .record-indicator,
+[data-phase='arming'] body[data-view="recording-toolbar"] .record-indicator {
+  background: #b6862b;
+}
+body[data-view="recording-toolbar"] #capture-actions #stop {
+  color: #d34545;
+}
+body[data-view="recording-toolbar"] #capture-actions #stop:hover {
+  background: #df494916;
+}
+body[data-view="recording-toolbar"] #capture-actions #stop.is-loading {
+  color: var(--fg);
+  opacity: 1;
+}
+body[data-view="recording-toolbar"] #stop.is-loading svg {
+  animation: one-recording-stop-spin 900ms linear infinite;
+}
+@keyframes one-recording-stop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="recording-toolbar"] #stop.is-loading svg {
+    animation: none;
+  }
+}
+body[data-view="recording-toolbar"] #capture-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+body[data-view="recording-toolbar"] #capture-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+body[data-view="recording-toolbar"] #capture-properties {
+  top: var(--property-top, 64px);
+  flex-wrap: nowrap;
+  min-height: 56px;
+  max-height: 56px;
+  border-top: 1px solid var(--line);
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+body[data-view="recording-toolbar"] #capture-properties .custom-select {
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+}
+body[data-view="recording-toolbar"] #capture-properties .custom-select::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border: solid var(--muted);
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg);
+}
+body[data-view="recording-toolbar"] .sound-panel {
+  top: var(--property-top, 64px);
+  width: 100%;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  max-height: calc(100vh - 70px);
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+body[data-view="recording-toolbar"] .sound-panel > * {
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+body[data-view="recording-toolbar"] .sound-channel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+body[data-view="recording-toolbar"] .sound-channel button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+}
+body[data-view="recording-toolbar"] .sound-channel button:hover {
+  background: var(--hover);
+}
+body[data-view="recording-toolbar"] .sound-channel label {
+  width: 68px;
+  font-size: 12px;
+}
+body[data-view="recording-toolbar"] .sound-channel input {
+  flex: 1;
+  min-width: 50px;
+}
+body[data-view="recording-toolbar"] .sound-channel output {
+  width: 38px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+body[data-view="recording-toolbar"] .sound-panel p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+body[data-view="recording-toolbar"] #message {
+  max-height: 40px;
+  overflow: auto;
+}
+body[data-view="recording-toolbar"] #annotation-message {
+  position: fixed;
+  bottom: 2px;
+  right: 12px;
+  margin: 0;
+  color: var(--danger, #be3838);
+  font-size: 11px;
+}
+body[data-view="recording-toolbar"] .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+body[data-view="recording-toolbar"] [hidden] {
+  display: none !important;
+}

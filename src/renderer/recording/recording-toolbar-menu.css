@@ -1,0 +1,148 @@
+@import './recording-properties.css';
+html:has(> body[data-view="recording-toolbar-menu"]),
+body[data-view="recording-toolbar-menu"] {
+  margin: 0;
+  background: var(--surface);
+  color: var(--fg);
+  height: 100%;
+  overflow: auto;
+}
+body[data-view="recording-toolbar-menu"] {
+  user-select: none;
+  padding: 8px;
+  box-sizing: border-box;
+}
+body[data-view="recording-toolbar-menu"] #menu {
+  display: grid;
+  gap: 2px;
+}
+body[data-view="recording-toolbar-menu"] .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--fg);
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+body[data-view="recording-toolbar-menu"] .menu-item:hover,
+body[data-view="recording-toolbar-menu"] .menu-item:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+body[data-view="recording-toolbar-menu"] .menu-item[aria-checked='true'] {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+body[data-view="recording-toolbar-menu"] .menu-item svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.75;
+}
+body[data-view="recording-toolbar-menu"] .menu-item > span {
+  text-align: left;
+}
+body[data-view="recording-toolbar-menu"] .menu-item .pattern {
+  width: 32px;
+}
+body[data-view="recording-toolbar-menu"] .menu-item .check {
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+}
+body[data-view="recording-toolbar-menu"] #error {
+  color: var(--danger, #be3838);
+  margin: 6px 4px;
+  font-size: 12px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu {
+  gap: 12px !important;
+  padding: 4px 6px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu header strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+body[data-view="recording-toolbar-menu"] .settings-reset {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+}
+body[data-view="recording-toolbar-menu"] .settings-reset svg {
+  width: 16px;
+  height: 16px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .input-style-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .input-style-grid > label {
+  display: grid;
+  grid-template-columns: 1fr 130px;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13px;
+  min-height: 32px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .input-style-grid .input-toggle {
+  display: flex;
+  justify-content: space-between;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .compact-camera {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .compact-camera > label {
+  grid-column: 1 / -1;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .compact-camera > .input-toggle:nth-child(2),
+body[data-view="recording-toolbar-menu"] .settings-menu .compact-camera > .input-toggle:nth-child(3) {
+  grid-column: auto;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .input-style-grid input[type='range'] {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .input-style-grid output {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  color: var(--muted);
+  font-size: 12px;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .input-style-grid input[type='text'] {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: Consolas, monospace;
+}
+body[data-view="recording-toolbar-menu"] .settings-menu .custom-select {
+  min-width: 0;
+  width: 100%;
+}
+body[data-view="recording-toolbar-menu"] [hidden] {
+  display: none !important;
+}

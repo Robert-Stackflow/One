@@ -17,7 +17,7 @@ window.addEventListener('error',event=>{void api?.diagnosticsReport('uncaught-er
 window.addEventListener('unhandledrejection',event=>{const reason=event.reason;void api?.diagnosticsReport('unhandled-rejection',reason?.stack||String(reason)).catch(()=>{});});
 if(['main','file-action','preview','picker','search','color-editor','dialog-bar','archive-task'].includes(view))setupWindowVisibility();
 const render=async()=>{
-  if(['recording-input-overlay','recording-camera-overlay','recording-annotation-overlay','recording-region-overlay','recording-region-outline','recording-countdown'].includes(view))await (await import('./recording-overlay-view')).renderRecordingOverlay(view);
+  if(['recording-toolbar','recording-toolbar-menu','recording-input-overlay','recording-camera-overlay','recording-annotation-overlay','recording-region-overlay','recording-region-outline','recording-countdown'].includes(view))await (await import('./recording-overlay-view')).renderRecordingOverlay(view);
   else if(view==='recognition')await (await import('./recognition-view')).renderRecognition();
   else if(view==='scroll-capture')(await import('./scroll-capture-view')).renderScrollCapture();
   else if(view==='capture')(await import('./capture-window-view')).renderCapture();

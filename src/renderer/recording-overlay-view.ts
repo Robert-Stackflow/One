@@ -3,11 +3,16 @@ import camera from './recording/recording-camera-overlay.html?raw';
 import annotation from './recording/recording-annotation-overlay.html?raw';
 import region from './recording/recording-region-overlay.html?raw';
 import countdown from './recording/recording-countdown.html?raw';
+import toolbar from './recording/recording-toolbar.html?raw';
+import menu from './recording/recording-toolbar-menu.html?raw';
 
 export async function renderRecordingOverlay(view:string){
   document.body.dataset.view=view;
+  document.body.classList.toggle('recording-settings-menu',view==='recording-toolbar-menu');
   const app=document.getElementById('app')!;
   switch(view){
+    case 'recording-toolbar':app.innerHTML=toolbar;await import('./recording/recording-toolbar');break;
+    case 'recording-toolbar-menu':app.innerHTML=menu;await import('./recording/recording-toolbar-menu');break;
     case 'recording-input-overlay':app.innerHTML=input;await import('./recording/recording-input-overlay');break;
     case 'recording-camera-overlay':app.innerHTML=camera;await import('./recording/recording-camera-overlay');break;
     case 'recording-annotation-overlay':app.innerHTML=annotation;await import('./recording/recording-annotation-overlay');break;

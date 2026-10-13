@@ -1,6 +1,6 @@
-/* Screenshot surfaces: a compact action strip, a separate property strip,
+/* Screenshot and recording surfaces: a compact action strip, a separate property strip,
    and anchored menus. Icon hit targets stay square at every window size. */
-body[data-view='capture'] .capture-panel {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-panel {
   position: absolute;
   z-index: 4;
   width: max-content;
@@ -16,33 +16,33 @@ body[data-view='capture'] .capture-panel {
   cursor: default;
   animation: capture-panel-in 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-body[data-view='capture'] #capture-properties {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-properties {
   max-height: min(45vh, 360px);
   overflow-y: auto;
   overflow-x: hidden;
 }
-body[data-view='capture'] .capture-main-row,
-body[data-view='capture'] .capture-tool-row,
-body[data-view='capture'] .capture-output-row {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-main-row,
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-tool-row,
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-output-row {
   display: flex;
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
 }
-body[data-view='capture'] .capture-main-row {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-main-row {
   gap: 4px;
 }
-body[data-view='capture'] .capture-output-row {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-output-row {
   flex-wrap: nowrap;
 }
-body[data-view='capture'] .capture-divider {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-divider {
   flex: 0 0 1px;
   height: 24px;
   background: var(--line);
   margin: 0 4px;
 }
-body[data-view='capture'] #capture-actions button,
-body[data-view='capture'] #capture-side > button {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button {
   display: grid;
   place-items: center;
   flex: 0 0 36px;
@@ -57,70 +57,70 @@ body[data-view='capture'] #capture-side > button {
   color: var(--fg);
   box-shadow: none;
 }
-body[data-view='capture'] .capture-panel svg {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-panel svg {
   width: 19px;
   height: 19px;
   stroke-width: 1.7;
   flex-shrink: 0;
 }
-body[data-view='capture'] #capture-actions button:hover,
-body[data-view='capture'] #capture-side > button:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button:hover,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button:hover {
   background: var(--hover);
 }
-body[data-view='capture'] #capture-actions #capture-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #capture-drag {
   cursor: grab;
   touch-action: none;
   color: var(--muted);
 }
-body[data-view='capture'] #capture-actions #capture-drag:hover,
-body[data-view='capture'] #capture-actions.is-dragging #capture-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #capture-drag:hover,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions.is-dragging #capture-drag {
   color: var(--fg);
   background: var(--hover);
 }
-body[data-view='capture'] #capture-actions.is-dragging,
-body[data-view='capture'] #capture-actions.is-dragging #capture-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions.is-dragging,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions.is-dragging #capture-drag {
   cursor: grabbing;
 }
-body[data-view='capture'] #capture-actions button[aria-pressed='true'],
-body[data-view='capture'] #capture-side > button[aria-pressed='true'],
-body[data-view='capture'] #capture-actions button[aria-expanded='true'],
-body[data-view='capture'] #capture-side > button[aria-expanded='true'] {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button[aria-pressed='true'],
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button[aria-pressed='true'],
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button[aria-expanded='true'],
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button[aria-expanded='true'] {
   background: var(--selected);
   color: var(--fg);
 }
-body[data-view='capture'] #capture-actions #copy,
-body[data-view='capture'] #capture-actions #region-confirm {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #copy,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #region-confirm {
   background: var(--accent);
   color: var(--on-accent);
 }
-body[data-view='capture'] #capture-actions #copy:hover,
-body[data-view='capture'] #capture-actions #region-confirm:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #copy:hover,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #region-confirm:hover {
   opacity: 0.85;
 }
-body[data-view='capture'] #capture-actions #cancel:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #cancel:hover {
   background: #df494916;
   color: #d34545;
 }
-body[data-view='capture'] #capture-side {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-body[data-view='capture'] #capture-side > button + button {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button + button {
   margin-top: 0;
 }
-body[data-view='capture'] #capture-side #capture-side-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side #capture-side-drag {
   min-height: 20px;
   height: 20px;
   cursor: grab;
   touch-action: none;
   color: var(--muted);
 }
-body[data-view='capture'] #capture-side.is-dragging,
-body[data-view='capture'] #capture-side.is-dragging #capture-side-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side.is-dragging,
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side.is-dragging #capture-side-drag {
   cursor: grabbing;
 }
-body[data-view='capture'] .capture-menu[popover] {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu[popover] {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -136,12 +136,12 @@ body[data-view='capture'] .capture-menu[popover] {
     0 8px 24px #0003,
     0 1px 4px #0001;
 }
-body[data-view='capture'] .capture-menu::backdrop {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu::backdrop {
   background: transparent;
   pointer-events: none;
 }
 /* Shared tool-menu rows live in editor/annotation-tools.css. */
-body[data-view='capture'] .capture-menu-action {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-action {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -155,37 +155,37 @@ body[data-view='capture'] .capture-menu-action {
   font-size: 13px;
   text-align: left;
 }
-body[data-view='capture'] .capture-menu-action:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-action:hover {
   background: var(--hover);
 }
-body[data-view='capture'] #capture-more-menu {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-more-menu {
   width: 290px;
 }
-body[data-view='capture'] .capture-menu-heading {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-heading {
   display: block;
   margin: 0 0 9px;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
 }
-body[data-view='capture'] #capture-more-menu #capture-workflow {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-more-menu #capture-workflow {
   margin: 6px 2px 2px;
   padding: 12px 5px 4px;
 }
-body[data-view='capture'] .capture-workflow-choice {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-choice {
   gap: 6px;
 }
-body[data-view='capture'] .capture-workflow-choice .custom-select {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-choice .custom-select {
   flex: 1;
   min-width: 0;
 }
-body[data-view='capture'] .capture-workflow-choice .custom-select {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-choice .custom-select {
   width: 100%;
   height: 34px;
   min-height: 34px;
   border-radius: 5px;
 }
-body[data-view='capture'] #run-workflow {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #run-workflow {
   flex: 0 0 34px;
   width: 34px;
   height: 34px;
@@ -193,36 +193,36 @@ body[data-view='capture'] #run-workflow {
   padding: 0;
   border-radius: 5px;
 }
-body[data-view='capture'] .capture-workflow-order {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-order {
   margin: 8px 0 0;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-body[data-view='capture'] #capture-receipts-title {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-receipts-title {
   margin-top: 14px;
 }
-body[data-view='capture'] .capture-workflow-receipts li {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-receipts li {
   min-height: 27px;
   align-items: center;
   border-bottom: 1px solid var(--line);
 }
-body[data-view='capture'] .capture-workflow-receipts li:last-child {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-receipts li:last-child {
   border: 0;
 }
-body[data-view='capture'] .capture-workflow-receipts li > :last-child {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-receipts li > :last-child {
   color: var(--muted);
 }
-body[data-view='capture'] #capture-effects-menu {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu {
   width: 310px;
   padding: 14px;
 }
-body[data-view='capture'] #capture-effects-menu #capture-output-effects {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu #capture-output-effects {
   display: block;
 }
-body[data-view='capture'] #capture-effects-menu .output-effect-preview {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-preview {
   margin-top: 12px;
 }
-body[data-view='capture'] #capture-effects-menu .output-effect-reset {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-reset {
   margin: 0;
   width: 30px;
   height: 30px;
@@ -230,21 +230,21 @@ body[data-view='capture'] #capture-effects-menu .output-effect-reset {
   padding: 6px;
   border-radius: 5px;
 }
-body[data-view='capture'] .capture-menu-header {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: -4px -3px 8px 0;
 }
-body[data-view='capture'] .capture-menu-header .capture-menu-heading {
+body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-header .capture-menu-heading {
   margin: 0;
 }
-body[data-view='capture'] #capture-effects-menu .output-effect-fields {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-fields {
   grid-template-columns: 1fr;
 }
-body[data-view='capture'] #capture-effects-menu .output-effect-fields > label {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-fields > label {
   min-height: 32px;
 }
-body[data-view='capture'] #capture-effects-menu .output-effect-fields input[type='number'] {
+body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-fields input[type='number'] {
   width: 42px;
 }

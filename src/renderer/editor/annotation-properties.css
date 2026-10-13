@@ -1,10 +1,10 @@
 /* Properties use compact, labelled controls, never a second row inside actions. */
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties {
   gap: 8px 12px;
   padding: 8px 10px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties > label,
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-property {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties > label,
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-property {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -13,48 +13,48 @@ body:is([data-view="image-editor"],[data-view="capture"]) .capture-property {
   font-weight: 400;
   min-height: 30px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties > label:not([hidden]) ~ label:not([hidden]):not(.property-row-start) {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties > label:not([hidden]) ~ label:not([hidden]):not(.property-row-start) {
   padding-left: 12px;
   border-left: 1px solid var(--line);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties > label.property-row-start {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties > label.property-row-start {
   padding-left: 0;
   border-left: 0;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .custom-select {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .custom-select {
   width: 106px;
   color: var(--fg);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties [id$='family-trigger'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties [id$='family-trigger'] {
   width: 128px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties [id$='weight-trigger'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties [id$='weight-trigger'] {
   width: 90px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties [id$='stroke-trigger'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties [id$='stroke-trigger'] {
   width: 128px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .number-control {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .number-control {
   width: 104px;
   color: var(--fg);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties > label > button {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties > label > button {
   padding: 3px 8px;
   color: var(--fg);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties #watermark-text {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties #watermark-text {
   width: 160px;
   color: var(--fg);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-color-field {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-color-field {
   gap: 8px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette {
   display: flex;
   align-items: center;
   gap: 4px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > button {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette > button {
   width: 24px;
   height: 26px;
   min-width: 24px;
@@ -64,7 +64,7 @@ body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > 
   background: transparent;
   border-radius: 4px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > button::before {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette > button::before {
   content: '';
   display: block;
   width: 16px;
@@ -73,14 +73,14 @@ body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > 
   background: var(--preset-color);
   box-shadow: inset 0 0 0 1px #0002;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > button:hover {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette > button:hover {
   background: var(--hover);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > button[aria-pressed='true'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette > button[aria-pressed='true'] {
   border-color: var(--fg);
   background: var(--selected);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .capture-color-control > button {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .capture-color-control > button {
   width: 30px;
   min-width: 30px;
   height: 30px;
@@ -90,33 +90,33 @@ body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties
   background: var(--surface);
   border-color: var(--line);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-color-control .color-picker-value {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-color-control .color-picker-value {
   display: none;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-color-control .color-picker-swatch {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-color-control .color-picker-swatch {
   width: 18px;
   height: 18px;
   border-radius: 3px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-color-panel.anchored-popover {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-color-panel.anchored-popover {
   padding: 14px;
   border-radius: 10px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-color-panel .color-picker-eyedropper {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-color-panel .color-picker-eyedropper {
   margin-top: 12px;
   width: 100%;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-control {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-control {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-presets {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-presets {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-presets button {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-presets button {
   min-width: 24px;
   width: 24px;
   height: 26px;
@@ -128,20 +128,20 @@ body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-presets
   font-size: 11px;
   color: var(--muted);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-presets button:hover {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-presets button:hover {
   background: var(--hover);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-presets button[aria-pressed='true'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-presets button[aria-pressed='true'] {
   border-color: var(--line);
   background: var(--selected);
   color: var(--fg);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-size-preset span {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-size-preset span {
   display: block;
   border-radius: 50%;
   background: currentColor;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .capture-range-control input[type='range'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .capture-range-control input[type='range'] {
   appearance: none;
   width: 64px;
   min-width: 40px;
@@ -149,7 +149,7 @@ body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties
   background: transparent;
   cursor: pointer;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-control input[type='range']::-webkit-slider-runnable-track {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-control input[type='range']::-webkit-slider-runnable-track {
   height: 3px;
   border-radius: 2px;
   background: linear-gradient(
@@ -158,7 +158,7 @@ body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-control
     var(--line) var(--range-progress)
   );
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-control input[type='range']::-webkit-slider-thumb {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-control input[type='range']::-webkit-slider-thumb {
   appearance: none;
   width: 11px;
   height: 11px;
@@ -168,7 +168,7 @@ body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-control
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 30%, transparent);
   margin-top: -4px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-value {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-value {
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--line);
@@ -177,7 +177,7 @@ body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-value {
   padding-right: 6px;
   font-size: 11px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .capture-range-value input[type='number'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .capture-range-value input[type='number'] {
   width: 40px;
   height: calc(var(--control-height) - 2px);
   min-height: 0;
@@ -190,43 +190,43 @@ body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-value input::-webkit-inner-spin-button {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-value input::-webkit-inner-spin-button {
   appearance: none;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .annotation-color-field {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .annotation-color-field {
   order: -2;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .annotation-width-field,
-body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .annotation-size-field {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .annotation-width-field,
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .annotation-size-field {
   order: -1;
 }
 @media (max-width: 780px) {
-  body:is([data-view="image-editor"],[data-view="capture"]) .capture-range-presets {
+  body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .capture-range-presets {
     display: none;
   }
-  body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties {
+  body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties {
     gap: 7px 9px;
   }
 }
 @media (max-width: 520px) {
-  body:is([data-view="image-editor"],[data-view="capture"]) .annotation-properties .capture-range-control input[type='range'] {
+  body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-properties .capture-range-control input[type='range'] {
     width: 44px;
   }
-  body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette {
+  body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette {
     gap: 2px;
   }
-  body:is([data-view="image-editor"],[data-view="capture"]) .annotation-palette > button {
+  body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .annotation-palette > button {
     width: 22px;
     min-width: 22px;
   }
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .text-emphasis {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .text-emphasis {
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
   align-items: center;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .text-emphasis button {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .text-emphasis button {
   width: 32px;
   min-width: 32px;
   height: 32px;
@@ -236,14 +236,14 @@ body:is([data-view="image-editor"],[data-view="capture"]) .text-emphasis button 
   color: var(--fg, #303030);
   background: transparent;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .text-emphasis button svg {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .text-emphasis button svg {
   width: 16px;
   height: 16px;
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .text-emphasis button:hover {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .text-emphasis button:hover {
   background: var(--hover, #eee);
 }
-body:is([data-view="image-editor"],[data-view="capture"]) .text-emphasis button[aria-pressed='true'] {
+body:is([data-view="image-editor"],[data-view="capture"],[data-view="recording-toolbar"]) .text-emphasis button[aria-pressed='true'] {
   background: var(--hover, #eee);
   border-color: var(--line, #ddd);
 }

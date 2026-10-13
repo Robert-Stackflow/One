@@ -1,0 +1,57 @@
+/* Shared recording property controls: setup, toolbar menus and replay. */
+
+:is(.recording-page,.recording-settings-menu) .input-style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px 20px;
+  padding-top: 14px;
+}
+:is(.recording-page,.recording-settings-menu) .input-style-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+:is(.recording-page,.recording-settings-menu) .input-style-grid > .input-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+:is(.recording-page,.recording-settings-menu) .input-style-grid .custom-select {
+  width: 100%;
+}
+:is(.recording-page,.recording-settings-menu) .input-range {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+:is(.recording-page,.recording-settings-menu) .input-range input {
+  flex: 1;
+  min-width: 40px;
+}
+:is(.recording-page,.recording-settings-menu) .input-range output {
+  min-width: 44px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+:is(.recording-page,.recording-settings-menu) .input-style-grid input[type='color'] {
+  padding: 3px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: 100%;
+  background: var(--surface);
+}
+
+:is(.recording-page,.recording-settings-menu) .property-section-title {
+  grid-column: 1 / -1;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+:is(.recording-page,.recording-settings-menu) .input-style-grid > .property-section-title:first-child {
+  margin-top: 0;
+}
