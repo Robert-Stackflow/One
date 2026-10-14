@@ -9,7 +9,7 @@ function decode(ids,config){
   const bytes=[];for(let n=33;n<=126;n++)bytes.push(n);for(let n=161;n<=172;n++)bytes.push(n);for(let n=174;n<=255;n++)bytes.push(n);
   const points=[...bytes];for(let n=0,index=0;n<256;n++)if(!bytes.includes(n)){bytes.push(n);points.push(256+index++);}
   const inverse=new Map(points.map((point,index)=>[String.fromCodePoint(point),bytes[index]])),decoded=[];
-  for(const value of ids){const id=Number(value);assert.ok(Number.isSafeInteger(id)&&id>=0);if(special.has(id))continue;const text=vocabulary.get(id);assert.notEqual(text,undefined);for(const character of text){const byte=inverse.get(character);assert.notEqual(byte,undefined);decoded.push(byte);}}
+  for(const value of ids){if(value===2n)break;const id=Number(value);assert.ok(Number.isSafeInteger(id)&&id>=0);if(special.has(id))continue;const text=vocabulary.get(id);assert.notEqual(text,undefined);for(const character of text){const byte=inverse.get(character);assert.notEqual(byte,undefined);decoded.push(byte);}}
   return new TextDecoder('utf8',{fatal:true}).decode(new Uint8Array(decoded));
 }
 async function main(){

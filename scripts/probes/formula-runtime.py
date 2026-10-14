@@ -113,7 +113,9 @@ def main():
         elapsed = round((time.perf_counter() - start) * 1000)
         if not np.issubdtype(tokens.dtype, np.integer) or len(tokens) > 1024:
             raise ValueError("Unexpected output token contract")
-        text = tokenizer.decode(tokens.tolist(), skip_special_tokens=True)
+        eos = np.flatnonzero(tokens == 2)
+        visible = tokens[: int(eos[0]) + 1] if len(eos) else tokens
+        text = tokenizer.decode(visible.tolist(), skip_special_tokens=True)
         if not text.strip():
             raise ValueError("Model returned empty LaTeX")
         memory = process.memory_info()
