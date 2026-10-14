@@ -7,6 +7,7 @@ export interface FormulaResult {
   text: string;
   endpoint: string;
   revision: string;
+  inference?:{backend:'cpu'|'dml';device:string;fallbackReason?:string};
 }
 export function formulaSettings(value: unknown): TranslationSettings {
   try {

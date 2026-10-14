@@ -63,12 +63,15 @@ export interface LocalModelEntry extends LocalModelState {
   measuredMemoryMiB?: number;
   measuredVRAMMiB?: number;
   progress: number;
+  phase?:LocalModelProgress['phase'];
+  sourceReady?:boolean;
+  preparationBytes?:number;
   error: string;
   note: string;
 }
 export interface LocalModelManagerState {
   revision: string;
-  choices: { ocr: LocalModelChoice; repair: LocalModelChoice };
+  choices: { ocr: LocalModelChoice; repair: LocalModelChoice; formula?:LocalModelChoice;formulaPrevious?:LocalModelChoice };
   entries: LocalModelEntry[];
   devices: import('./inference-devices').InferenceDevices;
 }

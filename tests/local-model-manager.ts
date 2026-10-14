@@ -7,6 +7,26 @@ import { OCRModels } from '../src/main/recognition/ocr-models';
 import { paddleTinyModel, miganModel } from '../src/main/local-model-catalog';
 import { aiModelPath, repairModel } from '../src/main/image-ai-model';
 import { LlamaRuntimeStore } from '../src/main/recognition/llama-runtime-store';
+import {formulaPlusS} from '../src/main/recognition/formula-model-catalog';
+import type {FormulaModelStore} from '../src/main/recognition/formula-model-store';
+
+test('OCR and formula managers share live settings without lost writes; formula metadata avoids inference and unrelated models',async()=>{
+  const root=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'formula-shared-')),models=new OCRModels(join(root,'recognition','models'));
+  let installed=0,removed=0,unloaded=0,ready=false;
+  const formulas={state:async()=>({ready,downloading:false,inUse:false,diskBytes:ready?12:0,totalBytes:20,downloadedBytes:0}),install:async()=>{installed++;ready=true;},remove:async()=>{removed++;ready=false;}} as unknown as FormulaModelStore;
+  const a=new LocalModelManager(root,models,fetch,async()=>{throw Error('unexpected GPU probe');},{formulas,unloadNative:async()=>{unloaded++;}}),b=new LocalModelManager(root,models,fetch,async()=>({gpus:[]}),{formulas});
+  a.store.state=async()=>{throw Error('unexpected unrelated model read');};models.state=async()=>{throw Error('unexpected Tesseract read');};
+  let state=await a.state(false,'formula');assert.deepEqual(state.entries.map(entry=>entry.id),[formulaPlusS.source.id]);assert.equal(state.choices.formula?.modelId,'service');
+  const stale=state.revision;await a.save('formula',{modelId:formulaPlusS.source.id,device:{mode:'cpu'}},stale);
+  assert.equal((await b.selection('formula')).modelId,formulaPlusS.source.id);await assert.rejects(b.save('ocr',{modelId:'tesseract',device:{mode:'cpu'}},stale),/已更新/);
+  await b.save('ocr',{modelId:paddleTinyModel.id,device:{mode:'auto'}},await b.settingsRevision());assert.equal((await a.selection('ocr')).modelId,paddleTinyModel.id);
+  const stored=JSON.parse(await readFile(join(root,'local-models.json'),'utf8'));assert.equal(stored.formula.modelId,formulaPlusS.source.id);assert.equal(stored.ocr.modelId,paddleTinyModel.id);assert.equal(stored.repair.modelId,miganModel.id);
+  await b.save('formula',{modelId:'service',device:{mode:'auto'}},await b.settingsRevision());assert.equal((await a.state(false,'formula')).choices.formulaPrevious?.device.mode,'cpu');
+  const resumedRoot=join(root,'resumed');await mkdir(resumedRoot);await copyFile(join(root,'local-models.json'),join(resumedRoot,'local-models.json'));const resumed=new LocalModelManager(resumedRoot,new OCRModels(join(resumedRoot,'recognition','models')));assert.equal((await resumed.selection('formula')).modelId,'service');assert.equal((await resumed.state(false,'formula')).choices.formulaPrevious?.modelId,formulaPlusS.source.id);await resumed.stop();
+  await a.save('formula',{modelId:formulaPlusS.source.id,device:{mode:'cpu'}},await a.settingsRevision());
+  await a.install(formulaPlusS.source.id);assert.equal(installed,1);assert.equal((await a.selectedState('formula')).ready,true);const release=a.use(formulaPlusS.source.id);await assert.rejects(a.remove(formulaPlusS.source.id),/使用/);release();await a.remove(formulaPlusS.source.id);assert.equal(removed,1);assert.equal(unloaded,1);
+  await Promise.all([a.stop(),b.stop()]);
+});
 
 test('model choices persist per feature and do not mutate active tasks or allow incompatible GPU settings', async () => {
   const root = await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!, 'profile-'));

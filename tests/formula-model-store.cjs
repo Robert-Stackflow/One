@@ -16,8 +16,9 @@ async function main(){
     const builder=async({destination,signal})=>{builds++;alive=true;try{if(wait)await new Promise((resolve,reject)=>{gate=resolve;signal.addEventListener('abort',()=>setTimeout(()=>reject(Error('fixture canceled')),25),{once:true});});signal.throwIfAborted();await fs.writeFile(path.join(destination,'model.onnx'),wrong?'broken':'native');}finally{alive=false;}};
     const store=new FormulaModelStore(path.join(testRoot,'cache'),runtime,{transport:offline,profile,build:builder});stores.push(store);
     wait=true;const first=new AbortController(),second=new AbortController(),phases=[];
-    const a=store.install(first.signal,p=>phases.push(p.phase),sources);void a.catch(()=>{});const b=store.install(second.signal,undefined,sources);
+    const a=store.install(first.signal,p=>phases.push(p.phase),sources);void a.catch(()=>{});const progress=[];const b=store.install(second.signal,p=>progress.push({...p}),sources);
     await until(()=>alive);first.abort();await assert.rejects(a,/取消/);assert.equal(alive,true);gate();await b;assert.equal(builds,1);assert.equal(leased,0);assert.equal((await store.state()).ready,true);assert.ok(!phases.includes('ready'));
+    assert.ok(progress.every((item,index)=>item.total===progress[0].total&&(!index||item.received>=progress[index-1].received)));assert.equal(progress.at(-1).received,progress.at(-1).total);
     const lease=await store.acquire();await assert.rejects(store.remove(),/使用/);await assert.rejects(store.install(new AbortController().signal),/使用/);lease.release();
     wait=false;await store.install(new AbortController().signal);assert.equal(builds,1);assert.equal(prepared,1,'ready native model must not prepare runtime again');
     await fs.writeFile(lease.model.onnx.path,'tamper');await assert.rejects(store.acquire(),/校验失败/);assert.equal((await store.state()).ready,false);await store.install(new AbortController().signal);assert.equal(builds,2);assert.equal((await store.state()).ready,true);
@@ -29,6 +30,8 @@ async function main(){
     wrong=false;await store.install(new AbortController().signal);assert.equal((await store.state()).ready,true);await store.stop();await assert.rejects(store.acquire(),/关闭/);await assert.rejects(store.install(new AbortController().signal),/关闭/);
     assert.ok((await fs.readdir(path.join(testRoot,'cache','prepared'))).every(name=>!name.startsWith('.preparing-')&&!name.startsWith('.obsolete-')));
     console.log('Formula model store: shared preparation, scoped cancellation/cleanup, leases, bounded metadata, integrity repair, foreign-file protection, verified publication and offline reuse passed.');
+    const combined=[];const missingRuntime={...runtime,state:async()=>({ready:false}),install:async(_signal,report)=>{const total=combined[0].total-artifacts.reduce((sum,file)=>sum+file.bytes,0);for(const received of [0,Math.floor(total/2),total])report({phase:'downloading',received,total});}};
+    const combinedStore=new FormulaModelStore(path.join(testRoot,'combined'),missingRuntime,{transport:offline,profile,build:builder});stores.push(combinedStore);await combinedStore.install(new AbortController().signal,value=>combined.push({...value}),sources);assert.ok(combined.every((item,index)=>item.total===combined[0].total&&(!index||item.received>=combined[index-1].received)));assert.equal(combined.at(-1).received,combined.at(-1).total);
     if(process.argv.includes('--runtime')){
       await Promise.all(['formula-runtime-store','formula-model-catalog','formula-model-builder','formula-local-runner','formula-local-worker'].map(name=>build({...options,entryPoints:['src/main/recognition/'+name+'.ts'],outfile:path.join(testRoot,name+'.cjs')})));
       const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{formulaPlusS}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));

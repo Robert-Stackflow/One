@@ -1,6 +1,7 @@
 import { q } from '../ui';
 import 'katex/dist/katex.min.css';
 import { mountServiceSettings } from './service-settings';
+import {mountLocalModels} from './local-models-ui';
 import { formulaText, FORMULA_TEXT, FORMULA_IMAGE } from '../../shared/recognition/formula';
 import type { TranslationConfig } from '../../shared/recognition/translation';
 import type { FormulaRecognitionAPI, OCRState } from '../../shared/recognition/ocr';
@@ -8,7 +9,7 @@ export function mountFormula(
   api: FormulaRecognitionAPI,
   state: () => OCRState | undefined,
   message: (value: unknown) => void,
-  changed: () => void,
+  changed: () => void|Promise<void>,
 ) {
   let mode = false,
     requesting = false,
@@ -23,6 +24,19 @@ export function mountFormula(
     previewState = q('formula-preview-status');
   editor.maxLength = FORMULA_TEXT;
   const busy = () => requesting || !!state()?.formulaRecognizing;
+  const local=()=>!!state()?.formulaLocal&&state()!.formulaLocal!.choice.modelId!=='service';
+  const source=q<HTMLSelectElement>('formula-source');
+  const models=mountLocalModels(api,async()=>{await changed();render();},'formula');
+  q('formula-model-configure').onclick=()=>void models().catch(message);
+  source.onchange=async()=>{
+    if(busy())return;try{
+      if(source.value==='local'&&!local()){
+        const snapshot=await api.localModels(),previous=snapshot.choices.formulaPrevious;
+        if(previous&&snapshot.entries.find(entry=>entry.id===previous.modelId)?.ready){await api.saveLocalModel('formula',previous,snapshot.revision);await changed();}else await models();
+      }
+      else if(source.value==='service'&&local()){await api.saveLocalModel('formula',{modelId:'service',device:{mode:'auto'}},state()!.formulaLocal!.revision);await changed();}
+    }catch(error){message(error);}finally{render();}
+  };
   function render() {
     const active = busy(),
       other = !!state()?.running || !!state()?.translating,
@@ -31,14 +45,21 @@ export function mountFormula(
     q('formula-tools').hidden = !mode;
     q('formula-destination').hidden = true;
     q('formula-copy').hidden = !mode;
-    q<HTMLButtonElement>('formula-recognize').disabled = active || other || large || !config?.ready;
+    const native=local(),ready=native?state()?.models.ready:config?.ready;
+    source.value=native?'local':'service';source.disabled=active||other;
+    source.options[1].textContent=native?state()?.modelTitle||'本地模型':'本地模型';
+    q<HTMLButtonElement>('formula-model-configure').disabled=active||other;
+    q<HTMLButtonElement>('formula-recognize').disabled = active || other || large || !ready;
+    q('formula-recognize').textContent=native?'识别公式':'识别公式（发送图片）';
     q<HTMLButtonElement>('formula-configure').disabled = active || other;
     editor.readOnly = active || other;
     q<HTMLButtonElement>('formula-copy').disabled =
       active || !editor.value.trim() || editor.value.length > FORMULA_TEXT;
     q('formula-configure').title = config?.ready ? config.endpoint : '配置视觉服务';
-    q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : '发送当前图片并识别公式';
+    q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : native?(state()?.models.ready?'在本机识别当前图片':'请先在“公式模型”中下载并使用模型'):'发送当前图片并识别公式';
+    q('formula-configure').hidden=native;
     q('image-loading').hidden = !active;
+    q('formula-loading-label').textContent=native&&state()?.waitingForInference?'等待本地任务':'识别中';
     q('source').parentElement!.ariaBusy = String(active);
     if (notice) { message(notice); notice = ''; }
   }
@@ -115,16 +136,18 @@ export function mountFormula(
     render();
   };
   q('formula-recognize').onclick = async () => {
-    if (busy() || !config?.ready || !state()) return;
+    if (busy() || !(local()?state()?.models.ready:config?.ready) || !state()) return;
     requesting = true;
     notice = '';
+    message('');
     render();
     changed();
     try {
-      const result = await api.recognizeFormula(state()!.token, config.revision);
+      const result = await api.recognizeFormula(state()!.token, local()?state()!.formulaLocal!.revision:config!.revision);
       editor.value = result.text;
       updatePreview();
       notice = '';
+      if(result.inference)source.title=(state()?.modelTitle||result.model)+' · '+result.inference.device;
     } catch (error) {
       notice = error instanceof Error ? error.message : String(error);
     } finally {

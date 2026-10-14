@@ -5,6 +5,7 @@ const api: FormulaRecognitionAPI = {
   dedicatedServices:async()=>[],
   taskProfiles:()=>call('formula-profiles'),verifyServiceImage:ref=>call('formula-verify',ref),cancelServiceCheck:()=>call('formula-check-cancel'),migrateService:rev=>call('formula-migrate',rev),restoreService:rev=>call('formula-restore',rev),manageServices:()=>call('formula-manage'),
   ready:()=>call('ready'),
+  localModels:refresh=>call('local-models',refresh),saveLocalModel:(purpose,choice,revision)=>call('local-model-save',purpose,choice,revision),installLocalModel:(id,preference)=>call('local-model-install',id,preference),cancelLocalModelInstall:id=>call('local-model-cancel',id),deleteLocalModel:id=>call('local-model-delete',id),refreshInferenceDevices:()=>call('local-model-devices'),
   imagePreview:(token,region)=>call('image-preview',token,region),
   state:()=>call('state'),formulaConfig:()=>call('formula-config'),saveFormula:value=>call('formula-save',value),clearFormula:revision=>call('formula-clear',revision),
   recognizeFormula:(token,revision)=>call('formula-recognize',token,revision),cancelFormula:()=>call('formula-cancel'),copyFormula:text=>call('formula-copy',text),

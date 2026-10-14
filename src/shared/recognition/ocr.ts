@@ -47,6 +47,7 @@ export interface OCRState {
   error: string;
   models: { ready: boolean; downloading: boolean; progress: number; error: string };
   modelTitle?: string;
+  formulaLocal?:{choice:import('../local-models').LocalModelChoice;revision:string};
 }
 export interface RecognitionServiceAPI {
   dedicatedServices():Promise<import('./translation-services').TranslationServiceProfile[]>;
@@ -57,7 +58,15 @@ export interface RecognitionServiceAPI {
   restoreService(revision:string):Promise<TranslationConfig>;
   manageServices():Promise<void>;
 }
-export interface OCRAPI extends RecognitionServiceAPI {
+export interface RecognitionModelAPI {
+  localModels(refresh?: boolean): Promise<import('../local-models').LocalModelManagerState>;
+  saveLocalModel(purpose: import('../local-models').LocalModelPurpose, choice: import('../local-models').LocalModelChoice, revision: string): Promise<string>;
+  installLocalModel(id: string,preference?:import('../inference-devices').InferencePreference): Promise<void>;
+  cancelLocalModelInstall(id: string): Promise<void>;
+  deleteLocalModel(id: string): Promise<void>;
+  refreshInferenceDevices(): Promise<import('../inference-devices').InferenceDevices>;
+}
+export interface OCRAPI extends RecognitionServiceAPI,RecognitionModelAPI {
   correct(token:string,selection:import('./text-region').OCRRegionSelection,text:string):Promise<OCRResult>;
   region(token:string,language:OCRLanguage,selection:import('./text-area').OCRLocalSelection):Promise<OCRResult>;
   ready(): Promise<void>;
@@ -70,12 +79,6 @@ export interface OCRAPI extends RecognitionServiceAPI {
   cancel(): Promise<void>;
   install(): Promise<void>;
   cancelInstall(): Promise<void>;
-  localModels(refresh?: boolean): Promise<import('../local-models').LocalModelManagerState>;
-  saveLocalModel(purpose: import('../local-models').LocalModelPurpose, choice: import('../local-models').LocalModelChoice, revision: string): Promise<string>;
-  installLocalModel(id: string,preference?:import('../inference-devices').InferencePreference): Promise<void>;
-  cancelLocalModelInstall(id: string): Promise<void>;
-  deleteLocalModel(id: string): Promise<void>;
-  refreshInferenceDevices(): Promise<import('../inference-devices').InferenceDevices>;
   copy(text: string): Promise<void>;
   translationConfig(): Promise<TranslationConfig>;
   saveTranslation(value: TranslationSettings): Promise<TranslationConfig>;
@@ -94,7 +97,7 @@ export interface OCRAPI extends RecognitionServiceAPI {
   outputImageTranslation(token:string,id:string,mode:'copy'|'export',png:string):Promise<string|null>;
   editImageTranslation(token:string,id:string,document:import('./image-translation').ImageTranslationDocument,past:import('./image-translation').ImageTranslationDocument[]):Promise<void>;
 }
-export interface FormulaRecognitionAPI extends RecognitionServiceAPI {
+export interface FormulaRecognitionAPI extends RecognitionServiceAPI,RecognitionModelAPI {
   ready(): Promise<void>;
   state():Promise<OCRState>;
   imagePreview(token:string,region:import('./image-preview').OCRImagePreviewRequest):Promise<Uint8Array>;

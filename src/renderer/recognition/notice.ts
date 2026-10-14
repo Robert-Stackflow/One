@@ -1,9 +1,10 @@
 /** Feedback appears only for an action or error, never as a permanent instruction. */
+export function recognitionMessage(value:unknown){const raw=value instanceof Error?value.message:String(value??'');return raw.replace(/^Error invoking remote method '[^'\r\n]{1,160}': (?:Error: )?/,'');}
 export function recognitionNotice(node: HTMLElement) {
   node.classList.add('recognition-notice');
   let last = '', timer: ReturnType<typeof setTimeout> | undefined;
   return (value: unknown) => {
-    const text = value instanceof Error ? value.message : String(value ?? '');
+    const text=recognitionMessage(value);
     if (last === text) return;
     last = text; if (timer) clearTimeout(timer);
     node.textContent = text; node.hidden = !text;

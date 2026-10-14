@@ -76,12 +76,13 @@ export class FormulaModelStore {
     await directory(path);if(owned)await this.owned(path);await rm(path,{recursive:true});
   }
   private async prepare(signal:AbortSignal,progress:(value:LocalModelProgress)=>void,sources:Record<string,string>,runtimeSources:Record<string,string>){
-    const total=this.profile.source.artifacts.reduce((sum,file)=>sum+file.bytes,0);progress({phase:'checking',received:0,total});
+    const weightsTotal=this.profile.source.artifacts.reduce((sum,file)=>sum+file.bytes,0),runtimeTotal=formulaRuntimeProfile.artifacts.reduce((sum,file)=>sum+file.bytes,0),total=weightsTotal+runtimeTotal;progress({phase:'checking',received:0,total});
     try{await this.verify(this.installed,signal);this.invalid=false;progress({phase:'ready',received:total,total});return;}catch(error){signal.throwIfAborted();let exists=false;try{await lstat(this.installed);exists=true;}catch(check){if((check as NodeJS.ErrnoException).code!=='ENOENT')throw check;}if(exists)await this.owned(this.installed);}
-    await this.protectSources();await this.sources.install(this.profile.source,signal,value=>progress({...value,phase:value.phase==='ready'?'verifying':value.phase}),sources);
+    const runtimeReady=(await this.runtime.state()).ready;signal.throwIfAborted();
+    await this.protectSources();await this.sources.install(this.profile.source,signal,value=>progress({...value,total,received:Math.min(total,(runtimeReady?runtimeTotal:0)+value.received),phase:value.phase==='ready'?'verifying':value.phase}),sources);
     const weights=await this.sources.acquire(this.profile.source,signal);let runtime:Awaited<ReturnType<Runtime['acquire']>>|undefined,temporary:string|undefined,old:string|undefined;
     try{
-      await this.runtime.install(signal,value=>progress({...value,phase:value.phase==='ready'?'verifying':value.phase}),runtimeSources);runtime=await this.runtime.acquire(signal);
+      await this.runtime.install(signal,value=>progress({...value,total,received:Math.min(total,weightsTotal+(runtimeReady?runtimeTotal:value.received)),phase:value.phase==='ready'?'verifying':value.phase}),runtimeSources);runtime=await this.runtime.acquire(signal);
       await directory(dirname(this.parent),true);await directory(this.parent,true);temporary=await mkdtemp(join(this.parent,'.preparing-'));
       await writeFile(join(temporary,'.prepared.json'),JSON.stringify(this.marker),{flag:'wx'});
       progress({phase:'verifying',received:total,total,artifact:'准备公式模型'});

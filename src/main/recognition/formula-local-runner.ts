@@ -21,6 +21,7 @@ export class FormulaLocalRunner {
     try{await task;}finally{this.release?.();this.release=undefined;if(this.terminating===task)this.terminating=undefined;}
   }
   async cancel(){this.abort?.abort();await this.active?.catch(()=>{});}
+  async unload(id?:string){if(id&&this.identity&&(JSON.parse(this.identity)[0] as FormulaModelFiles).id!==id)return;if(this.active)throw Error('公式任务正在进行');await this.terminate();this.scheduler.forget(this.client);}
   async close(){this.closed=true;await this.cancel();await this.terminate();this.scheduler.forget(this.client);}
   run(png:Buffer,model:FormulaModelFiles,preferences:FormulaLocalPreferences,progress:(value:number,phase:string)=>void=()=>{}){
     if(this.closed)return Promise.reject(Error('本地公式服务已关闭'));if(this.active)return Promise.reject(Error('公式任务正在进行'));

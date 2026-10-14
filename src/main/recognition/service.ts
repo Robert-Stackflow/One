@@ -17,6 +17,9 @@ import {RecognitionTaskProvider} from './task-provider';
 import { TranslationClient } from './translation-client';
 import type { TranslationResult } from '../../shared/recognition/translation';
 import { FormulaClient } from './formula-client';
+import {FormulaLocalRunner} from './formula-local-runner';
+import {FormulaModelStore} from './formula-model-store';
+import {FormulaRuntimeStore} from './formula-runtime-store';
 import { formulaText, type FormulaResult } from '../../shared/recognition/formula';
 import { LocalModelManager } from '../local-model-manager';
 import { PaddleRunner } from './paddle-runner';
@@ -27,7 +30,7 @@ import { localModelCatalog } from '../local-model-catalog';
 import { nativeRuntimeLicenses } from '../../shared/recognition/model-sources';
 import { inferOCRImage, InlineOCREngine } from './image-inference';
 import { InlineOCRSessions } from './inline-ocr';
-import { readInferenceDevices } from '../inference-devices';
+import { readInferenceDevices,resolveInferenceDevice } from '../inference-devices';
 import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
 import { correctOCRWord } from '../../shared/recognition/text-correction';
 import { prepareOCRRectangle,replaceOCRRectangle } from '../../shared/recognition/text-area';
@@ -87,20 +90,29 @@ export class OCRService {
   readonly translationClient: TranslationClient;
   readonly formulaStore: RecognitionConnectionStore;
   readonly formulaClient: FormulaClient;
+  readonly formulaModels:FormulaModelStore;
+  private formulaNative=new FormulaLocalRunner();
+  private formulaRuntime?:FormulaRuntimeStore;
+  private ownsFormulaModels:boolean;
+  private formulaAbort?:AbortController;
   private serviceCheck?:AbortController;
   constructor(
     directory: string,
     private ctx: RecognitionContext,
     private kind: 'ocr' | 'formula' = 'ocr',
     runtimes?:LlamaRuntimeStore,
+    formulaModels?:FormulaModelStore,
   ) {
     this.models = new OCRModels(join(directory, 'models'));
     this.runner = new OCRRunner(this.models);
     const transport:typeof fetch=(input,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(String(input),options);
+    this.ownsFormulaModels=!formulaModels;
+    if(!formulaModels)this.formulaRuntime=new FormulaRuntimeStore(join(directory,'..','models','runtimes','formula'),transport);
+    this.formulaModels=formulaModels||new FormulaModelStore(join(directory,'..','models','formula'),this.formulaRuntime!,{transport});
     this.ownsRuntimes=!runtimes;this.runtimes=runtimes||new LlamaRuntimeStore(join(directory,'..','models','runtimes','llama'),transport);
     const helper=process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined;
     this.localModels = new LocalModelManager(join(directory, '..'), this.models,transport,
-      signal => readInferenceDevices(signal,helper),{runtimes:this.runtimes,unloadNative:async id=>{await Promise.all([this.native.unload(id),this.inline?.unload(id)]);}});
+      signal => readInferenceDevices(signal,helper),{runtimes:this.runtimes,formulas:this.formulaModels,unloadNative:async id=>{await Promise.all([this.native.unload(id),this.inline?.unload(id),this.formulaNative.unload(id)]);}});
     this.native=new LlamaRunner(this.localModels.store,this.runtimes,join(directory,'native-sessions'),{helper});
     this.sensitive = new SensitiveScanner(this.models);
     this.workflow = new OCRWorkflow({
@@ -136,21 +148,21 @@ export class OCRService {
     this.formulaClient = new FormulaClient(undefined,undefined,tasks);
     this.inline = new InlineOCRSessions(()=>new InlineOCREngine(this.localModels,this.models,this.runtimes,directory),async()=>this.translationStore.connection((await this.translationStore.state()).revision),owner=>new TranslationClient(undefined,undefined,ctx.ai?new RecognitionTaskProvider(ctx.ai,()=>owner):undefined));
     const handle=(name:string,fn:(...args:any[])=>unknown)=>{
-      if(this.kind==='formula' ? !['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
+      if(this.kind==='formula' ? !['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-')&&!name.startsWith('local-model') : name.startsWith('formula-'))return;
       ctx.register(this.scope+'-'+name,(event,...args)=>{
       if(ctx.blocked()||!this.window||event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||event.sender.mainFrame.frames.length||event.senderFrame.url!==this.url)throw Error('拒绝访问识别窗口');
       return ctx.background(Promise.resolve().then(()=>fn(...args)));
     }); };
     handle('ready', () => { this.rendererReady?.(); });
     handle('image-preview',(token,region)=>{if(token!==this.token||!this.imagePreview)throw Error('识别图片已失效');return this.imagePreview.request(region);});
-    handle('state', async () => { const selected = this.kind === 'formula' ? {ready:false,downloading:false,progress:0,error:'',title:''} : await this.localModels.selectedState(); return ({
+    handle('state', async () => { const selected = await this.localModels.selectedState(this.kind); return ({
       token: this.token,
       name: this.name,
       image: 'one-file://' + this.scope + '/' + this.token,
       uiScale:ctx.uiScale(),
       ...this.size,
       running: this.running,
-      waitingForInference: this.runner.waiting || this.paddle.waiting || this.native.waiting,
+      waitingForInference: this.runner.waiting || this.paddle.waiting || this.native.waiting||this.formulaNative.waiting,
       translating: this.translating,
       formulaRecognizing: this.formulaRecognizing,
       imageBytes: this.png?.length || 0,
@@ -158,6 +170,7 @@ export class OCRService {
       error: this.error,
       models: selected,
       modelTitle: selected.title,
+      formulaLocal:this.kind==='formula'?{choice:await this.localModels.selection('formula'),revision:await this.localModels.settingsRevision()}:undefined,
       workflow: this.workflow.state,
     }); });
     handle('open-formula', async token => {
@@ -200,11 +213,12 @@ export class OCRService {
       if (generation === this.token) this.error = '';
     });
     handle('cancel-install', async () => this.localModels.cancel((await this.localModels.selection('ocr')).modelId));
-    handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh,'ocr'); });
-    handle('local-model-save', (purpose, choice, revision) => this.localModels.save(purpose, choice, revision));
-    handle('local-model-install', (id,preference) => this.localModels.install(id,preference));
-    handle('local-model-cancel', id => this.localModels.cancel(id));
-    handle('local-model-delete', id => this.localModels.remove(id));
+    const modelAllowed=(id:unknown)=>{if(id==='tesseract'&&this.kind==='ocr')return;if(localModelCatalog.find(model=>model.id===id)?.purpose!==this.kind)throw Error('模型与当前窗口不匹配');};
+    handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh,this.kind); });
+    handle('local-model-save', (purpose, choice, revision) => {if(purpose!==this.kind)throw Error('模型与当前窗口不匹配');if(this.running||this.formulaRecognizing)throw Error('请先结束当前识别');return this.localModels.save(purpose, choice, revision);});
+    handle('local-model-install', (id,preference) => {modelAllowed(id);return this.localModels.install(id,preference);});
+    handle('local-model-cancel', id => {modelAllowed(id);return this.localModels.cancel(id);});
+    handle('local-model-delete', id => {modelAllowed(id);return this.localModels.remove(id);});
     handle('local-model-devices', () => this.localModels.refreshDevices());
     handle('copy', async (value) => {
       const text = ocrText(value);
@@ -303,8 +317,25 @@ export class OCRService {
       const generation = this.token,
         serial = ++this.formulaSerial;
       this.formulaRecognizing = true;
+      this.progress=0;
+      const abort=this.formulaAbort=new AbortController();
       const task = (async () => {
         try {
+          const selected=await this.localModels.selection('formula');abort.signal.throwIfAborted();
+          if(selected.modelId!=='service'){
+            if(revision!==await this.localModels.settingsRevision())throw Error('公式模型设置已改变，请重新识别');
+            const device=selected.device.mode==='gpu'?resolveInferenceDevice(selected.device,await readInferenceDevices(abort.signal,process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined),384*384):{backend:'cpu' as const};
+            const release=this.localModels.use(selected.modelId);let lease:Awaited<ReturnType<FormulaModelStore['acquire']>>|undefined;
+            try{
+              lease=await this.formulaModels.acquire(abort.signal);abort.signal.throwIfAborted();
+              if(lease.model.id!==selected.modelId)throw Error('公式模型与准备缓存不匹配');
+              if(generation!==this.token||serial!==this.formulaSerial||ctx.blocked())throw Error('公式识别已取消');
+              const result=await this.formulaNative.run(this.png!,lease.model,{device:selected.device.mode,deviceId:'gpu' in device?device.gpu!.deviceId:0,automaticBackend:device.backend},progress=>{if(generation===this.token&&serial===this.formulaSerial)this.progress=progress;});
+              if(abort.signal.aborted||generation!==this.token||serial!==this.formulaSerial||ctx.blocked())throw Error('公式识别已取消');
+              if(JSON.stringify(await this.localModels.selection('formula'))!==JSON.stringify(selected))throw Error('公式模型设置已改变，请重新识别');
+              return {text:result.text,model:selected.modelId,endpoint:'local:'+selected.modelId,revision,inference:{backend:result.actualBackend,device:result.actualBackend==='cpu'?'CPU':'DirectML · '+result.deviceId,fallbackReason:result.fallbackReason}} as FormulaResult;
+            }finally{lease?.release();release();}
+          }
           const connection = await this.formulaStore.connection(revision);
           if (generation !== this.token || serial !== this.formulaSerial || ctx.blocked())
             throw Error('公式识别已取消');
@@ -319,7 +350,7 @@ export class OCRService {
       })();
       this.formulaTask = task;
       return task.finally(() => {
-        if (this.formulaTask === task) this.formulaTask = undefined;
+        if (this.formulaTask === task){this.formulaTask = undefined;this.formulaAbort=undefined;}
       });
     });
     handle('formula-cancel', () => this.cancelFormula());
@@ -466,7 +497,8 @@ export class OCRService {
   }
   private async cancelFormula() {
     this.formulaSerial++;
-    await this.formulaClient.cancel();
+    this.formulaAbort?.abort();
+    await Promise.all([this.formulaClient.cancel(),this.formulaNative.cancel()]);
     await this.formulaTask?.catch(() => {});
   }
   async open(png: Buffer, name: string) {
@@ -564,7 +596,8 @@ export class OCRService {
     this.window = undefined;
     this.clear();
     await this.settling;
-    await Promise.all([this.paddle.close(), this.native.close(),this.localModels.stop()]);
+    await Promise.all([this.paddle.close(), this.native.close(),this.formulaNative.close(),this.localModels.stop()]);
+    if(this.ownsFormulaModels){await this.formulaModels.stop();await this.formulaRuntime?.stop();}
     if(this.ownsRuntimes)await this.runtimes.stop();
   }
 }
