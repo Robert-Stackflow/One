@@ -3,6 +3,31 @@ import assert from 'node:assert/strict';
 import {ScrollStitch} from '../../src/shared/capture/scroll-stitch';
 import {ScrollSettle} from '../../src/shared/capture/scroll-settle';
 import {scrollDefaults} from '../../src/shared/capture/scroll-capture';
+import {NativePixelReader,FRAME_PIXEL_LIMIT} from '../../src/shared/capture/native-pixels';
+import {Worker} from 'node:worker_threads';
+import {join} from 'node:path';
+
+test('native packed pixels survive arbitrary pipe splits and reject invalid layouts before allocation',()=>{
+  const info={version:1,format:'bgra8',backend:'wgc',width:4,height:3,stride:16,bytes:48,elapsed:12},pixels=Buffer.from(Array.from({length:48},(_,i)=>i)),bytes=Buffer.concat([Buffer.from(JSON.stringify(info)+'\n'),pixels]);
+  for(const split of [1,7,37,512]){const reader=new NativePixelReader();for(let at=0;at<bytes.length;at+=split)reader.append(bytes.subarray(at,at+split));assert.equal(reader.complete,true);const value=reader.finish();assert.deepEqual(Buffer.from(value.frame.pixels),pixels);assert.equal(value.frame.pixels.buffer.byteLength,48);reader.clear();assert.ok(value.frame.pixels.every(byte=>byte===0));}
+  for(const change of [{version:2},{format:'rgba8'},{stride:20},{bytes:47},{bytes:FRAME_PIXEL_LIMIT+1},{elapsed:-1},{width:10001,height:1001,stride:40004,bytes:40044004}])assert.throws(()=>new NativePixelReader().append(Buffer.from(JSON.stringify({...info,...change})+'\n')),/无效/);
+  assert.throws(()=>new NativePixelReader().append(Buffer.alloc(513,32)),/过大/);
+  const partial=new NativePixelReader();partial.append(bytes.subarray(0,bytes.length-1));assert.throws(()=>partial.finish(),/不完整/);partial.clear();
+  assert.throws(()=>new NativePixelReader().append(Buffer.concat([bytes,Buffer.from([1])])),/额外/);
+});
+
+test('worker owns transferred raw frames, commits only staged frames and skips unchanged previews',async()=>{
+  const worker=new Worker(join(__dirname,'capture/scroll-worker.cjs'));let serial=0;
+  const command=(kind:string,value?:unknown,transfer:ArrayBuffer[]=[])=>new Promise<any>((resolve,reject)=>{const id=++serial;worker.once('message',message=>{assert.equal(message.id,id);message.error?reject(Error(message.error)):resolve(message);});worker.postMessage({id,kind,value},transfer);});
+  try{
+    await command('configure',{options:scrollDefaults(),source:{width:96,height:160}});
+    const frame=scrollPixels(96,160),original=frame.pixels.slice(),staging=command('stage',{frame,monitored:false},[frame.pixels.buffer as ArrayBuffer]);assert.equal(frame.pixels.byteLength,0);assert.equal((await staging).stable,true);
+    const first=await command('commit');assert.equal(first.result.count,1);assert.ok(first.preview);
+    const same=scrollPixels(96,160);await command('stage',{frame:same,monitored:false},[same.pixels.buffer as ArrayBuffer]);const unchanged=await command('commit');assert.equal(unchanged.result.match,'unchanged');assert.equal(unchanged.preview,null);
+    const next=scrollPixels(96,160,0,39);await command('stage',{frame:next,monitored:false},[next.pixels.buffer as ArrayBuffer]);await command('release-frame');await assert.rejects(command('commit'),/已失效/);
+    const output=await command('output');assert.deepEqual(output.output.pixels,original);assert.equal(output.output.height,160);
+  }finally{await worker.terminate();}
+});
 function scrollPixels(width: number, height: number, x = 0, y = 0) {
   const pixels = new Uint8Array(width * height * 4);
   for (let row = 0; row < height; row++)

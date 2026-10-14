@@ -135,6 +135,7 @@ export class ScrollNative {
     this.reads++;
     return this.read ? this.read() : frame(this.offset);
   }
+  async framePixels(){const png=await this.frame();const image=nativeImage.createFromBuffer(png),pixels=image.toBitmap(),owned=new Uint8Array(pixels.byteLength);owned.set(pixels);return {...image.getSize(),pixels:owned};}
   async focused() {
     return this.focus;
   }

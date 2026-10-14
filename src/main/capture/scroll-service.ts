@@ -227,7 +227,7 @@ export class ScrollCaptureService {
       this.publish();
     }
   }
-  private run(kind: string, value?: unknown) {
+  private run(kind: string, value?: unknown,transfer:ArrayBuffer[]=[]) {
     if (this.workerFailed) return Promise.reject(this.workerFailed);
     if (!this.worker || this.pending) return Promise.reject(Error('拼接会话不可用'));
     return new Promise<any>((resolve, reject) => {
@@ -235,7 +235,7 @@ export class ScrollCaptureService {
         timer = setTimeout(() => this.workerFailure(Error('拼接计算超时，已有预览已保留')), 10000);
       timer.unref();
       this.pending = { id, resolve, reject, timer };
-      this.worker!.postMessage({ id, kind, value });
+      try{this.worker!.postMessage({ id, kind, value },transfer);}catch(error){clearTimeout(timer);this.pending=undefined;reject(error);}
     });
   }
   private accept(response: any) {
@@ -304,6 +304,7 @@ export class ScrollCaptureService {
   }
   private async readSample(monitored = false) {
     const mode=this.view!.mode,automatic=monitored&&mode==='auto';
+    const unavailable=automatic?FOCUS_MESSAGE:'目标窗口不可见或被遮挡，手动采集已暂停。已有结果已保留。';
     const generation = this.generation,
       started = performance.now();
     const check = () => {
@@ -315,30 +316,25 @@ export class ScrollCaptureService {
     if (monitored) await this.run('settle-reset');
     for (;;) {
       check();
-      if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(automatic?FOCUS_MESSAGE:'目标窗口不可见或被遮挡，手动采集已暂停。已有结果已保留。');
-      const png = await this.native!.frame();
-      let image: Electron.NativeImage;
-      try {
-        image = nativeImage.createFromBuffer(png);
-      } finally {
-        png.fill(0);
-      }
-      if (image.isEmpty()) throw Error('长截图采集图像无法解码');
-      const frame = { ...image.getSize(), pixels: image.toBitmap() };
+      if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(unavailable);
+      const frame=await this.native!.framePixels();let staged=false;
       try {
         check();
-        if (!monitored || (await this.run('observe', frame)).stable) {
+        if(monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(unavailable);
+        const observed=await this.run('stage',{frame,monitored},[frame.pixels.buffer as ArrayBuffer]);staged=observed.stable;
+        if (staged) {
           check();
           // A focus/cursor change during settling must not append an obscured
           // frame or send another wheel. Leave the last accepted strip intact.
-          if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(automatic?FOCUS_MESSAGE:'目标窗口不可见或被遮挡，手动采集已暂停。已有结果已保留。');
+          if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(unavailable);
           check();
-          this.accept(await this.run('sample', frame));
+          this.accept(await this.run('commit'));staged=false;
           check();
           break;
         }
       } finally {
-        frame.pixels.fill(0);
+        if(frame.pixels.byteLength)frame.pixels.fill(0);
+        if(staged)await this.run('release-frame').catch(()=>{});
       }
       if (performance.now() - started >= 6000){
         if(monitored&&!automatic){this.view!.message='滚动中，等待画面稳定';return this.publish();}

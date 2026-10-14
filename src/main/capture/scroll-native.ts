@@ -2,6 +2,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { join } from 'node:path';
 import { screen } from 'electron';
 import { NativeFrameReader } from '../../shared/capture/native-frame';
+import {NativePixelReader} from '../../shared/capture/native-pixels';
+import type {PixelFrame} from '../../shared/capture/scroll-stitch';
 import { IMAGE_BYTES, imageDimensions } from '../../shared/capture/image-limits';
 import { limitChildProcess, nativeMonitorBounds,allowCaptureForeground } from './native';
 export function captureMonitorBounds(display: Electron.Display) {
@@ -17,7 +19,8 @@ export function captureMonitorBounds(display: Electron.Display) {
 export class ScrollNative {
   private child: ChildProcessWithoutNullStreams;
   private buffer = Buffer.alloc(0);
-  private reader?: NativeFrameReader;
+  private reader?: NativeFrameReader|NativePixelReader;
+  private pixelResponse=false;
   private diagnostics = '';
   private release?: () => void;
   private pending?: {
@@ -95,11 +98,12 @@ export class ScrollNative {
           imageDimensions(header.width, header.height);
           if (
             !Number.isSafeInteger(header.bytes) ||
-            header.bytes < 24 ||
+            header.bytes < (this.pixelResponse?16:24) ||
             header.bytes > IMAGE_BYTES
           )
             throw Error('采集图像容量无效');
-          this.reader = new NativeFrameReader();
+          if(this.pixelResponse!== (header.format==='bgra8'))throw Error('原生采集像素协议不一致');
+          this.reader = this.pixelResponse?new NativePixelReader():new NativeFrameReader();
           this.reader.append(this.buffer);
           this.buffer = Buffer.alloc(0);
           this.reader.append(chunk.subarray(newline + 1));
@@ -150,6 +154,7 @@ export class ScrollNative {
     pending.resolve(value);
   }
   private frameComplete() {
+    if(this.reader instanceof NativePixelReader){const {info,frame}=this.reader.finish();this.lastReadbackMs=info.elapsed;this.hasFrame=true;this.complete(frame);return;}
     const { info, png } = this.reader!.finish();
     this.lastReadbackMs = info.elapsed;
     this.hasFrame = true;
@@ -162,10 +167,15 @@ export class ScrollNative {
   async frame(fresh = false): Promise<Buffer> {
     await this.ready;
     const response = this.response();
+    this.pixelResponse=false;
     this.child.stdin.write(fresh && this.hasFrame ? 'frame fresh\n' : 'frame\n');
     const value = await response;
     if (!Buffer.isBuffer(value)) throw Error('原生图像响应无效');
     return value;
+  }
+  async framePixels(fresh=false):Promise<PixelFrame>{
+    await this.ready;const response=this.response();this.pixelResponse=true;this.child.stdin.write(fresh&&this.hasFrame?'pixels fresh\n':'pixels\n');
+    const value=await response as PixelFrame;if(!value||!(value.pixels instanceof Uint8Array))throw Error('原生像素响应无效');return value;
   }
   async wheel(horizontal: boolean) {
     await this.ready;
@@ -194,6 +204,7 @@ export class ScrollNative {
     }
     this.buffer.fill(0);
     this.buffer = Buffer.alloc(0);
+    if(this.reader instanceof NativePixelReader)this.reader.clear();
     this.reader = undefined;
     this.child.kill();
     this.release?.();

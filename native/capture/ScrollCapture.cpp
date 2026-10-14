@@ -229,12 +229,14 @@ static void run(RECT region, DWORD owner, bool snapshotOnly, HWND window = nullp
                 std::cout << "{\"scroll\":" << (sent ? "true" : "false") << "}\n" << std::flush;
                 continue;
             }
-            if (command != "frame" && command != "frame fresh") throw hresult_invalid_argument();
+            const bool rawPixels = command == "pixels" || command == "pixels fresh";
+            if (command != "frame" && command != "frame fresh" && !rawPixels) throw hresult_invalid_argument();
+            if (rawPixels && (snapshotOnly || window || pixels.size() > 40000000)) throw hresult_invalid_argument();
             const auto started = std::chrono::steady_clock::now();
             std::unique_lock lock(state->mutex);
             // A frame produced since the previous delivery is already fresh.
             // Static sources may produce no new frame; don't restart WGC for them.
-            if(command=="frame fresh" && state->latest && state->timestamp <= deliveredTimestamp)
+            if((command=="frame fresh" || command=="pixels fresh") && state->latest && state->timestamp <= deliveredTimestamp)
                 state->ready.wait_for(lock,std::chrono::milliseconds(100),[&]{return state->timestamp>deliveredTimestamp || FAILED(state->error);});
             if (!state->ready.wait_for(lock, std::chrono::milliseconds(2500), [&] { return state->latest || FAILED(state->error); }))
                 throw hresult_error(HRESULT_FROM_WIN32(WAIT_TIMEOUT), L"显示器没有返回可捕获帧");
@@ -263,7 +265,11 @@ static void run(RECT region, DWORD owner, bool snapshotOnly, HWND window = nullp
             deliveredTimestamp = state->timestamp;
             lock.unlock();
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
-            if (!snapshotOnly || !transport(pixels, width, height, elapsed)) encode(pixels, width, height, elapsed);
+            if(rawPixels){
+                std::cout << "{\"version\":1,\"format\":\"bgra8\",\"backend\":\"wgc\",\"width\":" << width << ",\"height\":" << height
+                    << ",\"stride\":" << size_t(width)*4 << ",\"bytes\":" << pixels.size() << ",\"elapsed\":" << elapsed << "}\n";
+                std::cout.write(reinterpret_cast<const char*>(pixels.data()),pixels.size());std::cout.flush();
+            }else if (!snapshotOnly || !transport(pixels, width, height, elapsed)) encode(pixels, width, height, elapsed);
             SecureZeroMemory(pixels.data(), pixels.size());
         }
     } catch (...) { close(); throw; }
