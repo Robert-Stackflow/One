@@ -1,4 +1,4 @@
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash,randomInt} from 'node:crypto';
 import {readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {session} from 'electron';
@@ -7,26 +7,94 @@ import {serviceRequest} from './service-request';
 import {CodexProvider,codexExecutables} from './codex-provider';
 import type {CodexStatus} from '../shared/codex-types';
 import {aiEndpoint,builtinAICommands,renderAIPrompt,validateAIImages,validateAIProfile,type AICommand,type AIConversation,type AIEvent,type AIHistoryEntry,type AIImage,type AIMessage,type AIModel,type AIModelCatalogDraft,type AIProfile,type AIProfileInput,type AIState} from '../shared/ai';
+import {prepareAITask,taskReference,taskTranslation,taskFormula,type AITaskReference,type AITaskProfile,type AITaskResult} from '../shared/ai-task';
 
-type Saved={connections?:Partial<Record<'translation'|'formula',unknown>>;profiles:Omit<AIProfile,'hasKey'>[];keys:Record<string,string>;defaultId:string;commands:AICommand[];conversations:AIConversation[];shortcut:string;history:AIHistoryEntry[];codexExecutable:string;chatOptions:{onTop:boolean;keepOpen:boolean}};
+interface ImageVerification {revision:string;models:Record<string,{expiresAt:number;model:string}>}
+interface TaskOptions {transport?:typeof fetch;codex?:CodexProvider;imageProbe?:()=>Promise<{image:AIImage;expected:string}>}
+
+type Saved={taskVision?:Record<string,ImageVerification>;codexTaskEpoch?:number;connections?:Partial<Record<'translation'|'formula',unknown>>;profiles:Omit<AIProfile,'hasKey'>[];keys:Record<string,string>;defaultId:string;commands:AICommand[];conversations:AIConversation[];shortcut:string;history:AIHistoryEntry[];codexExecutable:string;chatOptions:{onTop:boolean;keepOpen:boolean}};
 const empty=():Saved=>({profiles:[],keys:{},defaultId:'',commands:[],conversations:[],shortcut:'',history:[],codexExecutable:'',chatOptions:{onTop:true,keepOpen:true}});
 const messageLimit=256*1024,answerLimit=1024*1024;
+function wireModel(value:unknown){return typeof value==='string'&&value.length<=200&&!/[\r\n\0]/.test(value)?value.trim():'';}
+async function boundedAIJSON(response:Response,signal:AbortSignal){
+ if(!response.body)throw Error('AI 服务未返回内容');const reader=response.body.getReader(),decoder=new TextDecoder();let text='',bytes=0;
+ const abort=()=>{void reader.cancel().catch(()=>{});};signal.addEventListener('abort',abort,{once:true});
+ try{for(;;){signal.throwIfAborted();const item=await reader.read();if(item.done)break;bytes+=item.value.byteLength;if(bytes>8*1024*1024)throw Error('AI 响应过大');text+=decoder.decode(item.value,{stream:true});}signal.throwIfAborted();text+=decoder.decode();try{return JSON.parse(text);}catch{throw Error('AI 服务返回了无效的 JSON');}}
+ finally{signal.removeEventListener('abort',abort);await reader.cancel().catch(()=>{});reader.releaseLock();}
+}
 function requireText(value:unknown,max=messageLimit){if(typeof value!=='string'||!value.trim()||Buffer.byteLength(value)>max)throw Error('内容为空或过长');return value.trim();}
-function parseStreamLine(line:string,kind:AIProfile['kind']):{delta:string;done:boolean}{
+function parseStreamLine(line:string,kind:AIProfile['kind']):{delta:string;done:boolean;model?:string}{
  const value=line.trim();if(!value)return {delta:'',done:false};if(value==='[DONE]')return {delta:'',done:true};
  let data:any;try{data=JSON.parse(value);}catch{throw Error('AI 服务返回了无效的流式数据');}
  if(data.error)throw Error(typeof data.error?.message==='string'?data.error.message.slice(0,500):'AI 服务拒绝了请求');
- if(kind==='ollama')return {delta:typeof data.message?.content==='string'?data.message.content:'',done:data.done===true};
- const choice=data.choices?.[0];return {delta:typeof choice?.delta?.content==='string'?choice.delta.content:'',done:!!choice?.finish_reason};
+ if(kind==='ollama')return {delta:typeof data.message?.content==='string'?data.message.content:'',done:data.done===true,model:wireModel(data.model)};
+ const choice=data.choices?.[0];return {delta:typeof choice?.delta?.content==='string'?choice.delta.content:'',done:!!choice?.finish_reason,model:wireModel(data.model)};
 }
 export class OneAIService{
+ private taskOwners=new Map<string,{owner:number;abort:AbortController}>();
+ private taskOptions:TaskOptions={};
+ private taskRevision(profile:Omit<AIProfile,'hasKey'>){return createHash('sha256').update(JSON.stringify({profile,key:this.data.keys[profile.id]||'',codex:profile.kind==='codex'?{executable:this.data.codexExecutable,epoch:this.data.codexTaskEpoch||0}:undefined})).digest('hex');}
+ private taskModels(profile:Omit<AIProfile,'hasKey'>):AIModel[]{
+  return profile.models?.length?profile.models.map(model=>({id:model.id,name:model.name,reasoningEfforts:model.reasoningEfforts?[...model.reasoningEfforts]:undefined})):[{id:profile.model,name:profile.model||'默认模型'}];
+ }
+ private visionRecords(){return this.data.taskVision||{};}
+ private verifiedImages(profile:Omit<AIProfile,'hasKey'>){
+  const record=this.visionRecords()[profile.id];if(!record||record.revision!==this.taskRevision(profile)||!record.models||typeof record.models!=='object')return [];
+  return this.taskModels(profile).map(model=>model.id).filter(id=>Object.hasOwn(record.models,id)&&Number.isFinite(record.models[id]?.expiresAt)&&record.models[id].expiresAt>Date.now());
+ }
+ taskProfiles():AITaskProfile[]{return this.data.profiles.map(profile=>({id:profile.id,name:profile.name,kind:profile.kind,model:profile.model,models:this.taskModels(profile),revision:this.taskRevision(profile),imageModels:this.verifiedImages(profile)}));}
+ private taskProfile(value:unknown){
+  const reference=taskReference(value),profile=this.data.profiles.find(profile=>profile.id===reference.profileId);
+  if(!profile)throw Error('AI 服务不存在');validateAIProfile({...profile,id:undefined});
+  if(this.taskRevision(profile)!==reference.revision)throw Error('AI 服务配置已改变，请重新选择服务和模型');
+  if((!reference.model&&profile.kind!=='codex')||!this.taskModels(profile).some(model=>model.id===reference.model))throw Error('模型不在已配置的 AI 服务中');
+  return {reference,profile};
+ }
+ private pendingTasks(except?:string){return [...this.taskOwners.keys()].filter(id=>id!==except&&!this.active.has(id)).length;}
+ private async taskScope<T>(owner:number,signal:AbortSignal|undefined,action:(id:string,signal:AbortSignal)=>Promise<T>){
+  if(!Number.isSafeInteger(owner)||owner<=0)throw Error('AI 任务所属窗口无效');
+  if(this.active.size+this.pendingTasks()>=3)throw Error('已有太多 AI 请求，请等待或取消');
+  const id='feature:'+randomUUID(),abort=new AbortController(),cancel=()=>abort.abort('cancelled');
+  this.taskOwners.set(id,{owner,abort});signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();
+  try{abort.signal.throwIfAborted();const result=await action(id,abort.signal);abort.signal.throwIfAborted();return result;}
+  catch(error){if(abort.signal.aborted)throw Error('AI 请求已取消');throw error;}
+  finally{signal?.removeEventListener('abort',cancel);this.taskOwners.delete(id);}
+ }
+ cancelTaskOwner(owner:number){for(const [id,record] of this.taskOwners)if(record.owner===owner){record.abort.abort('cancelled');this.cancel(id);}}
+ async runTask(value:unknown,signal?:AbortSignal):Promise<AITaskResult>{
+  const {request,messages}=prepareAITask(value),{reference,profile}=this.taskProfile(request.reference);
+  if(request.purpose==='formula'&&!this.verifiedImages(profile).includes(reference.model))throw Error('请先验证该模型的图片输入能力');
+  return this.taskScope(request.owner,signal,async(id,signal)=>{
+   const result=await this.generate(reference.profileId,messages,id,()=>{},reference.model,undefined,signal,true);
+   signal.throwIfAborted();this.taskProfile(reference);
+   return request.purpose==='translation'?{reference,model:result.model,purpose:'translation',result:taskTranslation(result.text,request.paragraphs)}:{reference,model:result.model,purpose:'formula',text:taskFormula(result.text)};
+  });
+ }
+ async verifyTaskImageInput(value:unknown,owner:number,signal?:AbortSignal){
+  const {reference}=this.taskProfile(value);
+  return this.taskScope(owner,signal,async(id,signal)=>{
+   const probe=this.taskOptions.imageProbe?await this.taskOptions.imageProbe():await this.imageChallenge();signal.throwIfAborted();
+   if(!/^\d{6}$/.test(probe.expected))throw Error('图片验证样本无效');const [image]=validateAIImages([probe.image]);
+   const result=await this.generate(reference.profileId,[{role:'system',content:'Read the six digits in the supplied image. Return only those digits. Do not use tools or return explanations.'},{role:'user',content:'Read the image.',images:[image]}],id,()=>{},reference.model,undefined,signal,true);
+   signal.throwIfAborted();this.taskProfile(reference);if(result.text.trim()!==probe.expected)throw Error('模型未正确读取图片，请检查模型是否支持图片输入');
+   const previous=this.data.taskVision,records=this.visionRecords(),old=records[reference.profileId];
+   this.data.taskVision={...records,[reference.profileId]:{revision:reference.revision,models:{...(old?.revision===reference.revision?old.models:{}),[reference.model]:{expiresAt:Date.now()+86400000,model:result.model}}}};
+   try{this.save();}catch(error){this.data.taskVision=previous;throw error;}
+   return {reference,model:result.model,verified:true};
+  });
+ }
+ private async imageChallenge(){
+  const expected=String(randomInt(100000,1000000)),sharp=(await import('sharp')).default;
+  const png=await sharp(Buffer.from(`<svg width="360" height="90"><rect width="360" height="90" fill="white"/><text x="24" y="64" font-family="Arial" font-size="48" fill="black">${expected}</text></svg>`)).png().toBuffer();
+  return {expected,image:{name:'image-input-check.png',png:png.toString('base64')}};
+ }
  private data:Saved;private active=new Map<string,AbortController>();private activeChat=new Map<string,string>();private path:string;private notify:(event:AIEvent)=>void;private codex:CodexProvider;shortcutError='';
- constructor(directory:string,notify:(event:AIEvent)=>void){this.path=join(directory,'ai-data.json');this.notify=notify;try{const raw=JSON.parse(readFileSync(this.path,'utf8'));this.data={...empty(),...raw};if(!Array.isArray(this.data.profiles)||!Array.isArray(this.data.conversations)||!Array.isArray(this.data.history))throw Error('invalid');}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')this.data=empty();else throw Error('AI 数据无法读取，请检查 ai-data.json');}this.codex=this.newCodex(directory);}
+ constructor(directory:string,notify:(event:AIEvent)=>void,options:TaskOptions={}){this.taskOptions=options;this.path=join(directory,'ai-data.json');this.notify=notify;try{const raw=JSON.parse(readFileSync(this.path,'utf8'));this.data={...empty(),...raw};if(!Array.isArray(this.data.profiles)||!Array.isArray(this.data.conversations)||!Array.isArray(this.data.history))throw Error('invalid');}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')this.data=empty();else throw Error('AI 数据无法读取，请检查 ai-data.json');}this.codex=options.codex||this.newCodex(directory);}
  private newCodex(directory:string){return new CodexProvider(()=>join(directory,'codex'),()=>codexExecutables({executable:this.data.codexExecutable}),()=>session.defaultSession.resolveProxy('https://chatgpt.com/backend-api/codex/responses'));}
  async codexStatus():Promise<CodexStatus>{return {...await this.codex.status(),customExecutable:this.data.codexExecutable};}
- async codexLogin(){return {...await this.codex.login(),customExecutable:this.data.codexExecutable};}
+ async codexLogin(){const result=await this.codex.login();this.data.codexTaskEpoch=(this.data.codexTaskEpoch||0)+1;this.save();return {...result,customExecutable:this.data.codexExecutable};}
  async codexCancelLogin(){await this.codex.cancelLogin();return this.codexStatus();}
- async codexLogout(){await this.codex.logout();return this.codexStatus();}
+ async codexLogout(){await this.codex.logout();this.data.codexTaskEpoch=(this.data.codexTaskEpoch||0)+1;this.save();return this.codexStatus();}
  async codexExecutable(value:string){if(value)codexExecutables({executable:value});this.codex.dispose();this.data.codexExecutable=value;this.codex=this.newCodex(dirname(this.path));this.save();return this.codexStatus();}
  async codexCatalog(){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{return await this.codex.catalog(controller.signal);}finally{clearTimeout(timer);}}
  serviceConnections():ServiceConnectionStorage {
@@ -75,14 +143,14 @@ export class OneAIService{
    return (profile.kind==='ollama'?data.models?.map((v:any)=>v.name):data.data?.map((v:any)=>v.id)||[]).filter((v:unknown):v is string=>typeof v==='string'&&v.length<200).slice(0,200).map((id:string)=>({id,name:id}));
   }finally{clearTimeout(timer);}
  }
- private async generate(profileId:string,messages:{role:'system'|'user'|'assistant';content:string;images?:AIImage[]}[],requestId:string,onDelta:(text:string)=>void,modelId?:string,reasoningEffort?:string){if(this.active.has(requestId))throw Error('请求正在进行');if(this.active.size>=3)throw Error('已有太多 AI 请求，请等待或取消');const saved=this.data.profiles.find(p=>p.id===profileId);if(!saved)throw Error('请先配置 AI 服务');const profile={...saved,model:modelId??saved.model,reasoningEffort:reasoningEffort??saved.reasoningEffort};if(modelId!==undefined&&(modelId.length>200||/[\r\n]/.test(modelId)))throw Error('所选模型无效');const controller=new AbortController();this.active.set(requestId,controller);const timer=setTimeout(()=>controller.abort('timeout'),profile.timeoutSeconds*1000);
-  try{if(profile.kind==='codex'){const result=await this.codex.generate({...profile,hasKey:false},messages,controller.signal,undefined,{chat:true,delta:onDelta});return {text:result.text,model:result.model};}if(!profile.model)throw Error('请先在 AI 服务中选择模型');const key=await this.key(profileId),wire=messages.map(message=>message.images?.length?profile.kind==='ollama'?{role:message.role,content:message.content,images:message.images.map(image=>image.png)}:{role:message.role,content:[{type:'text',text:message.content||'请分析这些图片。'},...message.images.map(image=>({type:'image_url',image_url:{url:`data:image/png;base64,${image.png}`}}))]}:{role:message.role,content:message.content}),body=profile.kind==='ollama'?{model:profile.model,messages:wire,stream:true,options:{num_predict:profile.maxTokens,...(profile.temperature===null?{}:{temperature:profile.temperature})}}:{model:profile.model,messages:wire,stream:true,[profile.tokenField]:profile.maxTokens,...(profile.temperature===null?{}:{temperature:profile.temperature})};const response=await serviceRequest(aiEndpoint(profile),{method:'POST',headers:{'Content-Type':'application/json',...(key?{Authorization:'Bearer '+key}:{})},body:JSON.stringify(body),signal:controller.signal,redirect:'error',credentials:'omit'});if(!response.ok){await response.body?.cancel();throw Error(response.status===401||response.status===403?'认证失败，请检查 API 密钥':`AI 服务请求失败（HTTP ${response.status}）`);}if(!response.body)throw Error('AI 服务未返回内容');
-   let answer='',complete=false,total=0;const append=(part:string)=>{answer+=part;if(Buffer.byteLength(answer)>answerLimit)throw Error('AI 回复过长');onDelta(part);};const type=response.headers.get('content-type')||'';
-   if(type.includes('application/json')&&!type.includes('ndjson')){const data=await response.json() as any;const value=profile.kind==='ollama'?data.message?.content:data.choices?.[0]?.message?.content;if(typeof value!=='string'||!value.trim())throw Error('AI 服务未返回可用文字');append(value);complete=true;}
-   else {const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',events:string[]=[];const consume=(data:string)=>{const parsed=parseStreamLine(data,profile.kind);if(parsed.delta)append(parsed.delta);if(parsed.done)complete=true;};const line=(raw:string)=>{const value=raw.replace(/\r$/,'');if(profile.kind==='ollama'||type.includes('ndjson')){if(value.trim())consume(value);return;}if(value.startsWith('data:'))events.push(value.slice(5).trimStart());else if(!value&&events.length){consume(events.join('\n'));events=[];}};
+ private async generate(profileId:string,messages:{role:'system'|'user'|'assistant';content:string;images?:AIImage[]}[],requestId:string,onDelta:(text:string)=>void,modelId?:string,reasoningEffort?:string,externalSignal?:AbortSignal,taskMode=false){if(this.active.has(requestId))throw Error('请求正在进行');if(this.active.size+this.pendingTasks(requestId)>=3)throw Error('已有太多 AI 请求，请等待或取消');const saved=this.data.profiles.find(p=>p.id===profileId);if(!saved)throw Error('请先配置 AI 服务');const profile={...saved,model:modelId??saved.model,reasoningEffort:reasoningEffort??saved.reasoningEffort};if(modelId!==undefined&&(modelId.length>200||/[\r\n]/.test(modelId)))throw Error('所选模型无效');const controller=new AbortController();this.active.set(requestId,controller);const abortExternal=()=>controller.abort('cancelled');externalSignal?.addEventListener('abort',abortExternal,{once:true});if(externalSignal?.aborted)abortExternal();const timer=setTimeout(()=>controller.abort('timeout'),profile.timeoutSeconds*1000);
+  try{controller.signal.throwIfAborted();if(profile.kind==='codex'){const result=await this.codex.generate({...profile,hasKey:false},messages,controller.signal,taskMode?messages.flatMap(message=>message.images||[])[0]?.png:undefined,{chat:!taskMode,delta:onDelta});return {text:result.text,model:result.model};}if(!profile.model)throw Error('请先在 AI 服务中选择模型');const key=await this.key(profileId),wire=messages.map(message=>message.images?.length?profile.kind==='ollama'?{role:message.role,content:message.content,images:message.images.map(image=>image.png)}:{role:message.role,content:[{type:'text',text:message.content||'请分析这些图片。'},...message.images.map(image=>({type:'image_url',image_url:{url:`data:image/png;base64,${image.png}`}}))]}:{role:message.role,content:message.content}),body=profile.kind==='ollama'?{model:profile.model,messages:wire,stream:true,options:{num_predict:profile.maxTokens,...(profile.temperature===null?{}:{temperature:profile.temperature})}}:{model:profile.model,messages:wire,stream:true,[profile.tokenField]:profile.maxTokens,...(profile.temperature===null?{}:{temperature:profile.temperature})};controller.signal.throwIfAborted();const response=await (this.taskOptions.transport||serviceRequest)(aiEndpoint(profile),{method:'POST',headers:{'Content-Type':'application/json',...(key?{Authorization:'Bearer '+key}:{})},body:JSON.stringify(body),signal:controller.signal,redirect:'error',credentials:'omit'});if(!response.ok){await response.body?.cancel();throw Error(response.status===401||response.status===403?'认证失败，请检查 API 密钥':`AI 服务请求失败（HTTP ${response.status}）`);}if(!response.body)throw Error('AI 服务未返回内容');
+   let answer='',complete=false,total=0,actualModel='';const append=(part:string)=>{answer+=part;if(Buffer.byteLength(answer)>answerLimit)throw Error('AI 回复过长');onDelta(part);};const type=response.headers.get('content-type')||'';
+   if(type.includes('application/json')&&!type.includes('ndjson')){const data=await boundedAIJSON(response,controller.signal) as any;actualModel=wireModel(data.model);const value=profile.kind==='ollama'?data.message?.content:data.choices?.[0]?.message?.content;if(typeof value!=='string'||!value.trim())throw Error('AI 服务未返回可用文字');append(value);complete=true;}
+   else {const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',events:string[]=[];const consume=(data:string)=>{const parsed=parseStreamLine(data,profile.kind);if(parsed.model)actualModel=parsed.model;if(parsed.delta)append(parsed.delta);if(parsed.done)complete=true;};const line=(raw:string)=>{const value=raw.replace(/\r$/,'');if(profile.kind==='ollama'||type.includes('ndjson')){if(value.trim())consume(value);return;}if(value.startsWith('data:'))events.push(value.slice(5).trimStart());else if(!value&&events.length){consume(events.join('\n'));events=[];}};
     try{for(;;){const item=await reader.read();if(item.done)break;total+=item.value.byteLength;if(total>8*1024*1024)throw Error('AI 响应过大');buffer+=decoder.decode(item.value,{stream:true});if(buffer.length>2*1024*1024)throw Error('AI 响应过大');let at:number;while((at=buffer.indexOf('\n'))>=0){line(buffer.slice(0,at));buffer=buffer.slice(at+1);}}buffer+=decoder.decode();if(buffer)line(buffer);if(events.length)consume(events.join('\n'));}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}}
-   if(!complete||!answer.trim())throw Error('AI 连接中断或回复为空');return {text:answer,model:profile.model};
-  }catch(error){if(controller.signal.aborted)throw Error(controller.signal.reason==='timeout'?'AI 请求超时':'AI 请求已取消');if(error instanceof TypeError)throw Error('无法连接 AI 服务，请检查地址和网络');throw error;}finally{clearTimeout(timer);this.active.delete(requestId);}
+   if(!complete||!answer.trim())throw Error('AI 连接中断或回复为空');return {text:answer,model:taskMode?actualModel||profile.model:profile.model};
+  }catch(error){if(controller.signal.aborted)throw Error(controller.signal.reason==='timeout'?'AI 请求超时':'AI 请求已取消');if(error instanceof TypeError)throw Error('无法连接 AI 服务，请检查地址和网络');throw error;}finally{clearTimeout(timer);externalSignal?.removeEventListener('abort',abortExternal);this.active.delete(requestId);}
  }
  cancel(requestId:string){this.active.get(requestId)?.abort('cancelled');}
  cancelConversation(id:string){const request=this.activeChat.get(id);if(request)this.cancel(request);}
@@ -93,5 +161,5 @@ export class OneAIService{
   this.activeChat.set(id,requestId);try{const result=await this.generate(profileId,wire,requestId,delta=>{const offset=assistant.text.length;assistant.text+=delta;this.notify({kind:'delta',conversationId:id,messageId:assistant.id,text:delta,offset});},c.modelId,c.reasoningEffort);assistant.status='complete';assistant.model=result.model;}catch(error){assistant.status=(error as Error).message==='AI 请求已取消'?'cancelled':'failed';assistant.error=(error as Error).message;}finally{this.activeChat.delete(id);c.updated=Date.now();this.save();}
   return assistant;
  }
- dispose(){for(const controller of this.active.values())controller.abort('cancelled');this.codex.dispose();}
+ dispose(){for(const record of this.taskOwners.values())record.abort.abort('cancelled');for(const controller of this.active.values())controller.abort('cancelled');this.codex.dispose();}
 }
