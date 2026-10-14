@@ -16,4 +16,17 @@ function elevationCommand(executable, directory) {
   return `$launch=([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}'))|ConvertFrom-Json);Start-Process -FilePath $launch.executable -ArgumentList @($launch.argument) -Verb RunAs -ErrorAction Stop`;
 }
 
-module.exports={runningProcessIds,directoryArgument,elevationCommand};
+// Query the target filesystem, including volumes mounted inside a directory.
+// PSDrive.Free can be null on an otherwise healthy disk.
+async function checkDiskSpace(directory, statfs) {
+  let stats;
+  try {
+    stats=await statfs(directory,{bigint:true});
+    if(typeof stats?.bavail!=='bigint'||typeof stats?.bsize!=='bigint'||stats.bavail<0n||stats.bsize<=0n)throw Error('Invalid filesystem space information');
+  } catch(cause) {
+    throw Object.assign(Error('无法检测安装位置的可用空间',{cause}),{reason:'spaceCheck'});
+  }
+  if(stats.bavail*stats.bsize<1024n**3n)throw Object.assign(Error('磁盘空间不足'),{reason:'space'});
+}
+
+module.exports={runningProcessIds,directoryArgument,elevationCommand,checkDiskSpace};

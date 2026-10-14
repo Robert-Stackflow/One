@@ -8,7 +8,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const {spawn, execFile} = require('node:child_process');
 const {promisify} = require('node:util');
-const {runningProcessIds,elevationCommand} = require('./setup-actions.cjs');
+const {runningProcessIds,checkDiskSpace} = require('./setup-actions.cjs');
 
 const execute = promisify(execFile);
 const root = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '.dev-resources');
@@ -19,6 +19,7 @@ const uninstallKey = `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninst
 const appKey = `HKCU\\Software\\${info.guid}`;
 let window;
 let installing = false;
+let preparing = false;
 let installedDirectory = '';
 const resumedArgument = process.argv.find(value => value.startsWith('--one-setup-directory='));
 let resumedDirectory = '';
@@ -110,28 +111,17 @@ async function quitOne(directory,force=false) {
     send({stage:'ready'});
   } catch(error) {console.error('Unable to quit One before installation:',error);send({stage:'running',canForce:true,message:'One 仍在运行，请从托盘退出后重试。'});}
 }
-async function administrator() {
-  const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-Command','([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)'],{windowsHide:true,timeout:10000,maxBuffer:1024});
-  return stdout.trim().toLowerCase()==='true';
-}
-async function requestElevation(directory) {
-  const executable=process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
-  const command=elevationCommand(executable,directory);
-  await execute('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],{windowsHide:true,timeout:60000,maxBuffer:4096});
-}
 async function prepare(directory) {
-  if(installing)return;
+  if(installing||preparing)return;
   if(!validDirectory(directory)){send({stage:'failed',reason:'invalidPath'});return;}
+  preparing=true;
   try {
-    if(app.isPackaged && !(await administrator())) {
-      send({stage:'elevating'});
-      await requestElevation(directory);
-      app.quit();
-      return;
-    }
+    // Both packaged entry points requireAdministrator. Windows obtains the
+    // elevated token before this UI opens; no PowerShell relaunch is needed.
     if((await runningOne()).length){send({stage:'running'});return;}
     await install(directory);
-  } catch(error) {console.error('Unable to prepare One installation:',error);send({stage:'failed',reason:'elevation'});}
+  } catch(error) {console.error('Unable to prepare One installation:',error);send({stage:'failed',reason:'preparation'});}
+  finally {preparing=false;}
 }
 async function backupPrevious(previous,scratch) {
   const exe=path.join(previous,`${info.product}.exe`);
@@ -197,9 +187,7 @@ async function install(directory) {
     }
     const parent=path.dirname(directory);
     await fsp.mkdir(parent,{recursive:true});
-    const drive=path.parse(directory).root;
-    const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-Command',`(Get-PSDrive -Name '${drive[0]}').Free`],{windowsHide:true,timeout:10000});
-    if(Number(stdout.trim())<1024**3) throw Object.assign(Error('磁盘空间不足'),{reason:'space'});
+    await checkDiskSpace(parent,fsp.statfs.bind(fsp));
     scratch=path.join(parent,`cs-${crypto.randomBytes(8).toString('hex')}`);
     await fsp.mkdir(scratch);
     const copied=path.join(scratch,'One-Install-Engine.exe');
@@ -227,7 +215,7 @@ async function install(directory) {
     if(changed&&saved) {
       try {await mediaAssociation(directory,'remove');await restorePrevious(saved);if(restoreArchive)await registerArchiveAssociation(saved.previous);if(restoreMedia)await mediaAssociation(saved.previous,'register');} catch(restoreError) {keepScratch=true;error=Object.assign(Error(`无法恢复旧版，备份位置：${scratch}`),{reason:'restore'});}
     }
-    result={stage:'failed',reason:error.reason||'engine',message:error.message};
+    result={stage:'failed',reason:error.reason||(['EACCES','EPERM'].includes(error.code)?'permission':'engine'),message:error.message};
   } finally {
     if(scratch&&!keepScratch) await fsp.rm(scratch,{recursive:true,force:true,maxRetries:5,retryDelay:200}).catch(()=>{});
     installing=false;
@@ -238,7 +226,7 @@ async function install(directory) {
 app.whenReady().then(async()=>{
   app.setAppUserModelId('local.one.desktop.setup');
   window=new BrowserWindow({width:620,height:420,minWidth:620,minHeight:420,maxWidth:620,maxHeight:420,frame:true,titleBarStyle:'hidden',titleBarOverlay:false,thickFrame:true,hasShadow:true,backgroundColor:'#ffffff',resizable:false,show:false,roundedCorners:true,icon:path.join(__dirname,'icon.png'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true}});
-  window.on('close',event=>{if(installing)event.preventDefault();});
+  window.on('close',event=>{if(installing||preparing)event.preventDefault();});
   ipcMain.handle('setup:state',async()=>{const existing=await registry();return {version:info.version,directory:resumedDirectory||registeredDirectory(existing)||path.join(process.env.LOCALAPPDATA,'Programs',info.product),installed:!!existing,resumed:!!resumedDirectory};});
   ipcMain.handle('setup:choose-directory',async()=>{const result=await dialog.showOpenDialog(window,{title:'选择安装位置',properties:['openDirectory','createDirectory']});if(result.canceled)return '';const selected=result.filePaths[0];return path.basename(selected).toLowerCase()===info.product.toLowerCase()?selected:path.join(selected,info.product);});
   ipcMain.handle('setup:install',(_event,directory)=>prepare(directory));

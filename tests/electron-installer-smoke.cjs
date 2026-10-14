@@ -14,6 +14,12 @@ const assert = require('node:assert/strict');
   const app = await electron.launch({executablePath:packaged ? path.join(output,'electron-installer-build','win-unpacked','OneSetup.exe') : path.join(root,'node_modules/electron/dist/electron.exe'),args:packaged ? [] : [path.join(root,'installer')],cwd:root,env:packaged ? process.env : {...process.env,ONE_INSTALLER_BUILD_INFO:info,ONE_INSTALLER_PAYLOAD:engine}});
   try {
     const page = await app.firstWindow();
+    const space=await app.evaluate(async()=>{
+      const require=process.getBuiltinModule('module').createRequire(process.cwd()+'/installer/main.cjs');
+      const stats=await require('original-fs').promises.statfs(process.cwd(),{bigint:true});
+      return {availableType:typeof stats.bavail,blockType:typeof stats.bsize,bytes:(stats.bavail*stats.bsize).toString()};
+    });
+    assert.equal(space.availableType,'bigint');assert.equal(space.blockType,'bigint');assert(BigInt(space.bytes)>=0n);
     await page.waitForFunction(()=>document.querySelector('#version').textContent.startsWith('版本'));
     await page.getByRole('heading',{name:'安装 One'}).waitFor();
     await page.waitForFunction(() => document.querySelector('#directory').value.length > 0);

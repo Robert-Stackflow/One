@@ -60,6 +60,10 @@ if(custom){
  await writeFile(infoFile,JSON.stringify(info,null,2));
  await copyFile(resolve('assets/icons/one-256.png'),resolve('installer/icon.png'));
  const config={compression:'maximum',electronLanguages:['zh-CN','en-US'],appId:'local.one.desktop.setup',productName:'One Setup',electronVersion:packageInfo.devDependencies.electron,electronDist:resolve('node_modules/electron/dist'),npmRebuild:false,buildDependenciesFromSource:false,asar:true,directories:{output:staging},files:['package.json','main.cjs','setup-actions.cjs','preload.cjs','index.html','style.css','renderer.js','icon.png'],extraResources:[{from:engine,to:'engine/One-Setup-Engine.exe'},{from:infoFile,to:'build-info.json'},{from:resolve('dist/native/One.LaunchNormal.exe'),to:'launch-normal.exe'}],win:{target:'portable',icon:resolve('assets/icons/one.ico'),executableName:'OneSetup',signAndEditExecutable:true,signExecutable:false},portable:{artifactName:`One-${version}-Setup-x64.exe`}};
+ // portable has its own NSIS manifest; the inner Electron executable has a
+ // separate one. Declare both so ordinary and direct/admin launches agree.
+ config.portable.requestExecutionLevel='admin';
+ config.win.requestedExecutionLevel='requireAdministrator';
  const configFile=join(staging,'electron-builder.json');
  await writeFile(configFile,JSON.stringify(config,null,2));
  await run(process.execPath,['node_modules/electron-builder/out/cli/cli.js','--projectDir',resolve('installer'),'--config',configFile,'--win','portable','--x64','--publish','never']);
