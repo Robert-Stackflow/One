@@ -38,7 +38,7 @@ correction=mountWordCorrection(q<HTMLTextAreaElement>('result'),q('result-label'
 });
 const tools = document.querySelector('.text-image-tools'); if (tools) q('ocr-image-tools').append(tools);
 const loadImage=prepareRecognitionImage(q<HTMLImageElement>('source'),message);
-picture=mountImageTranslation(api,{state:()=>state?{...state,running:state.running||requesting||workflowBusy()||!!correction?.busy()||translation.busy()}:undefined,document:()=>selection.document(),layer:()=>selection.imageLayer(),translate:()=>translation.imageResult(),available:()=>translation.imageReady(),valid:id=>translation.imageValid(id),changed:()=>{if(state)render();},message});
+picture=mountImageTranslation(api,{state:()=>state?{...state,running:state.running||requesting||workflowBusy()||!!correction?.busy()||translation.busy()}:undefined,document:()=>selection.document(),layer:()=>selection.imageLayer(),translate:force=>translation.imageResult(force),available:()=>translation.imageReady(),valid:id=>translation.imageValid(id),changed:()=>{if(state)render();},message});
 const openLocalModels = mountLocalModels(api, refresh);
 q('local-model-configure').onclick = () => void openLocalModels().catch(message);
 q('open-formula').onclick = () => void api.openFormula(state.token).catch(message);

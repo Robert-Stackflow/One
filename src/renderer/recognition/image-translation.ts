@@ -8,7 +8,7 @@ import './image-translation.css';
 import {icon,registerIcons} from '../ui';
 import {Image as ImageIcon,Languages,ScanEye,Undo2,Copy,Download,PenLine} from 'lucide';
 
-export function mountImageTranslation(api:OCRAPI,options:{state():OCRState|undefined;document():TextDocument|undefined;layer():HTMLElement;translate():Promise<TranslationResult|undefined>;available():boolean;valid(id?:string):boolean;changed():void;message(value:unknown):void}){
+export function mountImageTranslation(api:OCRAPI,options:{state():OCRState|undefined;document():TextDocument|undefined;layer():HTMLElement;translate(force:boolean):Promise<TranslationResult|undefined>;available():boolean;valid(id?:string):boolean;changed():void;message(value:unknown):void}){
   const toolbar=document.createElement('div');toolbar.className='ocr-tool-group image-translation-tools';
   const button=(id:string,label:string,action:()=>void)=>{const node=document.createElement('button');node.id=id;node.type='button';node.className='quiet';node.textContent=label;node.onclick=action;toolbar.append(node);return node;};
   let preparing=false,show=false,comparing=false,serial=0,disposed=false,documentValue:ImageTranslationDocument|undefined,pixels:ImageData|undefined,sourceToken='';
@@ -57,9 +57,9 @@ export function mountImageTranslation(api:OCRAPI,options:{state():OCRState|undef
   }
   function warnings(){const skipped=documentValue?.blocks.filter(block=>block.status!=='ready').length||0;const messages=[overflow.size?`${overflow.size} 段译文超出区域，点击译文调整`:'',plates.size?`${plates.size} 段使用可读底板`:'',skipped?`${skipped} 段保留原图`:''].filter(Boolean);if(messages.length)options.message(messages.join('；'));}
   async function prepare(){
-    if(preparing||!options.document()||!options.state())return;const ticket=++serial,token=options.state()!.token;preparing=true;render();options.changed();
+    if(preparing||!options.document()||!options.state())return;const force=live(),ticket=++serial,token=options.state()!.token;preparing=true;render();options.changed();
     try{
-      const result=await options.translate();if(ticket!==serial||token!==options.state()?.token)return;if(!result?.id)throw Error('没有可用的图片译文，请重新翻译');
+      const result=await options.translate(force);if(ticket!==serial||token!==options.state()?.token)return;if(!result?.id)throw Error('没有可用的图片译文，请重新翻译');
       const value=await api.imageTranslation(token,result.id,result.revision);if(ticket!==serial)return;
       const source=new Image();source.crossOrigin='anonymous';source.decoding='async';source.src=options.state()!.image;await source.decode();
       if(ticket!==serial||token!==options.state()?.token)throw Error('识别图片已改变');

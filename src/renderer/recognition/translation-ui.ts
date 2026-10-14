@@ -120,7 +120,15 @@ export function mountTranslation(
   return {
     imageReady:()=>!!config?.ready,
     imageValid:(id?:string)=>valid()&&(!id||result?.id===id)&&q<HTMLTextAreaElement>('translated').value===result?.text,
-    imageResult:async()=>{selectionSource=undefined;await translate();return valid()?result:undefined;},
+    imageResult:async(force=false)=>{
+      selectionSource=undefined;
+      if(!force&&valid()){
+        if(q<HTMLTextAreaElement>('translated').value!==result?.text)
+          throw Error('译文已手动修改。请保留当前文字，或点击“翻译全文”重新生成后再制作译图。');
+        return result;
+      }
+      await translate();return valid()?result:undefined;
+    },
     async workflowResult(
       value: TranslationResult | undefined,
       language: TranslationLanguage,
