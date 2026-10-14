@@ -4,6 +4,13 @@ import { ScrollCaptureService } from '../../src/main/capture/scroll-service';
 import { displaySignature } from '../../src/shared/capture/region';
 import { handlers, display, BrowserWindow, ScrollNative, frame } from './scroll-service-runtime';
 import {ScrollCaptureHost} from '../../src/main/capture/scroll-host';
+import {scrollControlBounds} from '../../src/shared/capture/scroll-capture';
+test('scroll controls fit outside the selection across negative coordinates and constrained work areas',()=>{
+  const area={x:-1920,y:0,width:1920,height:1040},selection={x:-1000,y:100,width:950,height:800};
+  const bounds=scrollControlBounds(area,selection);assert.ok(bounds.x+bounds.width<selection.x);assert.ok(bounds.y>=area.y&&bounds.y+bounds.height<=area.y+area.height);
+  const bottom=scrollControlBounds({x:0,y:0,width:800,height:600},{x:0,y:0,width:800,height:300},250);assert.ok(bottom.y>=312);assert.equal(bottom.height,250);
+  const small=scrollControlBounds({x:0,y:0,width:300,height:200},{x:0,y:0,width:300,height:200});assert.deepEqual(small,{x:0,y:0,width:300,height:200});
+});
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(predicate: () => boolean) {
   const started = performance.now();
@@ -12,7 +19,7 @@ async function until(predicate: () => boolean) {
     await wait(20);
   }
 }
-async function fixture(remoteCompatible = true) {
+async function fixture(remoteCompatible = true,startManual=false) {
   const workbench = new BrowserWindow(),
     failures: unknown[] = [],
     outputs: Buffer[] = [];
@@ -35,7 +42,7 @@ async function fixture(remoteCompatible = true) {
       failures.push(error);
     },
   });
-  await service.open(display.id);
+  await service.open(display.id,false,undefined,startManual);
   const control = service.window!,
     native = ScrollNative.current,
     event = {
@@ -77,6 +84,18 @@ test('finishing during an in-flight automatic read stops scrolling and preserves
     release();
     f.service.cancel();
   }
+});
+test('default manual monitoring captures stable changes without wheels and safely switches modes while retaining strips',async()=>{
+  const f=await fixture(true,true);
+  try{
+    assert.equal(f.state().mode,'manual');await until(()=>f.state().count===1);f.native.offset=39;await until(()=>f.state().count===2);assert.equal(f.native.wheels,0);
+    await f.command('auto');await until(()=>f.state().count>=3);assert.equal(f.state().mode,'auto');await f.command('manual');const wheels=f.native.wheels,count=f.state().count;
+    f.native.offset+=20;await until(()=>f.state().count>count);assert.equal(f.native.wheels,wheels);assert.equal(f.state().mode,'manual');
+    f.native.focus=false;await until(()=>f.state().phase==='paused');assert.ok(f.state().count>0);assert.equal(f.native.wheels,wheels);assert.match(f.state().message,/遮挡/);
+  }finally{f.service.cancel();}
+});
+test('restarting matching parameters is explicit and clears only the current stitch while preserving the selection',async()=>{
+  const f=await fixture();try{await f.command('sample');const token=f.state().token,source=f.state().source;const event={sender:f.service.window!.webContents,senderFrame:f.service.window!.webContents.mainFrame};await handlers.get('one:scroll-command')!(event,token,{kind:'restart',options:{axis:'vertical',trimStart:8,trimEnd:4,ignoreStart:0,ignoreEnd:0}});assert.equal(f.state().count,0);assert.equal(f.state().preview,'');assert.deepEqual(f.state().source,source);assert.equal(f.state().token,token);assert.equal(f.state().options.trimStart,8);}finally{f.service.cancel();}
 });
 
 test('remote-compatible long capture hides an overlapping panel only while reading and restores it on failure', async () => {
@@ -164,7 +183,7 @@ test('canceling a pending capture releases its session and an old response canno
     assert.equal(f.native.stopped, true);
     assert.equal(f.service.active, false);
     assert.equal(f.workbench.isVisible(), true);
-    await f.service.open(display.id);
+    await f.service.open(display.id,false,undefined,false);
     const control = f.service.window!,
       event = { sender: control.webContents, senderFrame: control.webContents.mainFrame };
     const state = () => handlers.get('one:scroll-state')!(event);

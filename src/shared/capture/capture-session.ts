@@ -20,6 +20,7 @@ import {
 import { outputEffects, type OutputEffects } from './image-output';
 export type { CaptureAction } from './capture-workflow';
 export interface CaptureData {
+  canScroll?:boolean;
   token: string;
   image: string;
   revision: number;
@@ -56,6 +57,7 @@ export interface CaptureRequest {
   originalPng?: string;
 }
 export interface CaptureAPI extends SensitiveAPI {
+  startScroll(token:string,selection:Rectangle):Promise<void>;
   data(): Promise<CaptureData>;
   ready(token: string, failure?: string): Promise<void>;
   complete(request: CaptureRequest | null): Promise<CaptureResult>;

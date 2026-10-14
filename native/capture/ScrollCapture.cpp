@@ -170,6 +170,47 @@ static void run(RECT region, DWORD owner, bool snapshotOnly, HWND window = nullp
                     GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000;
                 return focused && !keys;
             };
+            const auto available = [&] {
+                if (snapshotOnly || GetAncestor(GetForegroundWindow(), GA_ROOT) != target) return false;
+                POINT points[]{{region.left + 2, region.top + 2}, {region.right - 3, region.top + 2},
+                    {region.left + 2, region.bottom - 3}, {region.right - 3, region.bottom - 3},
+                    {(region.left + region.right) / 2, (region.top + region.bottom) / 2}};
+                for (const auto point : points) if (GetAncestor(WindowFromPoint(point), GA_ROOT) != target) return false;
+                return true;
+            };
+            if (command == "visible") {
+                std::cout << "{\"visible\":" << (available() ? "true" : "false") << "}\n" << std::flush;
+                continue;
+            }
+            if (command == "activate manual" || command == "activate auto") {
+                POINT point{(region.left + region.right) / 2, (region.top + region.bottom) / 2};
+                const bool keys = (GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT) | GetAsyncKeyState(VK_MENU) |
+                    GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000;
+                bool activated = !snapshotOnly && !keys && GetAncestor(WindowFromPoint(point), GA_ROOT) == target;
+                DWORD foregroundPid = 0;
+                bool foregroundSet = false;
+                const char* reason = snapshotOnly ? "snapshot" : keys ? "keys" : !activated ? "point" : "foreground";
+                if (activated) {
+                    MSG message{};
+                    PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE);
+                    foregroundSet = SetForegroundWindow(target) != FALSE;
+                    // Activation in another input queue may complete after SetForegroundWindow returns.
+                    const auto deadline = GetTickCount64() + 250;
+                    while (GetAncestor(GetForegroundWindow(), GA_ROOT) != target && GetTickCount64() < deadline) {
+                        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                            TranslateMessage(&message); DispatchMessageW(&message);
+                        }
+                        Sleep(10);
+                    }
+                    activated = available(); reason = GetAncestor(GetForegroundWindow(), GA_ROOT) != target ? "foreground" : "region";
+                }
+                if (activated && command == "activate auto") activated = SetCursorPos(point.x, point.y) != FALSE && canScroll();
+                GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
+                std::cout << "{\"activated\":" << (activated ? "true" : "false") << ",\"reason\":\"" << (activated ? "ok" : reason)
+                    << "\",\"foregroundPid\":" << foregroundPid << ",\"targetPid\":" << expected
+                    << ",\"foregroundSet\":" << (foregroundSet ? "true" : "false") << "}\n" << std::flush;
+                continue;
+            }
             if (command == "guard") {
                 std::cout << "{\"focused\":" << (canScroll() ? "true" : "false") << "}\n" << std::flush;
                 continue;

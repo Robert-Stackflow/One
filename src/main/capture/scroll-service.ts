@@ -7,6 +7,7 @@ import { displaySignature, type Region } from '../../shared/capture/region';
 import {
   scrollDefaults,
   scrollOptions,
+  scrollControlBounds,
   type ScrollCommand,
   type ScrollView,
 } from '../../shared/capture/scroll-capture';
@@ -48,6 +49,8 @@ export class ScrollCaptureService {
   private busy = false;
   private unchanged = 0;
   private automatic = false;
+  private monitoring=false;
+  private monitorSerial=0;
   private settle?: { timer: NodeJS.Timeout; resolve(): void };
   private stepDone?: Promise<void>;
   private region?: Region;
@@ -85,7 +88,7 @@ export class ScrollCaptureService {
       this.window.webContents.send('one:scroll-view', this.view);
     return structuredClone(this.view!);
   }
-  async open(displayId: number, hideMainWindow = false) {
+  async open(displayId: number, hideMainWindow = false,chosen?:Region,startManual=true,carriedWindows:BrowserWindow[]=[]) {
     if(this.host.blocked())throw Error('长截图服务已关闭');
     if (this.active) {
       this.window?.show();
@@ -94,7 +97,7 @@ export class ScrollCaptureService {
     this.active = true;
     const generation = ++this.generation;
     try {
-      const region = await this.host.choose(displayId, hideMainWindow);
+      const region = chosen||await this.host.choose(displayId, hideMainWindow);
       if (!region || generation !== this.generation) {
         this.cancel();
         return;
@@ -103,9 +106,7 @@ export class ScrollCaptureService {
       const display = screen.getAllDisplays().find((d) => d.id === region.displayId);
       if (!display || displaySignature(display) !== region.signature)
         throw Error('显示器已改变，请重新选择');
-      this.hidden = this.host
-        .windows(hideMainWindow)
-        .filter((w) => !w.isDestroyed() && w.isVisible());
+      this.hidden = [...new Set([...carriedWindows,...this.host.windows(hideMainWindow).filter(w=>w.isVisible())])].filter(w=>!w.isDestroyed());
       for (const w of this.hidden) w.hide();
       await this.delay(150);
       if (generation !== this.generation) return;
@@ -140,6 +141,8 @@ export class ScrollCaptureService {
           this.workerFailure(Error('拼接进程已退出'));
       });
       this.view = {
+        mode:'manual',
+        previewExpanded:true,
         token: randomUUID(),
         uiScale:this.host.uiScale(),
         phase: 'setup',
@@ -157,16 +160,11 @@ export class ScrollCaptureService {
         preview: '',
       };
       await this.run('configure', { options: this.view.options, source: this.view.source });
-      const area = display.workArea,
-        width = Math.min(430, area.width),
-        height = Math.min(760, area.height);
+      const placement=scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height});
       const window = this.host.createWindow({
-        width,
-        height,
-        minWidth: 340,
-        minHeight: 550,
-        x: area.x + area.width - width - 12,
-        y: area.y + 12,
+        ...placement,
+        minWidth: Math.min(340,placement.width),
+        minHeight: Math.min(250,placement.height),
         title: 'One · 长截图',
         show: false,
         alwaysOnTop: true,
@@ -203,6 +201,7 @@ export class ScrollCaptureService {
       });
       await window.loadURL(SCROLL_URL);
       if (generation === this.generation && !window.isDestroyed()) window.showInactive();
+      if(startManual&&generation===this.generation)try{await this.command(this.view.token,{kind:'manual'});}catch(error){if(generation===this.generation){this.view.phase='paused';this.view.message=error instanceof Error?error.message:String(error);this.publish();}}
     } catch (error) {
       this.cancel();
       this.host.failed(error);
@@ -261,7 +260,7 @@ export class ScrollCaptureService {
     if (!d || displaySignature(d) !== this.region?.signature)
       throw Error('显示器已改变，请确认已有结果后重新选择');
   }
-  private async sample(automatic = false) {
+  private async sample(monitored = false) {
     const window = this.window,
       generation = this.generation;
     let hidden = false;
@@ -290,9 +289,9 @@ export class ScrollCaptureService {
         window!.hide();
         await this.delay(120);
       }
-      if (generation !== this.generation || (automatic && !this.automatic))
+      if (generation !== this.generation || (monitored && !this.monitoring))
         throw new ScrollStopped();
-      return await this.readSample(automatic);
+      return await this.readSample(monitored);
     } finally {
       if (
         hidden &&
@@ -303,18 +302,20 @@ export class ScrollCaptureService {
         window!.showInactive();
     }
   }
-  private async readSample(automatic = false) {
+  private async readSample(monitored = false) {
+    const mode=this.view!.mode,automatic=monitored&&mode==='auto';
     const generation = this.generation,
       started = performance.now();
     const check = () => {
-      if (generation !== this.generation || (automatic && !this.automatic))
+      if (generation !== this.generation || (monitored && (!this.monitoring||this.view?.mode!==mode)))
         throw new ScrollStopped();
       this.validDisplay();
+      if(this.host.blocked()){this.pause();throw new ScrollStopped();}
     };
-    if (automatic) await this.run('settle-reset');
+    if (monitored) await this.run('settle-reset');
     for (;;) {
       check();
-      if (automatic && !(await this.native!.focused())) throw new ScrollPaused(FOCUS_MESSAGE);
+      if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(automatic?FOCUS_MESSAGE:'目标窗口不可见或被遮挡，手动采集已暂停。已有结果已保留。');
       const png = await this.native!.frame();
       let image: Electron.NativeImage;
       try {
@@ -326,11 +327,11 @@ export class ScrollCaptureService {
       const frame = { ...image.getSize(), pixels: image.toBitmap() };
       try {
         check();
-        if (!automatic || (await this.run('observe', frame)).stable) {
+        if (!monitored || (await this.run('observe', frame)).stable) {
           check();
           // A focus/cursor change during settling must not append an obscured
           // frame or send another wheel. Leave the last accepted strip intact.
-          if (automatic && !(await this.native!.focused())) throw new ScrollPaused(FOCUS_MESSAGE);
+          if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(automatic?FOCUS_MESSAGE:'目标窗口不可见或被遮挡，手动采集已暂停。已有结果已保留。');
           check();
           this.accept(await this.run('sample', frame));
           check();
@@ -339,26 +340,30 @@ export class ScrollCaptureService {
       } finally {
         frame.pixels.fill(0);
       }
-      if (performance.now() - started >= 3000)
+      if (performance.now() - started >= 6000){
+        if(monitored&&!automatic){this.view!.message='滚动中，等待画面稳定';return this.publish();}
         throw new ScrollPaused(
           '画面持续变化，已暂停自动滚动。可等待加载结束后继续，或手动采集。已有结果已保留。',
         );
+      }
       await this.delay(140);
     }
     const view = this.view!;
     view.message =
       view.match === 'first'
-        ? '已采集首帧。向下或向右滚动，然后采集下一帧。'
+        ? '已采集首帧。滚动时会自动采集稳定画面。'
         : view.match === 'accepted'
           ? `已拼接 ${view.count} 帧，新增 ${view.offset} 像素。`
           : view.match === 'unchanged'
             ? '页面尚未变化。已有结果保持不变。'
             : view.match === 'backwards'
-              ? '检测到反向滚动。请返回上次位置后继续向前滚动。'
-              : '无法可靠匹配。请检查固定栏和动画，或设置移动距离后手动确认。';
+              ? '检测到反向滚动。请返回上次位置后继续。'
+              : '滚动距离过大或匹配不明确。请滚回一段找到衔接，已有结果已保留。';
     return this.publish();
   }
   private pause() {
+    this.monitorSerial++;
+    this.monitoring=false;
     this.automatic = false;
     clearTimeout(this.timer);
     this.timer = undefined;
@@ -372,7 +377,7 @@ export class ScrollCaptureService {
     }, ms);
   }
   private async step() {
-    if (!this.automatic || this.busy || !this.view) return;
+    if (!this.monitoring || this.busy || !this.view) return;
     this.busy = true;
     const generation = this.generation;
     let done!: () => void;
@@ -382,9 +387,9 @@ export class ScrollCaptureService {
     this.stepDone = stepDone;
     try {
       this.validDisplay();
-      if (!this.view.count) await this.sample(true);
+      if (!this.automatic||!this.view.count) await this.sample(true);
       else {
-        if (!(await this.native!.wheel(this.view.options.axis === 'horizontal'))) {
+        if (!(await this.native!.available())||!(await this.native!.wheel(this.view.options.axis === 'horizontal'))) {
           this.pause();
           this.view.message = FOCUS_MESSAGE;
           this.publish();
@@ -404,6 +409,7 @@ export class ScrollCaptureService {
           return;
         }
       }
+      if(this.monitoring&&this.view.pending){this.pause();this.view.phase='review';this.publish();}
     } catch (error) {
       if (generation === this.generation && !(error instanceof ScrollStopped)) {
         this.pause();
@@ -415,7 +421,7 @@ export class ScrollCaptureService {
     } finally {
       if (generation === this.generation) {
         this.busy = false;
-        if (this.automatic) this.schedule(250);
+        if (this.monitoring) this.schedule(this.automatic?450:300);
       }
       if (this.stepDone === stepDone) this.stepDone = undefined;
       done();
@@ -425,6 +431,11 @@ export class ScrollCaptureService {
     if (!this.view || token !== this.view.token || !value || typeof value !== 'object')
       throw Error('长截图请求已失效');
     const command = value as ScrollCommand;
+    if(command.kind==='layout'){
+      if(typeof command.preview!=='boolean'||command.settings!==undefined&&typeof command.settings!=='boolean')throw Error('预览设置无效');this.view.previewExpanded=command.preview;
+      const region=this.region,display=screen.getAllDisplays().find(d=>d.id===region?.displayId);
+      if(region&&display)this.window?.setBounds(scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height},command.settings?600:command.preview?500:310));return this.publish();
+    }
     if (command.kind === 'cancel') {
       this.cancel();
       return null;
@@ -433,7 +444,7 @@ export class ScrollCaptureService {
       this.pause();
       return this.publish();
     }
-    if (command.kind === 'finish' && this.stepDone) {
+    if (this.stepDone) {
       // Finish remains usable during an automatic sample. Pause immediately,
       // then wait for the owned read to release before touching the worker.
       this.pause();
@@ -455,16 +466,21 @@ export class ScrollCaptureService {
         this.accept(
           await this.run('configure', { options: this.view.options, source: this.view.source }),
         );
+      }else if(command.kind==='restart'){
+        this.view.options=scrollOptions(command.options,this.view.source.width,this.view.source.height);this.view.preview='';this.accept(await this.run('restart',{options:this.view.options,source:this.view.source}));this.view.mode='manual';this.view.phase='setup';this.view.message='已按新设置重新开始。';
       } else if (command.kind === 'sample') {
         this.view.phase = 'paused';
         await this.sample();
-      } else if (command.kind === 'auto') {
-        if (this.view.pending) throw Error('请先确认待拼接的帧');
+      } else if (command.kind === 'auto'||command.kind==='manual') {
+        if(this.view.pending) {this.accept(await this.run('discard'));this.view.message='待确认帧已放弃，返回上次拼接位置后继续。';}
+        const ticket=this.monitorSerial,window=this.window;this.native!.permitActivation();try{window?.hide();await this.delay(80);if(!(await this.native!.activate(command.kind==='auto')))throw new ScrollPaused(this.native!.activationReason==='keys'?'请松开鼠标和修饰键后继续。':this.native!.activationReason==='foreground'?'目标窗口未获得焦点，请点击目标窗口后继续。':'目标窗口或滚动点被遮挡，请移开遮挡后继续。');}finally{if(generation===this.generation&&window&&!window.isDestroyed())window.showInactive();}
+        if(generation!==this.generation||ticket!==this.monitorSerial)throw new ScrollStopped();
+        this.view.mode=command.kind==='auto'?'auto':'manual';
         this.view.phase = 'running';
-        this.automatic = true;
+        this.automatic = command.kind==='auto';this.monitoring=true;
         this.unchanged = 0;
-        this.view.message = '3 秒后开始。请点击原窗口并把鼠标移到选区内，保持约一屏的重叠。';
-        this.schedule(3000);
+        this.view.message = this.automatic?'自动滚动中，可随时暂停或改为手动。':'手动滚动中，稳定画面会自动拼接。';
+        this.schedule(300);
       } else if (command.kind === 'join' || command.kind === 'undo') {
         this.accept(
           await this.run(command.kind, command.kind === 'join' ? command.offset : undefined),

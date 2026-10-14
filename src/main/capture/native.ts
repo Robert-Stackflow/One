@@ -1,5 +1,6 @@
 import koffi from 'koffi';
 let api: any;
+export function allowCaptureForeground(pid:number){initCaptureNative();return Number.isSafeInteger(pid)&&pid>0&&api.allowForeground(pid);}
 export function initCaptureNative() {
   if (api) return;
   if (process.platform !== 'win32' || process.arch !== 'x64') throw Error('截图采集需要 Windows x64');
@@ -8,6 +9,7 @@ export function initCaptureNative() {
     dwm = koffi.load('dwmapi.dll');
   const point = koffi.struct({ x: 'int32_t', y: 'int32_t' });
   api = {
+    allowForeground:u.func('bool __stdcall AllowSetForegroundWindow(uint32)'),
     pid: u.func('uint32 __stdcall GetWindowThreadProcessId(uintptr_t,_Out_ uint32*)'),
     isWindow: u.func('bool __stdcall IsWindow(uintptr_t)'),
     visible: u.func('bool __stdcall IsWindowVisible(uintptr_t)'),

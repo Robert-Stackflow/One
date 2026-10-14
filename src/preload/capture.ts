@@ -4,6 +4,7 @@ import type {OneAPI} from '../shared/types';
 const invoke=(name:string,...args:unknown[])=>ipcRenderer.invoke('one:'+name,...args);
 const listen=(name:string,callback:(value:any)=>void)=>{const handler=(_event:Electron.IpcRendererEvent,value:unknown)=>callback(value);ipcRenderer.on('one:'+name,handler);return()=>ipcRenderer.removeListener('one:'+name,handler);};
 const capture:CaptureAPI={
+  startScroll:(token,selection)=>invoke('capture-start-scroll',token,selection),
   data:()=>invoke('capture-data'),ready:(token,failure)=>invoke('capture-ready',token,failure),
   complete:request=>invoke('capture-complete',request),refresh:token=>invoke('capture-refresh',token),
   refreshReady:(token,revision,accepted)=>invoke('capture-refresh-ready',token,revision,accepted),

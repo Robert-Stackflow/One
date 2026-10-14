@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include <algorithm>
@@ -62,6 +63,12 @@ int wmain() {
             if (line == "focus") PostMessage(fixture, WM_APP + 3, 0, 0);
             else if (line == "move") PostMessage(fixture, WM_APP + 4, 0, 0);
             else if (line == "state") PostMessage(fixture, WM_APP + 5, 0, 0);
+            else if (line.starts_with("click ")) {
+                std::istringstream coordinates(line.substr(6)); int x=0,y=0; coordinates>>x>>y;
+                SetCursorPos(x,y); INPUT input[2]{}; input[0].type=input[1].type=INPUT_MOUSE;
+                input[0].mi.dwFlags=MOUSEEVENTF_LEFTDOWN; input[1].mi.dwFlags=MOUSEEVENTF_LEFTUP;
+                SendInput(2,input,sizeof(INPUT)); Sleep(80); PostMessage(fixture,WM_APP+5,0,0);
+            }
             else if (line.starts_with("step ")) PostMessage(fixture, WM_APP + 1, std::stoi(line.substr(5)), 0);
             else if (line.starts_with("right ")) PostMessage(fixture, WM_APP + 2, std::stoi(line.substr(6)), 0);
         }

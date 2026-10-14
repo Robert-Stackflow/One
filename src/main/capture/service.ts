@@ -44,6 +44,7 @@ import { customCaptureSelection, type CustomCapture } from '../../shared/capture
 export const CAPTURE_URL='one://app/index.html?view=capture';
 
 interface CaptureRun {
+  scrollTransfer?:Region;
   token: string;
   overlay: BrowserWindow;
   shot: Snapshot;
@@ -70,6 +71,7 @@ interface CaptureRun {
   finish(value: Region | null): void;
 }
 export interface CaptureHost extends AnnotationPreferencesHost {
+  scroll?(region:Region,windows:BrowserWindow[]):Promise<void>;
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:Electron.IpcMainInvokeEvent,...args:any[])=>unknown):void;
   fonts():Promise<import('../../shared/fonts').InstalledFont[]>;
@@ -413,6 +415,14 @@ export class CaptureService {
         current.busy = null;
       }
     });
+    register('capture-start-scroll',(event,token,value)=>{
+      const current=session(event),size=current.shot.size,r=value as Rectangle;
+      if(token!==current.token||current.busy||current.purpose!=='capture'||!this.host.scroll||!current.shot.physical||current.shot.composition||!(current.shot.sourceId.startsWith('screen:')||current.shot.sourceId.startsWith('native-monitor:'))||['free','polygon'].includes(current.selectionMode||''))throw Error('当前截图来源不支持长截图');
+      this.checkDisplay(current.shot);
+      if(!r||typeof r!=='object'||Object.keys(r).sort().join(',')!=='height,width,x,y'||![r.x,r.y,r.width,r.height].every(Number.isSafeInteger)||r.x<0||r.y<0||r.width<64||r.height<64||r.x+r.width>size.width||r.y+r.height>size.height)throw Error('长截图选区至少 64 × 64 像素且必须位于当前显示器');
+      current.scrollTransfer={displayId:current.shot.displayId,sourceId:current.shot.sourceId,signature:current.shot.signature,rect:{x:r.x/size.width,y:r.y/size.height,width:r.width/size.width,height:r.height/size.height},pixels:{width:r.width,height:r.height},screen:{...size}};
+      current.finish(null);
+    });
     register('capture-refresh', async (event, token) => {
       const current = session(event);
       if (token !== current.token || current.busy) throw Error('当前截图不能刷新');
@@ -467,6 +477,7 @@ export class CaptureService {
       width: size.width,
       height: size.height,
       purpose: current.purpose,
+      canScroll:current.purpose==='capture'&&!!this.host.scroll&&!!shot.physical&&!shot.composition&&(shot.sourceId.startsWith('screen:')||shot.sourceId.startsWith('native-monitor:')),
       regionHint: current.regionHint,
       selected: current.selected,
       initialSelection: current.initialSelection,
@@ -1030,6 +1041,7 @@ export class CaptureService {
       return await result;
     } finally {
       clearTimeout(paintTimer);
+      const transfer=this.run?.overlay===overlay?this.run?.scrollTransfer:undefined;
       native?.stop();
       if (this.captureNative === native) this.captureNative = undefined;
       if (this.run && this.run.overlay === overlay) {
@@ -1040,7 +1052,10 @@ export class CaptureService {
       if (this.run?.overlay === overlay) this.run = undefined;
       if (overlay && !overlay.isDestroyed()) overlay.destroy();
       this.active = false;
-      for (const window of shown)
+      if(transfer&&this.host.scroll&&!this.closing&&!this.host.blocked()){
+        try{await this.host.scroll(transfer,shown);}
+        catch(error){for(const window of shown)if(!window.isDestroyed())window.show();throw error;}
+      }else for (const window of shown)
         if (!window.isDestroyed()&&!this.closing&&!this.host.blocked()) {
           window.show();
           window.focus();

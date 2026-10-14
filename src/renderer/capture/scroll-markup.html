@@ -2,7 +2,7 @@
     <header class="media-header"><strong>长截图</strong></header>
     <main>
       <p id="message" class="feedback-inline" role="status" aria-live="polite"></p>
-      <section id="setup" class="scroll-settings">
+      <details id="setup" class="scroll-settings"><summary>匹配设置</summary>
         <label
           >滚动方向<select id="axis">
             <option value="vertical">向下</option>
@@ -34,11 +34,12 @@
             /></label>
           </div>
         </details>
-      </section>
+        <button id="apply-settings" type="button" class="quiet">应用并重新开始</button>
+      </details>
       <div class="scroll-actions">
-        <button id="sample" type="button" class="primary">采集首帧</button
+        <button id="sample" type="button" class="quiet" hidden>采集当前帧</button><button id="manual" type="button" class="quiet">手动滚动</button
         ><button id="auto" type="button" class="quiet">自动滚动</button
-        ><button id="pause" type="button" class="quiet" hidden>暂停</button>
+        ><button id="pause" type="button" class="quiet" hidden>暂停</button><button id="preview-toggle" type="button" class="quiet">收起预览</button>
       </div>
       <div id="pending" class="scroll-pending" hidden>
         <label
@@ -52,10 +53,8 @@
         <p class="help">仅在你确定移动距离时使用。错误距离会产生重复或缺失内容。</p>
       </div>
       <section class="scroll-preview" aria-label="长截图预览">
-        <img id="preview" alt="拼接结果预览" hidden />
-        <p id="empty" class="help">
-          确认选区后手动滚动原页面，或开始自动滚动。建议每次移动不超过半屏。
-        </p>
+        <div id="preview-paper" hidden><img id="preview" alt="拼接结果预览" hidden /><span id="preview-viewport" aria-label="最后采集视口"></span><span id="preview-addition" aria-label="本次新增区域" hidden></span></div>
+        <p id="empty" class="help">等待稳定画面</p>
       </section>
     </main>
     <footer>

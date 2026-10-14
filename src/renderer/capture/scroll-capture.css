@@ -119,3 +119,16 @@ body[data-view='scroll-capture'] #app > footer > .scroll-actions {
 body[data-view='scroll-capture'] #app{height:100%;display:flex;flex-direction:column}
 body[data-view='scroll-capture'] .media-header{display:flex;align-items:center;border-bottom:1px solid var(--line);-webkit-app-region:drag}
 body[data-view='scroll-capture'] .media-header .window-controls{position:static;margin-left:auto;align-self:stretch;-webkit-app-region:no-drag}
+body[data-view='scroll-capture'] .scroll-preview{max-height:184px;overflow:hidden}
+body[data-view='scroll-capture'] #preview-paper{position:relative;display:inline-flex;max-width:100%;align-self:center}
+body[data-view='scroll-capture'] #preview-paper[hidden]{display:none}
+body[data-view='scroll-capture'] #preview{display:block;max-height:160px;width:auto;max-width:100%}
+body[data-view='scroll-capture'] #preview-viewport,body[data-view='scroll-capture'] #preview-addition{position:absolute;pointer-events:none;box-sizing:border-box;border:2px solid #3b82f6}
+body[data-view='scroll-capture'] #preview-addition{border-style:dashed;border-color:#1d4ed8}
+body[data-view='scroll-capture'] .scroll-preview[hidden]{display:none}
+body[data-view='scroll-capture'] .scroll-settings summary{cursor:pointer;color:var(--muted);margin-bottom:8px}
+body[data-view='scroll-capture'] #app > main{padding:0 12px 12px}
+body[data-view='scroll-capture'] #message{min-height:24px;margin-bottom:6px}
+body[data-view='scroll-capture'] .scroll-settings:not([open]){padding:8px;margin-bottom:8px}
+body[data-view='scroll-capture'] .scroll-settings:not([open]) summary{margin:0}
+body[data-view='scroll-capture'] .scroll-preview{padding:8px;margin-top:8px;min-height:0;max-height:176px}

@@ -1,12 +1,13 @@
 import { parentPort } from 'node:worker_threads';
 import { ScrollStitch } from '../../shared/capture/scroll-stitch';
 import { ScrollSettle } from '../../shared/capture/scroll-settle';
-const engine = new ScrollStitch();
+let engine = new ScrollStitch();
 let settling: ScrollSettle;
 parentPort!.on('message', ({ id, kind, value }) => {
   try {
     let result;
-    if (kind === 'configure') {
+    if (kind === 'configure'||kind==='restart') {
+      if(kind==='restart')engine=new ScrollStitch();
       result = engine.configure(value.options, value.source);
       settling = new ScrollSettle(value.options, value.source);
     } else if (kind === 'settle-reset' || kind === 'observe') {

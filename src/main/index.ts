@@ -1359,6 +1359,7 @@ async function start() {
     dark:()=>{const value=themeAutomation?.appearance()||settings.appearance;return value.mode==='dark'||value.mode==='system'&&nativeTheme.shouldUseDarkColors;},
   },()=>{if(main&&!main.isDestroyed())main.webContents.send('one:pins-changed');},error=>runtimeError(app.getPath('userData'),'pins',error));
   capture=new CaptureHost(app.getPath('userData'),{
+    scroll:(region,windows)=>{if(!scrollCapture)throw Error('长截图尚未就绪');return scrollCapture.openRegion(region,windows);},
     ...annotationPreferences,
     createWindow:options=>windowFor('capture',{minWidth:1,minHeight:1,roundedCorners:false,...options},'',false),
     register:(name,handler)=>handle(name,(event,...args)=>{if(event.senderFrame?.url!==CAPTURE_URL)throw Error('截图窗口来源无效');return handler(event,...args);},['capture']),

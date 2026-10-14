@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { screen } from 'electron';
 import { NativeFrameReader } from '../../shared/capture/native-frame';
 import { IMAGE_BYTES, imageDimensions } from '../../shared/capture/image-limits';
-import { limitChildProcess, nativeMonitorBounds } from './native';
+import { limitChildProcess, nativeMonitorBounds,allowCaptureForeground } from './native';
 export function captureMonitorBounds(display: Electron.Display) {
   const { x, y, width, height } = display.bounds;
   return nativeMonitorBounds(
@@ -110,7 +110,7 @@ export class ScrollNative {
             !(
               header.ready === true ||
               typeof header.scroll === 'boolean' ||
-              typeof header.focused === 'boolean'
+              typeof header.focused === 'boolean' || typeof header.visible==='boolean' || typeof header.activated==='boolean'
             )
           )
             throw Error('采集响应无效');
@@ -180,6 +180,10 @@ export class ScrollNative {
     this.child.stdin.write('guard\n');
     return ((await response) as { focused: boolean }).focused === true;
   }
+  async available(){await this.ready;const response=this.response();this.child.stdin.write('visible\n');return ((await response) as {visible:boolean}).visible===true;}
+  permitActivation(){const permitted=!!this.child.pid&&allowCaptureForeground(this.child.pid);if(process.env.ONE_TEST_MODE==='1')console.log('Scroll activation permission',permitted);return permitted;}
+  activationReason='';
+  async activate(automatic:boolean){await this.ready;const response=this.response();this.child.stdin.write(automatic?'activate auto\n':'activate manual\n');const value=(await response) as {activated:boolean;reason?:string};if(process.env.ONE_TEST_MODE==='1'&&!value.activated)console.log('Scroll activation failed',value);this.activationReason=['keys','point','foreground','region'].includes(value.reason||'')?value.reason!:'';return value.activated===true;}
   stop() {
     if (this.stopped) return;
     this.stopped = true;

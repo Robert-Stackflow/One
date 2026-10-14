@@ -591,6 +591,7 @@ function paint() {
     effectsUI?.refresh(!q('capture-effects-menu').hidden && !gesture && !annotations.active);
   selectionNode.hidden = !scene.selection;
   panel.hidden = !scene.selection;
+  q('start-scroll').hidden=!data.canScroll||!!scene.selectionMask||data.selectionMode==='free'||data.selectionMode==='polygon';
   q('capture-side').hidden = !scene.selection;
   q('capture-properties').hidden =
     !scene.selection ||
@@ -944,6 +945,7 @@ q('library')
 q('ocr')
   .querySelector('[data-menu-icon]')!
   .append(createElement(ScanText, { class: 'icon', 'aria-hidden': 'true' }));
+q('start-scroll').querySelector('[data-menu-icon]')!.append(createElement(ScanText,{class:'icon','aria-hidden':'true'}));
 for (const [handle, x, y] of [
   ['nw', 0, 0],
   ['n', 50, 0],
@@ -1276,6 +1278,7 @@ async function output(action?: CaptureAction) {
 }
 for (const action of ['copy', 'save', 'pin', 'library', 'ocr'] as const)
   q(action).onclick = () => void output(action);
+q('start-scroll').onclick=()=>{if(busy||!scene.selection||scene.selectionMask||!data.canScroll)return;busy=true;draw();void api.startScroll(data.token,scene.selection).catch(error).finally(()=>{busy=false;draw();});};
 q('region-confirm').onclick = () => void output();
 q('run-workflow').onclick = () => void output();
 q('capture-more').onclick = () => toggleCaptureMenu(q('capture-more-menu'), q('capture-more'));

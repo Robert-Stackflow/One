@@ -60,6 +60,7 @@ export class BrowserWindow extends EventEmitter {
     this.protected = value;
   }
   setAlwaysOnTop() {}
+  setBounds(bounds:typeof this.bounds){this.bounds=bounds;}
   async loadURL() {}
   destroy() {
     this.destroyed = true;
@@ -120,6 +121,9 @@ export class ScrollNative {
   ready = Promise.resolve();
   stopped = false;
   focus = true;
+  async available(){return this.focus;}
+  async activate(_automatic:boolean){return this.focus;}
+  permitActivation(){return true;}
   wheels = 0;
   offset = 0;
   reads = 0;

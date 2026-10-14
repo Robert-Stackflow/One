@@ -1,4 +1,20 @@
 export type ScrollAxis = 'vertical' | 'horizontal';
+export type ScrollMode='manual'|'auto';
+interface ControlRect {x:number;y:number;width:number;height:number}
+/** Prefer usable space outside the selection; constrained screens retain a movable control. */
+export function scrollControlBounds(area:ControlRect,selection:ControlRect,height=500):ControlRect {
+  const gap=12,left=area.x+gap,top=area.y+gap,right=area.x+area.width-gap,bottom=area.y+area.height-gap;
+  const spaces:ControlRect[]=[
+    {x:Math.max(left,selection.x+selection.width+gap),y:top,width:right-Math.max(left,selection.x+selection.width+gap),height:bottom-top},
+    {x:left,y:top,width:Math.min(right,selection.x-gap)-left,height:bottom-top},
+    {x:left,y:Math.max(top,selection.y+selection.height+gap),width:right-left,height:bottom-Math.max(top,selection.y+selection.height+gap)},
+    {x:left,y:top,width:right-left,height:Math.min(bottom,selection.y-gap)-top},
+  ];
+  const space=spaces.find(space=>space.width>=340&&space.height>=Math.min(height,250));
+  if(space){const width=Math.min(430,space.width),h=Math.min(height,space.height);return {x:Math.round(Math.max(space.x,Math.min(selection.x,space.x+space.width-width))),y:Math.round(Math.max(space.y,Math.min(selection.y,space.y+space.height-h))),width:Math.round(width),height:Math.round(h)};}
+  const width=Math.min(430,area.width),h=Math.min(height,area.height);
+  return {x:Math.round(area.x+Math.max(0,area.width-width-gap)),y:Math.round(area.y+Math.min(gap,Math.max(0,area.height-h))),width,height:h};
+}
 export interface ScrollOptions {
   axis: ScrollAxis;
   trimStart: number;
@@ -8,6 +24,8 @@ export interface ScrollOptions {
 }
 export type ScrollMatch = 'first' | 'accepted' | 'unchanged' | 'ambiguous' | 'backwards';
 export interface ScrollView {
+  mode:ScrollMode;
+  previewExpanded:boolean;
   token: string;
   uiScale:100|110|125|150;
   phase: 'setup' | 'ready' | 'running' | 'paused' | 'review' | 'failed';
@@ -25,8 +43,10 @@ export interface ScrollView {
   preview: string;
 }
 export type ScrollCommand =
+  | {kind:'layout';preview:boolean;settings?:boolean}
+  | {kind:'restart';options:ScrollOptions}
   | { kind: 'configure'; options: ScrollOptions }
-  | { kind: 'sample' | 'auto' | 'pause' | 'undo' | 'finish' | 'edit' | 'cancel' }
+  | { kind: 'sample' | 'manual' | 'auto' | 'pause' | 'undo' | 'finish' | 'edit' | 'cancel' }
   | { kind: 'join'; offset: number };
 export interface ScrollAPI {
   state(): Promise<ScrollView>;
