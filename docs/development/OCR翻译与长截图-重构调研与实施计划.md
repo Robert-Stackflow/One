@@ -121,7 +121,7 @@ OCR/公式窗口在动态样式和首轮布局完成后显示，不等待模型�
 
 首批实现保留 Tesseract 的真实符号框，产出带图片 SHA-256、引擎/模型版本与坐标变换的 `TextDocument`；字符文字与词不匹配或没有字形框时保留实际词框，不均分伪造。共享选择层已接入独立识别窗口，支持跨行、词内、词/行选择、键盘复制扩选与缩放旋转；单次拖选期间冻结变换，避免 ResizeObserver 或工具栏换行改变取点坐标。只为可视区建立文字节点，过密视图要求放大但允许全选复制。原图翻译、其他模型预设和局部重识别仍按后续批次推进，当前全文编辑后会关闭旧坐标选择层以防复制过期文字。
 
-Paddle tiny/small/medium 已接入近似字级选择，虚线与悬浮提示明确区分真实字形框；同行高矮片段按行合并阅读顺序。`node tests/paddle-alignment-runtime.cjs`（另加 `--dml --device0` / `--device1`）覆盖六类合成图的 CPU、NVIDIA 与 AMD：每个设备的 18 组合中，17 个声明支持的组合通过，匹配覆盖率最低 0.929、匹配字中心命中率最低 0.923。tiny 倒置行为预设负例，不能据此宣称支持。证据位于 `work/current/capture-reconstruction/ctc-alignment/verified-*`；尚不能代表真实文档质量、多栏或整图旋转后的阅读顺序验收。`node tests/local-model-ui.cjs --selection` 验证单字、扩选、原文联动、旋转复制及编辑后停用旧坐标。DeepSeek grounding 探测仅得到文段框，v1 还有明显偏移，继续仅提供文字结果。
+Paddle tiny/small/medium 已接入近似字级选择，通过悬浮提示和可访问标签说明位置近似；选中文字统一使用固定半透明蓝色，不跟随主题色，也不显示边框、描边或阴影；同行高矮片段按行合并阅读顺序。`node tests/paddle-alignment-runtime.cjs`（另加 `--dml --device0` / `--device1`）覆盖六类合成图的 CPU、NVIDIA 与 AMD：每个设备的 18 组合中，17 个声明支持的组合通过，匹配覆盖率最低 0.929、匹配字中心命中率最低 0.923。tiny 倒置行为预设负例，不能据此宣称支持。证据位于 `work/current/capture-reconstruction/ctc-alignment/verified-*`；尚不能代表真实文档质量、多栏或整图旋转后的阅读顺序验收。`node tests/local-model-ui.cjs --selection` 验证单字、扩选、原文联动、旋转复制及编辑后停用旧坐标。DeepSeek grounding 探测仅得到文段框，v1 还有明显偏移，继续仅提供文字结果。
 
 OCR 模型弹窗状态读取并发检查各模型的元数据，两种 DeepSeek 共享一次 CPU/CUDA 运行包快照；不加载推理模型，不读取权重散列，不等待显卡探测。`node tests/local-model-ui.cjs --timing` 刻意挂起状态返回，验证弹窗仍先绘制占位；本机隔离实测首帧约 25 ms、元数据约 4 ms，记录于 `work/current/capture-reconstruction/model-dialog-timing.json`，不作为其他设备的固定耗时保证。下载发布及实际推理的完整校验继续保留。
 
