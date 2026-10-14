@@ -11,6 +11,16 @@
 | 文本与系统工具 | 已有可用实现；专有格式、复杂规则及跨设备行为继续按实际场景验收 | [文本处理](../user-guide/文本处理.md)、[系统信息与磁盘告警](../user-guide/系统信息与磁盘告警.md) |
 | 压缩与解压 | ZIP/7Z/RAR 与 TAR/GZ/XZ 日常功能及必要回归已完成；其他格式转入 Roadmap，真实环境和安装交付验收单列 | [实现与验收设计](压缩与解压实现计划.md)、[使用说明](../user-guide/压缩与解压.md) |
 
+## 桌面入口、安装器与截图修复（2026-10-14）
+
+- [x] 桌面宿主按 Shell 进程识别，补充原生空白命中判断；覆盖桌面图标、隐藏图标和非 Shell 同名窗口。
+- [x] 安装器在外壳与内部程序声明管理员权限，移除 PowerShell 提权预检；纳入 PR #1 的文件系统空间检测和错误区分。
+- [x] 截图物理像素对齐、首帧展示与失败释放；连续触发保持当前会话，字体加载不阻塞首屏。
+- [x] 剪贴板贴图复用、恢复与置前；描边四角裁剪，黑色无描边 Toast 和深色模式黑色 Tooltip。
+- [ ] 在原先失败的 Windows 设备上确认桌面双击与 UAC 实际交互；隔离回归及权限声明检查不替代跨设备验收。
+
+验证入口：`tests/desktop-menu-native.cpp`、`tests/installer-disk-space.test.cjs`、`tests/installer-preparation.test.cjs`、`tests/capture-startup.test.cjs`、`tests/windows-bugfix-smoke.cjs`。证据位于 `verification/windows-bugfix-2026-10-14/`，候选安装器位于 `work/current/windows-bugfix/installer-0.16.24/`；本轮不写入正式安装目录。
+
 ## 侧边栏、托盘与提示（2026-10-13）
 
 - [x] 分组展开/折叠状态持久化；固定入口、同组拖动/键盘排序、即时应用与恢复默认；默认 AI 对话置于工具首项。

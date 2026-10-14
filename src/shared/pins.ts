@@ -72,6 +72,7 @@ export interface PinAPI {
   drag(phase: 'start' | 'move' | 'end', group?: boolean): Promise<void>;
   controlsHeight(height: number): Promise<void>;
   onChange(callback: (state: PinWindowState) => void): () => void;
+  onRecall(callback: () => void): () => void;
 }
 export const PIN_LIMIT = 200,
   PIN_VISIBLE_LIMIT = 20,

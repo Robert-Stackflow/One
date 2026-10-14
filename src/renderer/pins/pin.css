@@ -255,8 +255,8 @@ body:is([data-view=pin],[data-view=pin-controls]) #toast[popover] {
   max-width: calc(100vw - 24px);
   padding: 8px 12px;
   border-radius: 8px;
-  background: #303030;
-  color: #fff;
+  background: var(--toast-background);
+  color: var(--toast-foreground);
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -266,3 +266,15 @@ body[data-view=pin-controls]{overflow:auto}
 body[data-view=pin-controls] #app{overflow:visible}
 
 body[data-view=pin-controls] .pin-tool-heading .window-controls{margin-right:10px}
+.pin-recall-highlight {
+  position: fixed;
+  inset: 0;
+  border: 2px solid var(--accent);
+  /* Match the inside of the native 8px corner without insetting the edges. */
+  border-radius: 7px;
+  clip-path: inset(0 round 7px);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+}

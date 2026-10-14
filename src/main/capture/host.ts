@@ -37,7 +37,7 @@ export class CaptureHost {
     });
   }
   private check(){if(this.closing||this.context.blocked())throw Error('截图服务已关闭');}
-  private run<T>(work:()=>Promise<T>){this.check();this.context.assertAvailable();if(this.service.active)throw Error('请先完成当前截图');const task=work();this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;}
+  private run<T>(work:()=>Promise<T>){this.check();this.context.assertAvailable();const task=work();this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;}
   private preferredDisplay(){const main=this.context.mainWindow();return main&&!main.isDestroyed()?screen.getDisplayMatching(main.getBounds()).id:screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id;}
   private display(value?:number){if(value===undefined)return this.preferredDisplay();if(!Number.isSafeInteger(value)||!screen.getAllDisplays().some(display=>display.id===value))throw Error('显示器已断开');return value;}
   private windows(options?:CaptureOptions){const value=captureOptions(options),main=this.context.mainWindow();return value.hideMainWindow&&main&&!main.isDestroyed()?[main]:[];}

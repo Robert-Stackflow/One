@@ -39,6 +39,7 @@ body[data-view='capture'] {
   background: #111111;
 }
 body[data-view='capture'] #capture-preview {
+  image-rendering: pixelated;
   background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 16px 16px;
   position: absolute;
   inset: 0;

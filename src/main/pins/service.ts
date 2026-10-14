@@ -7,7 +7,7 @@ import {
   shell,
   type IpcMainInvokeEvent,
 } from 'electron';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { basename, join, resolve, isAbsolute } from 'node:path';
 import { PinStore } from './store';
@@ -276,12 +276,12 @@ export class PinService {
           entry.window.destroy();
       }, 250).unref();
   }
-  async open(input: { title: string; png?: Buffer; text?: string; files?: string[]; captured?:PinPlacement }) {
+  async open(input: { title: string; png?: Buffer; text?: string; files?: string[]; captured?:PinPlacement; reuseClipboard?:boolean }) {
     return this.serial(async () => {
       let content: PinContent;
       if (input.png) {
         const { size } = decodePng(input.png.toString('base64'));
-        content = { kind: 'image', ...size, hash: await this.store.installImage(input.png) };
+        content = { kind: 'image', ...size, hash: createHash('sha256').update(input.png).digest('hex') };
       } else if (input.files) {
         if (!input.files.length || input.files.length > PIN_FILE_LIMIT)
           throw Error('文件贴图支持 1–64 个文件');
@@ -301,6 +301,21 @@ export class PinService {
         }
         content = { kind: 'files', files };
       } else content = { kind: 'text', text: input.text || '' };
+      if(input.reuseClipboard){
+        const existing=[...this.store.snapshot().pins].reverse().find(pin=>{
+          const previous=pin.content;
+          if(content.kind==='image')return previous.kind==='image'&&previous.hash===content.hash;
+          if(content.kind==='text')return previous.kind==='text'&&previous.text===content.text;
+          return previous.kind==='files'&&previous.files.length===content.files.length&&previous.files.every((file,index)=>file.path.toLowerCase()===content.files[index].path.toLowerCase());
+        });
+        if(existing){
+          await this.show(existing.id);
+          const window=this.entries.get(existing.id)?.window;
+          if(window&&!window.isDestroyed()){window.moveTop();window.webContents.send('one:pins-window-recalled');}
+          return existing.id;
+        }
+      }
+      if(input.png)await this.store.installImage(input.png);
       const point=screen.getCursorScreenPoint(),area=screen.getDisplayNearestPoint(point).workArea;
       const view=initialPinView(content,point,area,input.captured);
       let record: PinRecord;

@@ -18,6 +18,8 @@ export function initCaptureNative() {
     flushDwm: dwm.func('int32 __stdcall DwmFlush()'),
     cursor: u.func('bool __stdcall GetCursorPos(void*)'),
     setCursor: u.func('bool __stdcall SetCursorPos(int,int)'),
+    position: u.func('bool __stdcall SetWindowPos(uintptr_t,uintptr_t,int,int,int,int,uint32)'),
+    dpiContext: u.func('intptr_t __stdcall SetThreadDpiAwarenessContext(intptr_t)'),
     monitorFromPoint: u.func('MonitorFromPoint', 'uintptr_t', [point, 'uint32_t']),
     monitorInfo: u.func('bool __stdcall GetMonitorInfoW(uintptr_t,void*)'),
     openProcess: k.func('uintptr_t __stdcall OpenProcess(uint32,bool,uint32)'),
@@ -39,6 +41,18 @@ export function disableWindowTransitions(hwnd: number) {
   disabled.writeInt32LE(1);
   // DWMWA_TRANSITIONS_FORCEDISABLED takes a Win32 BOOL (four bytes).
   return api.setDwm(hwnd, 3, disabled, disabled.length) === 0;
+}
+/** DIP window bounds can round outward by several pixels on mixed-DPI screens. */
+export function alignCaptureWindow(hwnd:number,bounds:{x:number;y:number;width:number;height:number}) {
+  initCaptureNative();
+  if(!api||!Number.isSafeInteger(hwnd)||!hwnd||![bounds.x,bounds.y,bounds.width,bounds.height].every(Number.isSafeInteger)||bounds.width<1||bounds.height<1)return false;
+  const previous=api.dpiContext(-4); // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+  if(!previous)return false;
+  // SWP_NOSENDCHANGING prevents Chromium's WINDOWPOSCHANGING handler from
+  // converting the exact size through rounded DIPs again. WINDOWPOSCHANGED
+  // still updates the renderer's viewport normally.
+  try{return !!api.position(hwnd,0,bounds.x,bounds.y,bounds.width,bounds.height,0x0614);}
+  finally{api.dpiContext(previous);}
 }
 export function windowExists(hwnd: number) {
   initCaptureNative();

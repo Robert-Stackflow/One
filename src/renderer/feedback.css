@@ -1,6 +1,33 @@
 .feedback-motion {
   animation: none !important;
 }
+:root {
+  --toast-background: #303030;
+  --toast-foreground: #fff;
+  --toast-shadow: 0 8px 28px #0000001c, 0 2px 6px #0000000d;
+}
+:root[data-theme='dark'] {
+  --toast-background: #333;
+  --toast-foreground: #f4f4f4;
+  --toast-shadow: 0 8px 28px #0000003d, 0 2px 6px #00000024;
+}
+/* Toasts are quiet, borderless feedback, with their own depth in each theme. */
+.toast.feedback-motion,
+.feedback-toast[popover] {
+  --popup-border: 0;
+  --popup-shadow: var(--toast-shadow);
+  border: 0;
+  outline: 0;
+  box-shadow: var(--toast-shadow);
+  background: var(--toast-background);
+  color: var(--toast-foreground);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: var(--control-font,13px);
+  line-height: 1.5;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
 .toast-layer > .toast.feedback-motion {
   pointer-events: auto;
 }
@@ -21,8 +48,8 @@
   overflow: auto;
   padding: 10px 14px;
   border-radius: 9px;
-  background: var(--surface);
-  color: var(--fg);
+  background: var(--toast-background);
+  color: var(--toast-foreground);
   font-size: var(--control-font,13px);
   line-height: 1.6;
   overflow-wrap: anywhere;

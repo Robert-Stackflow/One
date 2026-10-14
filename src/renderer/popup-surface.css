@@ -54,7 +54,7 @@ dialog.closing {
   to { opacity: 0; translate: 0 4px; }
 }
 
-/* Tooltip labels have compact depth and inverse colors in both themes. */
+/* Tooltip labels keep a dark surface and compact depth in both themes. */
 .one-tooltip { --popup-border-color: var(--tooltip-border); --popup-border: 1px solid var(--tooltip-border); }
 
 /* These surfaces already have one native Windows frame/shadow. An inner copy

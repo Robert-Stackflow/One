@@ -34,10 +34,10 @@ export class PinsHost {
   material(id:string){return this.run(async()=>{await this.materials.initialized();const item=this.materials.library.images.get(id);return this.service.open({title:item.title.slice(0,120),png:await this.materials.library.images.read(id)});});}
   image(title:string,png:Buffer,captured?:PinPlacement){return this.run(()=>this.service.open({title,png,captured}));}
   clipboard(){return this.run(async()=>{
-    const files=readClipboardFiles();if(files.length)return this.service.open({title:files.length===1?basename(files[0]).slice(0,120):`${files.length} 个文件`,files});
-    const png=await readClipboardPng();if(png)return this.service.open({title:'剪贴板图片',png});
+    const files=readClipboardFiles();if(files.length)return this.service.open({title:files.length===1?basename(files[0]).slice(0,120):`${files.length} 个文件`,files,reuseClipboard:true});
+    const png=await readClipboardPng();if(png)return this.service.open({title:'剪贴板图片',png,reuseClipboard:true});
     const text=await clipboard.readText();if(!text.trim())throw Error('剪贴板中没有可贴出的图片、文字或文件');
-    if(text.length>50000)throw Error('文字贴图最多 50,000 字符');return this.service.open({title:'文字贴图',text});
+    if(text.length>50000)throw Error('文字贴图最多 50,000 字符');return this.service.open({title:'文字贴图',text,reuseClipboard:true});
   });}
   files(parent:BrowserWindow){return this.run(async()=>{
     const result=await dialog.showOpenDialog(parent,{title:'贴出文件',properties:['openFile','multiSelections']});

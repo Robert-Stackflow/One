@@ -10,6 +10,7 @@ import {
   physicalCursor,
   movePhysicalCursor,
   disableWindowTransitions,
+  alignCaptureWindow,
 } from './native';
 import { CaptureProbe } from './capture-probe';
 import {
@@ -123,6 +124,13 @@ export class CaptureService {
   private acquisition?: AbortController;
   private outcome?: CaptureResult;
   active = false;
+  /** Repeated entry requests keep the current session; never queue another. */
+  private reuseActive() {
+    if(!this.active)return false;
+    const overlay=this.run?.overlay;
+    if(overlay&&!overlay.isDestroyed()&&overlay.isVisible()&&!this.run?.ended){overlay.moveTop();overlay.focus();}
+    return true;
+  }
   constructor(private readonly host: CaptureHost) {
     const register=(name:string,handler:(event:Electron.IpcMainInvokeEvent,...args:any[])=>unknown)=>host.register(name,(event,...args)=>{
       if(this.closing||host.blocked())throw Error('截图服务已关闭');
@@ -570,7 +578,10 @@ export class CaptureService {
       return;
     }
     const overlay = this.host.createWindow({
-      ...screen.getPrimaryDisplay().bounds,
+      ...(screen.getAllDisplays().find(display=>display.id===displayId)||screen.getPrimaryDisplay()).bounds,
+      minWidth: 1,
+      minHeight: 1,
+      roundedCorners: false,
       frame: false,
       thickFrame: false,
       transparent: true,
@@ -747,6 +758,7 @@ export class CaptureService {
     return result;
   }
   async takeWindow(token: unknown, windows: BrowserWindow[]) {
+    if(this.reuseActive())return null;
     const choice = typeof token === 'string' ? this.choices.get(token) : undefined;
     if (!choice || Date.now() - choice.created > 120000)
       throw Error('窗口选择已失效，请刷新窗口列表');
@@ -792,6 +804,7 @@ export class CaptureService {
     }
   }
   async takeWindowSet(value: unknown, windows: BrowserWindow[], placementValue?: unknown) {
+    if(this.reuseActive())return null;
     if (
       !Array.isArray(value) ||
       !value.length ||
@@ -849,6 +862,7 @@ export class CaptureService {
   ) {
     if (!['region', 'screen', 'copy', 'free', 'polygon', 'desktop'].includes(mode))
       throw Error('截图模式无效');
+    if(this.reuseActive())return null;
     await this.start(
       displayId,
       windows,
@@ -885,7 +899,7 @@ export class CaptureService {
     },
   ): Promise<Region | null> {
     if(this.closing||this.host.blocked())throw Error('截图服务已关闭');
-    if (this.active) throw Error('截图正在进行');
+    if (this.reuseActive()) return null;
     this.selectedFonts.clear();
     this.outcome = undefined;
     this.active = true;
@@ -900,6 +914,13 @@ export class CaptureService {
       this.prepare(displayId);
       const warm = this.warm!;
       overlay = warm.overlay;
+      const targetDisplay=screen.getAllDisplays().find(display=>display.id===displayId);
+      if(!targetDisplay)throw Error('显示器已断开');
+      // Move while hidden, before acquisition/decoding, so the first paint uses
+      // the target monitor's viewport and DPI rather than the warmed monitor's.
+      overlay.setBounds(targetDisplay.bounds);
+      const handle=overlay.getNativeWindowHandle();
+      if(!alignCaptureWindow(Number(handle.length>=8?handle.readBigUInt64LE():handle.readUInt32LE()),captureMonitorBounds(targetDisplay)))throw Error('无法对齐截图窗口的屏幕像素');
       for (const window of shown) {
         const handle = window.getNativeWindowHandle();
         disableWindowTransitions(
@@ -930,7 +951,9 @@ export class CaptureService {
       if (!display) throw Error('显示器已断开');
       const size = shot.size;
       imageDimensions(size.width, size.height);
-      overlay.setBounds(display.bounds);
+      // Chromium can apply WM_DPICHANGED's rounded suggested bounds after the
+      // initial move. Reapply exact pixels after acquisition has yielded to it.
+      if(!alignCaptureWindow(Number(handle.length>=8?handle.readBigUInt64LE():handle.readUInt32LE()),captureMonitorBounds(display)))throw Error('无法对齐截图窗口的屏幕像素');
       const remoteCompatible = this.host.remoteCompatible?.() ?? true;
       overlay.setContentProtection(!remoteCompatible);
       let painted!: () => void;
@@ -989,9 +1012,8 @@ export class CaptureService {
         });
       });
       warm.provide(this.data(this.run!));
-      await warm.loaded;
+      await Promise.all([warm.loaded,paintReady]);
       if (this.warm === warm) this.warm = undefined;
-      await paintReady;
       clearTimeout(paintTimer);
       if (generation !== this.generation || overlay.isDestroyed()) return null;
       if (this.run?.ended) return await result;

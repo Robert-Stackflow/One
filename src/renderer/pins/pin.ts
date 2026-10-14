@@ -313,4 +313,20 @@ window.addEventListener('resize', () => {
   if (state) render(state);
 });
 api.onChange(render);
+let recallAnimation:Animation|undefined;
+const recallHighlight=document.createElement('div');
+recallHighlight.className='pin-recall-highlight';
+recallHighlight.setAttribute('aria-hidden','true');
+document.body.append(recallHighlight);
+api.onRecall(()=>{
+  notify('已显示已有贴图');
+  recallAnimation?.cancel();
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    recallAnimation=recallHighlight.animate([
+      {opacity:0.85,offset:0},
+      {opacity:0.85,offset:0.3},
+      {opacity:0,offset:1},
+    ],{duration:650,easing:'ease-out'});
+  }
+});
 void api.state().then(state=>{render(state);document.body.dataset.pinReady='true';}).catch(error=>{document.body.dataset.pinError=String(error);toast(error);});

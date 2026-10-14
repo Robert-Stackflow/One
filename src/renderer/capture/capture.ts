@@ -551,8 +551,12 @@ function paint() {
     right: 'auto',
     bottom: 'auto',
   });
-  const width = Math.ceil(view.width * devicePixelRatio),
-    height = Math.ceil(view.height * devicePixelRatio);
+  // Preserve source pixels. Rounding DIP × DPI to a second bitmap size can
+  // resample every edge on monitors with fractional scaling.
+  const physicalWidth=view.width*devicePixelRatio,physicalHeight=view.height*devicePixelRatio;
+  const nativeSize=Math.abs(physicalWidth-scene.width)<=1&&Math.abs(physicalHeight-scene.height)<=1;
+  const width = nativeSize?scene.width:Math.max(1,Math.round(physicalWidth)),
+    height = nativeSize?scene.height:Math.max(1,Math.round(physicalHeight));
   if (canvas.width !== width) {
     canvas.width = width;
     sceneDirty = true;
@@ -1227,6 +1231,7 @@ async function output(action?: CaptureAction) {
   q('capture-message').textContent = '正在输出…';
   let exported: HTMLCanvasElement | undefined;
   try {
+    await initialFonts;
     const request = {
       token: data.token,
       selection: scene.selection,
@@ -1610,13 +1615,17 @@ async function loadImage(value: CaptureData) {
   // previous bitmap available for editing and output.
   source = await captureSource(value);
 }
+let initialFonts:Promise<void>=Promise.resolve();
 void api
   .data()
   .then(async (initial) => {
     data = initial;
     rememberedStyles.load(initial.annotationStyles);
     applyCaptureScale(document.body,initial.uiScale);
-    await Promise.all([...new Set([initial.watermark.fontFamily,...Object.values(initial.annotationStyles||{}).map(style=>style.fontFamily)])].map(loadAnnotationFont));
+    initialFonts=Promise.all([...new Set([initial.watermark.fontFamily,...Object.values(initial.annotationStyles||{}).map(style=>style.fontFamily)])].map(loadAnnotationFont)).then(()=>{});
+    // Font discovery must not delay showing an unannotated desktop snapshot.
+    // Output still waits for the selected document fonts before rasterization.
+    void initialFonts.catch(()=>{});
     shapedSelection.mode = initial.selectionMode || 'rectangle';
     q('capture-selection-mode').hidden = true;
     const watermark = initial.watermark;
@@ -1723,6 +1732,7 @@ void api
     paint();
     document.body.dataset.captureReady = 'true';
     await api.ready(initial.token);
+    void initialFonts.then(()=>draw(),error);
   })
   .catch((e) => {
     document.body.dataset.captureError=String(e);

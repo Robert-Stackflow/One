@@ -1353,6 +1353,10 @@ async function start() {
     assertAvailable:()=>{if(scrollCapture?.service.active)throw Error('请先完成当前长截图');if(rulerWindows.length)throw Error('请先关闭当前屏幕尺');if(colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前屏幕取色或条码框选');},
     failed:error=>runtimeError(app.getPath('userData'),'capture',error),timing:value=>runtimeLog(app.getPath('userData'),'capture-ready',JSON.stringify(value)),
   },materials,pins);
+  // Warm a hidden capture surface after startup; do not read desktop pixels.
+  if(!testMode)setImmediate(()=>{
+    if(!quitting&&!capture!.service.active)capture!.service.prepare(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id);
+  });
   scrollCapture=new ScrollCaptureHost({
     createWindow:options=>windowFor('scroll-capture',{roundedCorners:true,...options},'',false),
     register:(name,handler)=>handle(name,handler,['scroll-capture']),blocked:()=>quitting,
