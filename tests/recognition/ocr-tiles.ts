@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planOCRTiles,needsOCRTiles,OCR_TILE_EDGE } from '../../src/shared/recognition/ocr-tiles';
+import { planOCRTiles,planOCRRegionTiles,ocrRect,needsOCRTiles,OCR_TILE_EDGE } from '../../src/shared/recognition/ocr-tiles';
 import { textDocument,readingTokens,selectedText } from '../../src/shared/recognition/text-document';
 import { mergeOCRTiles } from '../../src/main/recognition/ocr-tile-merge';
 import type { OCRResult,OCRWord } from '../../src/shared/recognition/ocr';
 const engine={id:'fixture',version:'1',model:'fixed',device:'cpu'},hash='a'.repeat(64);
+test('regional tiles decode only the bounded crop and retain original coordinates',()=>{
+  const size={width:4000,height:10000},region={left:320,top:4300,width:2400,height:3200},tiles=planOCRRegionTiles(size,region);
+  assert.equal(tiles.reduce((sum,tile)=>sum+tile.core.width*tile.core.height,0),region.width*region.height);
+  for(const tile of tiles){assert.ok(tile.left>=region.left&&tile.top>=region.top);assert.ok(tile.left+tile.width<=region.left+region.width&&tile.top+tile.height<=region.top+region.height);}
+  for(const update of [{left:-1},{top:9999},{width:Infinity},{path:'../secret'},{height:0}])assert.throws(()=>ocrRect({...region,...update},size));
+});
 function result(tile:ReturnType<typeof planOCRTiles>[number],words:OCRWord[]):OCRResult{
   const value:OCRResult={width:tile.width,height:tile.height,language:'eng',words,text:words.map(word=>word.text).join('\n'),confidence:95};
   value.document=textDocument(value,'b'.repeat(64),{...engine});return value;

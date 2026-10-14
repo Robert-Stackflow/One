@@ -14,6 +14,7 @@ export interface TextToken {
   confidence?: number;
   sourceStart?: number;
   sourceEnd?: number;
+  recognitionRevision?: number;
 }
 export interface TextLine {
   id: string;
@@ -36,6 +37,8 @@ export interface TextDocument {
   text: string;
   alignment: 'source' | 'reconstructed';
   blocks: TextBlock[];
+  revision?:number;
+  revisions?:{revision:number;region:{left:number;top:number;width:number;height:number};context?:{left:number;top:number;width:number;height:number};contextToSource?:[number,number,number,number,number,number];engine:TextDocument['engine'];language:string}[];
 }
 export function textBounds(quad: TextQuad) {
   const x = Math.min(...quad.map(point => point.x)), y = Math.min(...quad.map(point => point.y));

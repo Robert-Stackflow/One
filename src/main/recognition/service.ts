@@ -23,6 +23,7 @@ import { nativeRuntimeLicenses } from '../../shared/recognition/model-sources';
 import { inferOCRImage, InlineOCREngine } from './image-inference';
 import { InlineOCRSessions } from './inline-ocr';
 import { readInferenceDevices } from '../inference-devices';
+import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
 import { OCRImagePreview } from './image-preview';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
@@ -45,6 +46,7 @@ export class OCRService {
   private name = '';
   private size = { width: 0, height: 0 };
   private result?: OCRResult;
+  private documentRevision=0;
   private progress = 0;
   private imagePreview?:OCRImagePreview;
   private running = false;
@@ -151,6 +153,10 @@ export class OCRService {
     handle('run', (token, value, mode = 'text') => {
       if (this.workflow.active) throw Error('正在执行识别流程，请先取消当前任务');
       return this.recognize(token, value, mode);
+    });
+    handle('region',(token,value,selection)=>{
+      if(this.workflow.active)throw Error('正在执行识别流程，请先取消当前任务');
+      return this.recognize(token,value,'text',selection);
     });
     handle('workflow-result', (token, id) => this.workflow.read(token, id));
     handle('workflow-back', (token, id) => {
@@ -259,7 +265,7 @@ export class OCRService {
     if(!this.window||!this.authorize(request.url,this.window.webContents.id))return new Response(null,{status:404});
     return new Response(request.method==='HEAD'?null:new Uint8Array(this.png!),{headers:{'Content-Type':'image/png','Content-Length':String(this.png!.length),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'one://app'}});
   }
-  private async recognize(token: unknown, value: unknown, mode: unknown = 'text') {
+  private async recognize(token: unknown, value: unknown, mode: unknown = 'text',selection?:unknown) {
     if (token !== this.token || !this.png) throw Error('识别图片已失效');
     if (this.running) throw Error('正在识别，请先取消当前任务');
     if (this.translating) throw Error('请先取消翻译，再识别文字');
@@ -268,18 +274,23 @@ export class OCRService {
     if (mode !== 'text') throw Error('识别模式无效');
     const language = ocrLanguage(value),
       generation = this.token;
+    const base=selection===undefined?undefined:this.result;
+    if(selection!==undefined&&!base)throw Error('请先识别全文');
+    const region=base?selectedOCRRegion(base,selection):undefined;
     this.running = true;
     this.progress = 0;
     this.error = '';
     const abort = this.recognitionAbort = new AbortController();
     const task = (async () => {
-      return inferOCRImage({models:this.localModels,runner:this.runner,paddle:this.paddle,native:this.native},this.png!,this.size,language,abort.signal,
-        value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);});
+      const result=await inferOCRImage({models:this.localModels,runner:this.runner,paddle:this.paddle,native:this.native},this.png!,this.size,language,abort.signal,
+        value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);},region?.context);
+      abort.signal.throwIfAborted();return base&&region?replaceOCRSelection(base,result,region.selection):result;
     })();
     this.recognitionTask = task;
     try {
       const result = await task;
       if (abort.signal.aborted || generation !== this.token || this.ctx.blocked()) throw Error('文字识别已取消');
+      if(result.document){this.documentRevision=Math.max(this.documentRevision+1,result.document.revision||0);result.document.revision=this.documentRevision;result.document.id=result.document.id.replace(/:r\d+$/,'')+`:r${this.documentRevision}`;}
       this.result = result;
       this.progress = 1;
       return result;

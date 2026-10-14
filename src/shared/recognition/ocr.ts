@@ -49,6 +49,7 @@ export interface OCRState {
   modelTitle?: string;
 }
 export interface OCRAPI {
+  region(token:string,language:OCRLanguage,selection:import('./text-region').OCRRegionSelection):Promise<OCRResult>;
   ready(): Promise<void>;
   openFormula(token:string):Promise<void>;
   returnToCapture(token: string, id: string): Promise<void>;

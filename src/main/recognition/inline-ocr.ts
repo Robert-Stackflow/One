@@ -4,17 +4,22 @@ import { OCRImagePreview } from './image-preview';
 import { ocrLanguage, ocrText, type OCRLanguage, type OCRResult } from '../../shared/recognition/ocr';
 import type { TranslationConnection, TranslationResult } from '../../shared/recognition/translation';
 import { TranslationClient } from './translation-client';
+import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
+import type { OCRRect } from '../../shared/recognition/ocr-tiles';
 
 export interface InlineEngine {
   run(png: Buffer, size: { width: number; height: number }, language: OCRLanguage, signal: AbortSignal): Promise<OCRResult>;
   cancel(): Promise<void>;
   close(): Promise<void>;
   unload?(id?:string):Promise<void>;
+  region?(png:Buffer,size:{width:number;height:number},language:OCRLanguage,signal:AbortSignal,region:OCRRect):Promise<OCRResult>;
 }
 interface ImageSession {
   id: string; source: string; png: Buffer; size: { width: number; height: number };
   engine: InlineEngine; preview: OCRImagePreview; translation: TranslationClient;
   abort?: AbortController; task?: Promise<OCRResult | TranslationResult>;
+  result?:OCRResult;
+  documentRevision?:number;
 }
 /** No window, implicit download or global cancellation. Each owner keeps one frozen input. */
 export class InlineOCRSessions {
@@ -53,7 +58,8 @@ export class InlineOCRSessions {
     if (image.task) throw Error('请先结束当前识别或翻译');
     const abort = image.abort = new AbortController();
     const task = Promise.resolve().then(() => { abort.signal.throwIfAborted(); return action(image, abort.signal); }).then(result => {
-      abort.signal.throwIfAborted(); if (this.images.get(owner) !== image) throw Error('图片选字已失效'); return result;
+      abort.signal.throwIfAborted(); if (this.images.get(owner) !== image) throw Error('图片选字已失效');
+      if('words' in result){if(result.document){image.documentRevision=Math.max((image.documentRevision||0)+1,result.document.revision||0);result.document.revision=image.documentRevision;result.document.id=result.document.id.replace(/:r\d+$/,'')+`:r${image.documentRevision}`;}image.result=result;}return result;
     });
     image.task = task;
     return task.finally(() => { if (image.task === task) { image.task = undefined; image.abort = undefined; } });
@@ -61,6 +67,15 @@ export class InlineOCRSessions {
   run(owner: number, id: unknown, language: unknown) {
     const parsed = ocrLanguage(language);
     return this.work(owner, id, (image, signal) => image.engine.run(image.png, image.size, parsed, signal));
+  }
+  region(owner:number,id:unknown,language:unknown,value:unknown){
+    const parsed=ocrLanguage(language),image=this.image(owner,id),base=image.result;
+    if(!base||!image.engine.region)throw Error('请先识别全文');
+    const region=selectedOCRRegion(base,value);
+    return this.work(owner,id,async(image,signal)=>{
+      const patch=await image.engine.region!(image.png,image.size,parsed,signal,region.context);signal.throwIfAborted();
+      return replaceOCRSelection(base,patch,region.selection);
+    });
   }
   translate(owner: number, id: unknown, text: unknown, target: unknown) {
     return this.work(owner, id, async (image, signal) => {

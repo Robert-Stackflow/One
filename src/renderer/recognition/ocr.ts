@@ -21,6 +21,7 @@ const message = recognitionNotice(q('message'));
 const translation = mountTranslation(api, () => state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined, message, () => { if (state) render(); });
 const selection = mountTextSelection(q<HTMLImageElement>('source'), {
   copy: text => api.copy(text), message,
+  rerecognize:value=>void recognize(value),
   selected: (start, end) => { if (!requesting && !state?.running) q<HTMLTextAreaElement>('result').setSelectionRange(start, end); },
   translate: text => { if (!requesting && !state.running && !workflowBusy() && !translation.busy()) { workspace.show(true); translation.translateSelection(text); } },
 });
@@ -49,7 +50,7 @@ function render() {
   const loading = busy || state.models.downloading || translation.busy();
   q('image-loading').hidden = !loading; q('source').parentElement!.ariaBusy = String(loading);
   q('image-loading-label').textContent = state.models.downloading ? '下载模型中' : state.waitingForInference ? '等待其他本地任务' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
-  q<HTMLButtonElement>('overlay-cancel').disabled = requesting && !state.running;
+  q<HTMLButtonElement>('overlay-cancel').disabled = false;
   selection.setEnabled(!busy); translation.render();
   const error = state.error || state.models.error || '';
   if (error && error !== reportedError) message(Error(error)); reportedError = error;
@@ -67,15 +68,17 @@ async function refresh() {
   try { state = await api.state(); await syncWorkflow(); if (!disposed) render(); } catch (error) { if (!disposed) message(error); }
   finally { polling = false; }
 }
-q('run').onclick = async () => {
+async function recognize(region?:import('../../shared/recognition/text-region').OCRRegionSelection){
   if (requesting || state.running || workflowBusy() || translation.busy()) return;
   requesting = true; render(); message('');
   try {
-    const result = await api.run(state.token, q<HTMLSelectElement>('language').value as OCRLanguage);
+    const language=q<HTMLSelectElement>('language').value as OCRLanguage;
+    const result = await (region?api.region(state.token,language,region):api.run(state.token,language));
     q<HTMLTextAreaElement>('result').value = result.text; selection.setDocument(result.document); inference(result.inference); translation.sourceChanged();
     if (!result.text.trim()) message('未识别到文字');
   } catch (error) { message(error); } finally { requesting = false; await refresh(); }
-};
+}
+q('run').onclick=()=>void recognize();
 q('overlay-cancel').onclick = () => void (state.models.downloading ? api.cancelInstall() : translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);
 q('install').onclick = () => { void api.install().then(refresh).catch(message); void refresh(); };
 q('cancel-install').onclick = () => void api.cancelInstall().catch(message);

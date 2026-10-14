@@ -15,10 +15,10 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     const main=await app.firstWindow();await main.waitForFunction(()=>!!window.one);
     await main.evaluate(()=>window.one.patchSettings({preview:{held:true,pinned:false,files:false}}));
     await app.evaluate(({dialog,ipcMain},input)=>{
-      dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});global.inlineSessions=[];global.inlineResults=[];global.inlineWorkers=[];
+      dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});global.inlineSessions=[];global.inlineResults=[];global.inlineRegions=[];global.inlineWorkers=[];
       const threads=process.getBuiltinModule('worker_threads'),Worker=threads.Worker;
       threads.Worker=class extends Worker {constructor(file,options){super(file,options);if(String(file).endsWith('ocr-worker.cjs')){const state={active:true};global.inlineWorkers.push(state);this.once('exit',()=>state.active=false);}}};
-      for(const [name,key]of [['prepare','inlineSessions'],['run','inlineResults']]){const channel='one:inline-ocr-'+name,old=ipcMain._invokeHandlers.get(channel);ipcMain.removeHandler(channel);ipcMain.handle(channel,async(event,...args)=>{const result=await old(event,...args);global[key].push({owner:event.sender.id,url:event.sender.getURL(),result});return result;});}
+      for(const [name,key]of [['prepare','inlineSessions'],['run','inlineResults'],['region','inlineRegions']]){const channel='one:inline-ocr-'+name,old=ipcMain._invokeHandlers.get(channel);ipcMain.removeHandler(channel);ipcMain.handle(channel,async(event,...args)=>{const result=await old(event,...args);global[key].push({owner:event.sender.id,url:event.sender.getURL(),selection:args[2],result});return result;});}
     },input);
     const [asset]=await main.evaluate(()=>window.one.materialsImportImages());await main.evaluate(id=>window.one.materialsRecognizeImage(id),asset);
     const recognition=app.windows().find(page=>page.url().includes('view=recognition'));await recognition.waitForFunction(()=>!!window.one.recognition);
@@ -39,9 +39,17 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await editor.locator('.inline-ocr [data-text-action=copy]').click();assert.equal(await app.evaluate(({clipboard})=>clipboard.readText()),'O');
     await editor.locator('.inline-ocr [data-text-action=rotate]').click();await editor.locator('.inline-ocr .text-selection-unit').filter({hasText:/^O$/}).first().click();
     await editor.keyboard.press('Control+c');assert.equal(await app.evaluate(({clipboard})=>clipboard.readText()),'O');
+    const beforeRegion=await app.evaluate(()=>global.inlineResults[0].result),beforeViewport=await editor.locator('.text-image-stage').evaluate(node=>[node.style.width,node.style.height]);
+    await editor.locator('.inline-ocr [data-text-action=recognize]').click();await expect.poll(()=>app.evaluate(()=>global.inlineRegions.length),{timeout:60000}).toBe(1);await expect(editor.locator('.inline-ocr-loading')).toBeHidden();
+    const regionReply=await app.evaluate(()=>global.inlineRegions[0]);assert.equal(regionReply.result.document.revision,beforeRegion.document.revision+1);
+    const oldTokens=beforeRegion.document.blocks.flatMap(block=>block.lines.flatMap(line=>line.tokens)).sort((a,b)=>a.order-b.order),newTokens=regionReply.result.document.blocks.flatMap(block=>block.lines.flatMap(line=>line.tokens));
+    const selectedWords=new Set(oldTokens.slice(Math.min(regionReply.selection.anchor,regionReply.selection.focus),Math.max(regionReply.selection.anchor,regionReply.selection.focus)+1).map(token=>token.wordId));
+    for(const token of oldTokens.filter(token=>!selectedWords.has(token.wordId))){const next=newTokens.find(value=>value.id===token.id);assert(next);assert.deepEqual(next.quad,token.quad);assert.equal(next.text,token.text);}
+    assert.deepEqual(await editor.locator('.text-image-stage').evaluate(node=>[node.style.width,node.style.height]),beforeViewport);
+    await editor.locator('.inline-ocr .text-selection-unit').filter({hasText:/^O$/}).first().click();
     await expect(editor.locator('.inline-ocr select')).toHaveCount(0);await expect(editor.locator('.inline-ocr [role=combobox]')).toHaveCount(2);
     await editor.locator('.inline-ocr [data-text-action=translate]').click();await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
-    assert.equal(requests.length,1);assert.equal(requests[0].messages.at(-1).content,'O');await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026[\s\S]*COPY SECOND LINE/);
+    assert.equal(requests.length,1);if(requests[0].messages.at(-1).content!=='O')console.log('Selection evidence',regionReply.selection,await editor.evaluate(()=>{const viewport=document.querySelector('.text-image-viewport'),original=document.querySelector('.inline-ocr-original');return {range:[viewport.dataset.selectionStart,viewport.dataset.selectionEnd],textarea:original.value.slice(original.selectionStart,original.selectionEnd),units:[...document.querySelectorAll('.text-selection-unit.selected')].slice(0,8).map(node=>[node.textContent,node.dataset.token])};}));assert.equal(requests[0].messages.at(-1).content,'O');await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026[\s\S]*COPY SECOND LINE/);
     const splitter=editor.locator('.inline-ocr-divider'),beforeWidth=await editor.locator('.inline-ocr-image').evaluate(node=>node.clientWidth),splitBounds=await splitter.boundingBox();
     await splitter.evaluate(node=>{node.__events=[];for(const name of ['pointerdown','pointermove','lostpointercapture'])node.addEventListener(name,event=>node.__events.push({name,x:event.clientX}));});
     const splitterHit=await editor.evaluate(({x,y})=>document.elementFromPoint(x+3,y+80)?.className,splitBounds);
@@ -73,11 +81,12 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     assert.equal(await app.evaluate(()=>global.inlineWorkers.at(-1).active),false);await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026/);
     await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
     await editor.locator('.inline-ocr-run').click();await expect(editor.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});await expect(editor.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);
+    await assert.rejects(editor.evaluate(({id,selection})=>window.one.inlineOCR.region(id,'eng',selection),{id:editorId,selection:regionReply.selection}),/已改变/);
     await editor.locator('.inline-ocr-back').click();await expect(editor.locator('.inline-ocr')).toHaveCount(0);
     const restored=await editor.evaluate(()=>({scroll:[document.querySelector('#viewport').scrollLeft,document.querySelector('#viewport').scrollTop],dirty:document.querySelector('#dirty').textContent}));
     assert.deepEqual(restored.scroll,before.scroll);assert.equal(restored.dirty,before.dirty);await expect(editor.locator('#ocr')).toBeEnabled();
     assert.equal(require('node:crypto').createHash('sha256').update(await fs.readFile(input)).digest('hex'),originalHash);
-    assert.deepEqual(errors,[]);console.log('Inline editor/preview: current model, frozen input, preserved zoom/pan, original/rotated glyph copy, keyboard copy, owner isolation, selected translation/cancel/retry, actual OCR worker cancellation/retry, exit restoration and original hash passed');
+    assert.deepEqual(errors,[]);console.log('Inline editor/preview: current model, local re-recognition, frozen input, preserved zoom/pan, original/rotated glyph copy, keyboard copy, owner isolation, selected translation/cancel/retry, actual OCR worker cancellation/retry, exit restoration and original hash passed');
     await app.close();app=undefined;
   }finally{
     await app?.close().catch(()=>{});server.closeAllConnections();await new Promise(resolve=>server.close(resolve));const actual=await fs.realpath(directory);assert.equal(path.dirname(actual),await fs.realpath(root));assert.ok(path.basename(actual).startsWith('inline-window-'));await fs.rm(actual,{recursive:true,force:true});

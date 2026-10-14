@@ -2,7 +2,7 @@ import { readingTokens, selectedText, textBounds, textGroup, textVertical, type 
 import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type TextRotation, type TextView } from '../../shared/recognition/text-geometry';
 import './text-selection.css';
 import { icon, registerIcons } from '../ui';
-import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages } from 'lucide';
+import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText } from 'lucide';
 import { mountImageRaster } from './image-raster';
 import type { OCRImagePreviewRequest } from '../../shared/recognition/image-preview';
 
@@ -11,6 +11,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   copy(text: string): Promise<void>;
   translate(text: string): void;
   selected?(start: number, end: number): void;
+  rerecognize?(selection:import('../../shared/recognition/text-region').OCRRegionSelection):void;
   message(value: unknown): void;
 }) {
   const host = image.parentElement!;
@@ -45,7 +46,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const less = button('缩小', () => setZoom(view.scale / 1.25)); less.dataset.textAction = 'zoom-out';
   const more = button('放大', () => setZoom(view.scale * 1.25)); more.dataset.textAction = 'zoom-in';
   const rotate = button('旋转', () => { rotation = ((rotation + 1) % 4) as TextRotation; layout(); }); rotate.dataset.textAction = 'rotate';
-  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages });
+  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText });
   for (const [node, glyph] of [[fit, 'image-fit'], [less, 'image-zoom-out'], [more, 'image-zoom-in'], [rotate, 'image-rotate']] as const) {
     node.title = node.ariaLabel = node.textContent; node.innerHTML = icon('lucide:' + glyph); node.classList.add('icon-button');
   }
@@ -56,6 +57,9 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   translateButton.innerHTML = icon('lucide:selection-translate') + '<span>翻译</span>';
   const actions = document.createElement('div'); actions.className = 'text-selection-actions'; actions.hidden = true;
   actions.setAttribute('aria-label', '已选文字操作'); actions.append(copyButton, translateButton); root.append(actions);
+  const recognizeButton=options.rerecognize?button('重新识别',()=>{if(doc&&anchor>=0&&focus>=0)options.rerecognize?.({revision:doc.revision||0,anchor,focus});}):undefined;
+  if(recognizeButton){recognizeButton.dataset.textAction='recognize';recognizeButton.ariaLabel='按完整词重新识别';recognizeButton.innerHTML=icon('lucide:selection-recognize')+'<span>重新识别</span>';actions.append(recognizeButton);}
+  for(const node of [copyButton,translateButton,recognizeButton])if(node)node.title=node.ariaLabel||node.textContent||'';
   tools.append(status);
   function setZoom(value: number, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) {
     if (drag && !drag.pan) return;
@@ -97,6 +101,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   function render() {
     layer.hidden = !enabled || !visible || !tokens.length;
     copyButton.disabled = translateButton.disabled = !enabled || anchor < 0 || focus < 0 || !tokens.length;
+    if(recognizeButton)recognizeButton.disabled=copyButton.disabled;
     actions.hidden = !enabled || !visible || anchor < 0 || !tokens.length;
     const bounds = viewport.getBoundingClientRect(), rect = stage.getBoundingClientRect();
     const corners = [[bounds.left, bounds.top], [bounds.right, bounds.top], [bounds.right, bounds.bottom], [bounds.left, bounds.bottom]]

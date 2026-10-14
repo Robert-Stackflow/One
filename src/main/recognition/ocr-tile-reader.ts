@@ -1,10 +1,10 @@
 import { fork } from 'node:child_process';
 import { join } from 'node:path';
 import { IMAGE_BYTES } from '../../shared/capture/image-limits';
-import { planOCRTiles,type OCRTile } from '../../shared/recognition/ocr-tiles';
+import { planOCRRegionTiles,type OCRTile,type OCRRect } from '../../shared/recognition/ocr-tiles';
 export async function* decodedOCRTiles(png:Buffer,size:{width:number;height:number},signal:AbortSignal,
-  worker=join(__dirname,'recognition/ocr-tile-worker.cjs')):AsyncGenerator<{tile:OCRTile;png:Buffer;decodeRSSMiB:number}>{
-  const tiles=planOCRTiles(size);signal.throwIfAborted();
+  worker=join(__dirname,'recognition/ocr-tile-worker.cjs'),region?:OCRRect):AsyncGenerator<{tile:OCRTile;png:Buffer;decodeRSSMiB:number}>{
+  const tiles=planOCRRegionTiles(size,region);signal.throwIfAborted();
   if(!Buffer.isBuffer(png)||png.length<33||png.length>IMAGE_BYTES)throw Error('长图数据无效');
   const child=fork(worker,[],{execArgv:['--max-old-space-size=128'],serialization:'advanced',windowsHide:true,
     stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});
@@ -13,7 +13,7 @@ export async function* decodedOCRTiles(png:Buffer,size:{width:number;height:numb
   const failed=(error:Error)=>{failure=error;},exited=(code:number|null)=>{failure ||= Error(code===70?'长图解码超过内存预算，输入已保留':'长图解码进程已退出');};
   child.on('error',failed);child.on('exit',exited);
   const cancel=()=>{child.kill();};signal.addEventListener('abort',cancel,{once:true});
-  async function request(packet:{type:'open';png:Buffer;size:{width:number;height:number}}|{type:'next';index:number}):Promise<any>{
+  async function request(packet:{type:'open';png:Buffer;size:{width:number;height:number};region?:OCRRect}|{type:'next';index:number}):Promise<any>{
     signal.throwIfAborted();if(failure)throw failure;
     return new Promise((resolve,reject)=>{
       let done=false;
@@ -27,7 +27,7 @@ export async function* decodedOCRTiles(png:Buffer,size:{width:number;height:numb
     });
   }
   try{
-    if(!(await request({type:'open',png,size})).ready)throw Error('长图解码初始化无效');
+    if(!(await request({type:'open',png,size,region})).ready)throw Error('长图解码初始化无效');
     for(const tile of tiles){
       const response=await request({type:'next',index:tile.index}),bytes=response?.png;
       if(response?.index!==tile.index||!Buffer.isBuffer(bytes)||bytes.length<33||bytes.length>IMAGE_BYTES||

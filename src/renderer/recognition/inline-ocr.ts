@@ -26,6 +26,7 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   customControls(root);
   const workspace=mountImageWorkspace(q('.inline-ocr-body'),q('.inline-ocr-divider'),q<HTMLButtonElement>('.inline-ocr-panel'),false);
   const selection=mountTextSelection(image,{copy:text=>api.copy(id,text),message:options.message,
+    rerecognize:value=>void run(value),
     selected:(start,end)=>original.setSelectionRange(start,end),translate:text=>void translate(text)});
   const tools=root.querySelector<HTMLElement>('.text-image-tools')!;q('.inline-ocr-image-tools').append(tools);
   tools.querySelector('.text-image-status')?.remove();
@@ -33,9 +34,10 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   q('.inline-ocr-back').innerHTML=icon('lucide:inline-ocr-back');const label=document.createElement('span');label.textContent=options.back;q('.inline-ocr-back').append(label);
   function panel(show:boolean){panelVisible=show;q('.inline-ocr-result').hidden=!show;workspace.show(show);}
   function loading(value:boolean,label:string){busy=value;root.ariaBusy=String(value);q('.inline-ocr-loading').hidden=!value;q('.inline-ocr-loading-label').textContent=label;q<HTMLButtonElement>('.inline-ocr-run').disabled=value||!ready;q<HTMLSelectElement>('.inline-ocr-language').disabled=value;selection.setEnabled(!value);}
-  async function run(){
+  async function run(region?:import('../../shared/recognition/text-region').OCRRegionSelection){
     if(!ready||busy||disposed)return;loading(true,'识别中');
-    try{const result=await api.run(id,q<HTMLSelectElement>('.inline-ocr-language').value as OCRLanguage);if(disposed)return;
+    try{const language=q<HTMLSelectElement>('.inline-ocr-language').value as OCRLanguage;
+      const result=await (region?api.region(id,language,region):api.run(id,language));if(disposed)return;
       original.value=result.text;translated.value='';selection.setDocument(result.document);if(!result.words.length)panel(true);
       q('.inline-ocr-run').title=result.inference?result.inference.model+' · '+result.inference.device:'';
     }catch(error){if(!disposed)options.message(error);}finally{if(!disposed)loading(false,'');}

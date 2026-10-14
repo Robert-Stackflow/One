@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { IMAGE_BYTES,IMAGE_PIXELS } from '../../shared/capture/image-limits';
-import { planOCRTiles,type OCRTile } from '../../shared/recognition/ocr-tiles';
+import { planOCRRegionTiles,type OCRTile } from '../../shared/recognition/ocr-tiles';
 import { needsOCRTiles } from '../../shared/recognition/ocr-tiles';
 import { imagePreviewRequest } from '../../shared/recognition/image-preview';
 let input:Buffer|undefined,tiles:OCRTile[]=[],next=0,busy=false,peakRSS=0;
@@ -14,9 +14,9 @@ process.on('message',async(packet:any)=>{
   try{
     if(packet?.type==='open'&&!input){
       if(!Buffer.isBuffer(packet.png)||packet.png.length<33||packet.png.length>IMAGE_BYTES)throw Error('长图数据无效');
-      const source:Buffer=packet.png;input=source;tiles=planOCRTiles(packet.size);size={...packet.size};preview=packet.mode==='preview';
+      const source:Buffer=packet.png;input=source;tiles=planOCRRegionTiles(packet.size,packet.region);size={...packet.size};preview=packet.mode==='preview';
       // Interlaced PNG cannot provide top-to-bottom bounded decoding.
-      if(source[28]!==0&&(!preview||needsOCRTiles(size)))throw Error('交错 PNG 长图请先转换为普通 PNG 后识别');
+      if(source[28]!==0&&(!preview&&!packet.region||needsOCRTiles(size)))throw Error('交错 PNG 长图请先转换为普通 PNG 后识别');
       const info=await sharp(source,{limitInputPixels:IMAGE_PIXELS,sequentialRead:true,failOn:'error'}).metadata();
       if(info.format!=='png'||info.width!==packet.size.width||info.height!==packet.size.height||info.pages&&info.pages>1)throw Error('长图尺寸或格式不一致');
       send({ready:true});
