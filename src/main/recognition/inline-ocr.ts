@@ -30,7 +30,7 @@ export class InlineOCRSessions {
   private settling = new Set<Promise<void>>();
   private cleanupError?: unknown;
   private closed = false;
-  constructor(private create: () => InlineEngine, private connection: () => Promise<TranslationConnection>) {}
+  constructor(private create: () => InlineEngine, private connection: () => Promise<TranslationConnection>,private translationClient:(owner:number)=>TranslationClient=()=>new TranslationClient()) {}
   prepare(owner: number, source: string, value: string) {
     if (this.closed || this.preparing.has(owner)) return Promise.reject(Error('图片识别正在准备'));
     const task = (async () => {
@@ -41,7 +41,7 @@ export class InlineOCRSessions {
         if ([...this.images.values()].reduce((sum, image) => sum + image.png.length, png.length) > 128 * 1024 * 1024)
           throw Error('图片识别缓存已满，请先关闭其他图片选字');
         const id = randomUUID();
-        this.images.set(owner, { id, source, png, size, engine: this.create(), preview: new OCRImagePreview(png, size), translation: new TranslationClient() });
+        this.images.set(owner, { id, source, png, size, engine: this.create(), preview: new OCRImagePreview(png, size), translation: this.translationClient(owner) });
         return { id, ...size };
       } catch (error) { png.fill(0); throw error; }
     })();
@@ -92,7 +92,9 @@ export class InlineOCRSessions {
   translate(owner: number, id: unknown, text: unknown, target: unknown) {
     return this.work(owner, id, async (image, signal) => {
       const connection = await this.connection(); signal.throwIfAborted();
-      return image.translation.run(connection, text, target);
+      const result=await image.translation.run(connection, text, target);signal.throwIfAborted();
+      if((await this.connection()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');
+      return result;
     });
   }
   copy(owner: number, id: unknown, text: unknown) { this.image(owner, id); return ocrText(text); }

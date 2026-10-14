@@ -2,6 +2,9 @@
 .recognition-settings .one-dialog-body { padding: 4px 24px 24px; max-height: calc(100vh - 180px); overflow: auto; }
 .recognition-settings form { display: grid; gap: 22px; }
 .service-settings-section { display: grid; gap: 14px; min-width: 0; }
+.service-settings-section[hidden] { display:none; }
+.service-settings-heading, .service-check { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.service-check { font-size:calc(12px * var(--text-scale, 1)); color:var(--muted); }
 .service-settings-section + .service-settings-section { border-top: 1px solid var(--line); padding-top: 18px; }
 .service-settings-section h3 { margin: 0; font-size: calc(12px * var(--text-scale, 1)); font-weight: 600; color: var(--muted); }
 .recognition-settings .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin: 0; font-size: calc(12px * var(--text-scale, 1)); font-weight: 400; }

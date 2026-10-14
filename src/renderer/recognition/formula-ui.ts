@@ -43,6 +43,7 @@ export function mountFormula(
     if (notice) { message(notice); notice = ''; }
   }
   const settings = mountServiceSettings('formula', {
+    profiles:()=>api.taskProfiles(),verify:ref=>api.verifyServiceImage(ref),cancelCheck:()=>api.cancelServiceCheck(),migrate:rev=>api.migrateService(rev),restore:rev=>api.restoreService(rev),manage:()=>api.manageServices(),
     load: () => api.formulaConfig(),
     save: (value) => api.saveFormula(value),
     clear: (revision) => api.clearFormula(revision),

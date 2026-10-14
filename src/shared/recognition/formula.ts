@@ -3,6 +3,7 @@ export const FORMULA_IMAGE = 8 * 1024 * 1024,
   FORMULA_TEXT = 16000,
   FORMULA_PREVIEW = 512 * 1024;
 export interface FormulaResult {
+  model?:string;
   text: string;
   endpoint: string;
   revision: string;
@@ -10,7 +11,7 @@ export interface FormulaResult {
 export function formulaSettings(value: unknown): TranslationSettings {
   try {
     const checked = translationSettings(value);
-    if (checked.provider !== 'chat')
+    if (checked.provider !== 'chat'&&checked.provider!=='ai')
       throw Error('公式识别需要支持图片的 Chat Completions 兼容服务');
     return checked;
   } catch (error) {

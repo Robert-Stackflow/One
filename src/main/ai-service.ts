@@ -43,6 +43,18 @@ export class OneAIService{
   return this.taskModels(profile).map(model=>model.id).filter(id=>Object.hasOwn(record.models,id)&&Number.isFinite(record.models[id]?.expiresAt)&&record.models[id].expiresAt>Date.now());
  }
  taskProfiles():AITaskProfile[]{return this.data.profiles.map(profile=>({id:profile.id,name:profile.name,kind:profile.kind,model:profile.model,models:this.taskModels(profile),revision:this.taskRevision(profile),imageModels:this.verifiedImages(profile)}));}
+ async importRecognitionConnection(endpoint:string,model:string,key:string,name:string){
+  const url=new URL(endpoint);if(!/\/chat\/completions\/?$/.test(url.pathname)||url.search||url.hash||url.username||url.password)throw Error('当前接口不是标准 Chat Completions 路径，原配置已保留，请手动配置 AI 服务');
+  const baseUrl=endpoint.replace(/\/chat\/completions\/?$/,'');
+  for(const profile of this.data.profiles){if(profile.kind==='openai'&&profile.baseUrl===baseUrl&&profile.model===model){try{if(await this.key(profile.id)===key)return {profileId:profile.id,model,revision:this.taskRevision(profile)};}catch{}}}
+  if(this.data.profiles.length>=24)throw Error('AI 服务数量已满，原配置已保留');
+  if(!serviceCredentialCrypto.available())throw Error('系统加密不可用，原配置已保留');
+  const checked=validateAIProfile({name,kind:'openai',baseUrl,model,models:[{id:model,name:model}],maxTokens:8192,timeoutSeconds:60,temperature:0,tokenField:'max_tokens'}),id=randomUUID();
+  const previous={profiles:this.data.profiles,keys:this.data.keys};
+  this.data.profiles=[...previous.profiles,{...checked,id}];this.data.keys={...previous.keys,[id]:serviceCredentialCrypto.encrypt(key).toString('base64')};
+  try{this.save();}catch(error){this.data.profiles=previous.profiles;this.data.keys=previous.keys;throw error;}
+  return {profileId:id,model,revision:this.taskRevision(this.data.profiles.at(-1)!)};
+ }
  private taskProfile(value:unknown){
   const reference=taskReference(value),profile=this.data.profiles.find(profile=>profile.id===reference.profileId);
   if(!profile)throw Error('AI 服务不存在');validateAIProfile({...profile,id:undefined});

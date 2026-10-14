@@ -1,0 +1,45 @@
+const {_electron:electron,expect}=require('@playwright/test');
+const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),sharp=require('sharp');
+async function main(){
+  const output=path.resolve('work/current/capture-reconstruction');await fs.mkdir(output,{recursive:true});
+  const root=await fs.mkdtemp(path.join(output,'task-window-')),profile=path.join(root,'profile'),input=path.join(root,'image.png'),requests=[],errors=[];let app,hold=false;
+  await sharp({create:{width:640,height:320,channels:3,background:'#fff'}}).png().toFile(input);
+  const server=http.createServer((req,res)=>{let data='';req.on('data',chunk=>data+=chunk);req.on('end',()=>{
+    const body=JSON.parse(data);requests.push({url:req.url,body,authorization:req.headers.authorization});if(hold)return;
+    const text=Array.isArray(body.messages[1].content)?'not-an-image-answer':JSON.stringify({paragraphs:JSON.parse(body.messages[1].content).paragraphs.map(p=>({id:p.id,text:'译文：'+p.text}))});
+    res.setHeader('content-type','application/json');res.end(JSON.stringify({model:'wire-task-model',choices:[{message:{content:text}}]}));
+  });});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const baseUrl='http://127.0.0.1:'+server.address().port+'/v1',env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+    app=await electron.launch({args:[path.resolve('.')],env});const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
+    await home.evaluate(baseUrl=>window.one.aiProfile({name:'Shared fixture',kind:'openai',baseUrl,model:'task-model',models:[{id:'task-model',name:'Task model'}],maxTokens:512,timeoutSeconds:30,temperature:0,tokenField:'max_tokens',apiKey:'encrypted-task-window-key'}),baseUrl);
+    const before=await home.evaluate(()=>window.one.aiState());
+    await app.evaluate(({dialog,ipcMain},input)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});const name='one:recognition-translation-profiles',old=ipcMain._invokeHandlers.get(name);ipcMain.removeHandler(name);ipcMain.handle(name,async(...args)=>{await new Promise(resolve=>{global.releaseTaskProfiles=resolve;});return old(...args);});},input);
+    await home.locator('[data-page=materials]').click();await home.getByRole('button',{name:'导入图片',exact:true}).click();await expect(home.locator('#material-results .asset-card')).toHaveCount(1);
+    const opening=app.waitForEvent('window');await home.getByRole('button',{name:'识别文字',exact:true}).click();const page=await opening;page.on('pageerror',error=>errors.push(String(error)));await page.waitForURL('**view=recognition');
+    await page.locator('#translation-configure').click();await expect(page.locator('#translation-settings')).toBeVisible();await expect(page.locator('#translation-save')).toBeDisabled();await app.evaluate(()=>global.releaseTaskProfiles());
+    await expect(page.locator('#translation-save')).toBeEnabled();await app.evaluate(({ipcMain})=>{const name='one:recognition-translation-profiles',wrapped=ipcMain._invokeHandlers.get(name);ipcMain.removeHandler(name);ipcMain.handle(name,(...args)=>{const task=wrapped(...args);global.releaseTaskProfiles();return task;});});
+    await expect(page.locator('#translation-profile')).toContainText('Shared fixture');await expect(page.locator('#translation-task-model')).toContainText('Task model');await expect(page.locator('#translation-key')).not.toBeVisible();assert.equal(requests.length,0);
+    await page.waitForFunction(()=>Number(getComputedStyle(document.querySelector('#translation-settings')).opacity)===1);
+    const layout=await page.locator('#translation-settings').evaluate(node=>{const rect=node.getBoundingClientRect(),body=node.querySelector('.one-dialog-body');return {left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:innerWidth,height:innerHeight,overflow:body.scrollWidth-body.clientWidth};});assert.ok(layout.left>=0&&layout.top>=0&&layout.right<=layout.width&&layout.bottom<=layout.height&&layout.overflow<2,JSON.stringify(layout));
+    await sharp(await page.screenshot({scale:'css'})).resize({width:1280,height:1280,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(output,'ai-service-picker.png'));
+    await page.locator('#translation-save').click();await expect(page.locator('#translation-settings')).not.toBeVisible();const config=await page.evaluate(()=>window.one.recognition.translationConfig());assert.equal(config.provider,'ai');assert.equal(JSON.stringify(config).includes('encrypted-task-window-key'),false);
+    await page.locator('#result').fill('Hello');await page.locator('#translate').click();await expect(page.locator('#translated')).toHaveValue('译文：Hello');assert.equal(requests[0].url,'/v1/chat/completions');assert.equal(requests[0].authorization,'Bearer encrypted-task-window-key');assert.equal(JSON.stringify(requests[0].body).includes('data:image/'),false);
+    const after=await home.evaluate(()=>window.one.aiState());assert.deepEqual(after.conversations,before.conversations);assert.deepEqual(after.history,before.history);
+    await page.locator('#translation-configure').click();await page.locator('#translation-manage').click();await expect(home.locator('[data-ai-tab=services]')).toHaveClass(/active|selected/);await page.locator('#modal-close').click();
+    await page.locator('#translation-configure').click();await page.locator('#translation-provider').click();await page.getByRole('option',{name:'独立 Chat Completions 接口',exact:true}).click();
+    await page.locator('#translation-endpoint').fill(baseUrl+'/chat/completions');await page.locator('#translation-model').fill('task-model');await page.locator('#translation-key').fill('encrypted-task-window-key');await page.locator('#translation-save').click();await expect(page.locator('#translation-settings')).not.toBeVisible();
+    await page.locator('#translation-configure').click();await page.locator('#translation-migrate').click();await expect(page.locator('#translation-save')).toBeEnabled();await expect(page.locator('#translation-profile')).toContainText('Shared fixture');assert.equal(requests.length,1);
+    assert.equal((await page.evaluate(()=>window.one.recognition.translationConfig())).provider,'chat');await page.locator('#translation-save').click();await expect(page.locator('#translation-settings')).not.toBeVisible();assert.equal((await home.evaluate(()=>window.one.aiState())).profiles.length,1);
+    await page.locator('#translation-configure').click();await page.locator('#translation-restore').click();await expect(page.locator('#translation-settings')).not.toBeVisible();assert.equal((await page.evaluate(()=>window.one.recognition.translationConfig())).provider,'chat');
+    const formulaOpening=app.waitForEvent('window');await page.locator('#open-formula').click();const formula=await formulaOpening;formula.on('pageerror',error=>errors.push(String(error)));await formula.waitForURL('**view=formula-recognition');await formula.locator('#formula-configure').click();await expect(formula.locator('#formula-profile')).toContainText('Shared fixture');await expect(formula.locator('#formula-save')).toBeDisabled();assert.equal(requests.length,1);
+    await formula.locator('#formula-verify').click();await expect(formula.locator('#formula-modal-error')).toContainText('未正确读取图片');await expect(formula.locator('#formula-save')).toBeDisabled();assert.equal(requests.length,2);assert.ok(requests[1].body.messages[1].content.some(item=>item.type==='image_url'));
+    hold=true;await formula.locator('#formula-verify').click();await expect.poll(()=>requests.length).toBe(3);await formula.locator('#formula-modal-close').click();await expect(formula.locator('#formula-settings')).not.toBeVisible();
+    hold=false;await formula.locator('#formula-configure').click();await expect(formula.locator('#formula-verify')).toBeEnabled();await formula.locator('#formula-modal-close').click();
+    assert.equal(await page.evaluate(()=>typeof window.one.recognition.runTask),'undefined');assert.equal((await fs.readFile(path.join(profile,'ai-data.json'),'utf8')).includes('encrypted-task-window-key'),false);assert.deepEqual(errors,[]);
+    console.log('Actual One task UI: shared profile/model selection, encrypted binding, text-only translation, no chat history, service navigation, formula capability gate and close cancellation passed.');
+  }finally{
+    if(app)await app.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));const actual=await fs.realpath(root);assert.equal(path.dirname(actual),await fs.realpath(output));await fs.rm(actual,{recursive:true,force:true});
+  }
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

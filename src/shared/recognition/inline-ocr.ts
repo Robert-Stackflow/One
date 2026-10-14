@@ -4,6 +4,13 @@ import type { TranslationLanguage, TranslationResult } from './translation';
 
 /** A frozen image owned by one existing preview/editor window. */
 export interface InlineOCRAPI {
+  translationConfig(id:string):Promise<import('./translation').TranslationConfig>;
+  saveTranslation(id:string,value:import('./translation').TranslationSettings):Promise<import('./translation').TranslationConfig>;
+  clearTranslation(id:string,revision:string):Promise<import('./translation').TranslationConfig>;
+  taskProfiles(id:string):Promise<import('../ai-task').AITaskProfile[]>;
+  migrateService(id:string,revision:string):Promise<import('../ai-task').AITaskReference>;
+  restoreService(id:string,revision:string):Promise<import('./translation').TranslationConfig>;
+  manageServices(id:string):Promise<void>;
   correct(id:string,selection:import('./text-region').OCRRegionSelection,text:string):Promise<OCRResult>;
   readSource(source:string):Promise<Uint8Array>;
   prepare(source: string, png: string): Promise<{ id: string; width: number; height: number }>;

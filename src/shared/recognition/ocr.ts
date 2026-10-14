@@ -48,7 +48,15 @@ export interface OCRState {
   models: { ready: boolean; downloading: boolean; progress: number; error: string };
   modelTitle?: string;
 }
-export interface OCRAPI {
+export interface RecognitionServiceAPI {
+  taskProfiles():Promise<import('../ai-task').AITaskProfile[]>;
+  verifyServiceImage(reference:import('../ai-task').AITaskReference):Promise<void>;
+  cancelServiceCheck():Promise<void>;
+  migrateService(revision:string):Promise<import('../ai-task').AITaskReference>;
+  restoreService(revision:string):Promise<TranslationConfig>;
+  manageServices():Promise<void>;
+}
+export interface OCRAPI extends RecognitionServiceAPI {
   correct(token:string,selection:import('./text-region').OCRRegionSelection,text:string):Promise<OCRResult>;
   region(token:string,language:OCRLanguage,selection:import('./text-area').OCRLocalSelection):Promise<OCRResult>;
   ready(): Promise<void>;
@@ -79,7 +87,7 @@ export interface OCRAPI {
   ): Promise<TranslationResult>;
   cancelTranslation(): Promise<void>;
 }
-export interface FormulaRecognitionAPI {
+export interface FormulaRecognitionAPI extends RecognitionServiceAPI {
   ready(): Promise<void>;
   state():Promise<OCRState>;
   imagePreview(token:string,region:import('./image-preview').OCRImagePreviewRequest):Promise<Uint8Array>;

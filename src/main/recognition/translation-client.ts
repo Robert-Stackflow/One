@@ -16,6 +16,7 @@ export class TranslationClient {
   constructor(
     private transport: typeof fetch = serviceRequest,
     private timeout = 45000,
+    private tasks?:Pick<import('./task-provider').RecognitionTaskProvider,'translate'>,
   ) {}
   async cancel() {
     this.abort?.abort();
@@ -27,7 +28,7 @@ export class TranslationClient {
     const source = translationText(value),
       target = translationLanguage(language),
       abort = (this.abort = new AbortController());
-    const task = this.request(connection, source, target, abort);
+    const task = connection.provider==='ai'?(this.tasks?this.tasks.translate(connection,source,target,abort.signal):Promise.reject(Error('AI 翻译服务不可用'))):this.request(connection, source, target, abort);
     this.active = task;
     return task.finally(() => {
       if (this.active === task) {

@@ -9,6 +9,8 @@ import { SensitiveScanner } from './sensitive-scanner';
 import { OCRWorkflow } from './ocr-workflow';
 import { ocrDimensions, ocrLanguage, ocrText, type OCRResult } from '../../shared/recognition/ocr';
 import { RecognitionConnectionStore } from './connections';
+import type {OneAIService} from '../ai-service';
+import {RecognitionTaskProvider} from './task-provider';
 import { TranslationClient } from './translation-client';
 import type { TranslationResult } from '../../shared/recognition/translation';
 import { FormulaClient } from './formula-client';
@@ -36,6 +38,8 @@ export interface RecognitionContext {
   createWindow():BrowserWindow;
   register(name:string,handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
   connections:ServiceConnectionStorage;
+  ai?:OneAIService;
+  manageServices?():Promise<void>;
   protect(path:string):void;
 }
 export class OCRService {
@@ -77,6 +81,7 @@ export class OCRService {
   readonly translationClient: TranslationClient;
   readonly formulaStore: RecognitionConnectionStore;
   readonly formulaClient: FormulaClient;
+  private serviceCheck?:AbortController;
   constructor(
     directory: string,
     private ctx: RecognitionContext,
@@ -118,11 +123,12 @@ export class OCRService {
         await Promise.all([this.cancelRecognition(), this.cancelTranslation()]);
       },
     });
-    this.translationStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto);
-    this.translationClient = new TranslationClient();
-    this.formulaStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'formula');
-    this.formulaClient = new FormulaClient();
-    this.inline = new InlineOCRSessions(()=>new InlineOCREngine(this.localModels,this.models,this.runtimes,directory),async()=>this.translationStore.connection((await this.translationStore.state()).revision));
+    const tasks=ctx.ai?new RecognitionTaskProvider(ctx.ai,()=>this.window?.webContents.id||0):undefined;
+    this.translationStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'translation',ctx.ai);
+    this.translationClient = new TranslationClient(undefined,undefined,tasks);
+    this.formulaStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'formula',ctx.ai);
+    this.formulaClient = new FormulaClient(undefined,undefined,tasks);
+    this.inline = new InlineOCRSessions(()=>new InlineOCREngine(this.localModels,this.models,this.runtimes,directory),async()=>this.translationStore.connection((await this.translationStore.state()).revision),owner=>new TranslationClient(undefined,undefined,ctx.ai?new RecognitionTaskProvider(ctx.ai,()=>owner):undefined));
     const handle=(name:string,fn:(...args:any[])=>unknown)=>{
       if(this.kind==='formula' ? !['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
       ctx.register(this.scope+'-'+name,(event,...args)=>{
@@ -200,6 +206,17 @@ export class OCRService {
       await clipboard.writeText(text);
     });
     handle('translation-config', () => this.translationStore.state());
+    const servicePrefix=this.kind==='formula'?'formula':'translation',serviceStore=this.kind==='formula'?this.formulaStore:this.translationStore;
+    handle(servicePrefix+'-profiles',()=>ctx.ai?.taskProfiles()||[]);
+    handle(servicePrefix+'-manage',()=>ctx.manageServices?.());
+    handle(servicePrefix+'-check-cancel',()=>{this.serviceCheck?.abort();});
+    handle(servicePrefix+'-verify',async reference=>{
+      if(this.kind!=='formula'||!ctx.ai)throw Error('图片验证不可用');
+      this.serviceCheck?.abort();const abort=new AbortController();this.serviceCheck=abort;
+      try{await ctx.ai.verifyTaskImageInput(reference,this.window!.webContents.id,abort.signal);}finally{if(this.serviceCheck===abort)this.serviceCheck=undefined;}
+    });
+    handle(servicePrefix+'-migrate',revision=>serviceStore.migrateLegacy(revision));
+    handle(servicePrefix+'-restore',revision=>this.kind==='ocr'?this.configureTranslation(()=>serviceStore.restoreLegacy(revision)):configureFormula(()=>serviceStore.restoreLegacy(revision)));
     handle('translation-save', (value) => {
       return this.configureTranslation(() => this.translationStore.save(value));
     });
@@ -243,6 +260,7 @@ export class OCRService {
           if (generation !== this.token || serial !== this.formulaSerial || ctx.blocked())
             throw Error('公式识别已取消');
           const result = await this.formulaClient.run(connection, this.png!);
+          if((await this.formulaStore.state()).revision!==connection.revision)throw Error('公式服务已改变，请重新识别');
           if (generation !== this.token || serial !== this.formulaSerial || ctx.blocked())
             throw Error('公式识别已取消');
           return result;
@@ -333,6 +351,7 @@ export class OCRService {
         if (generation !== this.token || serial !== this.translationSerial || this.ctx.blocked())
           throw Error('翻译已取消');
         const result = await this.translationClient.run(connection, text, target);
+        if((await this.translationStore.state()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');
         if (generation !== this.token || serial !== this.translationSerial || this.ctx.blocked())
           throw Error('翻译已取消');
         return result;
@@ -486,6 +505,7 @@ export class OCRService {
     void this.ctx.background(this.settling).catch(() => {});
   }
   async stop() {
+    this.serviceCheck?.abort();
     await this.inline.stop();
     await this.sensitive.cancel();
     this.window?.destroy();

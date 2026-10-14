@@ -1282,7 +1282,7 @@ async function start() {
   recognition=new RecognitionHost(app.getPath('userData'),materials,{
     createWindow:()=>windowFor('recognition',{width:1100,height:760,minWidth:640,minHeight:520,title:'识别与翻译 · One'},'',false),
     createFormulaWindow:()=>windowFor('formula-recognition',{width:1000,height:740,minWidth:640,minHeight:520,title:'公式识别 · One'},'',false),
-    register:(name,handler)=>handle(name,handler,[name.startsWith('formula-recognition-')?'formula-recognition':'recognition']),blocked:()=>quitting,uiScale:()=>settings.capture.uiScale,connections:aiService.serviceConnections(),
+    register:(name,handler)=>handle(name,handler,[name.startsWith('formula-recognition-')?'formula-recognition':'recognition']),blocked:()=>quitting,uiScale:()=>settings.capture.uiScale,connections:aiService.serviceConnections(),ai:aiService,manageServices:async()=>{navigateMainPage({page:'ai',tab:'services'});},
   });
   const annotationPreferences:import('../shared/capture/annotation-preferences').AnnotationPreferencesHost={
     annotationStyles:()=>settings.capture.annotationStyles,
@@ -1322,7 +1322,7 @@ async function start() {
     if(!inlineSource(owner,source)){await inline.releaseOwner(owner,result.id);throw Error('当前图片已失效');}
     return result;
   },['preview','image-editor']);
-  for(const name of ['run','region','correct','preview','translate','copy','cancel','release'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
+  for(const name of ['run','region','correct','preview','translate','copy','cancel','release','config','save-config','clear-config','profiles','migrate','restore','manage'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
     const owner=event.sender.id;
     if(name==='release'){await inline.releaseOwner(owner,id);return;}
     const source=inline.source(owner,id);
@@ -1333,6 +1333,13 @@ async function start() {
     else if(name==='correct')result=inline.correct(owner,id,args[0],args[1]);
     else if(name==='preview')result=await inline.preview(owner,id,args[0]);
     else if(name==='translate')result=await inline.translate(owner,id,args[0],args[1]);
+    else if(name==='config')result=await recognition!.service.translationStore.state();
+    else if(name==='save-config')result=await recognition!.service.translationStore.save(args[0]);
+    else if(name==='clear-config')result=await recognition!.service.translationStore.clear(args[0]);
+    else if(name==='profiles')result=aiService.taskProfiles();
+    else if(name==='migrate')result=await recognition!.service.translationStore.migrateLegacy(args[0]);
+    else if(name==='restore')result=await recognition!.service.translationStore.restoreLegacy(args[0]);
+    else if(name==='manage'){navigateMainPage({page:'ai',tab:'services'});return;}
     else if(name==='copy'){clipboard.writeText(inline.copy(owner,id,args[0]));return;}
     else result=await inline.cancel(owner,id);
     if(!inlineSource(owner,source)){await inline.releaseOwner(owner,id);throw Error('当前图片已失效');}

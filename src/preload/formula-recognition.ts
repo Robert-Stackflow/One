@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { FormulaRecognitionAPI } from '../shared/recognition/ocr';
 const call = (name:string,...args:unknown[]) => ipcRenderer.invoke('one:formula-recognition-'+name,...args);
 const api: FormulaRecognitionAPI = {
+  taskProfiles:()=>call('formula-profiles'),verifyServiceImage:ref=>call('formula-verify',ref),cancelServiceCheck:()=>call('formula-check-cancel'),migrateService:rev=>call('formula-migrate',rev),restoreService:rev=>call('formula-restore',rev),manageServices:()=>call('formula-manage'),
   ready:()=>call('ready'),
   imagePreview:(token,region)=>call('image-preview',token,region),
   state:()=>call('state'),formulaConfig:()=>call('formula-config'),saveFormula:value=>call('formula-save',value),clearFormula:revision=>call('formula-clear',revision),

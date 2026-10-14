@@ -91,7 +91,7 @@ async function main(){
     await expect(page.locator('#result')).toHaveValue(fullText);assert.equal(requests.length,0);
     await page.locator('#modal-close').click();await expect(page.locator('#translation-settings')).not.toBeVisible();
     await viewport.focus();await viewport.press('Control+a');await viewport.press('Control+c');
-    await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe(fullText.trim());
+    await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe(fullText);
     async function dragChinese(){
       await unit.filter({hasText:/^截$/}).waitFor({state:'attached',timeout:3000}).catch(async error=>{
         console.error('Text viewport:',await viewport.evaluate(node=>({size:[node.clientWidth,node.clientHeight],scroll:[node.scrollLeft,node.scrollTop],stage:node.querySelector('.text-image-stage').getBoundingClientRect().toJSON(),transform:node.querySelector('.text-image-inner').style.transform,rendered:node.querySelector('.text-selection-layer').dataset.renderedTokens,characters:Array.from(node.querySelectorAll('.text-selection-unit')).slice(0,12).map(node=>node.textContent)})));throw error;
@@ -131,6 +131,7 @@ async function main(){
     assert.deepEqual(await page.evaluate(() => ['table', 'copyTable', 'saveTable'].map(name => typeof window.one.recognition[name])), ['undefined', 'undefined', 'undefined']);
     assert.deepEqual(await page.evaluate(()=>['formulaConfig','recognizeFormula'].map(name=>typeof window.one.recognition[name])),['undefined','undefined']);
     await page.locator('#translation-configure').click();await expect(page.locator('#translation-settings')).toBeVisible();
+    await page.locator('#translation-provider').click();await page.getByRole('option',{name:'独立 Chat Completions 接口',exact:true}).click();
     await page.locator('#translation-endpoint').fill(endpoint+'/translate/exact/completions');await page.locator('#translation-model').fill('fixture-translation');await page.locator('#translation-key').fill('translation-fixture-key');
     await page.locator('#translation-save').click();await expect(page.locator('#translation-settings')).not.toBeVisible();
     await page.locator('#result').fill('Hello, One.');await page.locator('#translate').click();await expect(page.locator('#translated')).toHaveValue('你好，One。');
@@ -140,6 +141,7 @@ async function main(){
     assert.equal(await formulaPage.evaluate(()=>!!window.one.formulaRecognition&&!window.one.recognition),true);
     const formulaSource=await formulaPage.evaluate(async()=> (await window.one.formulaRecognition.state()).image);
     assert.equal(await page.evaluate(async url=>{try{await fetch(url);return false;}catch{return true;}},formulaSource),true);
+    await formulaPage.locator('#formula-provider').click();await formulaPage.getByRole('option',{name:'独立 Chat Completions 接口',exact:true}).click();
     await formulaPage.locator('#formula-endpoint').fill(endpoint+'/vision/exact/completions');await formulaPage.locator('#formula-model').fill('fixture-vision');await formulaPage.locator('#formula-key').fill('vision-fixture-key');
     await formulaPage.locator('#formula-save').click();await expect(formulaPage.locator('#formula-settings')).not.toBeVisible();assert.equal(requests.length,1);await verifyCanvas(formulaPage);
     await formulaPage.locator('#formula-recognize').click();await expect(formulaPage.locator('#formula-text')).toHaveValue('\\frac{a}{b}');await expect(formulaPage.locator('#formula-preview .katex')).toBeVisible();
@@ -163,7 +165,8 @@ async function main(){
     await expect(editor.locator('#copy')).toBeEnabled();await editor.locator('[data-tool="mosaic"]:visible').click();await editor.locator('#sensitive-scan').click();
     await expect(editor.locator('#sensitive-apply')).toBeVisible({timeout:30000});await expect(editor.locator('#sensitive-count')).toContainText('1');
     await editor.locator('#sensitive-apply').click();await expect(editor.locator('#steps')).toHaveText('1 个标注');await editor.locator('#undo').click();await expect(editor.locator('#steps')).toHaveText('0 个标注');
-    await editor.locator('#editor-more').click();const reopened=app.waitForEvent('window');await editor.locator('#ocr').click();page=await reopened;await page.waitForURL('**view=recognition');await expect(page.locator('#run')).toBeEnabled();await editor.close();
+    await editor.locator('#editor-more').click();const count=app.windows().length;await editor.locator('#ocr').click();await expect(editor.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});assert.equal(app.windows().length,count);await editor.locator('.inline-ocr-back').click();await editor.close();
+    const reopened=app.waitForEvent('window');await home.getByRole('button',{name:'识别文字',exact:true}).click();page=await reopened;await page.waitForURL('**view=recognition');await expect(page.locator('#run')).toBeEnabled();
     const reloaded=await page.evaluate(async()=>({translation:await window.one.recognition.translationConfig(),state:await window.one.recognition.state()}));
     assert.equal(reloaded.translation.ready,true);assert.notEqual(reloaded.state.token,initial.token);
     assert.equal(await page.evaluate(async token=>{try{await window.one.recognition.run(token,'eng');return false;}catch{return true;}},initial.token),true);
