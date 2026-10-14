@@ -54,6 +54,7 @@ export interface OCRAPI {
   returnToCapture(token: string, id: string): Promise<void>;
   workflowResult(token: string, id: string): Promise<OCRWorkflowResult>;
   state(): Promise<OCRState>;
+  imagePreview(token:string,region:import('./image-preview').OCRImagePreviewRequest):Promise<Uint8Array>;
   run(token: string, language: OCRLanguage): Promise<OCRResult>;
   cancel(): Promise<void>;
   install(): Promise<void>;
@@ -79,6 +80,7 @@ export interface OCRAPI {
 export interface FormulaRecognitionAPI {
   ready(): Promise<void>;
   state():Promise<OCRState>;
+  imagePreview(token:string,region:import('./image-preview').OCRImagePreviewRequest):Promise<Uint8Array>;
   formulaConfig(): Promise<TranslationConfig>;
   saveFormula(value: TranslationSettings): Promise<TranslationConfig>;
   clearFormula(revision: string): Promise<TranslationConfig>;

@@ -3,6 +3,7 @@ import type { FormulaRecognitionAPI } from '../shared/recognition/ocr';
 const call = (name:string,...args:unknown[]) => ipcRenderer.invoke('one:formula-recognition-'+name,...args);
 const api: FormulaRecognitionAPI = {
   ready:()=>call('ready'),
+  imagePreview:(token,region)=>call('image-preview',token,region),
   state:()=>call('state'),formulaConfig:()=>call('formula-config'),saveFormula:value=>call('formula-save',value),clearFormula:revision=>call('formula-clear',revision),
   recognizeFormula:(token,revision)=>call('formula-recognize',token,revision),cancelFormula:()=>call('formula-cancel'),copyFormula:text=>call('formula-copy',text),
 };

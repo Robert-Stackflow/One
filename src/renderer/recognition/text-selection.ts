@@ -3,6 +3,8 @@ import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type Te
 import './text-selection.css';
 import { icon, registerIcons } from '../ui';
 import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages } from 'lucide';
+import { mountImageRaster } from './image-raster';
+import type { OCRImagePreviewRequest } from '../../shared/recognition/image-preview';
 
 /** Shared image-space layer. Only visible lines create DOM nodes; selection always uses the full reading order. */
 export function mountTextSelection(image: HTMLImageElement, options: {
@@ -28,6 +30,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   inner.append(image, layer); stage.append(inner); canvas.append(stage); viewport.append(canvas); root.append(tools, viewport); host.append(root);
   const status = document.createElement('span'); status.className = 'text-image-status'; status.setAttribute('aria-live', 'polite');
   let doc: TextDocument | undefined, tokens: TextToken[] = [], enabled = true, visible = true, anchor = -1, focus = -1;
+  let imageSize:{width:number;height:number}|undefined,raster:ReturnType<typeof mountImageRaster>|undefined;
   let zoom: number | undefined, rotation: TextRotation = 0, view: TextView = { width: 1, height: 1, scale: 1, rotation: 0 };
   let lines: { top: number; bottom: number; left: number; right: number; prefixBottom: number; indices: number[] }[] = [];
   let frame = 0, space = false;
@@ -68,7 +71,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     // image transform for the complete selection gesture, then apply the new fit.
     if (drag && !drag.pan) { pendingLayout = true; return; }
     pendingLayout = false;
-    const width = doc?.source.width || image.naturalWidth, height = doc?.source.height || image.naturalHeight;
+    const width = doc?.source.width || imageSize?.width || image.naturalWidth, height = doc?.source.height || imageSize?.height || image.naturalHeight;
     if (!width || !height) return;
     const oldRect = stage.getBoundingClientRect(), bounds = viewport.getBoundingClientRect();
     const center = textViewToImage({ x: bounds.left + viewportWidth / 2 - oldRect.left, y: bounds.top + viewportHeight / 2 - oldRect.top }, view);
@@ -95,12 +98,13 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     layer.hidden = !enabled || !visible || !tokens.length;
     copyButton.disabled = translateButton.disabled = !enabled || anchor < 0 || focus < 0 || !tokens.length;
     actions.hidden = !enabled || !visible || anchor < 0 || !tokens.length;
-    if (layer.hidden) { layer.replaceChildren(); nodes.clear(); visibleSignature = ''; return; }
     const bounds = viewport.getBoundingClientRect(), rect = stage.getBoundingClientRect();
     const corners = [[bounds.left, bounds.top], [bounds.right, bounds.top], [bounds.right, bounds.bottom], [bounds.left, bounds.bottom]]
       .map(([x, y]) => textViewToImage({ x: x - rect.left, y: y - rect.top }, view));
     const top = Math.min(...corners.map(point => point.y)) - 20, bottom = Math.max(...corners.map(point => point.y)) + 20;
     const left = Math.min(...corners.map(point => point.x)) - 20, right = Math.max(...corners.map(point => point.x)) + 20;
+    raster?.update(view,{left,top,right,bottom});
+    if (layer.hidden) { layer.replaceChildren(); nodes.clear(); visibleSignature = ''; return; }
     let low = 0, high = lines.length;
     while (low < high) { const mid = (low + high) >>> 1; if (lines[mid].prefixBottom < top) low = mid + 1; else high = mid; }
     const fragment = document.createDocumentFragment(), start = Math.min(anchor, focus), end = Math.max(anchor, focus);
@@ -228,6 +232,9 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   image.addEventListener('load', layout);
   const resize = new ResizeObserver(layout); resize.observe(viewport);
   return {
+    setImagePreview(size:{width:number;height:number},request:(region:OCRImagePreviewRequest)=>Promise<Uint8Array>){
+      raster?.dispose();imageSize={width:size.width,height:size.height};raster=mountImageRaster(image,inner,imageSize,request,options.message);layout();return raster.base();
+    },
     setDocument(value: TextDocument | undefined) {
       stop();
       doc = value; tokens = value ? readingTokens(value) : []; anchor = focus = -1;
@@ -246,6 +253,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
       enabled = value; visible = show; tools.hidden = !show; layout(); schedule();
     },
     dispose() {
+      raster?.dispose();raster=undefined;
       resize.disconnect(); if (frame) cancelAnimationFrame(frame);
       image.removeEventListener('load', layout); image.classList.remove('text-selection-image');
       host.append(image); root.remove();

@@ -7,6 +7,7 @@ const api: OCRAPI = {
   returnToCapture: (token, id) => call('workflow-back', token, id),
   workflowResult: (token, id) => call('workflow-result', token, id),
   state: () => call('state'),
+  imagePreview:(token,region)=>call('image-preview',token,region),
   run: (token, language) => call('run', token, language),
   cancel: () => call('cancel'),
   install: () => call('install'),

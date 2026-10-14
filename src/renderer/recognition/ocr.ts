@@ -11,6 +11,7 @@ import { mountOCRWorkspace } from './workspace';
 import './workbench.css';
 import { recognitionNotice } from './notice';
 import { recognitionReady, prepareRecognitionImage } from './ready';
+import { needsImagePreview } from '../../shared/recognition/image-preview';
 export function mountOCR() {
 const api = window.one.recognition!;
 let state: OCRState, disposed = false, requesting = false, polling = false, workflowRead = '', reportedError = '';
@@ -81,7 +82,7 @@ q('cancel-install').onclick = () => void api.cancelInstall().catch(message);
 q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
 q('result').oninput = () => { selection.setDocument(undefined); translation.sourceChanged(); if (state) render(); };
 registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);
-void api.state().then(async value => { state = value; q('source-name').textContent = state.name;loadImage(state.image);await syncWorkflow(); render(); }).catch(message);
+void api.state().then(async value => { state = value; q('source-name').textContent = state.name;loadImage(needsImagePreview(value)?selection.setImagePreview(value,region=>api.imagePreview(value.token,region)):value.image);await syncWorkflow(); render(); }).catch(message);
 void recognitionReady(()=>api.ready()).catch(message);
 const timer = setInterval(() => void refresh(), 400);
 window.addEventListener('beforeunload', () => { disposed = true; selection.dispose(); clearInterval(timer); }, { once: true });

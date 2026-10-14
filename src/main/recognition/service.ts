@@ -24,6 +24,7 @@ import { acquirePaddleModel } from './paddle-models';
 import { readInferenceDevices, resolveInferenceDevice } from '../inference-devices';
 import { recognizeOCRImage } from './ocr-image-task';
 import { needsOCRTiles } from '../../shared/recognition/ocr-tiles';
+import { OCRImagePreview } from './image-preview';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
   openFormula?(png:Buffer,title:string):Promise<void>;
@@ -45,6 +46,7 @@ export class OCRService {
   private size = { width: 0, height: 0 };
   private result?: OCRResult;
   private progress = 0;
+  private imagePreview?:OCRImagePreview;
   private running = false;
   private translating = false;
   private formulaRecognizing = false;
@@ -117,12 +119,13 @@ export class OCRService {
     this.formulaStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'formula');
     this.formulaClient = new FormulaClient();
     const handle=(name:string,fn:(...args:any[])=>unknown)=>{
-      if(this.kind==='formula' ? !['state','ready'].includes(name)&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
+      if(this.kind==='formula' ? !['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
       ctx.register(this.scope+'-'+name,(event,...args)=>{
       if(ctx.blocked()||!this.window||event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||event.sender.mainFrame.frames.length||event.senderFrame.url!==this.url)throw Error('拒绝访问识别窗口');
       return ctx.background(Promise.resolve().then(()=>fn(...args)));
     }); };
     handle('ready', () => { this.rendererReady?.(); });
+    handle('image-preview',(token,region)=>{if(token!==this.token||!this.imagePreview)throw Error('识别图片已失效');return this.imagePreview.request(region);});
     handle('state', async () => { const selected = this.kind === 'formula' ? {ready:false,downloading:false,progress:0,error:'',title:''} : await this.localModels.selectedState(); return ({
       token: this.token,
       name: this.name,
@@ -420,6 +423,7 @@ export class OCRService {
       if(this.kind==='formula')ocrDimensions(header.width, header.height);
       this.size = header;
       this.png = Buffer.from(png);
+      this.imagePreview=new OCRImagePreview(this.png,this.size);
       this.token = randomUUID();
       this.name = name.slice(0, 180);
       this.result = undefined;
@@ -471,11 +475,14 @@ export class OCRService {
   private clear(cancelWorkflow = true) {
     this.workflow.closed(cancelWorkflow);
     this.token = '';
+    const preview=this.imagePreview;this.imagePreview=undefined;
+    const closingPreview=preview?.close();
     this.png?.fill(0);
     this.png = undefined;
     this.result = undefined;
     this.models.cancel();
     this.settling = Promise.all([
+      closingPreview,
       this.cancelRecognition(),
       this.localModels.settle(),
       this.models.settle(),

@@ -10,9 +10,8 @@ export function prepareRecognitionImage(image: HTMLImageElement, failed: (error:
   placeholder.setAttribute('role','status');placeholder.setAttribute('aria-label','加载图片');
   placeholder.innerHTML='<span class="recognition-spinner" aria-hidden="true"></span>';
   host.append(placeholder);host.ariaBusy='true';image.style.visibility='hidden';
-  return (source:string) => {
-    image.src=source;
-    void image.decode().then(()=>{image.style.visibility='';placeholder.remove();host.ariaBusy='false';}).catch(error=>{
+  return (source:string|Promise<string>) => {
+    void Promise.resolve(source).then(value=>{image.src=value;return image.decode();}).then(()=>{image.style.visibility='';placeholder.remove();host.ariaBusy='false';}).catch(error=>{
       host.ariaBusy='false';placeholder.textContent='图片加载失败';failed(error);
     });
   };
