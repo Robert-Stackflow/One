@@ -24,6 +24,7 @@ parentPort!.on('message', ({ id, kind, value }) => {
       clearStage();parentPort!.postMessage({id});return;
     } else if(kind==='commit'){
       if(!staged)throw Error('稳定像素帧已失效');
+      if(value?.recover&&engine.status().pending)engine.discard();
       try{result=engine.sample(staged);}finally{clearStage();}
     } else if (kind === 'settle-reset' || kind === 'observe') {
       if (!settling) throw Error('长截图尚未设置');

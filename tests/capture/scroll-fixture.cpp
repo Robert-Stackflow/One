@@ -54,11 +54,11 @@ static LRESULT CALLBACK procedure(HWND w, UINT message, WPARAM p, LPARAM l) {
     if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
     return DefWindowProc(w, message, p, l);
 }
-int wmain() {
+int wmain(int argc,wchar_t**argv) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASS cls{}; cls.lpfnWndProc = procedure; cls.hInstance = GetModuleHandle(nullptr);
     cls.lpszClassName = L"OneScrollFixture"; cls.hCursor = LoadCursor(nullptr, IDC_ARROW); RegisterClass(&cls);
-    RECT r{0, 0, 480, 360}; AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    RECT r{0, 0, 480, argc>1&&std::wstring(argv[1])==L"--tall"?640:360}; AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
     fixture = CreateWindow(cls.lpszClassName, L"One scroll pixel fixture", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
       140, 120, r.right - r.left, r.bottom - r.top, nullptr, nullptr, cls.hInstance, nullptr);
     ShowWindow(fixture, SW_SHOWNORMAL);

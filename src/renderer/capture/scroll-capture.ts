@@ -20,8 +20,11 @@ function render(next: ScrollView) {
     q<HTMLImageElement>('preview').src = next.preview;
   const vertical=next.options.axis==='vertical',length=vertical?next.height:next.width,viewport=(vertical?next.source.height:next.source.width)-next.options.trimStart-next.options.trimEnd;
   for(const [id,size] of [['preview-viewport',viewport],['preview-addition',next.offset]] as const){
-    const node=q(id),fraction=Math.min(100,Math.max(0,size/Math.max(1,length)*100));node.style.cssText=vertical?`left:0;right:0;bottom:0;height:${fraction}%`:`top:0;bottom:0;right:0;width:${fraction}%`;
-    node.hidden=!next.preview||(id==='preview-addition'&&(next.match!=='accepted'||next.pending||!next.offset));
+    const node=q(id),start=id==='preview-viewport'?length-viewport+(next.match==='backwards'?next.offset:0):length-size;
+    const clipped=Math.max(0,start),fraction=Math.max(0,Math.min(length,start+size)-clipped)/Math.max(1,length)*100,position=clipped/Math.max(1,length)*100;
+    node.style.cssText=vertical?`left:0;right:0;top:${position}%;height:${fraction}%`:`top:0;bottom:0;left:${position}%;width:${fraction}%`;
+    node.hidden=!next.preview||(id==='preview-viewport'&&next.recovering&&next.match==='ambiguous')||(id==='preview-addition'&&(next.match!=='accepted'||next.pending||!next.offset));
+    if(id==='preview-viewport')node.ariaLabel=next.match==='backwards'?'当前视口与已拼内容的重叠区域':'最后采集视口';
   }
   q('dimensions').textContent = next.count
     ? `${next.width} × ${next.height} · ${next.count} 帧`
@@ -37,7 +40,8 @@ function render(next: ScrollView) {
   q<HTMLButtonElement>('undo').disabled = pending || running || !next.undo;
   q<HTMLButtonElement>('finish').disabled = pending || !next.count;
   q<HTMLButtonElement>('edit').disabled = pending || !next.canEdit;
-  q<HTMLInputElement>('offset').value = String(next.offset || 1);
+  q<HTMLInputElement>('offset').value = String(Math.max(1,next.offset || 1));
+  q<HTMLInputElement>('offset').disabled=pending||running;
   q<HTMLInputElement>('offset').max = String(
     (next.options.axis === 'vertical' ? next.source.height : next.source.width) -
       next.options.trimStart -

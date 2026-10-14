@@ -1,5 +1,6 @@
 import { imageDimensions } from './image-limits';
 import { scrollOptions, type ScrollOptions, type ScrollMatch } from './scroll-capture';
+import {scrollSearchCandidates,scrollLocallyConsistent} from './scroll-search';
 export interface PixelFrame {
   width: number;
   height: number;
@@ -94,6 +95,12 @@ export class ScrollStitch {
     const keep = Math.ceil(columns.length * 0.9);
     return columns.slice(0, keep).reduce((s, v) => s + v, 0) / keep;
   }
+  private sameBody(a:Uint8Array,b:Uint8Array){
+    const first=Buffer.from(a.buffer,a.byteOffset,a.byteLength),second=Buffer.from(b.buffer,b.byteOffset,b.byteLength),left=this.options!.ignoreStart,right=this.cross-this.options!.ignoreEnd;
+    if(left===0&&right===this.cross)return first.equals(second);
+    for(let row=0;row<this.axis;row++){const start=(row*this.cross+left)*4,end=(row*this.cross+right)*4;if(!first.subarray(start,end).equals(second.subarray(start,end)))return false;}
+    return true;
+  }
   sample(frame: PixelFrame) {
     if (this.candidate) throw Error('请先处理上一帧的拼接位置');
     const pixels = this.normalize(frame);
@@ -106,16 +113,13 @@ export class ScrollStitch {
       return this.status();
     }
     if (this.count >= 200) throw Error('本次长截图已达到 200 帧，请确认已有结果');
-    if (this.score(this.previous, pixels, 0, true) < 0.4) {
+    if (this.sameBody(this.previous,pixels)) {
       this.match = 'unchanged';
       this.offset = 0;
       return this.status();
     }
-    const minOverlap = Math.max(32, Math.ceil(this.axis * 0.22)),
-      maxShift = this.axis - minOverlap;
-    const guesses: { shift: number; score: number }[] = [];
-    for (let shift = -maxShift; shift <= maxShift; shift++) {
-      if (!shift) continue;
+    const guesses: { shift: number; score: number }[] = [{shift:0,score:this.score(this.previous,pixels,0)}];
+    for (const shift of scrollSearchCandidates(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd)) {
       guesses.push({ shift, score: this.score(this.previous, pixels, shift) });
     }
     guesses.sort((a, b) => a.score - b.score);
@@ -135,13 +139,16 @@ export class ScrollStitch {
     this.offset = Math.max(1, best.shift);
     const confident =
       best.score <= 3 &&
-      (!runner || runner.score > best.score + 2 || (best.score < 0.15 && runner.score > 0.5));
+      (!runner || runner.score > best.score + 2 || (best.score < 0.15 && runner.score > 0.5))&&
+      scrollLocallyConsistent(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd,best.shift);
     if (!confident) {
       this.candidate = pixels;
       this.match = 'ambiguous';
       return this.status();
     }
+    if(best.shift===0){this.match='unchanged';this.offset=0;return this.status();}
     if (best.shift < 0) {
+      this.offset=best.shift;
       this.match = 'backwards';
       return this.status();
     }
@@ -181,6 +188,7 @@ export class ScrollStitch {
     return this.status();
   }
   discard() {
+    this.candidate?.fill(0);
     this.candidate = undefined;
     return this.status();
   }

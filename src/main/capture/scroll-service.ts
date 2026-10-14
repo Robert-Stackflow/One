@@ -142,6 +142,7 @@ export class ScrollCaptureService {
           this.workerFailure(Error('拼接进程已退出'));
       });
       this.view = {
+        recovering:false,
         mode:'manual',
         previewExpanded:true,
         token: randomUUID(),
@@ -329,7 +330,7 @@ export class ScrollCaptureService {
           // frame or send another wheel. Leave the last accepted strip intact.
           if (monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(unavailable);
           check();
-          this.accept(await this.run('commit'));staged=false;
+          this.accept(await this.run('commit',{recover:monitored&&!automatic&&this.view!.pending}));staged=false;
           check();
           break;
         }
@@ -346,15 +347,17 @@ export class ScrollCaptureService {
       await this.delay(140);
     }
     const view = this.view!;
+    const wasRecovering=view.recovering;
+    view.recovering=monitored&&!automatic&&(view.match==='backwards'||view.match==='ambiguous');
     view.message =
       view.match === 'first'
         ? '已采集首帧。滚动时会自动采集稳定画面。'
         : view.match === 'accepted'
           ? `已拼接 ${view.count} 帧，新增 ${view.offset} 像素。`
           : view.match === 'unchanged'
-            ? '页面尚未变化。已有结果保持不变。'
+            ? wasRecovering||view.message==='已找回衔接位置，可以继续滚动。'?'已找回衔接位置，可以继续滚动。':'页面尚未变化。已有结果保持不变。'
             : view.match === 'backwards'
-              ? '检测到反向滚动。请返回上次位置后继续。'
+              ? '正在定位已有内容，向前滚动找到衔接后自动继续。'
               : '滚动距离过大或匹配不明确。请滚回一段找到衔接，已有结果已保留。';
     return this.publish();
   }
@@ -407,7 +410,6 @@ export class ScrollCaptureService {
           return;
         }
       }
-      if(this.monitoring&&this.view.pending){this.pause();this.view.phase='review';this.publish();}
     } catch (error) {
       if (generation === this.generation && !(error instanceof ScrollStopped)) {
         this.pause();
@@ -465,7 +467,7 @@ export class ScrollCaptureService {
           await this.run('configure', { options: this.view.options, source: this.view.source }),
         );
       }else if(command.kind==='restart'){
-        this.view.options=scrollOptions(command.options,this.view.source.width,this.view.source.height);this.view.preview='';this.accept(await this.run('restart',{options:this.view.options,source:this.view.source}));this.view.mode='manual';this.view.phase='setup';this.view.message='已按新设置重新开始。';
+        this.view.options=scrollOptions(command.options,this.view.source.width,this.view.source.height);this.view.preview='';this.view.recovering=false;this.accept(await this.run('restart',{options:this.view.options,source:this.view.source}));this.view.mode='manual';this.view.phase='setup';this.view.message='已按新设置重新开始。';
       } else if (command.kind === 'sample') {
         this.view.phase = 'paused';
         await this.sample();
@@ -474,6 +476,7 @@ export class ScrollCaptureService {
         const ticket=this.monitorSerial,window=this.window;this.native!.permitActivation();try{window?.hide();await this.delay(80);if(!(await this.native!.activate(command.kind==='auto')))throw new ScrollPaused(this.native!.activationReason==='keys'?'请松开鼠标和修饰键后继续。':this.native!.activationReason==='foreground'?'目标窗口未获得焦点，请点击目标窗口后继续。':'目标窗口或滚动点被遮挡，请移开遮挡后继续。');}finally{if(generation===this.generation&&window&&!window.isDestroyed())window.showInactive();}
         if(generation!==this.generation||ticket!==this.monitorSerial)throw new ScrollStopped();
         this.view.mode=command.kind==='auto'?'auto':'manual';
+        this.view.recovering=false;
         this.view.phase = 'running';
         this.automatic = command.kind==='auto';this.monitoring=true;
         this.motion.reset();
@@ -487,12 +490,14 @@ export class ScrollCaptureService {
           command.kind === 'undo'
             ? '已撤销上一段拼接。请返回页面的对应位置后继续。'
             : '已按指定距离拼接，请检查接缝。';
+        this.view.recovering=false;
         this.view.phase = 'paused';
       } else if (command.kind === 'finish') {
         if (!this.view.count) throw Error('请先采集一帧');
         if (this.view.pending) {
           this.accept(await this.run('discard'));
         }
+        this.view.recovering=false;
         this.view.phase = 'review';
         this.view.message = '检查结果后进入图片编辑，可裁剪、标注、复制或另存。';
       } else if (command.kind === 'edit') {

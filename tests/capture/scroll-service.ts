@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ScrollCaptureService } from '../../src/main/capture/scroll-service';
 import { displaySignature } from '../../src/shared/capture/region';
-import { handlers, display, BrowserWindow, ScrollNative, frame } from './scroll-service-runtime';
+import { handlers, display, BrowserWindow, ScrollNative, frame,nativeImage } from './scroll-service-runtime';
 import {ScrollCaptureHost} from '../../src/main/capture/scroll-host';
 import {scrollControlBounds} from '../../src/shared/capture/scroll-capture';
 test('scroll controls fit outside the selection across negative coordinates and constrained work areas',()=>{
@@ -96,6 +96,18 @@ test('default manual monitoring captures stable changes without wheels and safel
 });
 test('restarting matching parameters is explicit and clears only the current stitch while preserving the selection',async()=>{
   const f=await fixture();try{await f.command('sample');const token=f.state().token,source=f.state().source;const event={sender:f.service.window!.webContents,senderFrame:f.service.window!.webContents.mainFrame};await handlers.get('one:scroll-command')!(event,token,{kind:'restart',options:{axis:'vertical',trimStart:8,trimEnd:4,ignoreStart:0,ignoreEnd:0}});assert.equal(f.state().count,0);assert.equal(f.state().preview,'');assert.deepEqual(f.state().source,source);assert.equal(f.state().token,token);assert.equal(f.state().options.trimStart,8);}finally{f.service.cancel();}
+});
+
+test('manual monitoring recovers a large gap and reverse scroll without duplicate pixels or repeated mode clicks',async()=>{
+  const f=await fixture(true,true);try{
+    await until(()=>f.state().count===1);f.native.offset=39;await until(()=>f.state().count===2);
+    f.native.offset=1000;await until(()=>f.state().recovering&&f.state().pending);const reads=f.native.reads;await until(()=>f.native.reads>reads+3);assert.equal(f.state().phase,'running');assert.equal(f.state().count,2);
+    f.native.offset=10;await until(()=>f.state().match==='backwards');assert.equal(f.state().offset,-29);assert.equal(f.state().recovering,true);assert.equal(f.state().pending,false);assert.equal(f.state().count,2);
+    f.native.offset=39;await until(()=>f.state().match==='unchanged');assert.equal(f.state().recovering,false);assert.match(f.state().message,/找回/);
+    f.native.offset=59;await until(()=>f.state().count===3);await f.command('pause');await f.command('edit');
+    const bytes=Buffer.concat([nativeImage.createFromBuffer(frame(0)).toBitmap(),nativeImage.createFromBuffer(frame(39)).toBitmap().subarray(121*96*4),nativeImage.createFromBuffer(frame(59)).toBitmap().subarray(140*96*4)]);
+    assert.deepEqual(f.outputs,[nativeImage.createFromBitmap(bytes,{width:96,height:219}).toPNG()]);assert.equal(f.native.wheels,0);assert.deepEqual(f.failures,[]);
+  }finally{f.service.cancel();}
 });
 
 test('slow-loaded content arrives after repeated stable frames without stacked wheel input',async()=>{

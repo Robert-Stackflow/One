@@ -24,6 +24,7 @@ export interface ScrollOptions {
 }
 export type ScrollMatch = 'first' | 'accepted' | 'unchanged' | 'ambiguous' | 'backwards';
 export interface ScrollView {
+  recovering:boolean;
   mode:ScrollMode;
   previewExpanded:boolean;
   token: string;

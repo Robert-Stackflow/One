@@ -7,6 +7,40 @@ import {NativePixelReader,FRAME_PIXEL_LIMIT} from '../../src/shared/capture/nati
 import {Worker} from 'node:worker_threads';
 import {join} from 'node:path';
 import {ScrollMotion} from '../../src/shared/capture/scroll-motion';
+import {scrollSearchCandidates} from '../../src/shared/capture/scroll-search';
+import sharp from 'sharp';
+
+test('multiscale search finds irregular large shifts while evaluating fewer original-pixel offsets',context=>{
+  const first=scrollPixels(96,4096),next=scrollPixels(96,4096,0,1337),candidates=scrollSearchCandidates(first.pixels,next.pixels,4096,96,0,96);
+  assert.ok(candidates.includes(1337));assert.ok(candidates.length<2500);
+  context.diagnostic('Large-shift fixture: '+candidates.length+' original-pixel candidates vs '+2*(4096-Math.ceil(4096*.22))+' exhaustive offsets.');
+  for(const axis of ['vertical','horizontal'] as const){
+    const vertical=axis==='vertical',engine=new ScrollStitch();engine.configure({...scrollDefaults(),axis},{width:vertical?96:4096,height:vertical?4096:96});
+    const frame=(offset:number)=>scrollPixels(vertical?96:4096,vertical?4096:96,vertical?0:offset,vertical?offset:0);
+    engine.sample(frame(0));assert.equal(engine.sample(frame(1337)).offset,1337);assert.equal(engine.sample(frame(2694)).offset,1357);
+    const before=engine.output(),back=engine.sample(frame(1000));assert.equal(back.match,'backwards');assert.equal(back.offset,-1694);assert.deepEqual(engine.output(),before);assert.equal(engine.sample(frame(2694)).match,'unchanged');assert.deepEqual(engine.output(),scrollPixels(vertical?96:6790,vertical?6790:96));
+  }
+});
+test('weak coarse signatures retain exhaustive verification instead of assuming a unique displacement',()=>{
+  const flat=new Uint8Array(96*2048*4).fill(255),candidates=scrollSearchCandidates(flat,flat,2048,96,0,96);assert.equal(candidates.length,2*(2048-Math.ceil(2048*.22)));
+});
+test('multiscale matching retains readable sparse text and whitespace instead of aliasing line spacing',async()=>{
+  const labels=Array.from({length:96},(_,line)=>{const text=Array.from({length:34},(_,letter)=>String.fromCharCode(97+((Math.imul(line+31,7919)^Math.imul(letter+7,104729))>>>0)%26)).join('');return `<text x="8" y="${line*32+24}">${line} ${text}</text>`;}).join('');
+  const {data,info}=await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="3072"><rect width="100%" height="100%" fill="white"/><g font-family="Arial" font-size="20" fill="#303030">${labels}</g></svg>`)).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const frame=(offset:number)=>({width:info.width,height:2048,pixels:new Uint8Array(data.subarray(offset*info.width*4,(offset+2048)*info.width*4))});
+  const engine=new ScrollStitch();engine.configure(scrollDefaults(),{width:480,height:2048});engine.sample(frame(0));const result=engine.sample(frame(513));assert.equal(result.match,'accepted');assert.equal(result.offset,513);assert.deepEqual(engine.output().pixels,new Uint8Array(data.subarray(0,2561*480*4)));
+});
+test('independent local checks reject a false alignment that perfectly matches the old sampling grid',()=>{
+  const first=scrollPixels(192,160),matched=scrollPixels(192,160,0,33),mixed=scrollPixels(192,160,0,71),engine=new ScrollStitch();
+  for(let y=0;y<160;y++)for(let x=0;x<192;x++)if(x%6===0||x%16===0){const at=(y*192+x)*4;mixed.pixels.set(matched.pixels.subarray(at,at+4),at);}
+  engine.configure(scrollDefaults(),{width:192,height:160});engine.sample(first);assert.equal((engine as any).score(first.pixels,mixed.pixels,33,true),0);assert.equal(engine.sample(mixed).match,'ambiguous');assert.equal(engine.status().count,1);assert.deepEqual(engine.output(),first);
+});
+test('weak moving content is uncertain rather than falsely unchanged, while a narrow blinking column stays unchanged',()=>{
+  const low=(offset:number)=>{const frame=scrollPixels(96,160,0,offset);for(let at=0;at<frame.pixels.length;at+=4){frame.pixels[at]=frame.pixels[at+1]=255;frame.pixels[at+2]=253+(frame.pixels[at+2]>>>7);}return frame;};
+  const first=low(0),next=low(39),engine=new ScrollStitch();engine.configure(scrollDefaults(),{width:96,height:160});engine.sample(first);assert.ok((engine as any).score(first.pixels,next.pixels,0,true)<.4);assert.equal(engine.sample(next).match,'ambiguous');assert.deepEqual(engine.output(),first);
+  const regular=scrollPixels(96,160),blink=scrollPixels(96,160);for(let y=0;y<160;y++)for(let x=90;x<96;x++)blink.pixels.set([0,0,0,255],(y*96+x)*4);
+  engine.configure(scrollDefaults(),{width:96,height:160});engine.sample(regular);assert.equal(engine.sample(blink).match,'unchanged');assert.equal(engine.status().count,1);
+});
 
 test('automatic motion adapts cautiously, retains overlap and resets for changed scroll speed',()=>{
   const motion=new ScrollMotion();assert.deepEqual(motion.action(0),{kind:'scroll',notches:1,probe:false});motion.sent(0,1,false);motion.accepted(39,328);assert.equal((motion.action(1) as {notches:number}).notches,2);
