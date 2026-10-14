@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { OCRAPI } from '../shared/recognition/ocr';
 const call = (name: string, ...args: unknown[]) => ipcRenderer.invoke('one:recognition-' + name, ...args);
 const api: OCRAPI = {
+  dedicatedServices:()=>call('translation-services'),
   taskProfiles:()=>call('translation-profiles'),verifyServiceImage:ref=>call('translation-verify',ref),cancelServiceCheck:()=>call('translation-check-cancel'),migrateService:rev=>call('translation-migrate',rev),restoreService:rev=>call('translation-restore',rev),manageServices:()=>call('translation-manage'),
   region:(token,language,selection)=>call('region',token,language,selection),
   correct:(token,selection,text)=>call('correct',token,selection,text),

@@ -62,6 +62,9 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   recordingExport?:import('./recording/recording-export').RecordingExportRendererAPI;
   searchSuggest(engineId:string,query:string):Promise<string[]>;
   aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
+  translationServices():Promise<import('./recognition/translation-services').TranslationServiceProfile[]>;
+  saveTranslationService(value:import('./recognition/translation-services').TranslationServiceInput):Promise<import('./recognition/translation-services').TranslationServiceProfile>;
+  removeTranslationService(id:string,revision:string):Promise<void>;
   aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;
   codexStatus():Promise<import('./codex-types').CodexStatus>;codexLogin():Promise<import('./codex-types').CodexStatus>;codexCancelLogin():Promise<import('./codex-types').CodexStatus>;codexLogout():Promise<import('./codex-types').CodexStatus>;codexChooseExecutable():Promise<import('./codex-types').CodexStatus|null>;codexAutoExecutable():Promise<import('./codex-types').CodexStatus>;codexOpenLogin():Promise<void>;codexCopyCode():Promise<void>;codexModelCatalog():Promise<import('./ai').AIModel[]>;
   aiCommandSave(value:Partial<import('./ai').AICommand>):Promise<string>;aiCommandRemove(id:string):Promise<void>;aiShortcut(value:string):Promise<import('./ai').AIState>;

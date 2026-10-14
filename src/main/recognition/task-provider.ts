@@ -4,8 +4,10 @@ import type {FormulaResult} from '../../shared/recognition/formula';
 /** Only feature code supplies the owner; renderer receives no arbitrary-prompt execution method. */
 export class RecognitionTaskProvider {
   constructor(private ai:OneAIService,private owner:()=>number){}
-  translationBudget(connection:TranslationConnection){return this.ai.taskTranslationBudget(connection.reference);}
+  translationBudget(connection:TranslationConnection){return connection.provider==='service'?this.ai.translators.assertReference(connection.serviceReference).maxCharacters:this.ai.taskTranslationBudget(connection.reference);}
+  translationBatchSize(connection:TranslationConnection){return connection.provider==='service'?this.ai.translators.assertReference(connection.serviceReference).maxItems:32;}
   async translateBatch(connection:TranslationConnection,paragraphs:import('../../shared/ai-task').AITaskParagraph[],target:TranslationLanguage,signal:AbortSignal){
+    if(connection.provider==='service'){if(!connection.serviceReference)throw Error('翻译服务引用无效');return this.ai.translateBatch(connection.serviceReference,this.owner(),paragraphs,target,signal);}
     if(!connection.reference)throw Error('AI 服务引用无效');
     const result=await this.ai.runTask({owner:this.owner(),reference:connection.reference,purpose:'translation',target,paragraphs},signal);
     if(result.purpose!=='translation')throw Error('翻译任务结果无效');return {paragraphs:result.result.paragraphs,model:result.model};

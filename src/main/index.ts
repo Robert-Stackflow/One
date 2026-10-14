@@ -813,6 +813,9 @@ function registerIPC() {
   handle('materials-edit-image',(_event,id)=>imageEditor!.openMaterial(main!,id));
   handle('materials-open-image-project',()=>imageEditor!.openProject(main!));
   handle('ai-state',()=>aiService.state(),['main','ai-chat','search']);
+  handle('translation-services',()=>aiService.translators.list(),['main']);
+  handle('translation-service-save',(_event,value)=>aiService.translators.save(value),['main']);
+  handle('translation-service-remove',(_event,id,revision)=>aiService.translators.remove(id,revision),['main']);
   handle('ai-profile',(_event,value:AIProfileInput)=>aiService.profile(value),['main']);
   handle('ai-profile-remove',(_event,id:string)=>aiService.removeProfile(id),['main']);
   handle('ai-profile-default',(_event,id:string)=>aiService.defaultProfile(id),['main']);
@@ -1322,7 +1325,7 @@ async function start() {
     if(!inlineSource(owner,source)){await inline.releaseOwner(owner,result.id);throw Error('当前图片已失效');}
     return result;
   },['preview','image-editor']);
-  for(const name of ['run','region','correct','preview','translate','translation-partial','translation-retry','copy','cancel','release','config','save-config','clear-config','profiles','migrate','restore','manage'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
+  for(const name of ['run','region','correct','preview','translate','translation-partial','translation-retry','copy','cancel','release','config','save-config','clear-config','profiles','services','migrate','restore','manage'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
     const owner=event.sender.id;
     if(name==='release'){await inline.releaseOwner(owner,id);return;}
     const source=inline.source(owner,id);
@@ -1339,6 +1342,7 @@ async function start() {
     else if(name==='save-config')result=await recognition!.service.translationStore.save(args[0]);
     else if(name==='clear-config')result=await recognition!.service.translationStore.clear(args[0]);
     else if(name==='profiles')result=aiService.taskProfiles();
+    else if(name==='services')result=aiService.translators.list();
     else if(name==='migrate')result=await recognition!.service.translationStore.migrateLegacy(args[0]);
     else if(name==='restore')result=await recognition!.service.translationStore.restoreLegacy(args[0]);
     else if(name==='manage'){navigateMainPage({page:'ai',tab:'services'});return;}

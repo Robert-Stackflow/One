@@ -1,3 +1,4 @@
+import {translationServiceReference} from './translation-services';
 export const translationLanguages = {
   'zh-Hans': '简体中文',
   'zh-Hant': '繁体中文',
@@ -13,12 +14,13 @@ export const translationLanguages = {
   ar: '阿拉伯文',
 } as const;
 export type TranslationLanguage = keyof typeof translationLanguages;
-export type TranslationProvider = 'chat' | 'azure' | 'ai';
+export type TranslationProvider = 'chat' | 'azure' | 'ai'|'service';
 export const TRANSLATION_INPUT = 20000,
   TRANSLATION_OUTPUT = 60000;
 export const TRANSLATION_DOCUMENT_INPUT=200000,TRANSLATION_DOCUMENT_OUTPUT=600000,TRANSLATION_DOCUMENT_PARTS=2048;
-export interface TranslationPart {id:string;start:number;end:number;paragraph:number;chunk:number;status:'waiting'|'translated'|'failed'|'cancelled';text?:string;error?:string;model?:string}
+export interface TranslationPart {id:string;start:number;end:number;paragraph:number;chunk:number;status:'waiting'|'translated'|'failed'|'cancelled';text?:string;error?:string;model?:string;sourceLanguage?:string}
 export interface TranslationConfig {
+  serviceReference?:import('./translation-services').TranslationServiceReference;
   canRestoreLegacy?:boolean;
   reference?:import('../ai-task').AITaskReference;
   serviceName?:string;
@@ -32,6 +34,7 @@ export interface TranslationConfig {
   error: string;
 }
 export interface TranslationSettings {
+  serviceReference?:import('./translation-services').TranslationServiceReference;
   reference?:import('../ai-task').AITaskReference;
   revision: string;
   provider: TranslationProvider;
@@ -41,6 +44,7 @@ export interface TranslationSettings {
   key?: string;
 }
 export interface TranslationConnection {
+  serviceReference?:import('./translation-services').TranslationServiceReference;
   reference?:import('../ai-task').AITaskReference;
   provider: TranslationProvider;
   endpoint: string;
@@ -101,13 +105,17 @@ export function translationSettings(value: unknown): TranslationSettings {
     !v ||
     typeof v.revision !== 'string' ||
     !/^[\da-f-]{36}$/i.test(v.revision) ||
-    !['chat', 'azure','ai'].includes(v.provider)
+    !['chat', 'azure','ai','service'].includes(v.provider)
   )
     throw Error('翻译配置无效');
   if(v.provider==='ai'){
     const ref=v.reference;
     if(!ref||typeof ref.profileId!=='string'||!ref.profileId.trim()||ref.profileId.length>200||typeof ref.model!=='string'||ref.model.length>200||/[\r\n\0]/.test(ref.profileId+ref.model)||typeof ref.revision!=='string'||!/^[a-f0-9]{64}$/.test(ref.revision)||Object.keys(ref).some(key=>!['profileId','model','revision'].includes(key))||(v.key!==undefined&&v.key!==''))throw Error('AI 服务引用无效');
     return {revision:v.revision,provider:'ai',endpoint:'',model:ref.model,region:'',reference:{...ref}};
+  }
+  if(v.provider==='service'){
+    if(v.key!==undefined&&v.key!=='')throw Error('翻译服务引用不能携带密钥');
+    return {revision:v.revision,provider:'service',endpoint:'',model:'',region:'',serviceReference:translationServiceReference(v.serviceReference)};
   }
   const endpoint = v.provider === 'azure' ? azureEndpoint : translationEndpoint(v.endpoint);
   if (

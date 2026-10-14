@@ -145,6 +145,10 @@ Tesseract/Paddle 首批长图分块已接入识别窗口：沿用图片子系统
 
 ### 4.1 服务接入
 
+首批专用翻译连接已接入 Azure Translator、DeepL API Free/Pro 与 Google Cloud Translation Basic（API key）。连接统一保存在现有 `ai-data.json` 的加密服务记录中，在主窗口“AI 服务”页的“翻译服务”分组管理；OCR 与内嵌图片选字只选择服务引用，公式窗口不展示这些纯文本服务。它们不进入聊天 Profile/默认服务/历史。地址固定为官方端点，DeepL 用自己的授权头与文本数组，Google 用 API key 请求头和 plain-text 模式并解码返回的 HTML 实体；不把这些协议伪装成 Chat Completions。依据 [Azure Translate](https://learn.microsoft.com/en-us/azure/ai-services/translator/text-translation/reference/v3/translate)、[DeepL Translate](https://developers.deepl.com/api-reference/translate/request-translation)、[Google Basic](https://docs.cloud.google.com/translate/docs/reference/rest/v2/translate) 与 [Google 系统参数](https://docs.cloud.google.com/apis/docs/system-parameters)。
+
+专用连接共享三请求上限与窗口所属任务取消，响应有界，配置/密钥/删除修订后拒绝迟到结果。按适配器的保守批次预算拆分（Azure 10000 字/1000 项、DeepL 12000 字/50 项、Google 5000 字/128 项），位置结果数量必须严格对应原文，数量不匹配不猜测归属；单段异常保留其他正常译文，检测语言/模型仅记录服务实际返回的数据。能力元数据声明批量/自动检测可用、当前术语/图片接口未接入、账户额度未知，不把保存密钥当作验证账户或余额。Azure 旧连接可按区域及主进程凭据去重迁入，保存服务选择才切换，并保留加密备份可恢复。113 项业务测试与实际 One 本机协议桩覆盖管理/密钥不回填、OCR/inline 请求、实体解码、迁移恢复、删除、混合 AI/专用并发、窗口取消、容量与配置竞态；原 AI 聊天/旧 OCR 公式/inline 与按段重试回归通过，证据 `work/current/capture-reconstruction/translation-services-*.log`。`translation-service-editor.png` 已检查实色弹窗和字段布局。本机协议桩不证明真实供应商凭据、翻译质量或视觉能力；OAuth/Advanced、术语/额度查询、其他厂商及旧自定义 Chat 配置入口收口仍待继续。
+
 长文本自动分批与按段重试已接入独立 OCR 和内嵌预览/编辑器。任务固定原文、目标语言、服务修订和窗口，保留段落/片段 ID、原文范围与实际模型。AI 按 Profile 输出上限估算单批长度（32–12000 字符、最多 32 段），逐批复用 `runTask`；旧独立接口短文仍发送一次完整原文，超长输入按单段/20000 字符拆分。整篇原文上限 200000 字符、2048 片段、512 批，译文上限 600000 字符；保留 CRLF、空行与缩进，避免截断 Unicode 代理对。输出预算仅为保守估算，不保证真实模型总能完整返回，截断/异常仍明确失败。
 
 图片预览已解除本地模型安装/下载状态遮挡：移除覆盖整个画布的安装提示，下载入口统一到“OCR 模型”；未就绪状态仅停用识别按钮并提供提示，图片仍能预览、缩放和拖动，文字翻译照常可用。后台模型下载本身不触发识别遮罩；有翻译任务时取消遮罩取消翻译，不误取消模型下载。真实窗口在无模型配置下验证原图可见，下载状态用 IPC 桩检查界面分支，未以此声称做了实际模型下载；证据 `work/current/capture-reconstruction/ocr-image-readiness-{types,bundle,window}.log`，更新后的 `translation-partial.png` 已检查。
@@ -153,7 +157,7 @@ Tesseract/Paddle 首批长图分块已接入识别窗口：沿用图片子系统
 
 共享服务入口已接入独立 OCR、公式及内嵌预览/编辑器：选择 One AI Profile 与模型，主进程按所属窗口调用固定用途任务，不写聊天历史、不返回密钥；“管理服务”打开主窗口 AI 服务页。弹窗先显示，再读取配置元数据，不加载模型权重。公式新绑定须先通过该模型图片验证，关闭弹窗取消验证；真实供应商视觉能力仍需逐项验证。
 
-旧 Chat Completions 连接仅在用户点击迁入时转换标准 `/chat/completions` 地址，按协议/地址/模型及主进程解密凭据去重，不改变聊天默认服务。迁入后仍使用原连接，显式保存才切换；新版绑定保留加密旧记录，可恢复原接口。非标准完整 endpoint、Azure 与无法解密的配置保留并提示；旧专用客户端继续兼容这些配置，专用翻译服务统一管理尚未完成。配置修订覆盖所选 Profile/密钥/模型与图片能力过期，拒绝旧请求与迟到结果。96 项业务测试通过；`tests/recognition-task-window.cjs` 检查真实窗口共享选择、故意延迟元数据仍先显示弹窗、翻译/迁入/恢复、管理跳转、公式验证失败与关闭取消；`tests/recognition-window-smoke.cjs` 和 `tests/inline-ocr-window.cjs` 验证旧接口、公式预览、编辑器/预览共享服务、实际 OCR 取消与返回。证据 `work/current/capture-reconstruction/ai-binding-*.log`。接口响应和图片验证使用本机协议桩，不能作为真实供应商视觉验收；本轮 JavaScript 构建通过，完整构建受运行中的 dev 占用本机辅助程序影响，未打包/安装。
+旧 Chat Completions 连接仅在用户点击迁入时转换标准 `/chat/completions` 地址，按协议/地址/模型及主进程解密凭据去重，不改变聊天默认服务。迁入后仍使用原连接，显式保存才切换；新版绑定保留加密旧记录，可恢复原接口。非标准完整 endpoint 与无法解密的配置保留并提示；Azure 可迁入专用连接，旧客户端继续兼容未切换的配置。首批专用服务已进入统一管理，后续适配器与旧入口收口仍待完成。配置修订覆盖所选 Profile/密钥/模型与图片能力过期，拒绝旧请求与迟到结果。96 项业务测试通过；`tests/recognition-task-window.cjs` 检查真实窗口共享选择、故意延迟元数据仍先显示弹窗、翻译/迁入/恢复、管理跳转、公式验证失败与关闭取消；`tests/recognition-window-smoke.cjs` 和 `tests/inline-ocr-window.cjs` 验证旧接口、公式预览、编辑器/预览共享服务、实际 OCR 取消与返回。证据 `work/current/capture-reconstruction/ai-binding-*.log`。接口响应和图片验证使用本机协议桩，不能作为真实供应商视觉验收；本轮 JavaScript 构建通过，完整构建受运行中的 dev 占用本机辅助程序影响，未打包/安装。
 
 提供统一 `TranslationProvider`：输入为带 ID 的段落、源语言/自动检测、目标语言、可选术语；输出逐段译文、实际服务/模型、状态。每个服务声明批量、语言检测、术语、图片翻译及额度限制，超长文本按服务规则切分。
 
@@ -167,7 +171,7 @@ Tesseract/Paddle 首批长图分块已接入识别窗口：沿用图片子系统
 
 增加内部 `AIService.runTask`，支持任务用途、服务/模型引用、文字/图片、可选结构化输出和所属窗口；不开放任意提示词执行入口给其他不相关窗口。AI 多段翻译通过段落 ID 校验缺失、重复和乱序，失败时显示具体段落并允许重试；正常译文保留。纯文本翻译默认只发送文字，公式/视觉翻译明确发送图片。
 
-内部任务接口首批已实现于 `OneAIService.runTask`：固定翻译/公式用途、服务/模型/配置修订引用和所属窗口，复用现有 OpenAI 兼容、Ollama、LM Studio、Codex 适配及共享三请求上限；Codex 用临时只读转换任务，任务不保存聊天或搜索历史。外部取消与窗口关闭均取消所属任务，预处理期间取消不发送图片，其他窗口任务继续；配置/密钥/模型修改或 One 发起的 Codex 登录/退出后旧结果不提交。公开任务 Profile 仅含服务名、类型、模型和修订/图片能力标记，不含密钥。文本翻译只发送带 ID 的文字：单批 32 段/20000 字符，输出校验缺失、重复、额外 ID 与乱序，恢复输入顺序并保留正常段落；自动分批与结果栏按段重试已接入，进展及限制见本节开头。公式仅发送单张 PNG，模型须先正确识别随机六位数字测试图，确认绑定配置修订并在 24 小时后过期；不按模型名猜图片能力。尚未验证真实外部服务各模型，不宣称所有供应商模型可收图。JSON/流响应容量受限，有效回复报告适配器返回的模型标识，缺失时沿用所选模型。没有新增可向无关窗口开放任意提示词的 IPC。`node --test tests/recognition.test.cjs` 覆盖四适配器协议桩、SSE/NDJSON、段落异常、任务用途/窗口标识形状与密钥不外泄、图片验证失败、取消/并发和旧配置竞态；`node tests/ai-migration-smoke.cjs` 的真实 One 窗口/本机协议桩聊天回归通过，旧动画断言已对齐现有统一弹出面板动画。证据为 `work/current/capture-reconstruction/ai-task-*.log`。OCR/公式共享服务接入和旧配置兼容的后续进展见本节前述记录；真实视觉能力及专用翻译适配器仍待完成。
+内部任务接口首批已实现于 `OneAIService.runTask`：固定翻译/公式用途、服务/模型/配置修订引用和所属窗口，复用现有 OpenAI 兼容、Ollama、LM Studio、Codex 适配及共享三请求上限；Codex 用临时只读转换任务，任务不保存聊天或搜索历史。外部取消与窗口关闭均取消所属任务，预处理期间取消不发送图片，其他窗口任务继续；配置/密钥/模型修改或 One 发起的 Codex 登录/退出后旧结果不提交。公开任务 Profile 仅含服务名、类型、模型和修订/图片能力标记，不含密钥。文本翻译只发送带 ID 的文字：单批 32 段/20000 字符，输出校验缺失、重复、额外 ID 与乱序，恢复输入顺序并保留正常段落；自动分批与结果栏按段重试已接入，进展及限制见本节开头。公式仅发送单张 PNG，模型须先正确识别随机六位数字测试图，确认绑定配置修订并在 24 小时后过期；不按模型名猜图片能力。尚未验证真实外部服务各模型，不宣称所有供应商模型可收图。JSON/流响应容量受限，有效回复报告适配器返回的模型标识，缺失时沿用所选模型。没有新增可向无关窗口开放任意提示词的 IPC。`node --test tests/recognition.test.cjs` 覆盖四适配器协议桩、SSE/NDJSON、段落异常、任务用途/窗口标识形状与密钥不外泄、图片验证失败、取消/并发和旧配置竞态；`node tests/ai-migration-smoke.cjs` 的真实 One 窗口/本机协议桩聊天回归通过，旧动画断言已对齐现有统一弹出面板动画。证据为 `work/current/capture-reconstruction/ai-task-*.log`。OCR/公式共享服务接入和旧配置兼容的后续进展见本节前述记录；真实视觉能力及后续专用翻译适配器仍待完成。
 
 ### 4.2 原图翻译
 

@@ -2,6 +2,7 @@ import type {ServiceConnectionStorage,ServiceCredentialCrypto} from '../service-
 import { randomUUID,createHash } from 'node:crypto';
 import type {OneAIService} from '../ai-service';
 import type {AITaskReference} from '../../shared/ai-task';
+import type {TranslationServiceReference} from '../../shared/recognition/translation-services';
 import { formulaSettings } from '../../shared/recognition/formula';
 import {
   translationSettings,
@@ -19,6 +20,7 @@ interface Stored {
 }
 export class RecognitionConnectionStore {
   private binding?:{revision:string;reference:AITaskReference;legacy?:Stored};
+  private serviceBinding?:{revision:string;serviceReference:TranslationServiceReference;legacy?:Stored};
   private stored?: Stored;
   private loading?: Promise<void>;
   private queue: Promise<unknown> = Promise.resolve();
@@ -43,9 +45,14 @@ export class RecognitionConnectionStore {
           const v=await this.storage.read(this.purpose) as any;
           if(v===undefined)return;
           if (!v || typeof v !== 'object' || Array.isArray(v)) throw Error();
+          if(v.format==='one-recognition-service-binding'&&v.version===3&&v.purpose===this.purpose&&this.purpose==='translation'){
+            const cfg=this.checked({...v,provider:'service'});
+            if(v.legacy){const legacy=this.checked({...v.legacy,key:undefined});if(['ai','service'].includes(legacy.provider)||typeof v.legacy.encrypted!=='string'||!v.legacy.encrypted||v.legacy.encrypted.length>24000||!/^[\da-z+/]+=*$/i.test(v.legacy.encrypted))throw Error();}
+            this.serviceBinding={revision:cfg.revision,serviceReference:cfg.serviceReference!,legacy:v.legacy};this.revision=cfg.revision;return;
+          }
           if(v.format==='one-recognition-task-binding'&&v.version===2&&v.purpose===this.purpose){
             const cfg=this.checked({...v,provider:'ai'});
-            if(v.legacy){const legacy=this.checked({...v.legacy,key:undefined});if(legacy.provider==='ai'||typeof v.legacy.encrypted!=='string'||!v.legacy.encrypted||v.legacy.encrypted.length>24000||!/^[\da-z+/]+=*$/i.test(v.legacy.encrypted))throw Error();}
+            if(v.legacy){const legacy=this.checked({...v.legacy,key:undefined});if(['ai','service'].includes(legacy.provider)||typeof v.legacy.encrypted!=='string'||!v.legacy.encrypted||v.legacy.encrypted.length>24000||!/^[\da-z+/]+=*$/i.test(v.legacy.encrypted))throw Error();}
             this.binding={revision:cfg.revision,reference:cfg.reference!,legacy:v.legacy};this.revision=cfg.revision;return;
           }
           if (
@@ -57,7 +64,7 @@ export class RecognitionConnectionStore {
           )
             throw Error();
           const cfg = this.checked({ ...v, key: undefined });
-          if(cfg.provider==='ai')throw Error();
+          if(cfg.provider==='ai'||cfg.provider==='service')throw Error();
           this.stored = { ...cfg, provider:cfg.provider, encrypted: v.encrypted };
           this.revision = cfg.revision;
         } catch (error) {
@@ -69,6 +76,13 @@ export class RecognitionConnectionStore {
   }
   async state(): Promise<TranslationConfig> {
     await this.load();
+    if(this.serviceBinding){
+      const binding=this.serviceBinding;let profile:import('../../shared/recognition/translation-services').TranslationServiceProfile|undefined,error='';
+      try{profile=this.ai?.translators.list().find(profile=>profile.id===binding.serviceReference.serviceId);}catch{error='翻译服务配置无法读取，请打开服务管理';}
+      const serviceReference={...binding.serviceReference,revision:profile?.revision||binding.serviceReference.revision};
+      const hash=createHash('sha256').update(binding.revision+':'+(profile?.revision||'missing')+':'+!!profile?.hasKey).digest('hex').slice(0,32),revision=`${hash.slice(0,8)}-${hash.slice(8,12)}-${hash.slice(12,16)}-${hash.slice(16,20)}-${hash.slice(20)}`;
+      error=error||(!profile?'翻译服务已删除，请重新选择':!profile.hasKey?'系统加密不可用，无法读取翻译密钥':'');return {revision,provider:'service',endpoint:'',model:'',region:'',serviceReference,serviceName:profile?.name||'',keySaved:false,ready:!error,error,canRestoreLegacy:!!binding.legacy};
+    }
     if(this.binding){
       const binding=this.binding,profile=this.ai?.taskProfiles().find(profile=>profile.id===binding.reference.profileId),model=profile?.models.find(model=>model.id===binding.reference.model);
       const reference={...binding.reference,revision:profile?.revision||binding.reference.revision};
@@ -104,13 +118,18 @@ export class RecognitionConnectionStore {
     await this.load();
     const cfg = this.checked(value);
     if (cfg.revision !== (await this.state()).revision) throw Error(`${this.label}配置已改变，请重新打开配置`);
+    if(cfg.provider==='service'){
+      if(this.purpose!=='translation'||!this.ai)throw Error('专用翻译服务不可用');this.ai.translators.assertReference(cfg.serviceReference);
+      const binding={revision:randomUUID(),serviceReference:cfg.serviceReference!,legacy:this.stored||this.binding?.legacy||this.serviceBinding?.legacy};
+      await this.storage.write(this.purpose,{format:'one-recognition-service-binding',purpose:this.purpose,version:3,...binding});this.serviceBinding=binding;this.binding=undefined;this.stored=undefined;this.revision=binding.revision;this.error='';return this.state();
+    }
     if(cfg.provider==='ai'){
       const profile=this.ai?.taskProfiles().find(profile=>profile.id===cfg.reference!.profileId);
       if(!profile||profile.revision!==cfg.reference!.revision||!profile.models.some(model=>model.id===cfg.reference!.model))throw Error('AI 服务或模型已改变，请重新选择');
       if(this.purpose==='formula'&&!profile.imageModels.includes(cfg.reference!.model))throw Error('请先验证该模型的图片输入能力');
-      const binding={revision:randomUUID(),reference:cfg.reference!,legacy:this.stored||this.binding?.legacy};
+      const binding={revision:randomUUID(),reference:cfg.reference!,legacy:this.stored||this.binding?.legacy||this.serviceBinding?.legacy};
       await this.storage.write(this.purpose,{format:'one-recognition-task-binding',purpose:this.purpose,version:2,...binding});
-      this.binding=binding;this.stored=undefined;this.revision=binding.revision;this.error='';return this.state();
+      this.binding=binding;this.serviceBinding=undefined;this.stored=undefined;this.revision=binding.revision;this.error='';return this.state();
     }
     if (!this.crypto.available()) throw Error(`系统加密不可用，无法保存${this.label}密钥`);
     const same = this.stored?.provider === cfg.provider && this.stored?.endpoint === cfg.endpoint;
@@ -136,6 +155,7 @@ export class RecognitionConnectionStore {
       await this.storage.write(this.purpose,{format:'one-recognition-connection',purpose:this.purpose,version:1,...record});
       this.stored = record;
       this.binding=undefined;
+      this.serviceBinding=undefined;
       this.revision = record.revision;
       this.error = '';
       return this.state();
@@ -150,6 +170,7 @@ export class RecognitionConnectionStore {
       await this.storage.clear(this.purpose);
       this.stored = undefined;
       this.binding=undefined;
+      this.serviceBinding=undefined;
       this.error = '';
       this.revision = randomUUID();
       return this.state();
@@ -161,6 +182,7 @@ export class RecognitionConnectionStore {
     const state = await this.state();
     const stored = this.stored;
     if (revision !== state.revision) throw Error(`${this.label}服务已改变，请核对后重试`);
+    if(this.serviceBinding){if(!state.ready)throw Error(state.error);return {provider:'service',serviceReference:state.serviceReference!,model:'',endpoint:'',region:'',key:'',revision:state.revision};}
     if(this.binding){if(!state.ready)throw Error(state.error);return {provider:'ai',reference:state.reference!,model:state.model,endpoint:'',region:'',key:'',revision:state.revision};}
     if (stored && stored.revision !== state.revision)
       throw Error(`${this.label}服务已改变，请核对后重试`);
@@ -181,14 +203,15 @@ export class RecognitionConnectionStore {
   }
   async migrateLegacy(revision:unknown){
     const state=await this.state();if(revision!==state.revision)throw Error(`${this.label}配置已改变，请重新打开配置`);
-    if(!this.ai||state.provider!=='chat')throw Error('当前服务不能自动迁入 AI 服务，原配置已保留');
+    if(!this.ai||!['chat','azure'].includes(state.provider))throw Error('当前服务不能自动迁入 AI 服务，原配置已保留');
     const connection=await this.connection(revision);
+    if(connection.provider==='azure')return this.ai.translators.importAzure(connection.region,connection.key,'Azure 翻译（迁入）');
     return this.ai.importRecognitionConnection(connection.endpoint,connection.model,connection.key,this.label+'服务（迁入）');
   }
   restoreLegacy(revision:unknown){
-    const task=this.queue.then(async()=>{const state=await this.state();if(revision!==state.revision||!this.binding?.legacy)throw Error('旧配置不可恢复或已改变');
-      const record={...this.binding.legacy,revision:randomUUID()};await this.storage.write(this.purpose,{format:'one-recognition-connection',purpose:this.purpose,version:1,...record});
-      this.stored=record;this.binding=undefined;this.revision=record.revision;this.error='';return this.state();});
+    const task=this.queue.then(async()=>{const state=await this.state(),legacy=this.binding?.legacy||this.serviceBinding?.legacy;if(revision!==state.revision||!legacy)throw Error('旧配置不可恢复或已改变');
+      const record={...legacy,revision:randomUUID()};await this.storage.write(this.purpose,{format:'one-recognition-connection',purpose:this.purpose,version:1,...record});
+      this.stored=record;this.binding=undefined;this.serviceBinding=undefined;this.revision=record.revision;this.error='';return this.state();});
     this.queue=task.catch(()=>{});return task;
   }
 }

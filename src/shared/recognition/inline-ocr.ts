@@ -8,7 +8,8 @@ export interface InlineOCRAPI {
   saveTranslation(id:string,value:import('./translation').TranslationSettings):Promise<import('./translation').TranslationConfig>;
   clearTranslation(id:string,revision:string):Promise<import('./translation').TranslationConfig>;
   taskProfiles(id:string):Promise<import('../ai-task').AITaskProfile[]>;
-  migrateService(id:string,revision:string):Promise<import('../ai-task').AITaskReference>;
+  migrateService(id:string,revision:string):Promise<import('../ai-task').AITaskReference|import('./translation-services').TranslationServiceReference>;
+  dedicatedServices(id:string):Promise<import('./translation-services').TranslationServiceProfile[]>;
   restoreService(id:string,revision:string):Promise<import('./translation').TranslationConfig>;
   manageServices(id:string):Promise<void>;
   correct(id:string,selection:import('./text-region').OCRRegionSelection,text:string):Promise<OCRResult>;

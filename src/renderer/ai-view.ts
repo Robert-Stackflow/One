@@ -3,6 +3,7 @@ import {setupShortcut} from './shortcut';
 import {dialogMarkup,openDialog,closeDialog,confirmDialog} from './dialog';
 import {openAIModelList,openAIProfileEditor} from './ai-profile-editor';
 import type {AICommand,AIProfile,AIState} from '../shared/ai';
+import {mountTranslationServiceManagement} from './translation-services-view';
 
 export function aiPage(){return `<div class="ai-page"><div class="toolbar module-toolbar ai-toolbar"><div class="tabs" role="tablist" aria-label="AI 对话">${[['chat','对话'],['services','AI 服务'],['commands','指令'],['settings','设置']].map(([id,label],i)=>`<button type="button" data-ai-tab="${id}" role="tab" aria-selected="${i===0}" class="${i?'':'selected'}">${label}</button>`).join('')}</div><div class="ai-toolbar-actions">${button('ai-add-service','添加服务','plus').replace('<button ','<button hidden ')}${button('ai-add-command','添加指令','plus').replace('<button ','<button hidden ')}${button('ai-open-chat','打开 AI 对话','open',true)}</div></div>
  <section data-ai-panel="chat"><div id="ai-main-chat" class="ai-main-chat"></div></section>
@@ -11,7 +12,8 @@ export function aiPage(){return `<div class="ai-page"><div class="toolbar module
  <section data-ai-panel="settings" hidden><div class="settings-card"><div class="setting-row"><div class="setting-copy"><h2>触发快捷键</h2><p>在任何窗口唤出 AI 对话。录入后立即生效。</p></div><input id="ai-hotkey" aria-label="AI 对话快捷键"></div></div><p id="ai-hotkey-error" class="utility-message" role="status"></p></section></div>`;}
 
 export function setupAIPage(root:HTMLElement){let state:AIState|undefined;
- const load=async()=>{state=await api.aiState();draw();};
+ const translators=mountTranslationServiceManagement(root.querySelector('[data-ai-panel="services"]')!);
+ const load=async()=>{const values=await Promise.all([api.aiState(),translators.refresh()]);state=values[0];draw();};
  const draw=()=>{if(!state)return;const hotkey=q<HTMLInputElement>('ai-hotkey');if(document.activeElement!==hotkey)hotkey.value=state.shortcut;q('ai-hotkey-error').textContent=state.shortcutError;
   q('ai-services').classList.add('ai-service-cards');q('ai-services').innerHTML=state.profiles.length?[...state.profiles].sort((a,b)=>Number(b.id===state!.defaultId)-Number(a.id===state!.defaultId)).map(p=>`<article class="ai-service-card"><div class="ai-service-card-copy"><strong>${esc(p.name)} ${p.id===state!.defaultId?'<span class="ai-default-tag">默认</span>':''}</strong><p>${esc(p.models?.find(model=>model.id===p.model)?.name||p.model||'尚未选择模型')}</p><small>${esc(p.baseUrl)}</small></div><div class="ai-service-card-actions"><button type="button" data-service-models="${esc(p.id)}">模型列表</button><button type="button" data-service-edit="${esc(p.id)}">编辑</button>${p.id===state!.defaultId?'':`<button type="button" data-service-default="${esc(p.id)}">设为默认</button>`}<button type="button" data-service-remove="${esc(p.id)}">删除</button></div></article>`).join(''):'<p class="ai-service-empty">暂无 AI 服务。点击右上角“添加服务”开始。</p>';
   q('ai-commands').innerHTML=state.commands.map(c=>`<div class="ai-row"><span class="ai-row-icon">${icon('text')}</span><div><strong>${esc(c.name)}</strong><small>${esc(c.prompt.slice(0,95))}</small></div>${c.builtin?'<span class="ai-default">内置</span>':`<button type="button" data-command-edit="${esc(c.id)}">编辑</button>`}</div>`).join('');

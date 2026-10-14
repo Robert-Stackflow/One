@@ -49,10 +49,11 @@ export interface OCRState {
   modelTitle?: string;
 }
 export interface RecognitionServiceAPI {
+  dedicatedServices():Promise<import('./translation-services').TranslationServiceProfile[]>;
   taskProfiles():Promise<import('../ai-task').AITaskProfile[]>;
   verifyServiceImage(reference:import('../ai-task').AITaskReference):Promise<void>;
   cancelServiceCheck():Promise<void>;
-  migrateService(revision:string):Promise<import('../ai-task').AITaskReference>;
+  migrateService(revision:string):Promise<import('../ai-task').AITaskReference|import('./translation-services').TranslationServiceReference>;
   restoreService(revision:string):Promise<TranslationConfig>;
   manageServices():Promise<void>;
 }

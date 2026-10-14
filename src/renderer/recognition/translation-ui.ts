@@ -51,7 +51,7 @@ export function mountTranslation(
     q('translation-cancel').hidden = !active;
     q<HTMLButtonElement>('translation-copy').disabled =
       active || !valid() || !q<HTMLTextAreaElement>('translated').value.trim();
-    q('translation-configure').title = config?.ready ? (config.serviceName||config.endpoint)+' · '+config.model : '配置翻译服务';
+    q('translation-configure').title = config?.ready ? (config.serviceName||config.endpoint)+(config.model?' · '+config.model:'') : '配置翻译服务';
     failures.update(result,active||ocr,valid(),q<HTMLTextAreaElement>('translated').value!==result?.text);
     if (notice) { message(notice); notice = ''; }
   }
@@ -60,6 +60,7 @@ export function mountTranslation(
     render();
   }
   const settings = mountServiceSettings('translation', {
+    services:()=>api.dedicatedServices(),
     profiles:()=>api.taskProfiles(),verify:ref=>api.verifyServiceImage(ref),cancelCheck:()=>api.cancelServiceCheck(),migrate:rev=>api.migrateService(rev),restore:rev=>api.restoreService(rev),manage:()=>api.manageServices(),
     load: () => api.translationConfig(),
     save: (value) => api.saveTranslation(value),

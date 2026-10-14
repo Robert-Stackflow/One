@@ -8,11 +8,15 @@ import {CodexProvider,codexExecutables} from './codex-provider';
 import type {CodexStatus} from '../shared/codex-types';
 import {aiEndpoint,builtinAICommands,renderAIPrompt,validateAIImages,validateAIProfile,type AICommand,type AIConversation,type AIEvent,type AIHistoryEntry,type AIImage,type AIMessage,type AIModel,type AIModelCatalogDraft,type AIProfile,type AIProfileInput,type AIState} from '../shared/ai';
 import {prepareAITask,taskReference,taskTranslation,taskFormula,type AITaskReference,type AITaskProfile,type AITaskResult} from '../shared/ai-task';
+import {TranslationServices} from './translation-services';
+import {DedicatedTranslation} from './recognition/dedicated-translation';
+import type {TranslationServiceReference} from '../shared/recognition/translation-services';
+import type {TranslationLanguage} from '../shared/recognition/translation';
 
 interface ImageVerification {revision:string;models:Record<string,{expiresAt:number;model:string}>}
-interface TaskOptions {transport?:typeof fetch;codex?:CodexProvider;imageProbe?:()=>Promise<{image:AIImage;expected:string}>}
+interface TaskOptions {transport?:typeof fetch;translationTransport?:typeof fetch;codex?:CodexProvider;imageProbe?:()=>Promise<{image:AIImage;expected:string}>}
 
-type Saved={taskVision?:Record<string,ImageVerification>;codexTaskEpoch?:number;connections?:Partial<Record<'translation'|'formula',unknown>>;profiles:Omit<AIProfile,'hasKey'>[];keys:Record<string,string>;defaultId:string;commands:AICommand[];conversations:AIConversation[];shortcut:string;history:AIHistoryEntry[];codexExecutable:string;chatOptions:{onTop:boolean;keepOpen:boolean}};
+type Saved={translationServices?:unknown;taskVision?:Record<string,ImageVerification>;codexTaskEpoch?:number;connections?:Partial<Record<'translation'|'formula',unknown>>;profiles:Omit<AIProfile,'hasKey'>[];keys:Record<string,string>;defaultId:string;commands:AICommand[];conversations:AIConversation[];shortcut:string;history:AIHistoryEntry[];codexExecutable:string;chatOptions:{onTop:boolean;keepOpen:boolean}};
 const empty=():Saved=>({profiles:[],keys:{},defaultId:'',commands:[],conversations:[],shortcut:'',history:[],codexExecutable:'',chatOptions:{onTop:true,keepOpen:true}});
 const messageLimit=256*1024,answerLimit=1024*1024;
 function wireModel(value:unknown){return typeof value==='string'&&value.length<=200&&!/[\r\n\0]/.test(value)?value.trim():'';}
@@ -31,6 +35,10 @@ function parseStreamLine(line:string,kind:AIProfile['kind']):{delta:string;done:
  const choice=data.choices?.[0];return {delta:typeof choice?.delta?.content==='string'?choice.delta.content:'',done:!!choice?.finish_reason,model:wireModel(data.model)};
 }
 export class OneAIService{
+ readonly translators=new TranslationServices(()=>this.data.translationServices,value=>{const previous=this.data.translationServices;this.data.translationServices=value;try{this.save();}catch(error){this.data.translationServices=previous;throw error;}});
+ async translateBatch(reference:TranslationServiceReference,owner:number,paragraphs:import('../shared/ai-task').AITaskParagraph[],target:TranslationLanguage,signal?:AbortSignal){
+  this.translators.assertReference(reference);return this.taskScope(owner,signal,async(_id,signal)=>new DedicatedTranslation(this.translators,this.taskOptions.translationTransport).run(reference,paragraphs,target,signal));
+ }
  private taskOwners=new Map<string,{owner:number;abort:AbortController}>();
  private taskOptions:TaskOptions={};
  private taskRevision(profile:Omit<AIProfile,'hasKey'>){return createHash('sha256').update(JSON.stringify({profile,key:this.data.keys[profile.id]||'',codex:profile.kind==='codex'?{executable:this.data.codexExecutable,epoch:this.data.codexTaskEpoch||0}:undefined})).digest('hex');}

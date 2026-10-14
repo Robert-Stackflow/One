@@ -22,7 +22,7 @@ export class TranslationClient {
   constructor(
     private transport: typeof fetch = serviceRequest,
     private timeout = 45000,
-    private tasks?:Pick<import('./task-provider').RecognitionTaskProvider,'translate'|'translateBatch'|'translationBudget'>,
+    private tasks?:Pick<import('./task-provider').RecognitionTaskProvider,'translate'|'translateBatch'|'translationBudget'>&Partial<Pick<import('./task-provider').RecognitionTaskProvider,'translationBatchSize'>>,
   ) {}
   async cancel() {
     this.abort?.abort();
@@ -35,7 +35,7 @@ export class TranslationClient {
       target = translationLanguage(language),
       abort = (this.abort = new AbortController());
     this.last=undefined;
-    const task=connection.provider!=='ai'&&source.length<=TRANSLATION_INPUT?this.request(connection,source,target,abort).then(result=>{this.last={...result,id:randomUUID()};return this.snapshot()!;}):this.document(connection,source,target,abort);
+    const task=!['ai','service'].includes(connection.provider)&&source.length<=TRANSLATION_INPUT?this.request(connection,source,target,abort).then(result=>{this.last={...result,id:randomUUID()};return this.snapshot()!;}):this.document(connection,source,target,abort);
     return this.track(task);
   }
   snapshot(){return this.last?{...this.last,parts:this.last.parts?.map(part=>({...part}))}:undefined;}
@@ -58,27 +58,27 @@ export class TranslationClient {
     });
   }
   private async document(connection:TranslationConnection,source:string,target:TranslationLanguage,abort:AbortController){
-    if(connection.provider==='ai'&&!this.tasks)throw Error('AI 翻译服务不可用');
-    const budget=connection.provider==='ai'?this.tasks!.translationBudget(connection):TRANSLATION_INPUT,parts=translationParts(source,budget);
-    translationBatches(parts,budget,connection.provider==='ai'?32:1);
-    const result:TranslationResult={id:randomUUID(),source,text:'',target,revision:connection.revision,endpoint:connection.provider==='ai'?'ai:'+connection.reference!.profileId:connection.endpoint,parts};
+    const structured=['ai','service'].includes(connection.provider);if(structured&&!this.tasks)throw Error('翻译服务不可用');
+    const budget=structured?this.tasks!.translationBudget(connection):TRANSLATION_INPUT,parts=translationParts(source,budget);
+    translationBatches(parts,budget,structured?(this.tasks!.translationBatchSize?.(connection)||32):1);
+    const result:TranslationResult={id:randomUUID(),source,text:'',target,revision:connection.revision,endpoint:connection.provider==='ai'?'ai:'+connection.reference!.profileId:connection.provider==='service'?'service:'+connection.serviceReference!.serviceId:connection.endpoint,parts};
     this.last=assembleTranslation(result);return this.translateParts(connection,result,parts,abort);
   }
   private async translateParts(connection:TranslationConnection,result:TranslationResult,selected:NonNullable<TranslationResult['parts']>,abort:AbortController){
-    const budget=connection.provider==='ai'?this.tasks!.translationBudget(connection):TRANSLATION_INPUT,batches=translationBatches(selected,budget,connection.provider==='ai'?32:1);
+    const structured=['ai','service'].includes(connection.provider),budget=structured?this.tasks!.translationBudget(connection):TRANSLATION_INPUT,batches=translationBatches(selected,budget,structured?(this.tasks!.translationBatchSize?.(connection)||32):1);
     const update=()=>{this.last=assembleTranslation(result);};
     for(const part of selected){part.status='waiting';delete part.error;}update();
     try{
       for(let index=0;index<batches.length;index++){
         abort.signal.throwIfAborted();const batch=batches[index];
-        if(connection.provider==='ai')this.tasks!.translationBudget(connection);
+        if(structured)this.tasks!.translationBudget(connection);
         try{
-          const output=connection.provider==='ai'?await this.tasks!.translateBatch(connection,batch.map(part=>({id:part.id,text:result.source.slice(part.start,part.end)})),result.target,abort.signal):{paragraphs:[{id:batch[0].id,text:(await this.request(connection,translationText(result.source.slice(batch[0].start,batch[0].end)),result.target,abort)).text}],model:connection.model};
+          const output=structured?await this.tasks!.translateBatch(connection,batch.map(part=>({id:part.id,text:result.source.slice(part.start,part.end)})),result.target,abort.signal):{paragraphs:[{id:batch[0].id,text:(await this.request(connection,translationText(result.source.slice(batch[0].start,batch[0].end)),result.target,abort)).text}],model:connection.model};
           abort.signal.throwIfAborted();
           let total=result.source.length-result.parts!.reduce((sum,part)=>sum+part.end-part.start,0)+result.parts!.reduce((sum,part)=>sum+(part.status==='translated'?(part.text?.length||0):0),0);
           for(const part of batch){const translated=output.paragraphs.find(item=>item.id===part.id);
-            if(translated&&'text' in translated&&total+translated.text.length<=TRANSLATION_DOCUMENT_OUTPUT){part.status='translated';part.text=translated.text;part.model=output.model;delete part.error;total+=translated.text.length;}
-            else{part.status='failed';part.error=translated&&'error' in translated?translated.error:translated?'译文超过可处理范围':'服务未返回该段落';delete part.text;}
+            if(translated&&'text' in translated&&typeof translated.text==='string'&&total+translated.text.length<=TRANSLATION_DOCUMENT_OUTPUT){part.status='translated';part.text=translated.text;part.model=connection.provider==='service'?('model' in translated&&typeof translated.model==='string'?translated.model:undefined):output.model;part.sourceLanguage='sourceLanguage' in translated&&typeof translated.sourceLanguage==='string'?translated.sourceLanguage:undefined;delete part.error;total+=translated.text.length;}
+            else{part.status='failed';part.error=translated&&'error' in translated?translated.error||'翻译失败':translated?'译文超过可处理范围':'服务未返回该段落';delete part.text;}
           }
           update();
         }catch(error){

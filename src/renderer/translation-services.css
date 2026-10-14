@@ -1,0 +1,8 @@
+.translation-service-management { display:grid; gap:14px; margin-top:8px; }
+.translation-service-management .section-heading h2 { font-size:14px; font-weight:600; }
+.translation-service-editor { width:min(560px,calc(100vw - 32px)); }
+.translation-service-editor form { display:grid; gap:16px; }
+.translation-service-editor .field { display:flex; flex-direction:column; gap:7px; margin:0; font-size:12px; }
+.translation-service-editor .field[hidden] { display:none; }
+.translation-service-editor input,.translation-service-editor .custom-select { min-width:0; width:100%; }
+.translation-service-editor small { color:var(--muted); overflow-wrap:anywhere; font-size:11px; }

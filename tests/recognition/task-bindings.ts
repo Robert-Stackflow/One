@@ -28,10 +28,10 @@ test('migration preserves legacy until explicit binding, reuses profile, keeps c
   const restored=await fresh.restoreLegacy(bound.revision);assert.equal(restored.provider,'chat');assert.equal((await fresh.connection(restored.revision)).key,secret);
   await assert.rejects(fresh.connection(saved.revision),/改变/);
 }));
-test('noncanonical and Azure endpoints stay intact when migration is refused',()=>fixture(async(ai,store)=>{
+test('noncanonical endpoints are retained and Azure migration keeps the active legacy connection until binding',()=>fixture(async(ai,store)=>{
   let saved=await store.save({...legacy,endpoint:'https://binding.example/custom/completions',revision:(await store.state()).revision});
   await assert.rejects(store.migrateLegacy(saved.revision),/原配置已保留/);assert.equal((await store.connection(saved.revision)).key,secret);assert.equal(ai.taskProfiles().length,0);
-  saved=await store.save({...legacy,provider:'azure',revision:saved.revision});await assert.rejects(store.migrateLegacy(saved.revision),/原配置已保留/);assert.equal((await store.connection(saved.revision)).provider,'azure');
+  saved=await store.save({...legacy,provider:'azure',revision:saved.revision});const migrated=await store.migrateLegacy(saved.revision);assert.ok('serviceId' in migrated);assert.equal((await store.connection(saved.revision)).provider,'azure');assert.equal(ai.translators.list().length,1);assert.equal(ai.taskProfiles().length,0);
 }));
 test('profile edits invalidate public binding revision and stale saves/results without copying credentials',()=>fixture(async(ai,store)=>{
   const ref=await ai.importRecognitionConnection(legacy.endpoint,legacy.model,secret,'Task profile'),bound=await store.save(settings((await store.state()).revision,ref)),profile=ai.state().profiles[0];
