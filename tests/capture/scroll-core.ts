@@ -9,6 +9,29 @@ import {join} from 'node:path';
 import {ScrollMotion} from '../../src/shared/capture/scroll-motion';
 import {scrollSearchCandidates} from '../../src/shared/capture/scroll-search';
 import sharp from 'sharp';
+import {createScrollDirectory,cleanScrollDirectory,ScrollDiskStorage} from '../../src/main/capture/scroll-storage';
+import {readFile,writeFile,unlink,readdir,lstat} from 'node:fs/promises';
+
+test('disk strips retain exact output, row previews and undo without keeping accumulated pixels in memory',async()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const lease=await createScrollDirectory(process.env.ONE_SCROLL_TEST_ROOT!);try{
+      const disk=new ScrollDiskStorage(lease.directory,lease.token),engine=new ScrollStitch(disk),memory=new ScrollStitch(),vertical=axis==='vertical';
+      const source={width:vertical?64:160,height:vertical?160:64};engine.configure({...scrollDefaults(),axis},source);memory.configure({...scrollDefaults(),axis},source);
+      for(let offset=0;offset<=2400;offset+=24){const frame=scrollPixels(source.width,source.height,vertical?0:offset,vertical?offset:0);engine.sample(frame);memory.sample(frame);}
+      assert.deepEqual(engine.output(),memory.output());assert.deepEqual(engine.preview(),memory.preview());const stats=engine.storageStats();assert.ok(stats.diskBytes>stats.residentBytes);assert.equal(stats.diskBytes,64*2560*4);
+      const old=disk.bytes;engine.undo();memory.undo();assert.ok(disk.bytes<old);assert.deepEqual(engine.output(),memory.output());engine.configure({...scrollDefaults(),axis},source);assert.equal(disk.bytes,0);assert.deepEqual(await readdir(lease.directory),['owner.json']);
+    }finally{await cleanScrollDirectory(lease);await assert.rejects(lstat(lease.directory),{code:'ENOENT'});}
+  }
+});
+test('disk quota and corrupt strips preserve accepted state; cleanup refuses foreign files and ownership changes',async()=>{
+  const lease=await createScrollDirectory(process.env.ONE_SCROLL_TEST_ROOT!);try{
+    const disk=new ScrollDiskStorage(lease.directory,lease.token,96*160*4+96*39*4-1),engine=new ScrollStitch(disk);engine.configure(scrollDefaults(),{width:96,height:160});const first=scrollPixels(96,160);engine.sample(first);await assert.rejects(async()=>engine.sample(scrollPixels(96,160,0,39)),/预算/);assert.equal(engine.status().count,1);assert.deepEqual(engine.output(),first);
+    const file=join(lease.directory,'1.bgra'),saved=await readFile(file);await writeFile(file,saved.subarray(0,saved.length-1));assert.throws(()=>engine.output(),/改变/);await writeFile(file,saved);
+    const altered=Buffer.from(saved);altered[10]^=1;await writeFile(file,altered);assert.throws(()=>engine.output(),/校验失败/);await writeFile(file,saved);assert.deepEqual(engine.output(),first);
+    await writeFile(join(lease.directory,'foreign.txt'),'keep');await assert.rejects(cleanScrollDirectory(lease),/非本会话文件/);assert.equal(await readFile(join(lease.directory,'foreign.txt'),'utf8'),'keep');await unlink(join(lease.directory,'foreign.txt'));
+    const marker=await readFile(join(lease.directory,'owner.json'));await writeFile(join(lease.directory,'owner.json'),JSON.stringify({token:'wrong'}));assert.throws(()=>disk.read(1),/所有权/);await assert.rejects(cleanScrollDirectory(lease),/所有权/);await writeFile(join(lease.directory,'owner.json'),marker);
+  }finally{await cleanScrollDirectory(lease);}
+});
 
 test('multiscale search finds irregular large shifts while evaluating fewer original-pixel offsets',context=>{
   const first=scrollPixels(96,4096),next=scrollPixels(96,4096,0,1337),candidates=scrollSearchCandidates(first.pixels,next.pixels,4096,96,0,96);

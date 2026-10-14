@@ -9,7 +9,7 @@ test('scroll algorithms and capture service preserve source pixels and cancellat
       build({...base,entryPoints:['tests/capture/scroll-service.ts'],outfile:path.join(directory,'service.cjs'),plugins:[{name:'native-scroll-fixture',setup(builder){builder.onResolve({filter:/^(electron|\.\/scroll-native)$/},()=>({path:path.resolve('tests/capture/scroll-service-runtime.ts')}));}}]}),
       build({...base,entryPoints:['src/main/capture/scroll-worker.ts'],outfile:path.join(directory,'capture/scroll-worker.cjs')})
     ]);
-    const env={...process.env};delete env.NODE_TEST_CONTEXT;
+    const env={...process.env,TEMP:directory,TMP:directory,ONE_SCROLL_TEST_ROOT:directory};delete env.NODE_TEST_CONTEXT;
     let result;try{result=await execFile(process.execPath,['--test','--test-reporter=tap',path.join(directory,'core.cjs'),path.join(directory,'service.cjs')],{env,windowsHide:true,maxBuffer:1024*1024,timeout:60000});}catch(error){await fs.writeFile(path.join(root,'scroll-unit-detail.log'),(error.stdout||'')+(error.stderr||''));throw Error(((error.stdout||'')+(error.stderr||'')).slice(-6000));}
     await fs.writeFile(path.join(root,'scroll-unit-detail.log'),result.stdout+result.stderr);assert.match(result.stdout,/# fail 0/);
     console.log(result.stdout.split('\n').filter(line=>/^# (tests|pass|fail) /.test(line)).join('; '));

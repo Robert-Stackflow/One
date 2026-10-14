@@ -1,8 +1,11 @@
-import { parentPort } from 'node:worker_threads';
+import { parentPort,workerData } from 'node:worker_threads';
+import {ScrollDiskStorage} from './scroll-storage';
+import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
 import { ScrollStitch } from '../../shared/capture/scroll-stitch';
 import { ScrollSettle } from '../../shared/capture/scroll-settle';
 import type {PixelFrame} from '../../shared/capture/scroll-stitch';
-let engine = new ScrollStitch();
+const storage=workerData?.directory?new ScrollDiskStorage(workerData.directory,workerData.token):undefined;
+let engine = new ScrollStitch(storage);
 let settling: ScrollSettle;
 let staged:PixelFrame|undefined;
 function clearStage(){staged?.pixels.fill(0);staged=undefined;}
@@ -11,7 +14,7 @@ parentPort!.on('message', ({ id, kind, value }) => {
     let result;
     if (kind === 'configure'||kind==='restart') {
       clearStage();
-      if(kind==='restart')engine=new ScrollStitch();
+      if(kind==='restart'){storage?.reset();engine=new ScrollStitch(storage);}
       result = engine.configure(value.options, value.source);
       settling = new ScrollSettle(value.options, value.source);
     } else if(kind==='stage'){
@@ -22,6 +25,8 @@ parentPort!.on('message', ({ id, kind, value }) => {
       parentPort!.postMessage({id,stable});return;
     } else if(kind==='release-frame'){
       clearStage();parentPort!.postMessage({id});return;
+    } else if(kind==='metrics'){
+      parentPort!.postMessage({id,...engine.storageStats()});return;
     } else if(kind==='commit'){
       if(!staged)throw Error('稳定像素帧已失效');
       if(value?.recover&&engine.status().pending)engine.discard();
@@ -50,6 +55,6 @@ parentPort!.on('message', ({ id, kind, value }) => {
     );
   } catch (error) {
     if(kind==='stage'&&value?.frame?.pixels instanceof Uint8Array)value.frame.pixels.fill(0);
-    parentPort!.postMessage({ id, error: error instanceof Error ? error.message : String(error) });
+    parentPort!.postMessage({ id, error: error instanceof Error ? error.message : String(error),limit:error instanceof ScrollCaptureLimit });
   }
 });

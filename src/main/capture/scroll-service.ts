@@ -13,6 +13,8 @@ import {
 } from '../../shared/capture/scroll-capture';
 import type { PixelFrame } from '../../shared/capture/scroll-stitch';
 import {ScrollMotion} from '../../shared/capture/scroll-motion';
+import {createScrollDirectory,cleanScrollDirectory,type ScrollDirectory} from './scroll-storage';
+import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
 export interface ScrollContext {
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
@@ -33,6 +35,7 @@ export class ScrollCaptureService {
   active = false;
   private requests=new Set<Promise<unknown>>();
   private terminations=new Set<Promise<void>>();
+  private directories=new Map<Worker,ScrollDirectory>();
   private native?: ScrollNative;
   private worker?: Worker;
   private workerFailed?: Error;
@@ -79,7 +82,7 @@ export class ScrollCaptureService {
   async idle(){this.pause();await this.stepDone;await Promise.allSettled([...this.requests]);if(this.view)this.publish();}
   async stopped(){await Promise.allSettled([...this.terminations]);}
   preferencesChanged(){if(this.view){this.view.uiScale=this.host.uiScale();this.publish();}}
-  private terminate(worker:Worker){const task=Promise.resolve(worker.terminate()).then(()=>{},()=>{});this.terminations.add(task);void task.then(()=>this.terminations.delete(task));}
+  private terminate(worker:Worker){const directory=this.directories.get(worker);this.directories.delete(worker);const task=(async()=>{try{await worker.terminate();}catch(error){if(worker.threadId!==-1){this.host.failed(error);return;}}if(directory)try{await cleanScrollDirectory(directory);}catch(error){this.host.failed(error);}})();this.terminations.add(task);void task.then(()=>this.terminations.delete(task));}
   get hasUnsaved() {
     return !!this.view?.count;
   }
@@ -132,7 +135,8 @@ export class ScrollCaptureService {
       this.native = new ScrollNative(rect);
       await this.native.ready;
       if (generation !== this.generation) return;
-      this.worker = new Worker(join(__dirname, 'capture/scroll-worker.cjs'));
+      const directory=await createScrollDirectory();if(generation!==this.generation){await cleanScrollDirectory(directory);return;}
+      try{this.worker = new Worker(join(__dirname, 'capture/scroll-worker.cjs'),{workerData:directory});this.directories.set(this.worker,directory);}catch(error){await cleanScrollDirectory(directory);throw error;}
       const worker = this.worker;
       worker.on('message', (response) => {
         if (generation !== this.generation || this.worker !== worker) return;
@@ -140,7 +144,7 @@ export class ScrollCaptureService {
         const pending = this.pending!;
         this.pending = undefined;
         clearTimeout(pending.timer);
-        if (response.error) pending.reject(Error(response.error));
+        if (response.error) pending.reject(response.limit?new ScrollCaptureLimit(response.error):Error(response.error));
         else pending.resolve(response);
       });
       worker.on('error', (error) => {
@@ -422,9 +426,9 @@ export class ScrollCaptureService {
     } catch (error) {
       if (generation === this.generation && !(error instanceof ScrollStopped)) {
         this.pause();
-        this.view.phase = error instanceof ScrollPaused ? 'paused' : 'failed';
+        this.view.phase = error instanceof ScrollCaptureLimit?'review':error instanceof ScrollPaused ? 'paused' : 'failed';
         this.view.message = error instanceof Error ? error.message : String(error);
-        if (!(error instanceof ScrollPaused)) this.host.failed(error);
+        if (!(error instanceof ScrollPaused)&&!(error instanceof ScrollCaptureLimit)) this.host.failed(error);
         this.publish();
       }
     } finally {

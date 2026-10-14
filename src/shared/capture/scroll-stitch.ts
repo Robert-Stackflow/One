@@ -1,13 +1,21 @@
 import { imageDimensions } from './image-limits';
-import { scrollOptions, type ScrollOptions, type ScrollMatch } from './scroll-capture';
+import { scrollOptions,ScrollCaptureLimit, type ScrollOptions, type ScrollMatch } from './scroll-capture';
 import {scrollSearchCandidates,scrollLocallyConsistent} from './scroll-search';
 export interface PixelFrame {
   width: number;
   height: number;
   pixels: Uint8Array;
 }
+export interface ScrollStripStorage {
+  put(pixels:Uint8Array):number;
+  read(id:number):Uint8Array;
+  rows(id:number,stride:number,indices:number[]):Uint8Array;
+  remove(id:number):void;
+  reset():void;
+  readonly bytes:number;
+}
 interface Strip {
-  pixels: Uint8Array;
+  pixels: Uint8Array|number;
   rows: number;
   previous?: Uint8Array;
 }
@@ -16,6 +24,7 @@ const BUDGET = 256 * 1024 * 1024;
  * Horizontal capture uses the same matching algorithm on a transposed view.
  * This module runs in a worker, never on Electron's main/renderer thread. */
 export class ScrollStitch {
+  constructor(private storage?:ScrollStripStorage){}
   private strips: Strip[] = [];
   private previous?: Uint8Array;
   private candidate?: Uint8Array;
@@ -33,6 +42,7 @@ export class ScrollStitch {
       throw Error('长截图单帧最多 1,000 万像素，请缩小选区');
     this.options = scrollOptions(options, source.width, source.height);
     this.source = source;
+    this.storage?.reset();
     this.strips = [];
     this.previous = this.candidate = undefined;
     this.axis = this.cross = this.rows = this.count = this.offset = 0;
@@ -105,14 +115,15 @@ export class ScrollStitch {
     if (this.candidate) throw Error('请先处理上一帧的拼接位置');
     const pixels = this.normalize(frame);
     if (!this.previous) {
+      const stored=this.storage?this.storage.put(pixels):pixels;
       this.previous = pixels;
-      this.strips = [{ pixels, rows: this.axis }];
+      this.strips = [{ pixels:stored, rows: this.axis }];
       this.rows = this.axis;
       this.count = 1;
       this.match = 'first';
       return this.status();
     }
-    if (this.count >= 200) throw Error('本次长截图已达到 200 帧，请确认已有结果');
+    if (this.count >= 200) throw new ScrollCaptureLimit('本次长截图已达到 200 帧，请确认已有结果');
     if (this.sameBody(this.previous,pixels)) {
       this.match = 'unchanged';
       this.offset = 0;
@@ -162,12 +173,12 @@ export class ScrollStitch {
   }
   private append(pixels: Uint8Array, shift: number) {
     const rows = this.rows + shift;
-    imageDimensions(
+    try{imageDimensions(
       this.options!.axis === 'vertical' ? this.cross : rows,
       this.options!.axis === 'vertical' ? rows : this.cross,
-    );
-    const tail = pixels.slice((this.axis - shift) * this.cross * 4);
-    this.strips.push({ pixels: tail, rows: shift, previous: this.previous });
+    );}catch(error){throw new ScrollCaptureLimit((error as Error).message+'。已有内容已保留。');}
+    const tail = this.storage?pixels.subarray((this.axis-shift)*this.cross*4):pixels.slice((this.axis - shift) * this.cross * 4),stored=this.storage?this.storage.put(tail):tail;
+    this.strips.push({ pixels: stored, rows: shift, previous: this.previous });
     this.rows = rows;
     this.previous = pixels;
     this.candidate = undefined;
@@ -178,10 +189,10 @@ export class ScrollStitch {
     const start = Math.max(1, this.strips.length - 8);
     for (let i = 1; i < start; i++) this.strips[i].previous = undefined;
     let bytes = this.strips.reduce(
-      (s, p) => s + p.pixels.byteLength + (p.previous?.byteLength || 0),
+      (s, p) => s + (typeof p.pixels==='number'?0:p.pixels.byteLength) + (p.previous?.byteLength || 0),
       pixels.byteLength,
     );
-    for (let i = 1; bytes > BUDGET && i < this.strips.length - 1; i++) {
+    for (let i = 1; bytes > (this.storage?96*1024*1024:BUDGET) && i < this.strips.length - 1; i++) {
       bytes -= this.strips[i].previous?.byteLength || 0;
       this.strips[i].previous = undefined;
     }
@@ -195,6 +206,7 @@ export class ScrollStitch {
   undo() {
     const last = this.strips.at(-1);
     if (!last?.previous) throw Error('没有可撤销的拼接');
+    if(typeof last.pixels==='number')this.storage!.remove(last.pixels);
     this.strips.pop();
     this.previous = last.previous;
     this.rows -= last.rows;
@@ -222,14 +234,15 @@ export class ScrollStitch {
       pixels = new Uint8Array(width * height * 4);
     let offset = 0;
     for (const strip of this.strips) {
-      if (this.options!.axis === 'vertical') pixels.set(strip.pixels, offset * this.cross * 4);
+      const bytes=typeof strip.pixels==='number'?this.storage!.read(strip.pixels):strip.pixels;
+      if (this.options!.axis === 'vertical') pixels.set(bytes, offset * this.cross * 4);
       else
         for (let y = 0; y < strip.rows; y++)
           for (let x = 0; x < this.cross; x++) {
             const from = (y * this.cross + x) * 4;
-            pixels.set(strip.pixels.subarray(from, from + 4), (x * width + offset + y) * 4);
+            pixels.set(bytes.subarray(from, from + 4), (x * width + offset + y) * 4);
           }
-      offset += strip.rows;
+      if(typeof strip.pixels==='number')bytes.fill(0);offset += strip.rows;
     }
     return { width, height, pixels };
   }
@@ -243,17 +256,18 @@ export class ScrollStitch {
     const limits = this.strips
       .map((s) => s.rows)
       .reduce<number[]>((a, n) => [...a, (a.at(-1) || 0) + n], []);
-    for (let y = 0; y < height; y++)
-      for (let x = 0; x < width; x++) {
-        const sx = Math.min(size.width - 1, Math.floor(x / scale)),
-          sy = Math.min(size.height - 1, Math.floor(y / scale)),
-          axis = this.options!.axis === 'vertical' ? sy : sx,
-          cross = this.options!.axis === 'vertical' ? sx : sy,
-          index = limits.findIndex((n) => axis < n),
-          strip = this.strips[index],
-          from = ((axis - (limits[index - 1] || 0)) * this.cross + cross) * 4;
-        pixels.set(strip.pixels.subarray(from, from + 4), (y * width + x) * 4);
+    const vertical=this.options!.axis==='vertical',requests=new Map<number,{out:number;row:number}[]>();
+    for(let out=0;out<(vertical?height:width);out++){
+      const axis=Math.min(this.rows-1,Math.floor(out/scale)),index=limits.findIndex(n=>axis<n),list=requests.get(index)||[];list.push({out,row:axis-(limits[index-1]||0)});requests.set(index,list);
+    }
+    for(const [index,list] of requests){
+      const strip=this.strips[index],stored=typeof strip.pixels==='number',bytes=stored?this.storage!.rows(strip.pixels as number,this.cross*4,list.map(item=>item.row)):strip.pixels as Uint8Array;
+      for(let row=0;row<list.length;row++)for(let cross=0;cross<(vertical?width:height);cross++){
+        const at=((stored?row:list[row].row)*this.cross+Math.min(this.cross-1,Math.floor(cross/scale)))*4,to=(vertical?list[row].out*width+cross:cross*width+list[row].out)*4;pixels.set(bytes.subarray(at,at+4),to);
       }
+      if(stored)bytes.fill(0);
+    }
     return { width, height, pixels };
   }
+  storageStats(){const buffers=new Set<Uint8Array>();if(this.previous)buffers.add(this.previous);if(this.candidate)buffers.add(this.candidate);for(const strip of this.strips){if(typeof strip.pixels!=='number')buffers.add(strip.pixels);if(strip.previous)buffers.add(strip.previous);}return {residentBytes:[...buffers].reduce((sum,bytes)=>sum+bytes.byteLength,0),diskBytes:this.storage?.bytes||0,strips:this.strips.length};}
 }
