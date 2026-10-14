@@ -7,7 +7,7 @@
     <button id="result-panel-toggle" class="quiet ocr-panel-toggle" aria-label="收起结果栏" aria-controls="ocr-results" aria-expanded="true" title="收起结果栏"></button>
   </div>
   <div class="ocr-workspace" id="ocr-workspace">
-    <section class="source-preview" aria-label="识别图片"><img id="source" alt="待识别图片"><section id="models" class="model-note" hidden><p id="model-download-note"></p><button id="install" class="quiet">下载所选模型</button><button id="cancel-install" class="quiet" hidden>取消下载</button></section><div id="image-loading" class="image-loading" role="status" aria-live="polite" hidden><div class="image-loading-card"><span class="recognition-spinner" aria-hidden="true"></span><span id="image-loading-label">识别中</span><button id="overlay-cancel" class="quiet">取消</button></div></div></section>
+    <section class="source-preview" aria-label="识别图片"><img id="source" alt="待识别图片"><div id="image-loading" class="image-loading" role="status" aria-live="polite" hidden><div class="image-loading-card"><span class="recognition-spinner" aria-hidden="true"></span><span id="image-loading-label">识别中</span><button id="overlay-cancel" class="quiet">取消</button></div></div></section>
     <div id="ocr-divider" class="ocr-divider" role="separator" tabindex="0" aria-label="调整图片与结果栏宽度" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="80" aria-valuenow="67"></div>
     <aside id="ocr-results" class="ocr-results" aria-label="识别与翻译结果">
       <section id="text-result" class="ocr-result-section"><div class="ocr-result-heading"><label id="result-label" for="result">识别原文</label></div><textarea id="result" dir="auto" spellcheck="false" placeholder="识别文字或粘贴原文"></textarea></section>

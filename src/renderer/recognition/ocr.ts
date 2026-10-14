@@ -47,18 +47,15 @@ function inference(value: OCRResult['inference']) {
 function render() {
   const root = q('app'); if (root.dataset.captureScale !== String(state.uiScale)) applyCaptureScale(root, state.uiScale);
   const busy = requesting || state.running || workflowBusy() || !!correction?.busy();
-  q('model-download-note').textContent = `${state.modelTitle || 'Tesseract fast'} 模型尚未就绪。下载后在本机识别图片。`;
-  q('models').hidden = state.models.ready && !state.models.downloading && !state.models.error;
   q<HTMLButtonElement>('run').disabled = busy || translation.busy() || state.models.downloading || !state.models.ready;
+  q('run').title=state.models.downloading?'模型下载中':!state.models.ready?`${state.modelTitle||'所选模型'} 尚未就绪，请打开 OCR 模型`:'';
   q<HTMLSelectElement>('language').disabled = busy;
   q<HTMLTextAreaElement>('result').readOnly = busy || translation.busy();
-  q<HTMLButtonElement>('install').disabled = state.models.downloading || busy;
-  q('cancel-install').hidden = !state.models.downloading;
   q<HTMLButtonElement>('copy').disabled = !q<HTMLTextAreaElement>('result').value.trim();
   q('workflow-back').hidden = !state.workflow?.returnToCapture;
-  const loading = requesting || state.running || workflowBusy() || state.models.downloading || translation.busy();
+  const loading = requesting || state.running || workflowBusy() || translation.busy();
   q('image-loading').hidden = !loading; q('source').parentElement!.ariaBusy = String(loading);
-  q('image-loading-label').textContent = state.models.downloading ? '下载模型中' : state.waitingForInference ? '等待其他本地任务' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
+  q('image-loading-label').textContent = state.waitingForInference ? '等待其他本地任务' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
   q<HTMLButtonElement>('overlay-cancel').disabled = false;
   selection.setEnabled(!busy); translation.render();
   const error = state.error || state.models.error || '';
@@ -88,9 +85,7 @@ async function recognize(region?:import('../../shared/recognition/text-area').OC
   } catch (error) { message(error); } finally { requesting = false; await refresh(); }
 }
 q('run').onclick=()=>void recognize();
-q('overlay-cancel').onclick = () => void (state.models.downloading ? api.cancelInstall() : translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);
-q('install').onclick = () => { void api.install().then(refresh).catch(message); void refresh(); };
-q('cancel-install').onclick = () => void api.cancelInstall().catch(message);
+q('overlay-cancel').onclick = () => void (translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);
 q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
 q('result').oninput = () => { selection.setDocument(undefined,false); translation.sourceChanged(); if (state) render(); };
 registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);

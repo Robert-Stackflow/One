@@ -10,8 +10,6 @@ body[data-view='recognition'] main.ocr-workbench { display: flex; flex-direction
 .ocr-tool-group label, .ocr-translation-tools label { display: flex; gap: 6px; align-items: center; font-size: calc(12px * var(--text-scale, 1)); white-space: nowrap; }
 .ocr-panel-toggle { margin-left: auto; display: grid; place-items: center; padding: 7px; }
 .ocr-panel-toggle svg { width: 18px; height: 18px; }
-.model-note { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 24px; background: var(--soft); font-size: calc(12px * var(--text-scale, 1)); }
-.model-note p { margin: 0; color: var(--muted); }
 .ocr-workspace { --ocr-image-width: 67%; display: grid; grid-template-columns: minmax(0, var(--ocr-image-width)) 8px minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; }
 .ocr-workspace.results-hidden { grid-template-columns: minmax(0, 1fr); }
 .ocr-workspace.results-hidden .ocr-results, .ocr-workspace.results-hidden .ocr-divider { display: none; }
