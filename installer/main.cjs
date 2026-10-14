@@ -8,7 +8,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const {spawn, execFile} = require('node:child_process');
 const {promisify} = require('node:util');
-const {runningProcessIds,elevationCommand} = require('./setup-actions.cjs');
+const {runningProcessIds,elevationCommand,checkDiskSpace} = require('./setup-actions.cjs');
 
 const execute = promisify(execFile);
 const root = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '.dev-resources');
@@ -197,9 +197,7 @@ async function install(directory) {
     }
     const parent=path.dirname(directory);
     await fsp.mkdir(parent,{recursive:true});
-    const drive=path.parse(directory).root;
-    const {stdout}=await execute('powershell.exe',['-NoProfile','-NonInteractive','-Command',`(Get-PSDrive -Name '${drive[0]}').Free`],{windowsHide:true,timeout:10000});
-    if(Number(stdout.trim())<1024**3) throw Object.assign(Error('磁盘空间不足'),{reason:'space'});
+    await checkDiskSpace(parent,fsp.statfs.bind(fsp));
     scratch=path.join(parent,`cs-${crypto.randomBytes(8).toString('hex')}`);
     await fsp.mkdir(scratch);
     const copied=path.join(scratch,'One-Install-Engine.exe');
