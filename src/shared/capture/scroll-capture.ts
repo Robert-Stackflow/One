@@ -2,7 +2,7 @@ export type ScrollAxis = 'vertical' | 'horizontal';
 export type ScrollMode='manual'|'auto';
 interface ControlRect {x:number;y:number;width:number;height:number}
 /** Prefer usable space outside the selection; constrained screens retain a movable control. */
-export function scrollControlBounds(area:ControlRect,selection:ControlRect,height=500):ControlRect {
+export function scrollControlBounds(area:ControlRect,selection:ControlRect,height=268,requestedWidth=460):ControlRect {
   const gap=12,left=area.x+gap,top=area.y+gap,right=area.x+area.width-gap,bottom=area.y+area.height-gap;
   const spaces:ControlRect[]=[
     {x:Math.max(left,selection.x+selection.width+gap),y:top,width:right-Math.max(left,selection.x+selection.width+gap),height:bottom-top},
@@ -10,9 +10,9 @@ export function scrollControlBounds(area:ControlRect,selection:ControlRect,heigh
     {x:left,y:Math.max(top,selection.y+selection.height+gap),width:right-left,height:bottom-Math.max(top,selection.y+selection.height+gap)},
     {x:left,y:top,width:right-left,height:Math.min(bottom,selection.y-gap)-top},
   ];
-  const space=spaces.find(space=>space.width>=340&&space.height>=Math.min(height,250));
-  if(space){const width=Math.min(430,space.width),h=Math.min(height,space.height);return {x:Math.round(Math.max(space.x,Math.min(selection.x,space.x+space.width-width))),y:Math.round(Math.max(space.y,Math.min(selection.y,space.y+space.height-h))),width:Math.round(width),height:Math.round(h)};}
-  const width=Math.min(430,area.width),h=Math.min(height,area.height);
+  const space=spaces.find(space=>space.width>=Math.min(320,requestedWidth)&&space.height>=Math.min(height,230));
+  if(space){const width=Math.min(requestedWidth,space.width),h=Math.min(height,space.height);return {x:Math.round(Math.max(space.x,Math.min(selection.x,space.x+space.width-width))),y:Math.round(Math.max(space.y,Math.min(selection.y,space.y+space.height-h))),width:Math.round(width),height:Math.round(h)};}
+  const width=Math.min(requestedWidth,area.width),h=Math.min(height,area.height);
   return {x:Math.round(area.x+Math.max(0,area.width-width-gap)),y:Math.round(area.y+Math.min(gap,Math.max(0,area.height-h))),width,height:h};
 }
 export interface ScrollOptions {

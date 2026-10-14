@@ -11,6 +11,14 @@ test('scroll controls fit outside the selection across negative coordinates and 
   const bottom=scrollControlBounds({x:0,y:0,width:800,height:600},{x:0,y:0,width:800,height:300},250);assert.ok(bottom.y>=312);assert.equal(bottom.height,250);
   const small=scrollControlBounds({x:0,y:0,width:300,height:200},{x:0,y:0,width:300,height:200});assert.deepEqual(small,{x:0,y:0,width:300,height:200});
 });
+test('preview layout changes size once and preserves a manually moved control during sampling',async()=>{
+  const f=await fixture();try{
+    const window=f.service.window as unknown as BrowserWindow,event={sender:window.webContents,senderFrame:window.webContents.mainFrame},token=f.state().token;
+    window.bounds={x:1000,y:400,width:460,height:268};await f.command('sample');assert.equal(window.bounds.x,1000);assert.equal(window.bounds.y,400);
+    await handlers.get('one:scroll-command')!(event,token,{kind:'layout',preview:false});assert.equal(window.bounds.width,320);assert.equal(window.bounds.height,268);
+    await handlers.get('one:scroll-command')!(event,token,{kind:'layout',preview:false,settings:true});assert.equal(window.bounds.width,500);assert.equal(window.bounds.height,600);
+  }finally{f.service.cancel();}
+});
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(predicate: () => boolean) {
   const started = performance.now();

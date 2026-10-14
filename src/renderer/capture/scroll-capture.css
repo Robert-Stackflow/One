@@ -1,134 +1,35 @@
-html:has(body[data-view='scroll-capture']),
-body[data-view='scroll-capture'] {
-  height: 100%;
-  overflow: hidden;
-}
-body[data-view='scroll-capture'] {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  color: var(--fg);
-}
-body[data-view='scroll-capture'] .media-header {
-  flex: 0 0 52px;
-  padding-left: 20px;
-}
-body[data-view='scroll-capture'] #app > main {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  height: auto;
-  margin: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0 18px 18px;
-}
-body[data-view='scroll-capture'] #message {
-  min-height: 40px;
-  margin: 0 0 12px;
-  font-size: 13px;
-}
-body[data-view='scroll-capture'] .scroll-settings {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px;
-  display: grid;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-body[data-view='scroll-capture'] .scroll-settings label,
-body[data-view='scroll-capture'] .scroll-pending label {
-  display: grid;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 400;
-  min-width: 0;
-}
-body[data-view='scroll-capture'] .field-pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-body[data-view='scroll-capture'] .scroll-settings summary {
-  font-size: 13px;
-  cursor: pointer;
-}
-body[data-view='scroll-capture'] .help {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.65;
-}
-body[data-view='scroll-capture'] .scroll-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-body[data-view='scroll-capture'] .scroll-preview {
-  margin-top: 14px;
-  min-height: 160px;
-  display: flex;
-  justify-content: center;
-  background: var(--soft);
-  border-radius: var(--radius);
-  padding: 12px;
-}
-body[data-view='scroll-capture'] .scroll-preview img {
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-  align-self: flex-start;
-}
-body[data-view='scroll-capture'] .scroll-preview #empty {
-  margin: auto;
-  max-width: 240px;
-  text-align: center;
-}
-body[data-view='scroll-capture'] .scroll-pending {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-body[data-view='scroll-capture'] .scroll-pending button {
-  margin-top: 8px;
-}
-body[data-view='scroll-capture'] #app > footer {
-  flex: none;
-  padding: 12px 18px;
-  border-top: 1px solid var(--line);
-  display: grid;
-  gap: 8px;
-}
-body[data-view='scroll-capture'] .scroll-status {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-body[data-view='scroll-capture'] #app > footer > .scroll-actions {
-  justify-content: flex-end;
-}
-@media (prefers-reduced-motion: no-preference) {
-  body[data-view='scroll-capture'] .scroll-preview {
-    transition: background 160ms ease;
-  }
-}
-
+html:has(body[data-view='scroll-capture']),body[data-view='scroll-capture']{height:100%;overflow:hidden}
+body[data-view='scroll-capture']{background:var(--surface);color:var(--fg)}
 body[data-view='scroll-capture'] #app{height:100%;display:flex;flex-direction:column}
-body[data-view='scroll-capture'] .media-header{display:flex;align-items:center;border-bottom:1px solid var(--line);-webkit-app-region:drag}
+body[data-view='scroll-capture'] .media-header{flex:0 0 40px;display:flex;align-items:center;gap:12px;padding-left:12px;border-bottom:1px solid var(--line);-webkit-app-region:drag}
+body[data-view='scroll-capture'] .media-header strong{font-size:14px;white-space:nowrap}
+body[data-view='scroll-capture'] #dimensions{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body[data-view='scroll-capture'] .media-header .window-controls{position:static;margin-left:auto;align-self:stretch;-webkit-app-region:no-drag}
-body[data-view='scroll-capture'] .scroll-preview{max-height:184px;overflow:hidden}
-body[data-view='scroll-capture'] #preview-paper{position:relative;display:inline-flex;max-width:100%;align-self:center}
-body[data-view='scroll-capture'] #preview-paper[hidden]{display:none}
-body[data-view='scroll-capture'] #preview{display:block;max-height:160px;width:auto;max-width:100%}
+body[data-view='scroll-capture'] #app > main{flex:1;min-height:0;width:100%;height:auto;margin:0;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) 116px;gap:12px;overflow:hidden}
+body[data-view='scroll-capture'][data-preview='collapsed'] #app > main{grid-template-columns:minmax(0,1fr)}
+body[data-view='scroll-capture'] .scroll-workspace{min-width:0;overflow:auto;scrollbar-width:thin}
+body[data-view='scroll-capture'] .scroll-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+body[data-view='scroll-capture'] .scroll-toolbar{flex-wrap:nowrap;margin-bottom:8px}
+body[data-view='scroll-capture'] .scroll-modes{display:flex;background:var(--soft);border-radius:var(--radius);padding:3px}
+body[data-view='scroll-capture'] .scroll-modes button{padding:5px 10px}
+body[data-view='scroll-capture'] .scroll-modes button[aria-pressed='true']{background:var(--fg);color:var(--surface)}
+body[data-view='scroll-capture'] .scroll-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;height:32px;padding:0}
+body[data-view='scroll-capture'] .scroll-icon .icon{width:18px;height:18px}
+body[data-view='scroll-capture'] #message{font-size:12px;line-height:1.5;min-height:36px;margin:0 0 8px;overflow-wrap:anywhere}
+body[data-view='scroll-capture'] .scroll-settings{border-top:1px solid var(--line);padding-top:8px;display:grid;gap:12px}
+body[data-view='scroll-capture'] .scroll-settings summary{font-size:12px;cursor:pointer;color:var(--muted)}
+body[data-view='scroll-capture'] .scroll-settings label,body[data-view='scroll-capture'] .scroll-pending label{display:grid;gap:6px;font-size:13px;font-weight:400;min-width:0}
+body[data-view='scroll-capture'] .field-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+body[data-view='scroll-capture'] .help{font-size:12px;line-height:1.5;color:var(--muted)}
+body[data-view='scroll-capture'] .scroll-pending{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+body[data-view='scroll-capture'] .scroll-pending button{margin-top:8px}
+body[data-view='scroll-capture'] .scroll-preview{display:flex;align-items:flex-start;justify-content:center;min-width:0;overflow:hidden;background:var(--soft);border-radius:var(--radius);padding:6px}
+body[data-view='scroll-capture'] .scroll-preview[hidden],body[data-view='scroll-capture'] #preview-paper[hidden],body[data-view='scroll-capture'] .scroll-icon[hidden]{display:none}
+body[data-view='scroll-capture'] #preview-paper{position:relative;display:inline-flex;max-width:100%}
+body[data-view='scroll-capture'] #preview{display:block;max-height:154px;width:auto;max-width:100%;object-fit:contain}
+body[data-view='scroll-capture'] #empty{margin:auto;text-align:center}
 body[data-view='scroll-capture'] #preview-viewport,body[data-view='scroll-capture'] #preview-addition{position:absolute;pointer-events:none;box-sizing:border-box;border:2px solid #3b82f6}
 body[data-view='scroll-capture'] #preview-addition{border-style:dashed;border-color:#1d4ed8}
-body[data-view='scroll-capture'] .scroll-preview[hidden]{display:none}
-body[data-view='scroll-capture'] .scroll-settings summary{cursor:pointer;color:var(--muted);margin-bottom:8px}
-body[data-view='scroll-capture'] #app > main{padding:0 12px 12px}
-body[data-view='scroll-capture'] #message{min-height:24px;margin-bottom:6px}
-body[data-view='scroll-capture'] .scroll-settings:not([open]){padding:8px;margin-bottom:8px}
-body[data-view='scroll-capture'] .scroll-settings:not([open]) summary{margin:0}
-body[data-view='scroll-capture'] .scroll-preview{padding:8px;margin-top:8px;min-height:0;max-height:176px}
+body[data-view='scroll-capture'] #app > footer{flex:none;padding:8px 12px;border-top:1px solid var(--line)}
+body[data-view='scroll-capture'] footer .scroll-actions{justify-content:flex-end;gap:8px}
+@media(max-width:400px){body[data-view='scroll-capture'] #app > main{grid-template-columns:minmax(0,1fr)}body[data-view='scroll-capture'] .scroll-preview{display:none}}

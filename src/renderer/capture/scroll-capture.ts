@@ -3,16 +3,20 @@ import { customControls } from '../controls';
 import type { ScrollCommand, ScrollView } from '../../shared/capture/scroll-capture';
 import {applyCaptureScale} from './appearance';
 import {confirmDialog} from '../dialog';
+import {icon,registerIcons} from '../ui';
+import {Pause,Undo2,PanelRightOpen,PanelRightClose} from 'lucide';
 const api = window.one.scrollCapture!,
   q = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 let view: ScrollView,
   pending = false;
+registerIcons({'scroll-pause':Pause,'scroll-undo':Undo2,'scroll-preview-open':PanelRightOpen,'scroll-preview-close':PanelRightClose});
+q('pause').innerHTML=icon('lucide:scroll-pause');q('undo').innerHTML=icon('lucide:scroll-undo');
 function render(next: ScrollView) {
   view = next;
   applyCaptureScale(document.body,next.uiScale);
   q('message').textContent = next.message;
   q('setup').hidden = false;
-  q('pending').hidden = !next.pending;
+  q('pending').hidden = !next.pending||next.phase==='running';
   q('empty').hidden = !!next.preview;
   q<HTMLImageElement>('preview').hidden = !next.preview;
   q('preview-paper').hidden=!next.preview;
@@ -30,16 +34,16 @@ function render(next: ScrollView) {
     ? `${next.width} × ${next.height} · ${next.count} 帧`
     : '尚未采集';
   q('sample').textContent = next.count ? '采集下一帧' : '采集首帧';
-  q('auto').textContent = '自动滚动';q<HTMLButtonElement>('auto').ariaPressed=String(next.mode==='auto');q<HTMLButtonElement>('manual').ariaPressed=String(next.mode==='manual');
+  q<HTMLButtonElement>('auto').ariaPressed=String(next.mode==='auto');q<HTMLButtonElement>('manual').ariaPressed=String(next.mode==='manual');
   const running = next.phase === 'running';
   q('auto').hidden = false;
   q('pause').hidden = !running;
   for (const id of ['sample', 'manual','auto', 'join'])
     q<HTMLButtonElement>(id).disabled = pending || (id==='sample'||id==='join')&&running || (next.pending && id==='sample');
-  q('preview-toggle').textContent=next.previewExpanded?'收起预览':'展开预览';q<HTMLElement>('preview').closest<HTMLElement>('.scroll-preview')!.hidden=!next.previewExpanded;
+  document.body.dataset.preview=next.previewExpanded?'expanded':'collapsed';const preview=q('preview-toggle');preview.title=preview.ariaLabel=next.previewExpanded?'收起预览':'展开预览';preview.innerHTML=icon(next.previewExpanded?'lucide:scroll-preview-close':'lucide:scroll-preview-open');q<HTMLElement>('preview').closest<HTMLElement>('.scroll-preview')!.hidden=!next.previewExpanded;
   q<HTMLButtonElement>('undo').disabled = pending || running || !next.undo;
   q<HTMLButtonElement>('finish').disabled = pending || !next.count;
-  q<HTMLButtonElement>('edit').disabled = pending || !next.canEdit;
+  q<HTMLButtonElement>('edit').disabled = pending || !(next.canEdit||next.pending&&next.count>0&&next.phase!=='failed');
   q<HTMLInputElement>('offset').value = String(Math.max(1,next.offset || 1));
   q<HTMLInputElement>('offset').disabled=pending||running;
   q<HTMLInputElement>('offset').max = String(
@@ -54,10 +58,10 @@ function render(next: ScrollView) {
   customControls(document.body);
 }
 async function send(command: ScrollCommand) {
-  if (pending && !['cancel', 'pause'].includes(command.kind)) return;
+  if (pending && !['cancel', 'pause'].includes(command.kind)) return false;
   pending = true;
   render(view);
-  let failure = '';
+  let failure = '',success=false;
   try {
     if (!view.count && ['sample','manual', 'auto'].includes(command.kind))
       await api.command(view.token, {
@@ -71,7 +75,7 @@ async function send(command: ScrollCommand) {
         },
       });
     const next = await api.command(view.token, command);
-    if (next) render(next);
+    if (next) {render(next);success=true;}
   } catch (error) {
     failure =
       error instanceof Error
@@ -84,11 +88,13 @@ async function send(command: ScrollCommand) {
       if (failure) q('message').textContent = failure;
     }
   }
+  return success;
 }
-for (const kind of ['sample','manual', 'auto', 'pause', 'undo', 'finish', 'edit', 'cancel'] as const)
+for (const kind of ['sample','manual', 'auto', 'pause', 'undo', 'finish', 'cancel'] as const)
   q(kind).onclick = () => {
     void send({ kind });
   };
+q('edit').onclick=()=>void(async()=>{if(await send({kind:'finish'}))await send({kind:'edit'});})();
 q('preview-toggle').onclick=()=>void send({kind:'layout',preview:!view.previewExpanded});
 q<HTMLDetailsElement>('setup').ontoggle=()=>{const open=q<HTMLDetailsElement>('setup').open;if(!view)return;void (async()=>{if(open)await send({kind:'pause'});await send({kind:'layout',preview:view.previewExpanded,settings:open});})();};
 q('apply-settings').onclick=()=>void(async()=>{

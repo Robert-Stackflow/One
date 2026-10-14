@@ -1,6 +1,14 @@
 
-    <header class="media-header"><strong>长截图</strong></header>
+    <header class="media-header"><strong>长截图</strong><span id="dimensions">尚未采集</span></header>
     <main>
+      <section class="scroll-workspace">
+      <div class="scroll-actions scroll-toolbar" aria-label="采集操作">
+        <button id="sample" type="button" hidden>采集当前帧</button>
+        <div class="scroll-modes" role="group" aria-label="采集模式"><button id="manual" type="button" class="quiet" title="手动滚动">手动</button><button id="auto" type="button" class="quiet" title="自动滚动">自动</button></div>
+        <button id="pause" type="button" class="quiet scroll-icon" title="暂停采集" aria-label="暂停采集" hidden></button>
+        <button id="undo" type="button" class="quiet scroll-icon" title="撤销拼接" aria-label="撤销拼接" disabled></button>
+        <button id="preview-toggle" type="button" class="quiet scroll-icon" title="收起预览" aria-label="收起预览"></button>
+      </div>
       <p id="message" class="feedback-inline" role="status" aria-live="polite"></p>
       <details id="setup" class="scroll-settings"><summary>匹配设置</summary>
         <label
@@ -36,11 +44,6 @@
         </details>
         <button id="apply-settings" type="button" class="quiet">应用并重新开始</button>
       </details>
-      <div class="scroll-actions">
-        <button id="sample" type="button" class="quiet" hidden>采集当前帧</button><button id="manual" type="button" class="quiet">手动滚动</button
-        ><button id="auto" type="button" class="quiet">自动滚动</button
-        ><button id="pause" type="button" class="quiet" hidden>暂停</button><button id="preview-toggle" type="button" class="quiet">收起预览</button>
-      </div>
       <div id="pending" class="scroll-pending" hidden>
         <label
           >本次向前移动距离（像素）<input
@@ -52,19 +55,16 @@
         ><button id="join" type="button" class="quiet">按此距离拼接</button>
         <p class="help">仅在你确定移动距离时使用。错误距离会产生重复或缺失内容。</p>
       </div>
-      <section class="scroll-preview" aria-label="长截图预览">
+      </section>
+      <aside class="scroll-preview" aria-label="长截图预览">
         <div id="preview-paper" hidden><img id="preview" alt="拼接结果预览" hidden /><span id="preview-viewport" aria-label="最后采集视口"></span><span id="preview-addition" aria-label="本次新增区域" hidden></span></div>
         <p id="empty" class="help">等待稳定画面</p>
-      </section>
+      </aside>
     </main>
     <footer>
-      <div class="scroll-status">
-        <span id="dimensions">尚未采集</span
-        ><button id="undo" type="button" class="quiet" disabled>撤销拼接</button>
-      </div>
       <div class="scroll-actions">
         <button id="cancel" type="button" class="quiet">取消</button
-        ><button id="finish" type="button" class="quiet" disabled>确认已有结果</button
-        ><button id="edit" type="button" class="primary" disabled>编辑结果</button>
+        ><button id="finish" type="button" hidden disabled>确认已有结果</button
+        ><button id="edit" type="button" class="primary" title="完成并进入图片编辑器" disabled>完成</button>
       </div>
     </footer>

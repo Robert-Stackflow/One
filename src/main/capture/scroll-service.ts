@@ -49,6 +49,7 @@ export class ScrollCaptureService {
   private generation = 0;
   private busy = false;
   private motion=new ScrollMotion();
+  private settingsOpen=false;
   private automatic = false;
   private monitoring=false;
   private monitorSerial=0;
@@ -86,8 +87,16 @@ export class ScrollCaptureService {
     if (this.view)
       this.view.canEdit = !!this.view.count && !this.view.pending && !this.workerFailed;
     if (this.window && !this.window.isDestroyed())
+      this.resizeControl();
+    if (this.window && !this.window.isDestroyed())
       this.window.webContents.send('one:scroll-view', this.view);
     return structuredClone(this.view!);
+  }
+  private resizeControl(){
+    const region=this.region,view=this.view,window=this.window,display=screen.getAllDisplays().find(d=>d.id===region?.displayId);if(!region||!view||!window||window.isDestroyed()||!display)return;
+    const height=this.settingsOpen?600:view.pending&&view.phase!=='running'?420:268,width=this.settingsOpen?500:view.previewExpanded?460:320;
+    const bounds=scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height},height,width),current=window.getBounds();
+    if(current.width!==bounds.width||current.height!==bounds.height)window.setBounds(bounds);
   }
   async open(displayId: number, hideMainWindow = false,chosen?:Region,startManual=true,carriedWindows:BrowserWindow[]=[]) {
     if(this.host.blocked())throw Error('长截图服务已关闭');
@@ -103,7 +112,7 @@ export class ScrollCaptureService {
         this.cancel();
         return;
       }
-      this.region = region;
+      this.region = region;this.settingsOpen=false;
       const display = screen.getAllDisplays().find((d) => d.id === region.displayId);
       if (!display || displaySignature(display) !== region.signature)
         throw Error('显示器已改变，请重新选择');
@@ -165,8 +174,8 @@ export class ScrollCaptureService {
       const placement=scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height});
       const window = this.host.createWindow({
         ...placement,
-        minWidth: Math.min(340,placement.width),
-        minHeight: Math.min(250,placement.height),
+        minWidth: Math.min(320,placement.width),
+        minHeight: Math.min(200,placement.height),
         title: 'One · 长截图',
         show: false,
         alwaysOnTop: true,
@@ -433,8 +442,7 @@ export class ScrollCaptureService {
     const command = value as ScrollCommand;
     if(command.kind==='layout'){
       if(typeof command.preview!=='boolean'||command.settings!==undefined&&typeof command.settings!=='boolean')throw Error('预览设置无效');this.view.previewExpanded=command.preview;
-      const region=this.region,display=screen.getAllDisplays().find(d=>d.id===region?.displayId);
-      if(region&&display)this.window?.setBounds(scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height},command.settings?600:command.preview?500:310));return this.publish();
+      if(command.settings!==undefined)this.settingsOpen=command.settings;return this.publish();
     }
     if (command.kind === 'cancel') {
       this.cancel();
