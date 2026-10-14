@@ -133,6 +133,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
         if (!node) {
           node = document.createElement('span'); node.className = 'text-selection-unit'; node.dataset.token = String(tokenIndex);
           node.dataset.geometry = token.geometry; node.textContent = token.text;
+          if(token.geometry==='ctc'){node.title='近似字符位置（CTC 对齐与像素投影）';node.ariaLabel=token.text+'，位置近似';}
           node.style.cssText = `left:${box.x / view.width * 100}%;top:${box.y / view.height * 100}%;width:${box.width / view.width * 100}%;height:${box.height / view.height * 100}%;`;
           node.style.clipPath = `polygon(${token.quad.map(point => `${(point.x - box.x) / box.width * 100}% ${(point.y - box.y) / box.height * 100}%`).join(',')})`;
           nodes.set(tokenIndex, node);

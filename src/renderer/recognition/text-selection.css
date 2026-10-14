@@ -18,6 +18,7 @@ img.text-selection-image, body[data-view='recognition'] .source-preview img.text
 .text-selection-layer { position: absolute; inset: 0; }
 .text-selection-unit { position: absolute; color: transparent; user-select: none; cursor: text; overflow: hidden; white-space: pre; }
 .text-selection-unit.selected { background: color-mix(in srgb, var(--fg) 24%, transparent); box-shadow: inset 0 0 0 1px var(--fg); }
+.text-selection-unit.selected[data-geometry='ctc'] { box-shadow: none; outline: 1px dashed var(--fg); outline-offset: -1px; }
 .text-image-viewport.panning, .text-image-viewport.panning .text-selection-unit { cursor: grab; }
 .text-image-viewport.panning:active, .text-image-viewport.panning:active .text-selection-unit { cursor: grabbing; }
 @media (max-width: 720px) {

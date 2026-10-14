@@ -44,7 +44,7 @@
 
 One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在独立推理 Worker 中运行检测、方向处理、识别和后处理，复用模型缓存；模型首次使用按需下载，记录版本、字典、前后处理配置、大小、哈希和许可，原子完成安装。代码许可和具体权重许可分别核对，不只看仓库首页。
 
-首批原型固定 [tiny 检测](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/tree/2ba1506c0380b8f0b03dd142459aac66d4421f6c) 与 [tiny 识别](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/tree/2612ab37152ae0a677521bae4e1e3d4fb4cf7c30) 官方 ONNX/YAML，权重许可标为 Apache-2.0；使用同版本字典和前后处理，不需要 Python。已实现 CPU/DirectML 推理、DB 文字框与透视裁剪，CTC 发射区间只标作近似对齐信息，不冒充实际字框。当前文档输出保留真实检测四边形，选择粒度为整行词框；精细对齐和方向模型仍待后续适配。推理已移入独立进程，校验后的权重字节直接交给 ONNX，避免校验与加载之间再打开可变化的文件；取消、超时和内存超限结束整个推理进程，旧输入保留。首批用户模型/设备管理入口已接入，可明确切换实验阶段 tiny，默认 OCR 仍为 Tesseract；跨功能调度和其他预设仍待完成。
+首批原型固定 [tiny 检测](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/tree/2ba1506c0380b8f0b03dd142459aac66d4421f6c) 与 [tiny 识别](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/tree/2612ab37152ae0a677521bae4e1e3d4fb4cf7c30) 官方 ONNX/YAML，权重许可标为 Apache-2.0；使用同版本字典和前后处理，不需要 Python。已实现 CPU/DirectML 推理、DB 文字框与透视裁剪。统一文字文档保留真实检测四边形；CTC 发射区间与高对比图片的墨迹列投影提供近似字级选择，扣除输入补白并还原透视、竖行旋转和行方向，缺失或不一致时保留原行框，不均分伪造字框。small/medium 已接入 0°/180° 行方向模型，tiny 不支持倒置行。推理已移入独立进程，校验后的权重字节直接交给 ONNX，避免校验与加载之间再打开可变化的文件；取消、超时和内存超限结束整个推理进程，旧输入保留。模型/设备入口和首批跨功能调度已接入，默认 OCR 仍为 Tesseract；真实文档质量、复杂版面阅读顺序与默认档仍待验收。
 
 可重复基准入口为 `node scripts/prepare-recognition-benchmark.mjs --prepare` 和 `node tests/recognition-paddle-runtime.cjs`，前者无 `--prepare` 时只验证已缓存文件。当前通过 60 张合成单行与中英三行、深色、顺时针 90°、紧裁剪单行四类整图的 CPU/DirectML 设备 0 核验；同图 Tesseract 也识别出预期文字，因此不能据此证明默认引擎应替换。结果记录文字、CER、冷启动、阶段耗时和进程 RSS，GPU 峰值显存尚未测量；DXGI 设备号/会话身份与指定设备推理已核验，真实分层样本与其他模型/尺寸仍按 A 门槛验收，不把合成样本成绩推广到真实使用场景。
 
@@ -120,6 +120,10 @@ OCR/公式窗口在动态样式和首轮布局完成后显示，不等待模型�
 默认引擎必须在中英屏幕截图主样本上优于当前 Tesseract，并检查每类样本是否出现明显退化；具体阈值在 A 阶段测量后冻结。v6 未通过时选择更合适的 v5 配置或继续优化，不为追新直接替换。
 
 首批实现保留 Tesseract 的真实符号框，产出带图片 SHA-256、引擎/模型版本与坐标变换的 `TextDocument`；字符文字与词不匹配或没有字形框时保留实际词框，不均分伪造。共享选择层已接入独立识别窗口，支持跨行、词内、词/行选择、键盘复制扩选与缩放旋转；单次拖选期间冻结变换，避免 ResizeObserver 或工具栏换行改变取点坐标。只为可视区建立文字节点，过密视图要求放大但允许全选复制。原图翻译、长图分块 OCR、其他模型预设和预览/编辑器入口仍按后续批次推进，当前全文编辑后会关闭旧坐标选择层以防复制过期文字。
+
+Paddle tiny/small/medium 已接入近似字级选择，虚线与悬浮提示明确区分真实字形框；同行高矮片段按行合并阅读顺序。`node tests/paddle-alignment-runtime.cjs`（另加 `--dml --device0` / `--device1`）覆盖六类合成图的 CPU、NVIDIA 与 AMD：每个设备的 18 组合中，17 个声明支持的组合通过，匹配覆盖率最低 0.929、匹配字中心命中率最低 0.923。tiny 倒置行为预设负例，不能据此宣称支持。证据位于 `work/current/capture-reconstruction/ctc-alignment/verified-*`；尚不能代表真实文档质量、多栏或整图旋转后的阅读顺序验收。`node tests/local-model-ui.cjs --selection` 验证单字、扩选、原文联动、旋转复制及编辑后停用旧坐标。DeepSeek grounding 探测仅得到文段框，v1 还有明显偏移，继续仅提供文字结果。
+
+OCR 模型弹窗状态读取并发检查各模型的元数据，两种 DeepSeek 共享一次 CPU/CUDA 运行包快照；不加载推理模型，不读取权重散列，不等待显卡探测。`node tests/local-model-ui.cjs --timing` 刻意挂起状态返回，验证弹窗仍先绘制占位；本机隔离实测首帧约 25 ms、元数据约 4 ms，记录于 `work/current/capture-reconstruction/model-dialog-timing.json`，不作为其他设备的固定耗时保证。下载发布及实际推理的完整校验继续保留。
 
 ## 4. 翻译与现有 AI 服务统一
 

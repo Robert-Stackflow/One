@@ -93,13 +93,16 @@ export class LocalModelManager {
     await this.deviceTask;
     return structuredClone(this.devices);
   }
-  private async modelState(id: string, refresh = false) {
+  private async modelState(id: string, refresh = false, runtimesReady?: Promise<{cpu:boolean;cuda:boolean}>) {
     const model = this.preset(id);
     // UI reads installed-file metadata only. Download publication and acquire()
     // verify SHA-256; opening/polling a dialog must never stream model weights.
     if (model.purpose === 'ocr') {
       const state=await this.store.state(model,undefined,false);
-      if(model.backends.includes('cuda'))state.ready=state.ready&&!!(await this.options.runtimes?.state('cpu'))?.ready;
+      if(model.backends.includes('cuda')){
+        const cpuReady=runtimesReady?(await runtimesReady).cpu:!!(await this.options.runtimes?.state('cpu'))?.ready;
+        state.ready=state.ready&&cpuReady;
+      }
       return state;
     }
     if (!this.states.has(id) || refresh) {
@@ -117,25 +120,31 @@ export class LocalModelManager {
   }
   async state(refresh = false, purpose?: LocalModelPurpose): Promise<LocalModelManagerState> {
     await this.load();
-    let runtimeReady:Promise<{cpu:boolean;cuda:boolean}>|undefined;
-    const legacy = await this.tesseract.state(), legacyBytes = ocrPacks.reduce((sum, file) => sum + file.bytes, 0);
+    const catalog=localModelCatalog.filter(model=>!purpose||model.purpose===purpose);
+    // Independent metadata reads share one runtime snapshot, including both DeepSeek presets.
+    const runtimeReady=catalog.some(model=>model.backends.includes('cuda'))?
+      Promise.all([this.options.runtimes?.state('cpu'),this.options.runtimes?.state('cuda')])
+        .then(([cpu,cuda])=>({cpu:!!cpu?.ready,cuda:!!cuda?.ready})):undefined;
+    const models=Promise.all(catalog.map(async model=>({model,cached:await this.modelState(model.id,refresh,runtimeReady)})));
+    const [legacy,snapshots,runtime]=await Promise.all([this.tesseract.state(),models,runtimeReady]);
+    const legacyBytes = ocrPacks.reduce((sum, file) => sum + file.bytes, 0);
     const entries: LocalModelEntry[] = [{ id: 'tesseract', title: 'Tesseract', size: 'fast', purpose: 'ocr', revision: 'tessdata_fast@8741641',
       languages: ['中文', 'English'], backends: ['cpu'], weightLicense: 'Apache-2.0', runtime: 'tesseract.js', precision: 'traineddata',
       ready: legacy.ready, downloading: legacy.downloading, inUse: !!this.usage.get('tesseract'), totalBytes: legacyBytes,
       diskBytes: legacy.diskBytes, downloadedBytes: legacy.ready ? legacyBytes : 0,
-      progress: legacy.progress, error: legacy.error, note: '兼容引擎；支持真实字符框选择' }];
-    for (const model of localModelCatalog) {
-      if(purpose&&model.purpose!==purpose)continue;
-      const cached = await this.modelState(model.id, refresh), progress = this.progress.get(model.id), downloading = this.tasks.has(model.id);
+      progress: legacy.progress, error: legacy.error,selection:'glyph', note: '兼容引擎；支持真实字符框选择' }];
+    for (const {model,cached} of snapshots) {
+      const progress = this.progress.get(model.id), downloading = this.tasks.has(model.id);
       const native=model.backends.includes('cuda');
-      if(native&&!runtimeReady)runtimeReady=Promise.all([this.options.runtimes?.state('cpu'),this.options.runtimes?.state('cuda')]).then(([cpu,cuda])=>({cpu:!!cpu?.ready,cuda:!!cuda?.ready}));
       entries.push({ ...cached, downloading, inUse: native ? !!this.usage.get(model.id) : cached.inUse || !!this.usage.get(model.id), id: model.id, title: model.title, size: model.size,
         purpose: model.purpose, revision: model.revision, languages: [...model.languages], backends: [...model.backends], weightLicense: model.weightLicense.name,
         runtime: model.runtime, precision: model.precision, measuredMemoryMiB: model.measuredMemoryMiB, measuredVRAMMiB: model.measuredVRAMMiB,
         weightLicenseSource:model.weightLicense.source,source:native?model.artifacts[0].url.split('/resolve/')[0]:undefined,
-        runtimeReady:native?await runtimeReady:undefined,
+        runtimeReady:native?runtime:undefined,
+        selection:model.purpose==='ocr'?(native?'text':'ctc'):undefined,
+        orientationModel:model.purpose==='ocr'&&!native?model.artifacts.some(file=>file.role==='orientation'):undefined,
         progress: progress ? progress.received / progress.total : 0, downloadedBytes: downloading && progress ? Math.min(cached.totalBytes,progress.received) : cached.downloadedBytes,
-        error: this.errors.get(model.id) || '', note: native?'CPU / NVIDIA CUDA；当前仅提供文字结果，不提供图上选字':model.purpose === 'ocr' ? '实验阶段；已验证 CPU/DirectML；当前选择粒度为真实整行框' : '已验证 CPU；保留旧缓存供旧版使用' });
+        error: this.errors.get(model.id) || '', note: native?'CPU / NVIDIA CUDA；当前仅提供文字结果，不提供图上选字':model.purpose === 'ocr' ? '已验证 CPU/DirectML；CTC 与高对比像素投影提供近似定位，缺失对齐时保留行框' : '已验证 CPU；保留旧缓存供旧版使用' });
     }
     return { revision: this.revision, choices: structuredClone(this.choices), entries, devices: structuredClone(this.devices) };
   }

@@ -14,6 +14,7 @@ export interface PaddleRecResult {
   timeSteps: number;
   /** CTC emission intervals are alignment hints, not measured character boxes. */
   alignment: 'ctc-approximate';
+  input?:{width:number;contentWidth:number};
 }
 
 /** PaddleX OCRReisizeNormImg + CTCLabelDecode semantics, implemented without a Python runtime.
@@ -74,8 +75,9 @@ export function decodePaddleCTC(probabilities: Float32Array, dims: readonly numb
       if (value > maximum) { maximum = value; index = char; }
     }
     if (index && index !== previous) {
-      glyphs.push({ text: characters[index], start: time, end: time + 1, confidence: maximum });
-      confidence += maximum;
+      const score=Math.min(1,maximum);
+      glyphs.push({ text: characters[index], start: time, end: time + 1, confidence: score });
+      confidence += score;
     } else if (index && glyphs.length) glyphs[glyphs.length - 1].end = time + 1;
     previous = index;
   }
@@ -104,7 +106,7 @@ export class PaddleRecognizer {
       const outputs = await this.session.run({ [this.session.inputNames[0]]: new ort.Tensor('float32', input.data, input.dims) });
       const output = outputs[this.session.outputNames[0]];
       if (output.type !== 'float32' || !(output.data instanceof Float32Array)) throw Error('OCR 识别模型输出类型不兼容');
-      return decodePaddleCTC(output.data, output.dims, this.config.characters);
+      return {...decodePaddleCTC(output.data, output.dims, this.config.characters),input:{width:input.dims[3],contentWidth:input.resizedWidth}};
     } finally { input.data.fill(0); }
   }
   close() { return this.session.release(); }

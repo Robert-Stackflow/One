@@ -19,6 +19,20 @@ const fs = require('node:fs/promises'), path = require('node:path'), assert = re
     page.on('pageerror', error => errors.push(String(error)));
     await page.waitForFunction(() => window.fixtureReady);
     const viewport = page.locator('.text-image-viewport'), layer = page.locator('.text-selection-layer');
+    async function zoomToReadable(){
+      for(let step=0;step<20;step++){
+        const count=await page.locator('.text-selection-unit').count();if(count>0&&count<3000)break;
+        await page.locator('[data-text-action=zoom-in]').click();
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      }
+      await viewport.evaluate(node=>{node.scrollTop=node.querySelector('.text-image-stage').offsetTop;node.scrollLeft=node.clientWidth;});
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    }
+    // Fit now contains the entire long image; zoom before testing virtualized glyph selection.
+    await expect(page.locator('.text-image-status')).toContainText('请放大后选字');
+    const imageBounds=await page.locator('.text-image-stage img').boundingBox(),viewportBounds=await viewport.boundingBox();
+    assert.ok(imageBounds.height<=viewportBounds.height&&imageBounds.width<=viewportBounds.width);
+    await zoomToReadable();
     await expect.poll(() => page.locator('.text-selection-unit').count()).toBeGreaterThan(0);
     const total = await page.evaluate(() => window.fixtureTokenCount);
     assert.ok(total > 30000);
@@ -43,6 +57,7 @@ const fs = require('node:fs/promises'), path = require('node:path'), assert = re
     await expect.poll(() => page.locator(`.text-selection-unit[data-token="${total - 1}"]`).count()).toBe(1);
     assert.ok(await page.locator('.text-selection-unit').count() < 3000);
     await page.locator('[data-text-action=rotate]').click();
+    await page.locator('[data-text-action=fit]').click();
     await expect.poll(() => layer.getAttribute('data-rendered-tokens')).toBe('0');
     await expect(page.locator('.text-image-status')).toContainText('请放大后选字');
     await viewport.focus(); await viewport.press('Control+a'); await viewport.press('Control+c');
@@ -51,6 +66,8 @@ const fs = require('node:fs/promises'), path = require('node:path'), assert = re
     await page.locator('[data-text-action=rotate]').click();
     await page.locator('[data-text-action=rotate]').click();
     await page.locator('[data-text-action=fit]').click();
+    await expect(page.locator('.text-image-status')).toContainText('请放大后选字');
+    await zoomToReadable();
     await expect.poll(() => page.locator('.text-selection-unit').count()).toBeGreaterThan(0);
     await viewport.focus(); await viewport.press('Space');
     assert.equal(await viewport.evaluate(node => node.classList.contains('panning')), false, 'keyup must release pan mode');

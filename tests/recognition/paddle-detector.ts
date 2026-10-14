@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { paddleDetBoxes, paddleDetConfig, paddleDetInput, mergePaddleTextBoxes, type PaddleTextBox } from '../../src/main/recognition/paddle-detector';
 import { rectifyPaddleText } from '../../src/main/recognition/paddle-pipeline';
+import {paddleTextRows} from '../../src/main/recognition/paddle-detector';
 const config = paddleDetConfig(`Global: {model_name: fixture}
 PreProcess:
   transform_ops:
@@ -31,6 +32,11 @@ test('perspective crop retains corner correspondence and rotates a tall crop wit
   assert.deepEqual([...crop.data.slice(-3)], [70, 80, 0]);
   const tall = rectifyPaddleText(rgb, 10, 10, [{ x: 1, y: 1 }, { x: 3, y: 1 }, { x: 3, y: 9 }, { x: 1, y: 9 }]);
   assert.deepEqual([tall.width, tall.height], [8, 2]);
+});
+test('mixed-height fragments on one baseline read left-to-right without joining adjacent rows',()=>{
+  const box=(x:number,y:number,w:number,h:number)=>({confidence:.9,quad:[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}] as import('../../src/shared/recognition/text-document').TextQuad});
+  const left=box(21,20,174,46),right=box(183,9,330,66),next=box(20,90,200,24);
+  assert.deepEqual(paddleTextRows([right,next,left]),[[left,right],[next]]);
 });
 test('expanded collinear pieces merge geometrically without guessing/deduplicating text or joining separate rows', () => {
   const box = (x: number, y: number, width: number): PaddleTextBox => ({ confidence: 0.9,

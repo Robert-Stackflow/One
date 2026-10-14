@@ -149,6 +149,29 @@ export function mergePaddleTextBoxes(input: PaddleTextBox[], width: number, heig
   }
   return output;
 }
+/** Group the same physical row by perpendicular overlap, rather than a fixed top-edge pixel tolerance. */
+export function paddleTextRows(input:readonly PaddleTextBox[]):PaddleTextBox[][] {
+  const candidates=input.map(box=>{
+    const a=box.quad[0],b=box.quad[1],d=box.quad[3],length=Math.hypot(b.x-a.x,b.y-a.y),height=Math.hypot(d.x-a.x,d.y-a.y);
+    return {box,length,height,ux:(b.x-a.x)/length,uy:(b.y-a.y)/length};
+  });
+  const reference=[...candidates].filter(value=>value.length>=value.height&&Math.abs(value.ux)>.7).sort((a,b)=>b.length-a.length)[0];
+  if(!reference)return [...input].sort((a,b)=>a.quad[0].y-b.quad[0].y||a.quad[0].x-b.quad[0].x).map(box=>[box]);
+  const {ux,uy}=reference;
+  const projected=candidates.map(value=>{
+    const us=value.box.quad.map(point=>point.x*ux+point.y*uy),vs=value.box.quad.map(point=>-point.x*uy+point.y*ux);
+    return {...value,u:Math.min(...us),v:(Math.min(...vs)+Math.max(...vs))/2,min:Math.min(...vs),max:Math.max(...vs),height:Math.max(...vs)-Math.min(...vs)};
+  }).sort((a,b)=>a.min-b.min||a.u-b.u);
+  const rows:typeof projected[]=[];
+  for(const box of projected){
+    const row=rows.find(row=>{
+      const anchor=row[0],overlap=Math.min(anchor.max,box.max)-Math.max(anchor.min,box.min);
+      return Math.abs(anchor.ux*box.ux+anchor.uy*box.uy)>.99&&Math.abs(anchor.v-box.v)<Math.min(anchor.height,box.height)*.5&&overlap>Math.min(anchor.height,box.height)*.5;
+    });
+    if(row)row.push(box);else rows.push([box]);
+  }
+  return rows.map(row=>row.sort((a,b)=>a.u-b.u).map(value=>value.box));
+}
 export class PaddleDetector {
   private constructor(private session: ort.InferenceSession, readonly config: PaddleDetConfig) {}
   static async create(model: string | Uint8Array, config: PaddleDetConfig, backend: 'cpu' | 'dml' = 'cpu', deviceId = 0) {

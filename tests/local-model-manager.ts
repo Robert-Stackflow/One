@@ -6,6 +6,7 @@ import { LocalModelManager } from '../src/main/local-model-manager';
 import { OCRModels } from '../src/main/recognition/ocr-models';
 import { paddleTinyModel, miganModel } from '../src/main/local-model-catalog';
 import { aiModelPath, repairModel } from '../src/main/image-ai-model';
+import { LlamaRuntimeStore } from '../src/main/recognition/llama-runtime-store';
 
 test('model choices persist per feature and do not mutate active tasks or allow incompatible GPU settings', async () => {
   const root = await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!, 'profile-'));
@@ -32,8 +33,14 @@ test('model choices persist per feature and do not mutate active tasks or allow 
 
 test('OCR dialog and selected state never verify weights or probe devices', async () => {
   const root=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'ocr-only-'));
+  const runtimes=new LlamaRuntimeStore(join(root,'runtimes')),runtimeReads:string[]=[];
+  const runtimeState=runtimes.state.bind(runtimes);
+  runtimes.state=async(backend,verify=false)=>{
+    assert.equal(verify,false,'dialog state must not hash native runtime files');
+    runtimeReads.push(backend);return runtimeState(backend,verify);
+  };
   const manager=new LocalModelManager(root,new OCRModels(join(root,'recognition','models')),fetch,
-    async()=>{throw Error('UI state must not wait for a device probe');});
+    async()=>{throw Error('UI state must not wait for a device probe');},{runtimes});
   const checked:string[]=[],inspect=manager.store.state.bind(manager.store);
   manager.store.state=async(...args)=>{
     checked.push(args[0].id);
@@ -42,6 +49,7 @@ test('OCR dialog and selected state never verify weights or probe devices', asyn
   };
   try {
     const state=await manager.state(true,'ocr');
+    assert.deepEqual(runtimeReads.sort(),['cpu','cuda'],'both DeepSeek models share one runtime metadata snapshot');
     assert.ok(state.entries.length>1&&state.entries.every(entry=>entry.purpose==='ocr'));
     assert.ok(!checked.includes(miganModel.id),'opening OCR models never hashes repair weights');
     await manager.save('ocr',{modelId:paddleTinyModel.id,device:{mode:'auto'}},state.revision);

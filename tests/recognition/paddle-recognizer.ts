@@ -31,3 +31,7 @@ test('CTC removes adjacent repeats, retains blank-separated repeats and reports 
   assert.throws(() => decodePaddleCTC(values, [1, indices.length, 3], characters), /字典/);
   values[0] = NaN; assert.throws(() => decodePaddleCTC(values, [1, indices.length, 4], characters), /概率/);
 });
+test('accepted floating-point probability tolerance cannot exceed the public confidence range',()=>{
+  const result=decodePaddleCTC(new Float32Array([0,1.000001]),[1,1,2],['','A']);
+  assert.equal(result.confidence,1);assert.equal(result.glyphs[0].confidence,1);
+});

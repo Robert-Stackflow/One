@@ -3,7 +3,7 @@ const {build}=require('esbuild');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
 (async()=>{
-  const presets=process.argv.includes('--presets');
+  const presets=process.argv.includes('--presets'),selectionCase=process.argv.includes('--selection'),timing=process.argv.includes('--timing');
   const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'model-ui-'));
   const profile=path.join(directory,'profile'),input=path.join(directory,'input.png'),errors=[];let app,imported=false;
   async function choose(page,id,label){await page.locator('#'+id).click();await page.getByRole('option',{name:label,exact:true}).click();}
@@ -24,6 +24,55 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile,...(presets?{ONE_MODEL_UI_PRESETS:'1'}:{})},windowsHide:true,maxBuffer:64*1024});
     await sharp(Buffer.from('<svg width="680" height="120"><rect width="680" height="120" fill="white"/><text x="15" y="85" font-family="Arial" font-size="58">ONE OCR 2026</text></svg>')).png().toFile(input);
     let page=await open();assert.equal((await page.evaluate(()=>window.one.recognition.state())).modelTitle,'Tesseract fast');
+    if(timing){
+      await app.evaluate(({ipcMain})=>{
+        const channel='one:recognition-local-models',previous=ipcMain._invokeHandlers.get(channel);
+        global.__modelReads=[];global.__modelWait=new Promise(resolve=>{global.__releaseModels=resolve;});
+        ipcMain.removeHandler(channel);ipcMain.handle(channel,async(...args)=>{
+          await global.__modelWait;const start=performance.now();const value=await previous(...args);
+          global.__modelReads.push(performance.now()-start);return value;
+        });
+      });
+      const firstFrame=await page.evaluate(()=>new Promise(resolve=>{
+        const start=performance.now();document.querySelector('#local-model-configure').click();
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{
+          const dialog=document.querySelector('#local-model-settings');
+          resolve({milliseconds:performance.now()-start,open:dialog.open,loading:!dialog.querySelector('#local-model-loading').hidden,width:dialog.getBoundingClientRect().width});
+        }));
+      }));
+      assert.ok(firstFrame.open&&firstFrame.loading&&firstFrame.width>0,'dialog paints before model metadata completes');
+      assert.ok(firstFrame.milliseconds<500,'first dialog frame is independent of blocked backend');
+      assert.deepEqual(await app.evaluate(()=>global.__modelReads),[]);
+      await app.evaluate(()=>global.__releaseModels());
+      await expect(page.locator('[data-select-model=tesseract]')).toBeVisible();
+      const metadataMilliseconds=await app.evaluate(()=>global.__modelReads);
+      const evidence={firstFrame,metadataMilliseconds,pageErrors:errors};
+      await fs.writeFile(path.join(root,'model-dialog-timing.json'),JSON.stringify(evidence,null,2));
+      assert.deepEqual(errors,[]);console.log(JSON.stringify(evidence));return;
+    }
+    if(selectionCase){
+      await app.evaluate(({clipboard})=>{global.__ctcCopied='';clipboard.writeText=value=>{global.__ctcCopied=value;};});
+      await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');
+      await dialog.locator('[data-select-model=pp-ocrv6-tiny]').click();await choose(page,'local-model-device','CPU');
+      await expect(dialog.locator('#local-model-metadata')).toContainText('近似字级（CTC）');
+      await dialog.locator('#local-model-save').click();await expect(dialog).not.toBeVisible();await page.locator('#run').click();
+      await expect(page.locator('#result')).toHaveValue(/ONE\s*OCR\s*2026/,{timeout:30000});
+      const units=page.locator('.text-selection-unit[data-geometry=ctc]');await expect.poll(()=>units.count()).toBeGreaterThan(8);
+      const first=units.filter({hasText:/^O$/}).first();await expect(first).toHaveAttribute('aria-label',/位置近似/);
+      let box=await first.boundingBox();assert.ok(box);await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+      const copy=page.getByRole('button',{name:'复制选中文字',exact:true});await expect(copy).toBeVisible();await copy.click();
+      assert.equal(await app.evaluate(()=>global.__ctcCopied),'O');
+      await page.locator('.text-image-viewport').focus();await page.keyboard.press('Shift+ArrowRight');await copy.click();
+      assert.equal(await app.evaluate(()=>global.__ctcCopied),'ON');
+      assert.equal(await page.locator('#result').evaluate(node=>node.value.slice(node.selectionStart,node.selectionEnd)),'ON');
+      const screenshot=await page.screenshot();await sharp(screenshot).resize({width:1280,height:1280,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(root,'ctc-selection-review.png'));
+      await page.locator('[data-text-action=rotate]').click();box=await first.boundingBox();assert.ok(box);
+      await page.mouse.click(box.x+box.width/2,box.y+box.height/2);await copy.click();assert.equal(await app.evaluate(()=>global.__ctcCopied),'O');
+      await page.locator('.text-image-viewport').focus();await page.keyboard.press('Control+a');await copy.click();
+      assert.equal((await app.evaluate(()=>global.__ctcCopied)).replace(/\s/g,''),'ONEOCR2026');
+      await page.locator('#result').fill('修正后的原文');await expect(page.locator('.text-selection-actions')).toBeHidden();
+      assert.deepEqual(errors,[]);console.log('CTC selection UI: approximate metadata, character copy, keyboard expansion/editor sync, rotation, select-all and stale geometry disable passed');return;
+    }
     if(presets){
       for(const id of ['pp-ocrv6-small','pp-ocrv6-medium']){
         await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');
