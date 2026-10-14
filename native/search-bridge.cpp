@@ -6,6 +6,7 @@
 #include <exdisp.h>
 #include <servprov.h>
 #include <uiautomation.h>
+#include <oleacc.h>
 #include <wrl/client.h>
 #include <imm.h>
 #include <string>
@@ -25,7 +26,7 @@ bool testMode(){wchar_t value[4]{};return GetEnvironmentVariableW(L"ONE_TEST_MOD
 std::string utf8(const std::wstring& s){int n=WideCharToMultiByte(CP_UTF8,0,s.data(),(int)s.size(),nullptr,0,nullptr,nullptr);std::string v(n,0);WideCharToMultiByte(CP_UTF8,0,s.data(),(int)s.size(),v.data(),n,nullptr,nullptr);return v;}
 std::string quote(const std::wstring& s){std::string out="\"";for(unsigned char c:utf8(s)){if(c=='"'||c=='\\'){out+='\\';out+=c;}else if(c<32){char b[7];sprintf_s(b,"\\u%04x",c);out+=b;}else out+=c;}return out+'"';}
 std::wstring cls(HWND h){wchar_t s[256]={};GetClassNameW(h,s,256);return s;}
-bool desktop(HWND h){auto c=cls(h);if(c!=L"Progman"&&c!=L"WorkerW")return false;return FindWindowExW(h,nullptr,L"SHELLDLL_DefView",nullptr)!=nullptr;}
+bool desktop(HWND h){auto c=cls(h);if(c!=L"Progman"&&c!=L"WorkerW")return false;DWORD pid=0,shellPid=0;GetWindowThreadProcessId(h,&pid);GetWindowThreadProcessId(GetShellWindow(),&shellPid);return pid&&pid==shellPid;}
 bool explorer(HWND h){auto c=cls(h);return c==L"CabinetWClass"||c==L"ExploreWClass"||desktop(h);}
 bool dialog(HWND h){return cls(h)==L"#32770"&&FindWindowExW(h,nullptr,L"DUIViewWndClassName",nullptr);}
 std::string creation(DWORD pid){HANDLE p=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,pid);if(!p)return "";FILETIME c,e,k,u;bool ok=GetProcessTimes(p,&c,&e,&k,&u);CloseHandle(p);return ok?std::to_string((static_cast<unsigned long long>(c.dwHighDateTime)<<32)|c.dwLowDateTime):"";}
@@ -69,13 +70,49 @@ void jump(HWND h,DWORD expectedPid,const std::string& expected,const std::wstrin
 // The hook only records the click; no COM call can delay Explorer input.
 std::atomic<bool> running{true};std::mutex outputMutex;
 struct MenuClick{HWND hwnd;HWND focus;POINT point;ULONGLONG when;};
+// Desktop providers differ across Windows versions and hidden-icon layouts.
+// Native accessibility resolves icon/label hits without requiring UIA ItemsView.
+bool desktopBlank(HWND root,POINT point){
+ HWND hit=WindowFromPoint(point);if(GetAncestor(hit,GA_ROOT)!=root)return false;
+ for(HWND h=hit;h;h=GetParent(h)){
+  const auto name=cls(h);
+  if(name==L"SysListView32"){
+   ComPtr<IAccessible> accessible;
+   if(FAILED(AccessibleObjectFromWindow(h,OBJID_CLIENT,IID_PPV_ARGS(&accessible)))||!accessible)return false;
+   VARIANT child;VariantInit(&child);
+   const HRESULT result=accessible->accHitTest(point.x,point.y,&child);
+   const bool blank=SUCCEEDED(result)&&child.vt==VT_I4&&child.lVal==CHILDID_SELF;
+   VariantClear(&child);return blank;
+  }
+  if(h==root)break;
+ }
+ const auto name=cls(hit);
+ return name==L"Progman"||name==L"WorkerW"||name==L"SHELLDLL_DefView";
+}
 std::mutex menuClickMutex;std::condition_variable menuClickWake;std::deque<MenuClick> menuClicks;
 void emit(const std::string& s){std::lock_guard<std::mutex> lock(outputMutex);std::cout<<s<<std::endl;}
 bool inFileList(IUIAutomation* ui,IUIAutomationElement* element,bool allowItem){ComPtr<IUIAutomationTreeWalker> walker;ui->get_RawViewWalker(&walker);ComPtr<IUIAutomationElement> current=element;bool item=false;for(int n=0;n<24&&current;n++){CONTROLTYPEID type=0;current->get_CurrentControlType(&type);if(type==UIA_EditControlTypeId||type==UIA_ButtonControlTypeId||type==UIA_HeaderControlTypeId||type==UIA_HeaderItemControlTypeId||type==UIA_ScrollBarControlTypeId)return false;if(type==UIA_ListItemControlTypeId||type==UIA_DataItemControlTypeId||type==UIA_TreeItemControlTypeId)item=true;BSTR id=nullptr;current->get_CurrentAutomationId(&id);bool list=id&&(wcscmp(id,L"ItemsView")==0||wcscmp(id,L"listview")==0);SysFreeString(id);BSTR className=nullptr;current->get_CurrentClassName(&className);list=list||(className&&wcscmp(className,L"SysListView32")==0);SysFreeString(className);if(list)return allowItem||!item;ComPtr<IUIAutomationElement> parent;if(FAILED(walker->GetParentElement(current.Get(),&parent)))break;current=parent;}return false;}
 int options=0;DWORD ownerPid=0;std::atomic<HWND> notifiedDialog{nullptr};
 void notifyDialog(HWND h){if((options&8)&&h==GetForegroundWindow()&&dialog(h)&&notifiedDialog.exchange(h)!=h)emit("{\"event\":\"dialog\",\"hwnd\":"+std::to_string((uintptr_t)h)+"}");}
 void CALLBACK dialogEvents(HWINEVENTHOOK,DWORD event,HWND hwnd,LONG object,LONG child,DWORD,DWORD){if(!(options&8)||!hwnd)return;if(event==EVENT_SYSTEM_FOREGROUND){if(hwnd!=GetForegroundWindow())return;notifiedDialog=nullptr;notifyDialog(hwnd);}else if(object==OBJID_WINDOW&&child==CHILDID_SELF)notifyDialog(GetAncestor(hwnd,GA_ROOT));}
-void poll(){CoInitializeEx(nullptr,COINIT_MULTITHREADED);ComPtr<IUIAutomation> ui;if(options&4)CoCreateInstance(CLSID_CUIAutomation,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&ui));HWND last=nullptr;while(running){std::deque<MenuClick> pending;{std::unique_lock<std::mutex> lock(menuClickMutex);menuClickWake.wait_for(lock,std::chrono::milliseconds(75),[]{return !running||!menuClicks.empty();});pending.swap(menuClicks);}HWND h=GetForegroundWindow();notifyDialog(h);if(explorer(h)&&h!=last){last=h;emit("{\"event\":\"explorer-active\",\"hwnd\":"+std::to_string((uintptr_t)h)+"}");}for(const auto& click:pending){if(!ui||!IsWindow(click.hwnd)||GetTickCount64()-click.when>1000||GetAncestor(WindowFromPoint(click.point),GA_ROOT)!=click.hwnd)continue;ComPtr<IUIAutomationElement> element;if(SUCCEEDED(ui->ElementFromPoint(click.point,&element))&&inFileList(ui.Get(),element.Get(),false))emit("{\"event\":\"menu\",\"hwnd\":"+std::to_string((uintptr_t)click.hwnd)+",\"focus\":"+std::to_string((uintptr_t)click.focus)+"}");}}CoUninitialize();}
+void poll(){
+ CoInitializeEx(nullptr,COINIT_MULTITHREADED);ComPtr<IUIAutomation> ui;
+ if(options&4)CoCreateInstance(CLSID_CUIAutomation,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&ui));
+ HWND last=nullptr;
+ while(running){
+  std::deque<MenuClick> pending;
+  {std::unique_lock<std::mutex> lock(menuClickMutex);menuClickWake.wait_for(lock,std::chrono::milliseconds(75),[]{return !running||!menuClicks.empty();});pending.swap(menuClicks);}
+  HWND h=GetForegroundWindow();notifyDialog(h);
+  if(explorer(h)&&h!=last){last=h;emit("{\"event\":\"explorer-active\",\"hwnd\":"+std::to_string((uintptr_t)h)+"}");}
+  for(const auto& click:pending){
+   if(!IsWindow(click.hwnd)||GetTickCount64()-click.when>1500||GetAncestor(WindowFromPoint(click.point),GA_ROOT)!=click.hwnd)continue;
+   bool blank=desktop(click.hwnd)?desktopBlank(click.hwnd,click.point):false;
+   if(!desktop(click.hwnd)&&ui){ComPtr<IUIAutomationElement> element;blank=SUCCEEDED(ui->ElementFromPoint(click.point,&element))&&element&&inFileList(ui.Get(),element.Get(),false);}
+   if(blank)emit("{\"event\":\"menu\",\"hwnd\":"+std::to_string((uintptr_t)click.hwnd)+",\"focus\":"+std::to_string((uintptr_t)click.focus)+"}");
+  }
+ }
+ CoUninitialize();
+}
 ULONGLONG lastCtrl=0,lastClick=0,pendingSince=0;POINT lastPoint{};HWND pendingOrigin=nullptr;std::vector<INPUT> queued;DWORD hookThread=0;HKL originLayout=nullptr;bool originIme=false;
 bool down(int vk){return (GetAsyncKeyState(vk)&0x8000)!=0;}
 void replay(HWND target){if(!pendingSince){DWORD pid=0;GetWindowThreadProcessId(target,&pid);if(pid==ownerPid)focusWindow(target);return;}DWORD targetPid=0;GetWindowThreadProcessId(target,&targetPid);if(targetPid==ownerPid&&GetForegroundWindow()==pendingOrigin&&target!=pendingOrigin){DWORD current=GetCurrentThreadId(),foregroundThread=GetWindowThreadProcessId(pendingOrigin,nullptr);DWORD targetThread=GetWindowThreadProcessId(target,nullptr);bool attached=AttachThreadInput(current,foregroundThread,TRUE),targetAttached=AttachThreadInput(current,targetThread,TRUE);BringWindowToTop(target);SetForegroundWindow(target);SetFocus(target);if(targetAttached)AttachThreadInput(current,targetThread,FALSE);if(attached)AttachThreadInput(current,foregroundThread,FALSE);}bool focused=GetForegroundWindow()==target;if(focused&&target!=pendingOrigin){PostMessageW(target,WM_INPUTLANGCHANGEREQUEST,0,(LPARAM)originLayout);GUITHREADINFO gi{sizeof(gi)};GetGUIThreadInfo(GetWindowThreadProcessId(target,nullptr),&gi);HIMC imc=ImmGetContext(gi.hwndFocus);if(imc){ImmSetOpenStatus(imc,originIme);ImmReleaseContext(gi.hwndFocus,imc);}}auto events=queued;queued.clear();pendingSince=0;if(!focused&&GetForegroundWindow()==pendingOrigin)focused=true;if(focused&&!events.empty())SendInput((UINT)events.size(),events.data(),sizeof(INPUT));}
