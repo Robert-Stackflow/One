@@ -13,7 +13,7 @@ import {
 } from '../../shared/capture/scroll-capture';
 import type { PixelFrame } from '../../shared/capture/scroll-stitch';
 import {ScrollMotion} from '../../shared/capture/scroll-motion';
-import {createScrollDirectory,cleanScrollDirectory,type ScrollDirectory} from './scroll-storage';
+import {createScrollDirectory,cleanScrollDirectory,sweepScrollDirectories,type ScrollDirectory} from './scroll-storage';
 import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
 export interface ScrollContext {
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
@@ -36,6 +36,7 @@ export class ScrollCaptureService {
   private requests=new Set<Promise<unknown>>();
   private terminations=new Set<Promise<void>>();
   private directories=new Map<Worker,ScrollDirectory>();
+  private cacheReady:Promise<unknown>;
   private native?: ScrollNative;
   private worker?: Worker;
   private workerFailed?: Error;
@@ -61,6 +62,7 @@ export class ScrollCaptureService {
   private region?: Region;
   private remoteCompatible = true;
   constructor(private host: ScrollContext) {
+    this.cacheReady=sweepScrollDirectories().catch(error=>host.failed(error));
     const handle = (name: string, fn: (...args: any[]) => unknown) =>
       host.register('scroll-' + name, (event, ...args) => {
         if (
@@ -135,7 +137,7 @@ export class ScrollCaptureService {
       this.native = new ScrollNative(rect);
       await this.native.ready;
       if (generation !== this.generation) return;
-      const directory=await createScrollDirectory();if(generation!==this.generation){await cleanScrollDirectory(directory);return;}
+      await this.cacheReady;const directory=await createScrollDirectory();if(generation!==this.generation){await cleanScrollDirectory(directory);return;}
       try{this.worker = new Worker(join(__dirname, 'capture/scroll-worker.cjs'),{workerData:directory});this.directories.set(this.worker,directory);}catch(error){await cleanScrollDirectory(directory);throw error;}
       const worker = this.worker;
       worker.on('message', (response) => {

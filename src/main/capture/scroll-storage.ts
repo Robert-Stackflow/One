@@ -1,4 +1,4 @@
-import {mkdtemp,realpath,writeFile,readFile,lstat,readdir,unlink,rmdir} from 'node:fs/promises';
+import {mkdtemp,realpath,writeFile,readFile,lstat,readdir,unlink,rmdir,opendir} from 'node:fs/promises';
 import {readFileSync,lstatSync,openSync,closeSync,readSync,writeFileSync,renameSync,unlinkSync,statfsSync,fstatSync,realpathSync} from 'node:fs';
 import {join,dirname,basename,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -9,7 +9,25 @@ import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
 export interface ScrollDirectory {directory:string;parent:string;token:string}
 export async function createScrollDirectory(base=tmpdir()):Promise<ScrollDirectory>{
   const parent=await realpath(base),directory=await mkdtemp(join(parent,'one-scroll-')),token=randomUUID();
-  try{await writeFile(join(directory,'owner.json'),JSON.stringify({token,pid:process.pid}),{flag:'wx'});}catch(error){await unlink(join(directory,'owner.json')).catch(()=>{});await rmdir(directory).catch(()=>{});throw error;}return {directory,parent,token};
+  try{await writeFile(join(directory,'owner.json'),JSON.stringify({app:'One',kind:'scroll',schema:1,token,pid:process.pid,created:Date.now()}),{flag:'wx'});}catch(error){await unlink(join(directory,'owner.json')).catch(()=>{});await rmdir(directory).catch(()=>{});throw error;}return {directory,parent,token};
+}
+/** Scan a bounded namespace; an inaccessible or reused live PID keeps its files. */
+export async function sweepScrollDirectories(base=tmpdir()){
+  const parent=await realpath(base),result={checked:0,removed:0,kept:0},entries=await opendir(parent);let scanned=0;
+  for await(const entry of entries){
+    if(++scanned>4096||result.checked>=64)break;
+    if(!entry.name.startsWith('one-scroll-')||!entry.isDirectory()||entry.isSymbolicLink())continue;
+    result.checked++;const directory=join(parent,entry.name),file=join(directory,'owner.json');
+    try{
+      const item=await lstat(file);if(!item.isFile()||item.isSymbolicLink()||item.size>512){result.kept++;continue;}
+      const owner=JSON.parse(await readFile(file,'utf8'));
+      if(owner.app!=='One'||owner.kind!=='scroll'||owner.schema!==1||typeof owner.token!=='string'||!/^[0-9a-f-]{36}$/.test(owner.token)||!Number.isSafeInteger(owner.pid)||owner.pid<=0||!Number.isSafeInteger(owner.created)||owner.created<0||owner.created>Date.now()+60000){result.kept++;continue;}
+      let dead=false;try{process.kill(owner.pid,0);}catch(error){dead=(error as NodeJS.ErrnoException).code==='ESRCH';}
+      if(!dead){result.kept++;continue;}
+      await cleanScrollDirectory({directory,parent,token:owner.token});result.removed++;
+    }catch{result.kept++;}
+  }
+  return result;
 }
 export async function cleanScrollDirectory(lease:ScrollDirectory){
   const item=await lstat(lease.directory).catch(error=>{if(error.code==='ENOENT')return undefined;throw error;});if(!item)return;

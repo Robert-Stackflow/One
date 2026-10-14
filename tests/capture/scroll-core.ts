@@ -9,8 +9,26 @@ import {join} from 'node:path';
 import {ScrollMotion} from '../../src/shared/capture/scroll-motion';
 import {scrollSearchCandidates} from '../../src/shared/capture/scroll-search';
 import sharp from 'sharp';
-import {createScrollDirectory,cleanScrollDirectory,ScrollDiskStorage} from '../../src/main/capture/scroll-storage';
-import {readFile,writeFile,unlink,readdir,lstat} from 'node:fs/promises';
+import {createScrollDirectory,cleanScrollDirectory,ScrollDiskStorage,sweepScrollDirectories} from '../../src/main/capture/scroll-storage';
+import {readFile,writeFile,unlink,readdir,lstat,mkdtemp,rmdir} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {createInterface} from 'node:readline';
+
+test('cache sweep reclaims an abruptly killed owner and preserves live, foreign and unmarked directories',async()=>{
+  const base=await mkdtemp(join(process.env.ONE_SCROLL_TEST_ROOT!,'crash-cases-'));let child:ReturnType<typeof spawn>|undefined,crashed:Awaited<ReturnType<typeof createScrollDirectory>>|undefined;
+  const alive=await createScrollDirectory(base),foreign=await createScrollDirectory(base),legacy=await createScrollDirectory(base);const marker=await readFile(join(foreign.directory,'owner.json'));const old=await readFile(join(legacy.directory,'owner.json'));
+  try{
+    child=spawn(process.execPath,[join(__dirname,'scroll-crash-child.cjs'),base],{windowsHide:true,stdio:['ignore','pipe','pipe']});const lines=createInterface({input:child.stdout!});crashed=JSON.parse(String((await once(lines,'line'))[0]));lines.close();
+    await writeFile(join(foreign.directory,'owner.json'),JSON.stringify({...JSON.parse(marker.toString()),pid:2147483647}));await writeFile(join(foreign.directory,'foreign.txt'),'keep');await writeFile(join(legacy.directory,'owner.json'),JSON.stringify({token:legacy.token,pid:2147483647}));
+    const initial=await sweepScrollDirectories(base);assert.equal(initial.removed,0);assert.ok((await lstat(crashed!.directory)).isDirectory());
+    const ended=once(child,'exit');child.kill();await ended;child=undefined;const result=await sweepScrollDirectories(base);assert.equal(result.removed,1);await assert.rejects(lstat(crashed!.directory),{code:'ENOENT'});assert.ok((await lstat(alive.directory)).isDirectory());assert.equal(await readFile(join(foreign.directory,'foreign.txt'),'utf8'),'keep');assert.ok((await lstat(legacy.directory)).isDirectory());
+  }finally{
+    if(child){const ended=once(child,'exit');child.kill();await ended;}if(crashed)await cleanScrollDirectory(crashed);
+    await unlink(join(foreign.directory,'foreign.txt')).catch(()=>{});await writeFile(join(foreign.directory,'owner.json'),marker);await writeFile(join(legacy.directory,'owner.json'),old);
+    await cleanScrollDirectory(alive);await cleanScrollDirectory(foreign);await cleanScrollDirectory(legacy);await rmdir(base);
+  }
+});
 
 test('disk strips retain exact output, row previews and undo without keeping accumulated pixels in memory',async()=>{
   for(const axis of ['vertical','horizontal'] as const){
