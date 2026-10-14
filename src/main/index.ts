@@ -1322,7 +1322,7 @@ async function start() {
     if(!inlineSource(owner,source)){await inline.releaseOwner(owner,result.id);throw Error('当前图片已失效');}
     return result;
   },['preview','image-editor']);
-  for(const name of ['run','region','correct','preview','translate','copy','cancel','release','config','save-config','clear-config','profiles','migrate','restore','manage'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
+  for(const name of ['run','region','correct','preview','translate','translation-partial','translation-retry','copy','cancel','release','config','save-config','clear-config','profiles','migrate','restore','manage'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
     const owner=event.sender.id;
     if(name==='release'){await inline.releaseOwner(owner,id);return;}
     const source=inline.source(owner,id);
@@ -1333,6 +1333,8 @@ async function start() {
     else if(name==='correct')result=inline.correct(owner,id,args[0],args[1]);
     else if(name==='preview')result=await inline.preview(owner,id,args[0]);
     else if(name==='translate')result=await inline.translate(owner,id,args[0],args[1]);
+    else if(name==='translation-partial')result=await inline.partialTranslation(owner,id);
+    else if(name==='translation-retry')result=await inline.retryTranslation(owner,id,args[0],args[1]);
     else if(name==='config')result=await recognition!.service.translationStore.state();
     else if(name==='save-config')result=await recognition!.service.translationStore.save(args[0]);
     else if(name==='clear-config')result=await recognition!.service.translationStore.clear(args[0]);

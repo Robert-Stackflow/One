@@ -16,6 +16,8 @@ export type TranslationLanguage = keyof typeof translationLanguages;
 export type TranslationProvider = 'chat' | 'azure' | 'ai';
 export const TRANSLATION_INPUT = 20000,
   TRANSLATION_OUTPUT = 60000;
+export const TRANSLATION_DOCUMENT_INPUT=200000,TRANSLATION_DOCUMENT_OUTPUT=600000,TRANSLATION_DOCUMENT_PARTS=2048;
+export interface TranslationPart {id:string;start:number;end:number;paragraph:number;chunk:number;status:'waiting'|'translated'|'failed'|'cancelled';text?:string;error?:string;model?:string}
 export interface TranslationConfig {
   canRestoreLegacy?:boolean;
   reference?:import('../ai-task').AITaskReference;
@@ -48,6 +50,8 @@ export interface TranslationConnection {
   revision: string;
 }
 export interface TranslationResult {
+  id?:string;
+  parts?:TranslationPart[];
   model?:string;
   source: string;
   text: string;
@@ -63,6 +67,11 @@ export function translationLanguage(value: unknown): TranslationLanguage {
 export function translationText(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) throw Error('请先识别或输入需要翻译的文字');
   if (value.length > TRANSLATION_INPUT) throw Error('每次最多翻译 20,000 个字符，请分段处理');
+  return value;
+}
+export function translationDocumentText(value:unknown){
+  if(typeof value!=='string'||!value.trim())throw Error('请先识别或输入需要翻译的文字');
+  if(value.includes('\0')||value.length>TRANSLATION_DOCUMENT_INPUT)throw Error('翻译原文支持最多 200,000 个字符');
   return value;
 }
 export const azureEndpoint = 'https://api.cognitive.microsofttranslator.com/translate';

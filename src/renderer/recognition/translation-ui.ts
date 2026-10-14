@@ -1,8 +1,9 @@
 import { q } from '../ui';
 import { mountServiceSettings } from './service-settings';
+import {mountTranslationFailures} from './translation-failures';
 import {
   translationLanguages,
-  TRANSLATION_INPUT,
+  TRANSLATION_DOCUMENT_INPUT,
   type TranslationLanguage,
   type TranslationConfig,
   type TranslationResult,
@@ -23,6 +24,7 @@ export function mountTranslation(
   const source = () => selectionSource ?? q<HTMLTextAreaElement>('result').value,
     target = () => q<HTMLSelectElement>('translation-language').value as TranslationLanguage;
   const busy = () => requesting || !!state()?.translating;
+  const failures=mountTranslationFailures(q('translated'),ids=>void translate(ids));
   const valid = () =>
     !!result &&
     result.source === source() &&
@@ -44,12 +46,13 @@ export function mountTranslation(
     q<HTMLTextAreaElement>('translated').readOnly = active || ocr;
     q<HTMLSelectElement>('translation-language').disabled = active || ocr;
     q<HTMLButtonElement>('translate').disabled =
-      active || ocr || !config?.ready || !source().trim() || source().length > TRANSLATION_INPUT;
+      active || ocr || !config?.ready || !source().trim() || source().length > TRANSLATION_DOCUMENT_INPUT;
     q<HTMLButtonElement>('translation-configure').disabled = active || ocr;
     q('translation-cancel').hidden = !active;
     q<HTMLButtonElement>('translation-copy').disabled =
       active || !valid() || !q<HTMLTextAreaElement>('translated').value.trim();
     q('translation-configure').title = config?.ready ? (config.serviceName||config.endpoint)+' · '+config.model : '配置翻译服务';
+    failures.update(result,active||ocr,valid(),q<HTMLTextAreaElement>('translated').value!==result?.text);
     if (notice) { message(notice); notice = ''; }
   }
   function invalidate() {
@@ -72,18 +75,22 @@ export function mountTranslation(
   q('translation-configure').onclick = () => void settings.open();
   q('translation-language').onchange = invalidate;
   q('translated').oninput = render;
-  async function translate() {
+  async function translate(retry?:string[]) {
     if (busy() || !config?.ready || !state()) return;
+    if(retry&&(!valid()||!result?.id||q<HTMLTextAreaElement>('translated').value!==result.text))return;
+    const token=state()!.token,revision=config.revision,input=source(),language=target(),job=result?.id;
     requesting = true;
     notice = '';
     render();
     changed();
     try {
-      result = await api.translate(state()!.token, source(), target(), config.revision);
+      result = await (retry?api.retryTranslation(token,job!,retry,revision):api.translate(token,input,language,revision));
       q<HTMLTextAreaElement>('translated').value = result.text;
       notice = '';
     } catch (error) {
-      notice = error instanceof Error ? error.message : String(error);
+      const partial=await api.partialTranslation(token,revision).catch(()=>undefined);
+      if(partial?.parts&&partial.source===input&&partial.target===language&&partial.revision===revision){result=partial;q<HTMLTextAreaElement>('translated').value=partial.text;notice='';}
+      else notice = error instanceof Error ? error.message : String(error);
     } finally {
       requesting = false;
       render();

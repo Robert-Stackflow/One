@@ -97,6 +97,10 @@ export class InlineOCRSessions {
       return result;
     });
   }
+  async partialTranslation(owner:number,id:unknown){const image=this.image(owner,id),connection=await this.connection(),result=image.translation.snapshot();return result?.revision===connection.revision?result:undefined;}
+  retryTranslation(owner:number,id:unknown,job:unknown,parts:unknown){
+    return this.work(owner,id,async(image,signal)=>{const connection=await this.connection();signal.throwIfAborted();const result=await image.translation.retry(connection,job,parts);signal.throwIfAborted();if((await this.connection()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');return result;});
+  }
   copy(owner: number, id: unknown, text: unknown) { this.image(owner, id); return ocrText(text); }
   private async cancelImage(image: ImageSession) {
     image.abort?.abort();
@@ -109,7 +113,7 @@ export class InlineOCRSessions {
     if (!image || id !== undefined && image.id !== id) return Promise.resolve();
     this.images.delete(owner);
     const task=(async()=>{
-      try { await Promise.all([this.cancelImage(image), image.engine.close(), image.preview.close()]); }
+      try { await Promise.all([this.cancelImage(image).finally(()=>image.translation.clearSnapshot()), image.engine.close(), image.preview.close()]); }
       finally { image.png.fill(0); }
     })();
     this.settling.add(task);void task.then(()=>this.settling.delete(task),error=>{this.settling.delete(task);this.cleanupError=error;});

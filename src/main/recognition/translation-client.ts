@@ -1,8 +1,13 @@
 import {serviceRequest} from '../service-request';
+import {randomUUID} from 'node:crypto';
+import {translationParts,translationBatches,assembleTranslation} from '../../shared/recognition/translation-document';
 import {
   translationLanguage,
   translationLanguages,
   translationText,
+  translationDocumentText,
+  TRANSLATION_INPUT,
+  TRANSLATION_DOCUMENT_OUTPUT,
   translationSettings,
   TRANSLATION_OUTPUT,
   type TranslationConnection,
@@ -13,10 +18,11 @@ class TranslationFailure extends Error {}
 export class TranslationClient {
   private abort?: AbortController;
   private active?: Promise<TranslationResult>;
+  private last?:TranslationResult;
   constructor(
     private transport: typeof fetch = serviceRequest,
     private timeout = 45000,
-    private tasks?:Pick<import('./task-provider').RecognitionTaskProvider,'translate'>,
+    private tasks?:Pick<import('./task-provider').RecognitionTaskProvider,'translate'|'translateBatch'|'translationBudget'>,
   ) {}
   async cancel() {
     this.abort?.abort();
@@ -25,10 +31,24 @@ export class TranslationClient {
   run(connection: TranslationConnection, value: unknown, language: unknown) {
     if (this.active) return Promise.reject(Error('正在翻译，请先取消当前任务'));
     connection = { ...translationSettings(connection), key: connection.key };
-    const source = translationText(value),
+    const source = translationDocumentText(value),
       target = translationLanguage(language),
       abort = (this.abort = new AbortController());
-    const task = connection.provider==='ai'?(this.tasks?this.tasks.translate(connection,source,target,abort.signal):Promise.reject(Error('AI 翻译服务不可用'))):this.request(connection, source, target, abort);
+    this.last=undefined;
+    const task=connection.provider!=='ai'&&source.length<=TRANSLATION_INPUT?this.request(connection,source,target,abort).then(result=>{this.last={...result,id:randomUUID()};return this.snapshot()!;}):this.document(connection,source,target,abort);
+    return this.track(task);
+  }
+  snapshot(){return this.last?{...this.last,parts:this.last.parts?.map(part=>({...part}))}:undefined;}
+  clearSnapshot(){this.last=undefined;}
+  retry(connection:TranslationConnection,id:unknown,ids:unknown){
+    if(this.active)return Promise.reject(Error('正在翻译，请先取消当前任务'));
+    connection={...translationSettings(connection),key:connection.key};const previous=this.snapshot();
+    if(!previous?.parts||id!==previous.id||connection.revision!==previous.revision)throw Error('翻译结果或服务已改变，请重新翻译');
+    if(!Array.isArray(ids)||!ids.length||ids.length>previous.parts.length||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!previous.parts!.some(part=>part.id===id&&part.status!=='translated')))throw Error('重试段落无效或已经翻译完成');
+    const parts=previous.parts.filter(part=>ids.includes(part.id)),abort=this.abort=new AbortController();
+    const task=this.translateParts(connection,previous,parts,abort);return this.track(task);
+  }
+  private track(task:Promise<TranslationResult>){
     this.active = task;
     return task.finally(() => {
       if (this.active === task) {
@@ -36,6 +56,40 @@ export class TranslationClient {
         this.abort = undefined;
       }
     });
+  }
+  private async document(connection:TranslationConnection,source:string,target:TranslationLanguage,abort:AbortController){
+    if(connection.provider==='ai'&&!this.tasks)throw Error('AI 翻译服务不可用');
+    const budget=connection.provider==='ai'?this.tasks!.translationBudget(connection):TRANSLATION_INPUT,parts=translationParts(source,budget);
+    translationBatches(parts,budget,connection.provider==='ai'?32:1);
+    const result:TranslationResult={id:randomUUID(),source,text:'',target,revision:connection.revision,endpoint:connection.provider==='ai'?'ai:'+connection.reference!.profileId:connection.endpoint,parts};
+    this.last=assembleTranslation(result);return this.translateParts(connection,result,parts,abort);
+  }
+  private async translateParts(connection:TranslationConnection,result:TranslationResult,selected:NonNullable<TranslationResult['parts']>,abort:AbortController){
+    const budget=connection.provider==='ai'?this.tasks!.translationBudget(connection):TRANSLATION_INPUT,batches=translationBatches(selected,budget,connection.provider==='ai'?32:1);
+    const update=()=>{this.last=assembleTranslation(result);};
+    for(const part of selected){part.status='waiting';delete part.error;}update();
+    try{
+      for(let index=0;index<batches.length;index++){
+        abort.signal.throwIfAborted();const batch=batches[index];
+        if(connection.provider==='ai')this.tasks!.translationBudget(connection);
+        try{
+          const output=connection.provider==='ai'?await this.tasks!.translateBatch(connection,batch.map(part=>({id:part.id,text:result.source.slice(part.start,part.end)})),result.target,abort.signal):{paragraphs:[{id:batch[0].id,text:(await this.request(connection,translationText(result.source.slice(batch[0].start,batch[0].end)),result.target,abort)).text}],model:connection.model};
+          abort.signal.throwIfAborted();
+          let total=result.source.length-result.parts!.reduce((sum,part)=>sum+part.end-part.start,0)+result.parts!.reduce((sum,part)=>sum+(part.status==='translated'?(part.text?.length||0):0),0);
+          for(const part of batch){const translated=output.paragraphs.find(item=>item.id===part.id);
+            if(translated&&'text' in translated&&total+translated.text.length<=TRANSLATION_DOCUMENT_OUTPUT){part.status='translated';part.text=translated.text;part.model=output.model;delete part.error;total+=translated.text.length;}
+            else{part.status='failed';part.error=translated&&'error' in translated?translated.error:translated?'译文超过可处理范围':'服务未返回该段落';delete part.text;}
+          }
+          update();
+        }catch(error){
+          if(error instanceof Error&&error.message==='AI 请求已取消')abort.abort();
+          if(abort.signal.aborted)throw error;const message=error instanceof Error?error.message.slice(0,240):'翻译失败';
+          for(const part of batch){part.status='failed';part.error=message;}update();
+          if(!/段落 JSON|无效的段落|译文过长/.test(message)){for(const remaining of batches.slice(index+1).flat()){remaining.status='failed';remaining.error='尚未发送：'+message;}update();break;}
+        }
+      }
+      return this.snapshot()!;
+    }catch(error){const cancelled=abort.signal.aborted&&abort.signal.reason!=='timeout',message=cancelled?'翻译已取消':error instanceof Error?error.message.slice(0,240):'翻译失败';for(const part of selected)if(part.status==='waiting'){part.status=cancelled?'cancelled':'failed';part.error=message;}update();throw error;}
   }
   private async request(
     c: TranslationConnection,
@@ -46,7 +100,7 @@ export class TranslationClient {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      abort.abort();
+      abort.abort('timeout');
     }, this.timeout);
     timer.unref();
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;

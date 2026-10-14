@@ -18,7 +18,7 @@ interface Host {
   ): Promise<TranslationResult>;
   cancel(): Promise<void>;
 }
-/** Explicit capture action: local OCR then one configured translation request; no automatic retries. */
+/** Explicit capture action: local OCR then a configured translation job; retries require user action. */
 export class OCRWorkflow {
   owner?: string;
   state?: OCRWorkflowState;
@@ -28,6 +28,10 @@ export class OCRWorkflow {
   constructor(private host: Host) {}
   get active() {
     return !!this.task;
+  }
+  acceptTranslation(value:TranslationResult){
+    if(this.active||!this.state||!this.output?.translation||this.state.status==='canceled'||this.output.source!==value.source||this.state.target!==value.target)return;
+    this.output.translation=structuredClone(value);const partial=!!value.parts?.some(part=>part.status!=='translated');this.state.status=partial?'failed':'done';this.state.error=partial?'部分段落未翻译完成，请在识别窗口重试':'';
   }
   async run(owner: string, png: Buffer, target: unknown): Promise<boolean> {
     if (this.task) throw Error('正在执行识别流程，请先取消当前任务');
@@ -73,6 +77,7 @@ export class OCRWorkflow {
       );
       check();
       this.output.translation = translated;
+      if(translated.parts?.some(part=>part.status!=='translated'))throw Error('部分段落未翻译完成，请在识别窗口重试');
       this.state!.status = 'done';
       return true;
     } catch (error) {

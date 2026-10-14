@@ -10,6 +10,7 @@ export const inlineOCR: InlineOCRAPI = {
   correct:(id,selection,text)=>call('correct',id,selection,text),
   preview: (id, region) => call('preview', id, region),
   translate: (id, text, target) => call('translate', id, text, target),
+  partialTranslation:id=>call('translation-partial',id),retryTranslation:(id,job,parts)=>call('translation-retry',id,job,parts),
   copy: (id, text) => call('copy', id, text),
   cancel: id => call('cancel', id),
   release: id => call('release', id),

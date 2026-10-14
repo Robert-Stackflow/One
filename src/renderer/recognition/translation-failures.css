@@ -1,0 +1,9 @@
+.translation-failures { flex:none; border-top:1px solid var(--line); padding:8px 12px; font-size:calc(12px * var(--text-scale,1)); }
+.translation-failures[hidden] { display:none; }
+.translation-failures header,.translation-failures li { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.translation-failures ul { list-style:none; margin:0; padding:0; max-height:160px; overflow:auto; }
+.translation-failures li { padding:6px 0; }
+.translation-failures li div { display:grid; gap:3px; min-width:0; }
+.translation-failures li span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.translation-failures small { color:var(--muted); }
+.translation-failures button { flex:none; min-height:28px; }

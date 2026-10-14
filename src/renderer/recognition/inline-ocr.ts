@@ -1,6 +1,6 @@
 import type { InlineOCRAPI } from '../../shared/recognition/inline-ocr';
 import type { OCRLanguage } from '../../shared/recognition/ocr';
-import { translationLanguages, type TranslationLanguage } from '../../shared/recognition/translation';
+import { translationLanguages, type TranslationLanguage,type TranslationResult,type TranslationConfig } from '../../shared/recognition/translation';
 import { mountTextSelection } from './text-selection';
 import { icon, registerIcons } from '../ui';
 import { ArrowLeft } from 'lucide';
@@ -9,6 +9,7 @@ import { mountImageWorkspace } from './workspace';
 import './inline-ocr.css';
 import { mountWordCorrection } from './word-correction';
 import {mountServiceSettings} from './service-settings';
+import {mountTranslationFailures} from './translation-failures';
 
 /** The same image-space selection engine, mounted inside an existing image workspace. */
 export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
@@ -18,6 +19,7 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   let disposed=false,id='',busy=false,ready=false,panelVisible=false;
   let correction:ReturnType<typeof mountWordCorrection>|undefined;
   let settings:ReturnType<typeof mountServiceSettings>|undefined;
+  let translationResult:TranslationResult|undefined,translationOriginal='',serviceConfig:TranslationConfig|undefined;
   const scroll={left:host.scrollLeft,top:host.scrollTop},overflow=host.style.overflow;
   host.classList.add('inline-ocr-host');host.scrollLeft=host.scrollTop=0;host.style.overflow='clip';
   const root=document.createElement('section');root.className='inline-ocr';root.setAttribute('aria-label','图片文字识别');
@@ -29,6 +31,9 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   const q=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
   const image=q<HTMLImageElement>('img'),original=q<HTMLTextAreaElement>('.inline-ocr-original'),translated=q<HTMLTextAreaElement>('.inline-ocr-translated');
   const target=q<HTMLSelectElement>('.inline-ocr-translation-tools select');
+  const failures=mountTranslationFailures(translated,ids=>void translate(translationResult!.source,ids));
+  const translationValid=()=>!!translationResult&&translationOriginal===original.value&&translationResult.target===target.value&&translationResult.revision===serviceConfig?.revision;
+  const renderFailures=()=>{failures.update(translationResult,busy||!!correction?.busy(),translationValid(),translated.value!==translationResult?.text);q<HTMLButtonElement>('.inline-ocr-copy-translation').disabled=busy||!translationValid()||!translated.value.trim();};
   for(const [value,label]of Object.entries(translationLanguages)){const option=document.createElement('option');option.value=value;option.textContent=label;target.append(option);}target.value='zh-Hans';
   customControls(root);
   const workspace=mountImageWorkspace(q('.inline-ocr-body'),q('.inline-ocr-divider'),q<HTMLButtonElement>('.inline-ocr-panel'),false);
@@ -47,22 +52,25 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   registerIcons({'inline-ocr-back':ArrowLeft});
   q('.inline-ocr-back').innerHTML=icon('lucide:inline-ocr-back');const label=document.createElement('span');label.textContent=options.back;q('.inline-ocr-back').append(label);
   function panel(show:boolean){panelVisible=show;q('.inline-ocr-result').hidden=!show;workspace.show(show);}
-  function loading(value:boolean,label:string){busy=value;const editing=!!correction?.busy();root.ariaBusy=String(value||editing);q('.inline-ocr-loading').hidden=!value;q('.inline-ocr-loading-label').textContent=label;q<HTMLButtonElement>('.inline-ocr-run').disabled=value||editing||!ready;q<HTMLSelectElement>('.inline-ocr-language').disabled=value||editing;original.readOnly=value||editing;selection.setEnabled(!value&&!editing);}
+  function loading(value:boolean,label:string){busy=value;const editing=!!correction?.busy();root.ariaBusy=String(value||editing);q('.inline-ocr-loading').hidden=!value;q('.inline-ocr-loading-label').textContent=label;q<HTMLButtonElement>('.inline-ocr-run').disabled=value||editing||!ready;q<HTMLSelectElement>('.inline-ocr-language').disabled=value||editing;q<HTMLButtonElement>('.inline-ocr-translation-tools [role=combobox]').disabled=value||editing;serviceButton.disabled=value||editing||!ready;original.readOnly=value||editing;translated.readOnly=value||editing;selection.setEnabled(!value&&!editing);renderFailures();}
   async function run(region?:import('../../shared/recognition/text-area').OCRLocalSelection){
     if(!ready||busy||disposed||correction?.busy())return;loading(true,'识别中');
     try{const language=q<HTMLSelectElement>('.inline-ocr-language').value as OCRLanguage;
       const result=await (region?api.region(id,language,region):api.run(id,language));if(disposed)return;
-      original.value=result.text;translated.value='';selection.setDocument(result.document,!!result.document||!result.text.trim());if(!result.words.length)panel(true);
+      original.value=result.text;translated.value='';translationResult=undefined;selection.setDocument(result.document,!!result.document||!result.text.trim());if(!result.words.length)panel(true);
       q('.inline-ocr-run').title=result.inference?result.inference.model+' · '+result.inference.device:'';
     }catch(error){if(!disposed)options.message(error);}finally{if(!disposed)loading(false,'');}
   }
-  async function translate(text:string){
+  async function translate(text:string,retry?:string[]){
     if(busy||correction?.busy()||!id||!text.trim())return;panel(true);loading(true,'翻译中');
-    try{const config=await api.translationConfig(id);if(!config.ready){loading(false,'');await settings?.open();return;}const result=await api.translate(id,text,target.value as TranslationLanguage);if(!disposed)translated.value=result.text;}
-    catch(error){if(!disposed)options.message(error);}finally{if(!disposed)loading(false,'');}
+    const before=original.value,language=target.value as TranslationLanguage,job=translationResult?.id;
+    try{const config=await api.translationConfig(id);if(!config.ready){loading(false,'');await settings?.open();return;}serviceConfig=config;
+      if(retry&&(!translationValid()||translated.value!==translationResult?.text||!job))throw Error('原文、译文或服务已改变，请重新翻译');
+      const result=await(retry?api.retryTranslation(id,job!,retry):api.translate(id,text,language));if(!disposed){translationResult=result;translationOriginal=before;translated.value=result.text;}}
+    catch(error){const partial=await api.partialTranslation(id).catch(()=>undefined);if(!disposed){if(partial?.parts&&partial.source===text&&partial.target===language&&partial.revision===serviceConfig?.revision){translationResult=partial;translationOriginal=before;translated.value=partial.text;}else options.message(error);}}finally{if(!disposed)loading(false,'');}
   }
   function dispose(){
-    if(disposed)return;disposed=true;workspace.dispose();correction?.dispose();selection.dispose();root.remove();host.classList.remove('inline-ocr-host');host.style.overflow=overflow;
+    if(disposed)return;disposed=true;workspace.dispose();correction?.dispose();selection.dispose();failures.dispose();root.remove();host.classList.remove('inline-ocr-host');host.style.overflow=overflow;
     host.scrollLeft=scroll.left;host.scrollTop=scroll.top;if(id)void api.release(id).catch(()=>{});options.closed();
   }
   q('.inline-ocr-back').onclick=dispose;q('.inline-ocr-panel').onclick=()=>panel(!panelVisible);
@@ -70,12 +78,12 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   q('.inline-ocr-copy').onclick=()=>void api.copy(id,original.value).then(()=>options.message('已复制原文')).catch(options.message);
   q('.inline-ocr-copy-translation').onclick=()=>void api.copy(id,translated.value).then(()=>options.message('已复制译文')).catch(options.message);
   q('.inline-ocr-cancel').onclick=()=>{if(id)void api.cancel(id).catch(options.message);else dispose();};
-  original.oninput=()=>selection.setDocument(undefined,false);
+  original.oninput=()=>{selection.setDocument(undefined,false);renderFailures();};translated.oninput=renderFailures;target.onchange=renderFailures;
   panel(false);loading(true,'准备图片');
   void (async()=>{
     const png=await options.snapshot();if(disposed)return;
     const state=await api.prepare(options.source,png);id=state.id;if(disposed){await api.release(id);return;}
-    settings=mountServiceSettings('translation',{load:()=>api.translationConfig(id),save:value=>api.saveTranslation(id,value),clear:rev=>api.clearTranslation(id,rev),profiles:()=>api.taskProfiles(id),verify:async()=>{throw Error('文字翻译无需图片验证');},cancelCheck:async()=>{},migrate:rev=>api.migrateService(id,rev),restore:rev=>api.restoreService(id,rev),manage:()=>api.manageServices(id),available:()=>ready&&!busy&&!disposed&&!correction?.busy(),updated:()=>{translated.value='';},error:options.message});
+    settings=mountServiceSettings('translation',{load:()=>api.translationConfig(id),save:value=>api.saveTranslation(id,value),clear:rev=>api.clearTranslation(id,rev),profiles:()=>api.taskProfiles(id),verify:async()=>{throw Error('文字翻译无需图片验证');},cancelCheck:async()=>{},migrate:rev=>api.migrateService(id,rev),restore:rev=>api.restoreService(id,rev),manage:()=>api.manageServices(id),available:()=>ready&&!busy&&!disposed&&!correction?.busy(),updated:value=>{if(serviceConfig&&serviceConfig.revision!==value.revision){translated.value='';translationResult=undefined;}serviceConfig=value;renderFailures();},error:options.message});
     const source=selection.setImagePreview(state,region=>api.preview(id,region));selection.setView(options.initial);
     image.src=await source;await image.decode();if(disposed)return;ready=true;loading(false,'');await run();
   })().catch(error=>{if(!disposed){options.message(error);dispose();}});

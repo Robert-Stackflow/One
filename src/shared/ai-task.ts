@@ -51,12 +51,14 @@ export function taskTranslation(text:string,requested:AITaskParagraph[]):AITaskT
   if(text.length>TRANSLATION_OUTPUT)throw Error('译文过长');let value:any;
   try{value=JSON.parse(text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{throw Error('翻译服务未返回有效的段落 JSON');}
   if(!value||!Array.isArray(value.paragraphs)||value.paragraphs.length>64)throw Error('翻译服务返回了无效的段落列表');
-  const ids=new Set(requested.map(item=>item.id)),found=new Map<string,string>(),duplicate=new Set<string>(),unexpectedIds:string[]=[],order:string[]=[];
+  const ids=new Set(requested.map(item=>item.id)),found=new Map<string,string>(),duplicate=new Set<string>(),invalid=new Set<string>(),seen=new Set<string>(),unexpectedIds:string[]=[],order:string[]=[];
   for(const item of value.paragraphs){
-    if(!item||typeof item.id!=='string'||item.id.length>160||typeof item.text!=='string'||!item.text.trim()||item.text.includes('\0')||Object.keys(item).some(key=>!['id','text'].includes(key)))throw Error('翻译服务返回了无效的段落');
-    if(!ids.has(item.id)){unexpectedIds.push(item.id);continue;}if(found.has(item.id))duplicate.add(item.id);else{found.set(item.id,item.text);order.push(item.id);}
+    if(!item||typeof item.id!=='string'||item.id.length>160)throw Error('翻译服务返回了无效的段落');
+    if(!ids.has(item.id)){unexpectedIds.push(item.id);continue;}if(seen.has(item.id))duplicate.add(item.id);seen.add(item.id);
+    if(typeof item.text!=='string'||!item.text.trim()||item.text.includes('\0')||Object.keys(item).some(key=>!['id','text'].includes(key))){invalid.add(item.id);continue;}
+    if(!found.has(item.id)){found.set(item.id,item.text);order.push(item.id);}
   }
   const expectedOrder=requested.filter(item=>found.has(item.id)).map(item=>item.id);
-  return {paragraphs:requested.map(({id})=>duplicate.has(id)?{id,error:'服务重复返回该段落'}:found.has(id)?{id,text:found.get(id)!}:{id,error:'服务未返回该段落'}),unexpectedIds,reordered:order.some((id,index)=>id!==expectedOrder[index])};
+  return {paragraphs:requested.map(({id})=>duplicate.has(id)?{id,error:'服务重复返回该段落'}:invalid.has(id)?{id,error:'服务返回的该段落无效'}:found.has(id)?{id,text:found.get(id)!}:{id,error:'服务未返回该段落'}),unexpectedIds,reordered:order.some((id,index)=>id!==expectedOrder[index])};
 }
 export function taskFormula(text:string){const value=formulaText(text);if(!value.trim())throw Error('公式服务未返回可用的 LaTeX');return value;}

@@ -63,6 +63,7 @@ export class OCRService {
   private formulaConfiguring = false;
   private translationSerial = 0;
   private translationTask?: Promise<TranslationResult>;
+  private translationSnapshotToken='';
   private configuring = false;
   private error = '';
   private opening = false;
@@ -227,6 +228,15 @@ export class OCRService {
       if (this.workflow.active) throw Error('正在执行识别流程，请先取消当前任务');
       return this.translate(token, text, target, revision);
     });
+    handle('translation-retry',(token,id,parts,revision)=>{
+      if(this.workflow.active||token!==this.translationSnapshotToken)throw Error('翻译结果已失效');
+      return this.translate(token,undefined,undefined,revision,{id,parts});
+    });
+    handle('translation-partial',async(token,revision)=>{
+      if(token!==this.token||token!==this.translationSnapshotToken)throw Error('翻译结果已失效');
+      if((await this.translationStore.state()).revision!==revision)throw Error('翻译服务已改变');
+      const result=this.translationClient.snapshot();return result?.revision===revision?result:undefined;
+    });
     handle('translation-cancel', () =>
       this.workflow.active ? this.workflow.cancel() : this.cancelTranslation(),
     );
@@ -337,7 +347,7 @@ export class OCRService {
     await Promise.all([this.runner.cancel(), this.paddle.cancel(),this.native.cancel()]);
     await this.recognitionTask?.catch(() => {});
   }
-  private async translate(token: unknown, text: unknown, target: unknown, revision: unknown) {
+  private async translate(token: unknown, text: unknown, target: unknown, revision: unknown,retry?:{id:unknown;parts:unknown}) {
     if (token !== this.token || !this.png) throw Error('识别图片已失效');
     if (this.translating || this.running || this.formulaRecognizing)
       throw Error('请先结束当前识别或翻译');
@@ -350,10 +360,12 @@ export class OCRService {
         const connection = await this.translationStore.connection(revision);
         if (generation !== this.token || serial !== this.translationSerial || this.ctx.blocked())
           throw Error('翻译已取消');
-        const result = await this.translationClient.run(connection, text, target);
+        this.translationSnapshotToken=generation;
+        const result = await (retry?this.translationClient.retry(connection,retry.id,retry.parts):this.translationClient.run(connection, text, target));
         if((await this.translationStore.state()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');
         if (generation !== this.token || serial !== this.translationSerial || this.ctx.blocked())
           throw Error('翻译已取消');
+        this.workflow.acceptTranslation(result);
         return result;
       } finally {
         if (generation === this.token) this.translating = false;
@@ -486,6 +498,7 @@ export class OCRService {
   private clear(cancelWorkflow = true) {
     this.workflow.closed(cancelWorkflow);
     this.token = '';
+    this.translationSnapshotToken='';
     const preview=this.imagePreview;this.imagePreview=undefined;
     const closingPreview=preview?.close();
     this.png?.fill(0);
@@ -497,7 +510,7 @@ export class OCRService {
       this.cancelRecognition(),
       this.localModels.settle(),
       this.models.settle(),
-      this.cancelTranslation(),
+      this.cancelTranslation().finally(()=>this.translationClient.clearSnapshot()),
       this.translationStore.settle(),
       this.cancelFormula(),
       this.formulaStore.settle(),

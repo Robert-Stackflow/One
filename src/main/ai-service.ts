@@ -43,6 +43,7 @@ export class OneAIService{
   return this.taskModels(profile).map(model=>model.id).filter(id=>Object.hasOwn(record.models,id)&&Number.isFinite(record.models[id]?.expiresAt)&&record.models[id].expiresAt>Date.now());
  }
  taskProfiles():AITaskProfile[]{return this.data.profiles.map(profile=>({id:profile.id,name:profile.name,kind:profile.kind,model:profile.model,models:this.taskModels(profile),revision:this.taskRevision(profile),imageModels:this.verifiedImages(profile)}));}
+ taskTranslationBudget(value:unknown){const {profile}=this.taskProfile(value);return Math.max(32,Math.min(12000,Math.floor(profile.maxTokens/2)));}
  async importRecognitionConnection(endpoint:string,model:string,key:string,name:string){
   const url=new URL(endpoint);if(!/\/chat\/completions\/?$/.test(url.pathname)||url.search||url.hash||url.username||url.password)throw Error('当前接口不是标准 Chat Completions 路径，原配置已保留，请手动配置 AI 服务');
   const baseUrl=endpoint.replace(/\/chat\/completions\/?$/,'');
