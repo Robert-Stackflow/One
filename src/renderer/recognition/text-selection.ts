@@ -275,6 +275,8 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   image.addEventListener('load', layout);
   const resize = new ResizeObserver(layout); resize.observe(viewport);
   return {
+    document:()=>doc,
+    imageLayer:()=>inner,
     wordSelection() {
       if(!enabled||!visible||!doc||anchor<0||focus<0)return undefined;
       const first=Math.min(anchor,focus),last=Math.max(anchor,focus),range=textGroup(tokens,first,'word');

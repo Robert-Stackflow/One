@@ -13,14 +13,16 @@ import { recognitionNotice } from './notice';
 import { recognitionReady, prepareRecognitionImage } from './ready';
 import { needsImagePreview } from '../../shared/recognition/image-preview';
 import { mountWordCorrection } from './word-correction';
+import {mountImageTranslation} from './image-translation';
 export function mountOCR() {
 const api = window.one.recognition!;
 let state: OCRState, disposed = false, requesting = false, polling = false, workflowRead = '', reportedError = '';
 let correction:ReturnType<typeof mountWordCorrection>|undefined;
+let picture:ReturnType<typeof mountImageTranslation>|undefined;
 const workspace = mountOCRWorkspace();
 const workflowBusy = () => ['recognizing', 'translating'].includes(state?.workflow?.status || '');
 const message = recognitionNotice(q('message'));
-const translation = mountTranslation(api, () => state ? { ...state, running: state.running || requesting || workflowBusy() || !!correction?.busy() } : undefined, message, () => { if (state) render(); });
+const translation = mountTranslation(api, () => state ? { ...state, running: state.running || requesting || workflowBusy() || !!correction?.busy()||!!picture?.busy() } : undefined, message, () => { if (state) render(); });
 const selection = mountTextSelection(q<HTMLImageElement>('source'), {
   copy: text => api.copy(text), message,
   rerecognize:value=>void recognize(value),
@@ -36,6 +38,7 @@ correction=mountWordCorrection(q<HTMLTextAreaElement>('result'),q('result-label'
 });
 const tools = document.querySelector('.text-image-tools'); if (tools) q('ocr-image-tools').append(tools);
 const loadImage=prepareRecognitionImage(q<HTMLImageElement>('source'),message);
+picture=mountImageTranslation(api,{state:()=>state?{...state,running:state.running||requesting||workflowBusy()||!!correction?.busy()||translation.busy()}:undefined,document:()=>selection.document(),layer:()=>selection.imageLayer(),translate:()=>translation.imageResult(),available:()=>translation.imageReady(),valid:id=>translation.imageValid(id),changed:()=>{if(state)render();},message});
 const openLocalModels = mountLocalModels(api, refresh);
 q('local-model-configure').onclick = () => void openLocalModels().catch(message);
 q('open-formula').onclick = () => void api.openFormula(state.token).catch(message);
@@ -46,18 +49,18 @@ function inference(value: OCRResult['inference']) {
 }
 function render() {
   const root = q('app'); if (root.dataset.captureScale !== String(state.uiScale)) applyCaptureScale(root, state.uiScale);
-  const busy = requesting || state.running || workflowBusy() || !!correction?.busy();
+  const busy = requesting || state.running || workflowBusy() || !!correction?.busy()||!!picture?.busy();
   q<HTMLButtonElement>('run').disabled = busy || translation.busy() || state.models.downloading || !state.models.ready;
   q('run').title=state.models.downloading?'模型下载中':!state.models.ready?`${state.modelTitle||'所选模型'} 尚未就绪，请打开 OCR 模型`:'';
   q<HTMLSelectElement>('language').disabled = busy;
   q<HTMLTextAreaElement>('result').readOnly = busy || translation.busy();
   q<HTMLButtonElement>('copy').disabled = !q<HTMLTextAreaElement>('result').value.trim();
   q('workflow-back').hidden = !state.workflow?.returnToCapture;
-  const loading = requesting || state.running || workflowBusy() || translation.busy();
+  const loading = requesting || state.running || workflowBusy() || translation.busy()||!!picture?.busy();
   q('image-loading').hidden = !loading; q('source').parentElement!.ariaBusy = String(loading);
-  q('image-loading-label').textContent = state.waitingForInference ? '等待其他本地任务' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
+  q('image-loading-label').textContent = state.waitingForInference ? '等待其他本地任务' : picture?.busy()?'生成译图':translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
   q<HTMLButtonElement>('overlay-cancel').disabled = false;
-  selection.setEnabled(!busy); translation.render();
+  selection.setEnabled(!busy&&!picture?.visible()); translation.render();picture?.render();
   const error = state.error || state.models.error || '';
   if (error && error !== reportedError) message(Error(error)); reportedError = error;
 }
@@ -75,7 +78,7 @@ async function refresh() {
   finally { polling = false; }
 }
 async function recognize(region?:import('../../shared/recognition/text-area').OCRLocalSelection){
-  if (requesting || state.running || workflowBusy() || translation.busy() || correction?.busy()) return;
+  if (requesting || state.running || workflowBusy() || translation.busy() || correction?.busy()||picture?.busy()) return;
   requesting = true; render(); message('');
   try {
     const language=q<HTMLSelectElement>('language').value as OCRLanguage;
@@ -85,12 +88,12 @@ async function recognize(region?:import('../../shared/recognition/text-area').OC
   } catch (error) { message(error); } finally { requesting = false; await refresh(); }
 }
 q('run').onclick=()=>void recognize();
-q('overlay-cancel').onclick = () => void (translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);
+q('overlay-cancel').onclick = () => {if(picture?.busy()){picture.cancel();return;}void (translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);};
 q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
 q('result').oninput = () => { selection.setDocument(undefined,false); translation.sourceChanged(); if (state) render(); };
 registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);
 void api.state().then(async value => { state = value; q('source-name').textContent = state.name;loadImage(needsImagePreview(value)?selection.setImagePreview(value,region=>api.imagePreview(value.token,region)):value.image);await syncWorkflow(); render(); }).catch(message);
 void recognitionReady(()=>api.ready()).catch(message);
 const timer = setInterval(() => void refresh(), 400);
-window.addEventListener('beforeunload', () => { disposed = true; correction?.dispose(); selection.dispose(); clearInterval(timer); }, { once: true });
+window.addEventListener('beforeunload', () => { disposed = true;picture?.dispose(); correction?.dispose(); selection.dispose(); clearInterval(timer); }, { once: true });
 }

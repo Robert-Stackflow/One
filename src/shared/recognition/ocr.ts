@@ -89,6 +89,8 @@ export interface OCRAPI extends RecognitionServiceAPI {
   cancelTranslation(): Promise<void>;
   partialTranslation(token:string,revision:string):Promise<TranslationResult|undefined>;
   retryTranslation(token:string,id:string,parts:string[],revision:string):Promise<TranslationResult>;
+  imageTranslation(token:string,id:string,revision:string):Promise<import('./image-translation').ImageTranslationDocument>;
+  outputImageTranslation(token:string,id:string,mode:'copy'|'export',png:string):Promise<string|null>;
 }
 export interface FormulaRecognitionAPI extends RecognitionServiceAPI {
   ready(): Promise<void>;

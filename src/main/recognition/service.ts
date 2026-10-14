@@ -2,7 +2,9 @@ import {serviceCredentialCrypto,type ServiceConnectionStorage} from '../service-
 import {clipboard,session,shell,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { pngDimensions } from '../capture/clipboard';
+import { pngDimensions,decodePng,writeClipboardPng } from '../capture/clipboard';
+import {saveImage} from '../capture/image-export';
+import {imageTranslationDocument,type ImageTranslationDocument} from '../../shared/recognition/image-translation';
 import { OCRModels } from './ocr-models';
 import { OCRRunner } from './ocr-runner';
 import { SensitiveScanner } from './sensitive-scanner';
@@ -64,6 +66,7 @@ export class OCRService {
   private translationSerial = 0;
   private translationTask?: Promise<TranslationResult>;
   private translationSnapshotToken='';
+  private translatedImage?:ImageTranslationDocument;
   private configuring = false;
   private error = '';
   private opening = false;
@@ -237,6 +240,26 @@ export class OCRService {
       if(token!==this.token||token!==this.translationSnapshotToken)throw Error('翻译结果已失效');
       if((await this.translationStore.state()).revision!==revision)throw Error('翻译服务已改变');
       const result=this.translationClient.snapshot();return result?.revision===revision?result:undefined;
+    });
+    handle('image-translation',async(token,id,revision)=>{
+      if(this.kind==='formula'||token!==this.token||token!==this.translationSnapshotToken||this.running||this.translating||this.ctx.blocked())throw Error('图片翻译已失效');
+      if((await this.translationStore.state()).revision!==revision)throw Error('翻译服务已改变');
+      const result=this.translationClient.snapshot(),document=this.result?.document;
+      if(token!==this.token||this.running||this.translating||!document||!result||result.id!==id||result.revision!==revision)throw Error('图片文字或译文已改变');
+      this.translatedImage=imageTranslationDocument(document,result,randomUUID());return this.translatedImage;
+    });
+    handle('image-translation-output',async(token,id,mode,png)=>{
+      const document=this.translatedImage;
+      const valid=()=>!!document&&document.id===id&&token===this.token&&document===this.translatedImage&&document.sourceId===this.result?.document?.id&&document.recognitionRevision===(this.result?.document?.revision||0)&&document.translationId===this.translationClient.snapshot()?.id&&!this.running&&!this.translating&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed();
+      if(!valid()||!['copy','export'].includes(mode))throw Error('图片翻译已失效');
+      if((await this.translationStore.state()).revision!==document!.serviceRevision||!valid())throw Error('翻译服务或图片已改变');
+      const header=pngDimensions(png);if(header.width!==document!.width||header.height!==document!.height)throw Error('译图尺寸与原图不一致');
+      const decoded=decodePng(png);
+      try{
+        if(!valid())throw Error('图片翻译已失效');
+        if(mode==='copy'){await writeClipboardPng(decoded.data);return '已复制译图';}
+        return await saveImage(this.window!,{payload:{png}},path=>this.ctx.protect(path),valid,{title:'保存译图',defaultPath:'One-translated.png'});
+      }finally{decoded.data.fill(0);}
     });
     handle('translation-cancel', () =>
       this.workflow.active ? this.workflow.cancel() : this.cancelTranslation(),
@@ -450,7 +473,7 @@ export class OCRService {
       this.imagePreview=new OCRImagePreview(this.png,this.size);
       this.token = randomUUID();
       this.name = name.slice(0, 180);
-      this.result = undefined;
+      this.result = undefined;this.translatedImage=undefined;
       this.error = '';
       this.progress = 0;
       this.running = false;
@@ -504,7 +527,7 @@ export class OCRService {
     const closingPreview=preview?.close();
     this.png?.fill(0);
     this.png = undefined;
-    this.result = undefined;
+    this.result = undefined;this.translatedImage=undefined;
     this.models.cancel();
     this.settling = Promise.all([
       closingPreview,

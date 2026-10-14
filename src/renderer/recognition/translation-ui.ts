@@ -118,6 +118,9 @@ export function mountTranslation(
       });
   };
   return {
+    imageReady:()=>!!config?.ready,
+    imageValid:(id?:string)=>valid()&&(!id||result?.id===id)&&q<HTMLTextAreaElement>('translated').value===result?.text,
+    imageResult:async()=>{selectionSource=undefined;await translate();return valid()?result:undefined;},
     async workflowResult(
       value: TranslationResult | undefined,
       language: TranslationLanguage,
