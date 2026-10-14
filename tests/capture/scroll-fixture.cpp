@@ -8,13 +8,15 @@
 #include <algorithm>
 static int offsetY = 0, offsetX = 0;
 static int wheelEvents=0,lastWheelNotches=0,delayMs=0,delayedOffset=0;
+static int animationTicks=0;
+static bool animate=false;
 static HWND fixture;
 static void report() {
     RECT r{}; GetClientRect(fixture, &r);
     POINT origin{}; ClientToScreen(fixture, &origin);
     std::cout << "{\"x\":" << origin.x << ",\"y\":" << origin.y << ",\"width\":" << r.right
       << ",\"height\":" << r.bottom << ",\"hwnd\":" << reinterpret_cast<uintptr_t>(fixture)
-      << ",\"offsetY\":" << offsetY << ",\"offsetX\":" << offsetX << ",\"wheelEvents\":" << wheelEvents << ",\"lastWheelNotches\":" << lastWheelNotches << "}\n" << std::flush;
+      << ",\"offsetY\":" << offsetY << ",\"offsetX\":" << offsetX << ",\"wheelEvents\":" << wheelEvents << ",\"lastWheelNotches\":" << lastWheelNotches << ",\"animationTicks\":" << animationTicks << "}\n" << std::flush;
 }
 static LRESULT CALLBACK procedure(HWND w, UINT message, WPARAM p, LPARAM l) {
     if (message == WM_PAINT) {
@@ -26,6 +28,7 @@ static LRESULT CALLBACK procedure(HWND w, UINT message, WPARAM p, LPARAM l) {
             uint32_t value = uint32_t(x + offsetX + 17) * 1103515245u ^ uint32_t(y - 20 + offsetY + 31) * 2654435761u;
             value ^= value >> 13; value *= 2246822519u; value ^= value >> 16;
             pixels[size_t(y) * width + x] = y < 20 || y >= height - 12 ? 0xffa0a0a0 : 0xff000000 | (value & 0xffffff);
+            if(animate&&x>=160&&x<256&&y>=130&&y<162){const auto phase=(animationTicks*37)&255;pixels[size_t(y)*width+x]=0xff000000|(phase<<16)|((255-phase)<<8)|phase;}
         }
         BITMAPINFO info{}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         info.bmiHeader.biWidth = width; info.bmiHeader.biHeight = -height;
@@ -40,9 +43,11 @@ static LRESULT CALLBACK procedure(HWND w, UINT message, WPARAM p, LPARAM l) {
         offsetY=next;InvalidateRect(w,nullptr,FALSE);return 0;
     }
     if(message==WM_TIMER&&p==1){KillTimer(w,1);offsetY=delayedOffset;InvalidateRect(w,nullptr,FALSE);UpdateWindow(w);return 0;}
+    if(message==WM_TIMER&&p==2){animationTicks++;InvalidateRect(w,nullptr,FALSE);UpdateWindow(w);return 0;}
     if (message == WM_MOUSEHWHEEL) { wheelEvents++;lastWheelNotches=std::abs(GET_WHEEL_DELTA_WPARAM(p)/120);offsetX = std::clamp(offsetX + GET_WHEEL_DELTA_WPARAM(p) / 120 * 39, 0, 180); InvalidateRect(w, nullptr, FALSE); return 0; }
     if (message == WM_APP + 1) { KillTimer(w,1);offsetY = int(p); InvalidateRect(w, nullptr, FALSE); UpdateWindow(w); report(); return 0; }
     if(message==WM_APP+6){delayMs=int(p);report();return 0;}
+    if(message==WM_APP+7){animate=true;SetTimer(w,2,80,nullptr);InvalidateRect(w,nullptr,FALSE);report();return 0;}
     if (message == WM_APP + 2) { offsetX = int(p); InvalidateRect(w, nullptr, FALSE); UpdateWindow(w); report(); return 0; }
     if (message == WM_APP + 3) {
         ShowWindow(w, SW_SHOWNORMAL);
@@ -79,6 +84,7 @@ int wmain(int argc,wchar_t**argv) {
             }
             else if (line.starts_with("step ")) PostMessage(fixture, WM_APP + 1, std::stoi(line.substr(5)), 0);
             else if (line.starts_with("delay ")) PostMessage(fixture,WM_APP+6,std::stoi(line.substr(6)),0);
+            else if (line=="animate") PostMessage(fixture,WM_APP+7,0,0);
             else if (line.starts_with("right ")) PostMessage(fixture, WM_APP + 2, std::stoi(line.substr(6)), 0);
         }
         PostMessage(fixture, WM_CLOSE, 0, 0);

@@ -30,6 +30,44 @@ test('ordinary blank margins and ambiguous movement do not become automatically 
   assert.equal(detectScrollFixedEdges(a.pixels,b.pixels,height,width,0,width),undefined);
 });
 
+test('localized repeated animation settles and matches on both axes without modifying captured pixels',()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96,frame=(offset:number,color:number)=>{
+      const result=scrollPixels(width,height,vertical?0:offset,vertical?offset:0);
+      for(let row=60;row<78;row++)for(let x=30;x<44;x++){const at=(vertical?row*width+x:x*width+row)*4;result.pixels.set([color,255-color,color,255],at);}
+      return result;
+    },settle=new ScrollSettle({...scrollDefaults(),axis},{width,height}),engine=new ScrollStitch();
+    engine.configure({...scrollDefaults(),axis},{width,height});
+    const collect=(offset:number,time:number)=>{
+      settle.reset();const colors=[20,100,200,40];let last=frame(offset,20);
+      for(let i=0;i<colors.length;i++){last=frame(offset,colors[i]);assert.equal(settle.observe(last,time+i*140),i===3);}
+      const regions=settle.dynamicRegions();assert.equal(regions.length,1);assert.ok(regions[0].width*regions[0].height<=width*height*.08);return {last,regions};
+    };
+    const first=collect(0,0);engine.sample(first.last,first.regions);assert.deepEqual(engine.output(),first.last);
+    const next=collect(39,1000);assert.equal(engine.sample(next.last,next.regions).match,'accepted');assert.equal(vertical?engine.status().height:engine.status().width,199);
+    const output=engine.output();for(let y=0;y<height;y++)for(let x=0;x<width;x++){const at=(y*width+x)*4,to=(y*output.width+x)*4;assert.deepEqual(output.pixels.subarray(to,to+4),first.last.pixels.subarray(at,at+4));}
+    const before=engine.output(),unchanged=collect(39,2000);assert.equal(engine.sample(unchanged.last,unchanged.regions).match,'unchanged');assert.deepEqual(engine.output(),before);engine.undo();assert.deepEqual(engine.output(),first.last);
+    assert.throws(()=>engine.sample(next.last,[{x:0,y:0,width,height}]),/动态区域/);assert.deepEqual(engine.output(),first.last);
+  }
+});
+
+test('one-time local updates settle normally; large or widespread movement is never hidden as animation',()=>{
+  const width=96,height=160,local=(color:number)=>{const frame=scrollPixels(width,height);for(let y=60;y<78;y++)for(let x=30;x<44;x++)frame.pixels.set([color,color,color,255],(y*width+x)*4);return frame;};
+  const once=new ScrollSettle(scrollDefaults(),{width,height});assert.equal(once.observe(local(0),0),false);assert.equal(once.observe(local(255),140),false);assert.equal(once.observe(local(255),280),false);assert.equal(once.observe(local(255),420),false);assert.equal(once.observe(local(255),560),true);assert.deepEqual(once.dynamicRegions(),[]);
+  for(const broad of [false,true]){const settle=new ScrollSettle(scrollDefaults(),{width,height});for(let i=0;i<8;i++){const frame=scrollPixels(width,height,0,broad?i*5:0);if(!broad)for(let y=40;y<100;y++)for(let x=20;x<60;x++)frame.pixels.fill(i*25,(y*width+x)*4,(y*width+x)*4+3);assert.equal(settle.observe(frame,i*140),false);assert.deepEqual(settle.dynamicRegions(),[]);}}
+});
+
+test('animation masks cannot manufacture a unique overlap on blank or unrelated bodies',()=>{
+  const width=96,height=160,regions=[{x:30,y:60,width:14,height:18}];
+  for(const blank of [true,false]){
+    const first=scrollPixels(width,height),next=scrollPixels(width,height,511,777);
+    if(blank){first.pixels.fill(255);next.pixels.fill(255);}
+    for(let y=60;y<78;y++)for(let x=30;x<44;x++){first.pixels.set([0,0,0,255],(y*width+x)*4);next.pixels.set([200,200,200,255],(y*width+x)*4);}
+    const engine=new ScrollStitch();engine.configure(scrollDefaults(),{width,height});engine.sample(first,regions);
+    assert.equal(engine.sample(next,regions).match,'ambiguous');assert.deepEqual(engine.output(),first);
+  }
+});
+
 test('detected and manually corrected fixed edges do not delay otherwise quiet frames',()=>{
   for(const axis of ['vertical','horizontal'] as const){
     const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96,frame=(color:number)=>{

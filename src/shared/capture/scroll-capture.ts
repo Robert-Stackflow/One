@@ -1,5 +1,6 @@
 export type ScrollAxis = 'vertical' | 'horizontal';
 export type ScrollMode='manual'|'auto';
+export interface ScrollDynamicRegion {x:number;y:number;width:number;height:number}
 export class ScrollCaptureLimit extends Error {}
 interface ControlRect {x:number;y:number;width:number;height:number}
 /** Prefer usable space outside the selection; constrained screens retain a movable control. */

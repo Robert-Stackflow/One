@@ -1,6 +1,6 @@
 import { parentPort,workerData } from 'node:worker_threads';
 import {ScrollDiskStorage} from './scroll-storage';
-import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
+import {ScrollCaptureLimit,type ScrollDynamicRegion} from '../../shared/capture/scroll-capture';
 import { ScrollStitch } from '../../shared/capture/scroll-stitch';
 import { ScrollSettle } from '../../shared/capture/scroll-settle';
 import type {PixelFrame} from '../../shared/capture/scroll-stitch';
@@ -8,7 +8,8 @@ const storage=workerData?.directory?new ScrollDiskStorage(workerData.directory,w
 let engine = new ScrollStitch(storage,true);
 let settling: ScrollSettle;
 let staged:PixelFrame|undefined;
-function clearStage(){staged?.pixels.fill(0);staged=undefined;}
+let stagedRegions:ScrollDynamicRegion[]=[];
+function clearStage(){staged?.pixels.fill(0);staged=undefined;stagedRegions=[];}
 parentPort!.on('message', ({ id, kind, value }) => {
   try {
     let result;
@@ -21,7 +22,7 @@ parentPort!.on('message', ({ id, kind, value }) => {
       clearStage();const frame=value.frame as PixelFrame;
       if(!frame||!(frame.pixels instanceof Uint8Array))throw Error('采集像素帧无效');
       const stable=!value.monitored||settling.observe(frame,performance.now());
-      if(stable)staged=frame;else frame.pixels.fill(0);
+      if(stable){staged=frame;stagedRegions=value.monitored?settling.dynamicRegions():[];}else frame.pixels.fill(0);
       parentPort!.postMessage({id,stable});return;
     } else if(kind==='release-frame'){
       clearStage();parentPort!.postMessage({id});return;
@@ -30,7 +31,7 @@ parentPort!.on('message', ({ id, kind, value }) => {
     } else if(kind==='commit'){
       if(!staged)throw Error('稳定像素帧已失效');
       if(value?.recover&&engine.status().pending)engine.discard();
-      try{result=engine.sample(staged);}finally{clearStage();}
+      try{result=engine.sample(staged,stagedRegions);}finally{clearStage();}
     } else if (kind === 'settle-reset' || kind === 'observe') {
       if (!settling) throw Error('长截图尚未设置');
       if (kind === 'settle-reset') {clearStage();settling.reset();}

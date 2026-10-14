@@ -1,5 +1,5 @@
 import { imageDimensions } from './image-limits';
-import { scrollOptions,ScrollCaptureLimit, type ScrollOptions, type ScrollMatch } from './scroll-capture';
+import { scrollOptions,ScrollCaptureLimit, type ScrollOptions, type ScrollMatch, type ScrollDynamicRegion } from './scroll-capture';
 import {scrollSearchCandidates,scrollLocallyConsistent} from './scroll-search';
 import {detectScrollFixedEdges,type FixedEdges} from './scroll-fixed';
 export interface PixelFrame {
@@ -20,6 +20,7 @@ interface Strip {
   rows: number;
   previous?: Uint8Array;
   rowStart?:number;
+  previousRegions?:ScrollDynamicRegion[];
 }
 const BUDGET = 256 * 1024 * 1024;
 /** Original BGRA bytes, append-only strips, bounded undo and explicit uncertain joins.
@@ -29,6 +30,9 @@ export class ScrollStitch {
   constructor(private storage?:ScrollStripStorage,private autoFixed=false){}
   private fixed?:FixedEdges&{header:Uint8Array;footer:Uint8Array};
   private fixedAttempts=0;
+  private previousRegions:ScrollDynamicRegion[]=[];
+  private regions:ScrollDynamicRegion[]=[];
+  private candidateRegions:ScrollDynamicRegion[]=[];
   private strips: Strip[] = [];
   private previous?: Uint8Array;
   private candidate?: Uint8Array;
@@ -49,6 +53,7 @@ export class ScrollStitch {
     this.storage?.reset();
     this.strips = [];
     this.fixed=undefined;this.fixedAttempts=0;
+    this.previousRegions=[];this.regions=[];this.candidateRegions=[];
     this.previous = this.candidate = undefined;
     this.axis = this.cross = this.rows = this.count = this.offset = 0;
     this.match = 'first';
@@ -83,6 +88,11 @@ export class ScrollStitch {
         }
     return pixels;
   }
+  private masked(row:number,x:number,regions:ScrollDynamicRegion[]){
+    const vertical=this.options!.axis==='vertical',px=vertical?x:row+this.options!.trimStart,py=vertical?row+this.options!.trimStart:x;
+    return regions.some(region=>px>=region.x&&px<region.x+region.width&&py>=region.y&&py<region.y+region.height);
+  }
+  private omit=(oldRow:number,newRow:number,x:number)=>this.masked(oldRow,x,this.previousRegions)||this.masked(newRow,x,this.regions)||(!this.previousRegions.length&&oldRow===newRow&&this.masked(oldRow,x,this.regions));
   private score(a: Uint8Array, b: Uint8Array, shift: number, precise = false) {
     const start = Math.max(0, -shift),
       end = Math.min(this.axis, this.axis - shift),
@@ -97,6 +107,7 @@ export class ScrollStitch {
       let sum = 0,
         n = 0;
       for (let y = start; y < end; y += stepY) {
+        if(this.omit(y+shift,y,x))continue;
         const i = ((y + shift) * this.cross + x) * 4,
           j = (y * this.cross + x) * 4;
         for (let c = 0; c < 3; c++) {
@@ -104,14 +115,15 @@ export class ScrollStitch {
           n++;
         }
       }
-      columns.push(sum / n);
+      if(n)columns.push(sum / n);
     }
     columns.sort((x, y) => x - y);
     const keep = Math.ceil(columns.length * 0.9);
-    return columns.slice(0, keep).reduce((s, v) => s + v, 0) / keep;
+    return keep?columns.slice(0, keep).reduce((s, v) => s + v, 0) / keep:Infinity;
   }
   private sameBody(a:Uint8Array,b:Uint8Array){
     const first=Buffer.from(a.buffer,a.byteOffset,a.byteLength),second=Buffer.from(b.buffer,b.byteOffset,b.byteLength),left=this.options!.ignoreStart,right=this.cross-this.options!.ignoreEnd;
+    if(this.previousRegions.length||this.regions.length)return false;
     if(left===0&&right===this.cross)return first.equals(second);
     for(let row=0;row<this.axis;row++){const start=(row*this.cross+left)*4,end=(row*this.cross+right)*4;if(!first.subarray(start,end).equals(second.subarray(start,end)))return false;}
     return true;
@@ -122,8 +134,10 @@ export class ScrollStitch {
     this.options={...this.options!,trimStart:this.options!.trimStart+edges.start,trimEnd:this.options!.trimEnd+edges.end};
     this.axis=fullAxis-edges.start-edges.end;this.rows=this.axis;this.strips[0].rows=this.axis;this.strips[0].rowStart=edges.start;this.previous=old.slice(start,end);
   }
-  sample(frame: PixelFrame) {
+  sample(frame: PixelFrame,regions:ScrollDynamicRegion[]=[]) {
     if (this.candidate) throw Error('请先处理上一帧的拼接位置');
+    if(regions.length>1||regions.some(region=>![region.x,region.y,region.width,region.height].every(Number.isSafeInteger)||region.x<0||region.y<0||region.width<=0||region.height<=0||region.x+region.width>frame.width||region.y+region.height>frame.height||region.width*region.height>frame.width*frame.height*.08))throw Error('局部动态区域无效');
+    this.regions=regions.map(region=>({...region}));
     let pixels = this.normalize(frame);
     if (!this.previous) {
       const stored=this.storage?this.storage.put(pixels):pixels;
@@ -132,6 +146,7 @@ export class ScrollStitch {
       this.rows = this.axis;
       this.count = 1;
       this.match = 'first';
+      this.previousRegions=this.regions;
       if(this.options!.retainStart||this.options!.retainEnd)this.retainEdges({start:this.options!.retainStart||0,end:this.options!.retainEnd||0});
       return this.status();
     }
@@ -142,13 +157,14 @@ export class ScrollStitch {
       return this.status();
     }
     if(this.autoFixed&&this.options!.autoFixed!==false&&this.count===1&&!this.fixed&&this.fixedAttempts<3&&!this.options!.trimStart&&!this.options!.trimEnd){
-      this.fixedAttempts++;const edges=detectScrollFixedEdges(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd);
+      this.fixedAttempts++;const edges=detectScrollFixedEdges(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd,this.omit);
       if(edges){
         pixels=pixels.slice(edges.start*this.cross*4,(this.axis-edges.end)*this.cross*4);this.retainEdges(edges);
       }
     }
     const guesses: { shift: number; score: number }[] = [{shift:0,score:this.score(this.previous,pixels,0)}];
-    for (const shift of scrollSearchCandidates(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd)) {
+    const maxShift=this.axis-Math.max(32,Math.ceil(this.axis*.22)),shifts=this.previousRegions.length||this.regions.length?Array.from({length:maxShift*2+1},(_,index)=>index-maxShift).filter(shift=>shift!==0):scrollSearchCandidates(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd);
+    for (const shift of shifts) {
       guesses.push({ shift, score: this.score(this.previous, pixels, shift) });
     }
     guesses.sort((a, b) => a.score - b.score);
@@ -169,9 +185,10 @@ export class ScrollStitch {
     const confident =
       best.score <= 3 &&
       (!runner || runner.score > best.score + 2 || (best.score < 0.15 && runner.score > 0.5))&&
-      scrollLocallyConsistent(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd,best.shift);
+      scrollLocallyConsistent(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd,best.shift,this.omit);
     if (!confident) {
       this.candidate = pixels;
+      this.candidateRegions=this.regions;
       this.match = 'ambiguous';
       return this.status();
     }
@@ -187,7 +204,7 @@ export class ScrollStitch {
     if (!this.candidate) throw Error('没有待确认的采集帧');
     if (!Number.isSafeInteger(offset) || offset < 1 || offset > this.axis - 32)
       throw Error('拼接位移无效');
-    return this.append(this.candidate, offset);
+    this.regions=this.candidateRegions;return this.append(this.candidate, offset);
   }
   private append(pixels: Uint8Array, shift: number) {
     const rows = this.rows + shift;
@@ -197,10 +214,12 @@ export class ScrollStitch {
       this.options!.axis === 'vertical' ? totalRows : this.cross,
     );}catch(error){throw new ScrollCaptureLimit((error as Error).message+'。已有内容已保留。');}
     const tail = this.storage?pixels.subarray((this.axis-shift)*this.cross*4):pixels.slice((this.axis - shift) * this.cross * 4),stored=this.storage?this.storage.put(tail):tail;
-    this.strips.push({ pixels: stored, rows: shift, previous: this.previous });
+    this.strips.push({ pixels: stored, rows: shift, previous: this.previous,previousRegions:this.previousRegions });
     this.rows = rows;
     this.previous = pixels;
+    this.previousRegions=this.regions;
     this.candidate = undefined;
+    this.candidateRegions=[];
     this.count++;
     this.offset = shift;
     this.match = 'accepted';
@@ -220,6 +239,7 @@ export class ScrollStitch {
   discard() {
     this.candidate?.fill(0);
     this.candidate = undefined;
+    this.candidateRegions=[];
     return this.status();
   }
   undo() {
@@ -228,6 +248,7 @@ export class ScrollStitch {
     if(typeof last.pixels==='number')this.storage!.remove(last.pixels);
     this.strips.pop();
     this.previous = last.previous;
+    this.previousRegions=last.previousRegions||[];
     this.rows -= last.rows;
     this.candidate = undefined;
     this.count--;

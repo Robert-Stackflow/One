@@ -39,16 +39,17 @@ export function scrollSearchCandidates(a:Uint8Array,b:Uint8Array,axis:number,cro
 }
 
 /** Use a different sampling phase in spatial cells to reject coincidental grid matches. */
-export function scrollLocallyConsistent(a:Uint8Array,b:Uint8Array,axis:number,cross:number,left:number,right:number,shift:number){
+export function scrollLocallyConsistent(a:Uint8Array,b:Uint8Array,axis:number,cross:number,left:number,right:number,shift:number,omit?:(oldRow:number,newRow:number,x:number)=>boolean){
   const start=Math.max(0,-shift),end=Math.min(axis,axis-shift),rows=6,columns=6,goodRows=new Uint8Array(rows),goodColumns=new Uint8Array(columns);let good=0;
   for(let row=0;row<rows;row++)for(let column=0;column<columns;column++){
-    let error=0;
+    let error=0,count=0;
     for(let y=0;y<4;y++)for(let x=0;x<4;x++){
       const py=start+Math.floor((row+(y+.61803398875)/4)*(end-start)/rows),px=left+Math.floor((column+(x+.38196601125)/4)*(right-left)/columns);
+      if(omit?.(py+shift,py,px))continue;
       const first=((py+shift)*cross+px)*4,second=(py*cross+px)*4;
-      for(let channel=0;channel<3;channel++)error+=Math.abs(a[first+channel]-b[second+channel]);
+      for(let channel=0;channel<3;channel++){error+=Math.abs(a[first+channel]-b[second+channel]);count++;}
     }
-    if(error/48<=6){good++;goodRows[row]++;goodColumns[column]++;}
+    if(count>=24&&error/count<=6){good++;goodRows[row]++;goodColumns[column]++;}
   }
   return good>=28&&goodRows.every(count=>count>=4)&&[...goodColumns].filter(count=>count>=4).length>=5;
 }
