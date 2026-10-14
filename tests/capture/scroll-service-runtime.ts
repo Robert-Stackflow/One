@@ -125,6 +125,7 @@ export class ScrollNative {
   async activate(_automatic:boolean){return this.focus;}
   permitActivation(){return true;}
   wheels = 0;
+  wheelNotches:number[]=[];
   offset = 0;
   reads = 0;
   read?: () => Promise<Buffer>;
@@ -139,10 +140,10 @@ export class ScrollNative {
   async focused() {
     return this.focus;
   }
-  async wheel() {
+  async wheel(_horizontal=false,notches=1) {
     if (!this.focus) return false;
     this.wheels++;
-    this.offset += 39;
+    this.wheelNotches.push(notches);this.offset += 39*notches;
     return true;
   }
   stop() {

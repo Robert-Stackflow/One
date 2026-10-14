@@ -6,6 +6,21 @@ import {scrollDefaults} from '../../src/shared/capture/scroll-capture';
 import {NativePixelReader,FRAME_PIXEL_LIMIT} from '../../src/shared/capture/native-pixels';
 import {Worker} from 'node:worker_threads';
 import {join} from 'node:path';
+import {ScrollMotion} from '../../src/shared/capture/scroll-motion';
+
+test('automatic motion adapts cautiously, retains overlap and resets for changed scroll speed',()=>{
+  const motion=new ScrollMotion();assert.deepEqual(motion.action(0),{kind:'scroll',notches:1,probe:false});motion.sent(0,1,false);motion.accepted(39,328);assert.equal((motion.action(1) as {notches:number}).notches,2);
+  motion.sent(1,2,false);motion.accepted(78,328);assert.equal((motion.action(2) as {notches:number}).notches,3);
+  motion.sent(2,3,false);motion.accepted(200,328);assert.equal((motion.action(3) as {notches:number}).notches,2);
+  motion.sent(3,2,false);motion.accepted(240,328);assert.equal((motion.action(4) as {notches:number}).notches,1);
+  motion.reset();assert.equal((motion.action(5) as {notches:number}).notches,1);
+});
+test('slow loading waits without stacked wheels, allows one small probe, then requests review',()=>{
+  const motion=new ScrollMotion();motion.sent(0,1,false);
+  for(const now of [1,1000,3000,5999])assert.deepEqual(motion.action(now),{kind:'wait'});
+  assert.deepEqual(motion.action(6000),{kind:'scroll',notches:1,probe:true});motion.sent(6000,1,true);assert.deepEqual(motion.action(9999),{kind:'wait'});assert.deepEqual(motion.action(10000),{kind:'end'});
+  motion.accepted(78,328);assert.deepEqual(motion.action(10001),{kind:'scroll',notches:2,probe:false});
+});
 
 test('native packed pixels survive arbitrary pipe splits and reject invalid layouts before allocation',()=>{
   const info={version:1,format:'bgra8',backend:'wgc',width:4,height:3,stride:16,bytes:48,elapsed:12},pixels=Buffer.from(Array.from({length:48},(_,i)=>i)),bytes=Buffer.concat([Buffer.from(JSON.stringify(info)+'\n'),pixels]);

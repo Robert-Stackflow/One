@@ -15,7 +15,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(predicate: () => boolean) {
   const started = performance.now();
   while (!predicate()) {
-    if (performance.now() - started > 12000) throw Error('Session fixture timeout');
+    if (performance.now() - started > 16000) throw Error('Session fixture timeout');
     await wait(20);
   }
 }
@@ -96,6 +96,21 @@ test('default manual monitoring captures stable changes without wheels and safel
 });
 test('restarting matching parameters is explicit and clears only the current stitch while preserving the selection',async()=>{
   const f=await fixture();try{await f.command('sample');const token=f.state().token,source=f.state().source;const event={sender:f.service.window!.webContents,senderFrame:f.service.window!.webContents.mainFrame};await handlers.get('one:scroll-command')!(event,token,{kind:'restart',options:{axis:'vertical',trimStart:8,trimEnd:4,ignoreStart:0,ignoreEnd:0}});assert.equal(f.state().count,0);assert.equal(f.state().preview,'');assert.deepEqual(f.state().source,source);assert.equal(f.state().token,token);assert.equal(f.state().options.trimStart,8);}finally{f.service.cancel();}
+});
+
+test('slow-loaded content arrives after repeated stable frames without stacked wheel input',async()=>{
+  const f=await fixture();try{
+    await f.command('sample');let loaded=false;f.native.read=async()=>frame(loaded?39:0);
+    await f.command('auto');await until(()=>f.native.wheels===1);await wait(3300);
+    assert.equal(f.state().phase,'running');assert.equal(f.state().count,1);assert.equal(f.native.wheels,1);
+    loaded=true;await until(()=>f.state().count===2);await f.command('pause');assert.equal(f.native.wheels,1);assert.equal(f.state().offset,39);assert.deepEqual(f.failures,[]);
+  }finally{f.service.cancel();}
+});
+test('a stable bottom waits and probes once before retaining the result for review',async()=>{
+  const f=await fixture();try{
+    await f.command('sample');f.native.read=async()=>frame(0);await f.command('auto');await until(()=>f.state().phase==='review');
+    assert.equal(f.state().count,1);assert.deepEqual(f.native.wheelNotches,[1,1]);assert.match(f.state().message,/确认末尾/);assert.equal(f.state().canEdit,true);await f.command('edit');assert.deepEqual(f.outputs,[frame()]);assert.deepEqual(f.failures,[]);
+  }finally{f.service.cancel();}
 });
 
 test('remote-compatible long capture hides an overlapping panel only while reading and restores it on failure', async () => {

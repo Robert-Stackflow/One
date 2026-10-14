@@ -7,13 +7,14 @@
 #include <vector>
 #include <algorithm>
 static int offsetY = 0, offsetX = 0;
+static int wheelEvents=0,lastWheelNotches=0,delayMs=0,delayedOffset=0;
 static HWND fixture;
 static void report() {
     RECT r{}; GetClientRect(fixture, &r);
     POINT origin{}; ClientToScreen(fixture, &origin);
     std::cout << "{\"x\":" << origin.x << ",\"y\":" << origin.y << ",\"width\":" << r.right
       << ",\"height\":" << r.bottom << ",\"hwnd\":" << reinterpret_cast<uintptr_t>(fixture)
-      << ",\"offsetY\":" << offsetY << ",\"offsetX\":" << offsetX << "}\n" << std::flush;
+      << ",\"offsetY\":" << offsetY << ",\"offsetX\":" << offsetX << ",\"wheelEvents\":" << wheelEvents << ",\"lastWheelNotches\":" << lastWheelNotches << "}\n" << std::flush;
 }
 static LRESULT CALLBACK procedure(HWND w, UINT message, WPARAM p, LPARAM l) {
     if (message == WM_PAINT) {
@@ -32,9 +33,16 @@ static LRESULT CALLBACK procedure(HWND w, UINT message, WPARAM p, LPARAM l) {
         SetDIBitsToDevice(dc, 0, 0, width, height, 0, 0, 0, height, pixels.data(), &info, DIB_RGB_COLORS);
         EndPaint(w, &ps); return 0;
     }
-    if (message == WM_MOUSEWHEEL) { offsetY = std::clamp(offsetY - GET_WHEEL_DELTA_WPARAM(p) / 120 * 39, 0, 180); InvalidateRect(w, nullptr, FALSE); return 0; }
-    if (message == WM_MOUSEHWHEEL) { offsetX = std::clamp(offsetX + GET_WHEEL_DELTA_WPARAM(p) / 120 * 39, 0, 180); InvalidateRect(w, nullptr, FALSE); return 0; }
-    if (message == WM_APP + 1) { offsetY = int(p); InvalidateRect(w, nullptr, FALSE); UpdateWindow(w); report(); return 0; }
+    if (message == WM_MOUSEWHEEL) {
+        wheelEvents++;lastWheelNotches=std::abs(GET_WHEEL_DELTA_WPARAM(p)/120);
+        const auto next=std::clamp(offsetY-GET_WHEEL_DELTA_WPARAM(p)/120*39,0,180);
+        if(delayMs){delayedOffset=next;SetTimer(w,1,delayMs,nullptr);delayMs=0;return 0;}
+        offsetY=next;InvalidateRect(w,nullptr,FALSE);return 0;
+    }
+    if(message==WM_TIMER&&p==1){KillTimer(w,1);offsetY=delayedOffset;InvalidateRect(w,nullptr,FALSE);UpdateWindow(w);return 0;}
+    if (message == WM_MOUSEHWHEEL) { wheelEvents++;lastWheelNotches=std::abs(GET_WHEEL_DELTA_WPARAM(p)/120);offsetX = std::clamp(offsetX + GET_WHEEL_DELTA_WPARAM(p) / 120 * 39, 0, 180); InvalidateRect(w, nullptr, FALSE); return 0; }
+    if (message == WM_APP + 1) { KillTimer(w,1);offsetY = int(p); InvalidateRect(w, nullptr, FALSE); UpdateWindow(w); report(); return 0; }
+    if(message==WM_APP+6){delayMs=int(p);report();return 0;}
     if (message == WM_APP + 2) { offsetX = int(p); InvalidateRect(w, nullptr, FALSE); UpdateWindow(w); report(); return 0; }
     if (message == WM_APP + 3) {
         ShowWindow(w, SW_SHOWNORMAL);
@@ -70,6 +78,7 @@ int wmain() {
                 SendInput(2,input,sizeof(INPUT)); Sleep(80); PostMessage(fixture,WM_APP+5,0,0);
             }
             else if (line.starts_with("step ")) PostMessage(fixture, WM_APP + 1, std::stoi(line.substr(5)), 0);
+            else if (line.starts_with("delay ")) PostMessage(fixture,WM_APP+6,std::stoi(line.substr(6)),0);
             else if (line.starts_with("right ")) PostMessage(fixture, WM_APP + 2, std::stoi(line.substr(6)), 0);
         }
         PostMessage(fixture, WM_CLOSE, 0, 0);

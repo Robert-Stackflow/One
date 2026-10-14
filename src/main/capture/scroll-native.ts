@@ -177,10 +177,11 @@ export class ScrollNative {
     await this.ready;const response=this.response();this.pixelResponse=true;this.child.stdin.write(fresh&&this.hasFrame?'pixels fresh\n':'pixels\n');
     const value=await response as PixelFrame;if(!value||!(value.pixels instanceof Uint8Array))throw Error('原生像素响应无效');return value;
   }
-  async wheel(horizontal: boolean) {
+  async wheel(horizontal: boolean,notches=1) {
+    if(!Number.isInteger(notches)||notches<1||notches>3)throw Error('自动滚动步长无效');
     await this.ready;
     const response = this.response();
-    this.child.stdin.write(horizontal ? 'wheel h 120\n' : 'wheel v -120\n');
+    this.child.stdin.write(`wheel ${horizontal?'h':'v'} ${notches*(horizontal?120:-120)}\n`);
     const value = (await response) as { scroll: boolean };
     return value.scroll === true;
   }

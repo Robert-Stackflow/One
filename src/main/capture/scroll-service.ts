@@ -12,6 +12,7 @@ import {
   type ScrollView,
 } from '../../shared/capture/scroll-capture';
 import type { PixelFrame } from '../../shared/capture/scroll-stitch';
+import {ScrollMotion} from '../../shared/capture/scroll-motion';
 export interface ScrollContext {
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
@@ -47,7 +48,7 @@ export class ScrollCaptureService {
   private timer?: NodeJS.Timeout;
   private generation = 0;
   private busy = false;
-  private unchanged = 0;
+  private motion=new ScrollMotion();
   private automatic = false;
   private monitoring=false;
   private monitorSerial=0;
@@ -385,22 +386,23 @@ export class ScrollCaptureService {
       this.validDisplay();
       if (!this.automatic||!this.view.count) await this.sample(true);
       else {
-        if (!(await this.native!.available())||!(await this.native!.wheel(this.view.options.axis === 'horizontal'))) {
-          this.pause();
-          this.view.message = FOCUS_MESSAGE;
-          this.publish();
-          return;
+        const action=this.motion.action(performance.now());
+        if(action.kind==='end'){
+          this.pause();this.view.phase='review';this.view.message='等待页面后仍无新增内容。请确认末尾，或改为手动继续。';this.publish();return;
         }
-        await this.delay(140);
+        if(action.kind==='scroll'){
+          if (!(await this.native!.available())||!(await this.native!.wheel(this.view.options.axis === 'horizontal',action.notches))) {
+            this.pause();this.view.message = FOCUS_MESSAGE;this.publish();return;
+          }
+          this.motion.sent(performance.now(),action.notches,action.probe);
+          await this.delay(140);
+        }
         if (generation !== this.generation || !this.automatic) return;
         await this.sample(true);
-        this.unchanged = this.view.match === 'unchanged' ? this.unchanged + 1 : 0;
-        if (this.view.pending || this.view.match === 'backwards' || this.unchanged >= 3) {
+        if(this.view.match==='accepted')this.motion.accepted(this.view.offset,(this.view.options.axis==='vertical'?this.view.source.height:this.view.source.width)-this.view.options.trimStart-this.view.options.trimEnd);
+        if(this.view.match==='unchanged'){this.view.message='等待页面加载或新增内容…';this.publish();}
+        if (this.view.pending || this.view.match === 'backwards') {
           this.pause();
-          if (this.unchanged >= 3) {
-            this.view.phase = 'review';
-            this.view.message = '连续三次没有新内容。请确认已到末尾，或继续手动采集。';
-          }
           this.publish();
           return;
         }
@@ -474,7 +476,7 @@ export class ScrollCaptureService {
         this.view.mode=command.kind==='auto'?'auto':'manual';
         this.view.phase = 'running';
         this.automatic = command.kind==='auto';this.monitoring=true;
-        this.unchanged = 0;
+        this.motion.reset();
         this.view.message = this.automatic?'自动滚动中，可随时暂停或改为手动。':'手动滚动中，稳定画面会自动拼接。';
         this.schedule(300);
       } else if (command.kind === 'join' || command.kind === 'undo') {
