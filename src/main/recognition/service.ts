@@ -20,10 +20,9 @@ import { LlamaRuntimeStore } from './llama-runtime-store';
 import { deepseekOCRPresets } from './deepseek-models';
 import { localModelCatalog } from '../local-model-catalog';
 import { nativeRuntimeLicenses } from '../../shared/recognition/model-sources';
-import { acquirePaddleModel } from './paddle-models';
-import { readInferenceDevices, resolveInferenceDevice } from '../inference-devices';
-import { recognizeOCRImage } from './ocr-image-task';
-import { needsOCRTiles } from '../../shared/recognition/ocr-tiles';
+import { inferOCRImage, InlineOCREngine } from './image-inference';
+import { InlineOCRSessions } from './inline-ocr';
+import { readInferenceDevices } from '../inference-devices';
 import { OCRImagePreview } from './image-preview';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
@@ -38,6 +37,7 @@ export interface RecognitionContext {
 }
 export class OCRService {
   readonly workflow: OCRWorkflow;
+  readonly inline: InlineOCRSessions;
   readonly sensitive: SensitiveScanner;
   window?: BrowserWindow;
   private png?: Buffer;
@@ -85,7 +85,7 @@ export class OCRService {
     this.ownsRuntimes=!runtimes;this.runtimes=runtimes||new LlamaRuntimeStore(join(directory,'..','models','runtimes','llama'),transport);
     const helper=process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined;
     this.localModels = new LocalModelManager(join(directory, '..'), this.models,transport,
-      signal => readInferenceDevices(signal,helper),{runtimes:this.runtimes,unloadNative:id=>this.native.unload(id)});
+      signal => readInferenceDevices(signal,helper),{runtimes:this.runtimes,unloadNative:async id=>{await Promise.all([this.native.unload(id),this.inline?.unload(id)]);}});
     this.native=new LlamaRunner(this.localModels.store,this.runtimes,join(directory,'native-sessions'),{helper});
     this.sensitive = new SensitiveScanner(this.models);
     this.workflow = new OCRWorkflow({
@@ -118,6 +118,7 @@ export class OCRService {
     this.translationClient = new TranslationClient();
     this.formulaStore = new RecognitionConnectionStore(ctx.connections,serviceCredentialCrypto,'formula');
     this.formulaClient = new FormulaClient();
+    this.inline = new InlineOCRSessions(()=>new InlineOCREngine(this.localModels,this.models,this.runtimes,directory),async()=>this.translationStore.connection((await this.translationStore.state()).revision));
     const handle=(name:string,fn:(...args:any[])=>unknown)=>{
       if(this.kind==='formula' ? !['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-') : name.startsWith('formula-'))return;
       ctx.register(this.scope+'-'+name,(event,...args)=>{
@@ -272,38 +273,8 @@ export class OCRService {
     this.error = '';
     const abort = this.recognitionAbort = new AbortController();
     const task = (async () => {
-      const choice = await this.localModels.selection('ocr');
-      abort.signal.throwIfAborted();
-      const releaseUse = this.localModels.use(choice.modelId);
-      try {
-        if (choice.modelId === 'tesseract') {
-          const result = await recognizeOCRImage(this.png!,this.size,abort.signal,
-            (png,size,progress)=>this.runner.run(png,size,language,progress),
-            value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);});
-          result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
-        }
-        if(deepseekOCRPresets.some(model=>model.id===choice.modelId)){
-          if(needsOCRTiles(this.size))throw Error('DeepSeek 当前不支持长图分块，请选择 Tesseract 或 PP-OCRv6；输入已保留');
-          return await this.native.run(this.png!,this.size,language,choice.modelId,choice.device);
-        }
-        const lease = await acquirePaddleModel(this.localModels.store, choice.modelId);
-        try {
-          abort.signal.throwIfAborted();
-          const pixels = this.size.width * this.size.height;
-          const devices = choice.device.mode === 'cpu' || choice.device.mode === 'auto' && pixels < 1_000_000 && !choice.device.gpu ? { gpus: [] }
-            : await readInferenceDevices(abort.signal, process.env.ONE_TEST_MODE === '1' ? process.env.ONE_INFERENCE_MONITOR : undefined);
-          const selected = resolveInferenceDevice(choice.device, devices, this.size.width * this.size.height);
-          abort.signal.throwIfAborted();
-          let cpuFallback=false;
-          return await recognizeOCRImage(this.png!,this.size,abort.signal,async(png,size,progress)=>{
-            const result=await this.paddle.run(png,size,language,lease.model,
-              {device:cpuFallback||selected.backend==='cpu'?'cpu':choice.device.mode==='auto'?'auto':'gpu',deviceId:selected.gpu?.deviceId??0,memoryMiB:lease.preset.memoryBudgetMiB},progress);
-            if(result.fallbackReason)cpuFallback=true;
-            result.inference={model:lease.preset.title+' '+lease.preset.size,backend:result.actualBackend,
-              device:result.actualBackend==='dml'?selected.gpu!.name+' · '+selected.gpu!.deviceId:'CPU',fallbackReason:result.fallbackReason||selected.reason};return result;
-          },value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);});
-        } finally { lease.release(); }
-      } finally { releaseUse(); }
+      return inferOCRImage({models:this.localModels,runner:this.runner,paddle:this.paddle,native:this.native},this.png!,this.size,language,abort.signal,
+        value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);});
     })();
     this.recognitionTask = task;
     try {
@@ -494,6 +465,7 @@ export class OCRService {
     void this.ctx.background(this.settling).catch(() => {});
   }
   async stop() {
+    await this.inline.stop();
     await this.sensitive.cancel();
     this.window?.destroy();
     this.window = undefined;

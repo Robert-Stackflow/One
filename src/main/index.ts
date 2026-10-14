@@ -378,6 +378,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.on('show',sendWindowState);window.on('hide',sendWindowState);
   window.on('minimize',sendWindowState);window.on('restore',sendWindowState);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('render-process-gone',()=>{void recognition?.service.inline.releaseOwner(windowId).catch(()=>{});});
   window.webContents.on('did-fail-load',(_event,code,description,url)=>{if(code!==-3)runtimeError(app.getPath('userData'),`window-load:${view}`,`${code} ${description} ${url}`);});
   window.webContents.on('console-message',details=>{if(details.level==='error')runtimeError(app.getPath('userData'),`renderer-console:${view}`,`${details.message} (${details.sourceId}:${details.lineNumber})`);});
   window.webContents.on('render-process-gone',(_event,details)=>runtimeError(app.getPath('userData'),`renderer-gone:${view}`,JSON.stringify(details)));
@@ -386,7 +387,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   window.webContents.on('will-navigate', event => event.preventDefault());
   if(view==='preview'){const stop=()=>{nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);};window.webContents.on('did-start-loading',stop);window.webContents.on('render-process-gone',stop);}
   window.on('close',()=>{if(view==='preview'){nativeOfficePreview.stop(windowId);nativeTooltips.dispose(windowId);}if(view==='preview'&&!window.webContents.isDestroyed()){window.webContents.setAudioMuted(true);window.webContents.send('one:preview-closing');}});
-  window.on('closed', () => {if(['main','file-action','search','color-picker','archive-task'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageAi.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);motionVideoExports.get(windowId)?.abort();if(view==='preview'||view==='archive-task'){archiveService?.cancelOwner(windowId);if(view==='preview')nativeOfficePreview.stop(windowId);}materials?.release(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
+  window.on('closed', () => {void recognition?.service.inline.releaseOwner(windowId).catch(()=>{});if(['main','file-action','search','color-picker','archive-task'].includes(view))runtimeLog(app.getPath('userData'),'window-closed',`role=${view} id=${windowId}`);fileTools?.cancel(windowId);imageConvert.cancel(windowId);imageAi.cancel(windowId);imageMetadata.cancel(windowId);developerHash.cancel(windowId);qrImages.delete(windowId);motionVideoExports.get(windowId)?.abort();if(view==='preview'||view==='archive-task'){archiveService?.cancelOwner(windowId);if(view==='preview')nativeOfficePreview.stop(windowId);}materials?.release(windowId);textService?.release(windowId);search?.releaseScope(windowId);directories.close(windowId);roles.delete(windowId); previews.delete(windowId); flags.delete(windowId);previewQueues.delete(windowId);releasePreviewAssets(windowId); });
   window.webContents.on('did-start-navigation',(_event,_url,inPlace,isMainFrame)=>{if(isMainFrame&&!inPlace)materials?.release(windowId);});
   window.webContents.on('render-process-gone',()=>materials?.release(windowId));
   if(load)void window.loadURL(`one://app/index.html?view=${view}${query}`);
@@ -559,6 +560,7 @@ async function runMaintenance(mode: 'startup' | 'registry') {
   const rows=JSON.parse(result.stdout.trim() || '[]');return [...await nativeMaintenance('startup'),...rows];
 }
 async function preparePreview(path: string, owner: number): Promise<PreviewData> {
+  void recognition?.service.inline.releaseOwner(owner).catch(()=>{});
   nativeOfficePreview.stop(owner);
   releasePreviewAssets(owner);
   const held:string[]=[];try{const next=await loadPreview(path,(path,mime,segment,temporary)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime,segment,temporary});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){releasePreviewAssets(owner);for(const id of held)directories.release(owner,id);throw error;}
@@ -1293,6 +1295,46 @@ async function start() {
     fonts:()=>installedFonts(),blocked:()=>quitting,sensitive:recognition.sensitive,recognize:(png,title)=>recognition!.openImage(png,title),
     dark:()=>{const value=themeAutomation?.appearance()||settings.appearance;return value.mode==='dark'||value.mode==='system'&&nativeTheme.shouldUseDarkColors;},
   });
+  const inline = recognition.service.inline;
+  const inlineSource = (owner:number, source:unknown) => {
+    const window=BrowserWindow.getAllWindows().find(window=>window.webContents.id===owner);
+    if(typeof source!=='string'||!window||window.webContents.mainFrame.frames.length)return false;
+    if(roles.get(owner)==='image-editor')return !!imageEditor?.editor.authorize(source,owner);
+    if(window.webContents.getURL()!=='one://app/index.html?view=preview')return false;
+    const data=previews.get(owner);return data?.type==='image' && !data.animated && !data.motionPhoto && data.url===source;
+  };
+  handle('inline-ocr-source',async(event,source)=>{
+    const owner=event.sender.id;
+    if(roles.get(owner)!=='preview'||!inlineSource(owner,source))throw Error('当前图片已失效');
+    const data=previews.get(owner)!,url=new URL(source),asset=assets.get(url.pathname.split('/')[1]);
+    if(!asset||asset.owner!==owner||asset.segment||!asset.mime.startsWith('image/'))throw Error('当前图片不支持文字识别');
+    const before=await stat(asset.path);
+    if(!before.isFile()||before.size>64*1024*1024||before.size!==data.size||before.mtimeMs!==data.modified)throw Error('图片已变化或过大，请重新打开预览');
+    const bytes=await readFile(asset.path);
+    try{const after=await stat(asset.path);if(!inlineSource(owner,source)||after.size!==before.size||after.mtimeMs!==before.mtimeMs||bytes.length!==before.size)throw Error('图片已变化，请重新打开预览');return new Uint8Array(bytes);}
+    finally{bytes.fill(0);}
+  },['preview']);
+  handle('inline-ocr-prepare',async(event,source,png)=>{
+    const owner=event.sender.id;
+    if(!inlineSource(owner,source))throw Error('当前图片已失效');
+    const result=await inline.prepare(owner,source,png);
+    if(!inlineSource(owner,source)){await inline.releaseOwner(owner,result.id);throw Error('当前图片已失效');}
+    return result;
+  },['preview','image-editor']);
+  for(const name of ['run','preview','translate','copy','cancel','release'] as const)handle('inline-ocr-'+name,async(event,id,...args)=>{
+    const owner=event.sender.id;
+    if(name==='release'){await inline.releaseOwner(owner,id);return;}
+    const source=inline.source(owner,id);
+    if(!inlineSource(owner,source)){await inline.releaseOwner(owner,id);throw Error('当前图片已失效');}
+    let result:unknown;
+    if(name==='run')result=await inline.run(owner,id,args[0]);
+    else if(name==='preview')result=await inline.preview(owner,id,args[0]);
+    else if(name==='translate')result=await inline.translate(owner,id,args[0],args[1]);
+    else if(name==='copy'){clipboard.writeText(inline.copy(owner,id,args[0]));return;}
+    else result=await inline.cancel(owner,id);
+    if(!inlineSource(owner,source)){await inline.releaseOwner(owner,id);throw Error('当前图片已失效');}
+    return result;
+  },['preview','image-editor']);
   pins=new PinsHost(join(app.getPath('userData'),'pins'),materials,{
     createWindow:(view,options)=>windowFor(view,{minWidth:1,minHeight:1,...options},'',false),
     register:(name,handler)=>handle(name,handler,['pin','pin-controls']),mainWindow:()=>main,

@@ -1,0 +1,85 @@
+const {_electron:electron,expect}=require('@playwright/test');
+const {build}=require('esbuild'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
+const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
+(async()=>{
+  const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'inline-window-')),profile=path.join(directory,'profile'),input=path.join(directory,'input.png');let app;const errors=[],requests=[];let holdTranslation=false;
+  const server=require('node:http').createServer((request,response)=>{let text='';request.on('data',chunk=>text+=chunk);request.on('end',()=>{requests.push(JSON.parse(text));if(holdTranslation)return;response.setHeader('Content-Type','application/json');response.end(JSON.stringify({choices:[{finish_reason:'stop',message:{content:'仅选中文字的译文'}}]}));});});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    await build({entryPoints:['tests/local-model-ui-prepare.ts'],outfile:path.join(directory,'prepare.mjs'),bundle:true,format:'esm',platform:'node',target:'node22',packages:'external',logLevel:'warning'});
+    await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile},windowsHide:true,maxBuffer:64*1024});
+    await sharp(Buffer.from('<svg width="1200" height="800"><rect width="1200" height="800" fill="white"/><text x="60" y="180" font-family="Arial" font-size="60">ONE OCR 2026</text><text x="60" y="300" font-family="Arial" font-size="60">COPY SECOND LINE</text></svg>')).png().toFile(input);
+    const originalHash=require('node:crypto').createHash('sha256').update(await fs.readFile(input)).digest('hex');
+    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+    app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
+    const main=await app.firstWindow();await main.waitForFunction(()=>!!window.one);
+    await main.evaluate(()=>window.one.patchSettings({preview:{held:true,pinned:false,files:false}}));
+    await app.evaluate(({dialog,ipcMain},input)=>{
+      dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});global.inlineSessions=[];global.inlineResults=[];global.inlineWorkers=[];
+      const threads=process.getBuiltinModule('worker_threads'),Worker=threads.Worker;
+      threads.Worker=class extends Worker {constructor(file,options){super(file,options);if(String(file).endsWith('ocr-worker.cjs')){const state={active:true};global.inlineWorkers.push(state);this.once('exit',()=>state.active=false);}}};
+      for(const [name,key]of [['prepare','inlineSessions'],['run','inlineResults']]){const channel='one:inline-ocr-'+name,old=ipcMain._invokeHandlers.get(channel);ipcMain.removeHandler(channel);ipcMain.handle(channel,async(event,...args)=>{const result=await old(event,...args);global[key].push({owner:event.sender.id,url:event.sender.getURL(),result});return result;});}
+    },input);
+    const [asset]=await main.evaluate(()=>window.one.materialsImportImages());await main.evaluate(id=>window.one.materialsRecognizeImage(id),asset);
+    const recognition=app.windows().find(page=>page.url().includes('view=recognition'));await recognition.waitForFunction(()=>!!window.one.recognition);
+    await recognition.evaluate(async endpoint=>{const config=await window.one.recognition.translationConfig();await window.one.recognition.saveTranslation({...config,provider:'chat',endpoint,model:'fixture',key:'inline-fixture'});},'http://127.0.0.1:'+server.address().port+'/translate');
+    await recognition.evaluate(()=>window.one.windowAction('close'));await expect.poll(()=>recognition.isClosed()).toBe(true);
+    await main.evaluate(id=>window.one.materialsEditImage(id),asset);
+    const editor=app.windows().find(page=>page.url().includes('view=image-editor'));assert(editor);await editor.waitForFunction(()=>document.body.dataset.editorReady==='true');
+    await editor.evaluate(()=>{const zoom=document.querySelector('#zoom');zoom.value='2';zoom.dispatchEvent(new Event('change',{bubbles:true}));});
+    await editor.waitForTimeout(100);
+    const before=await editor.evaluate(()=>{const viewport=document.querySelector('#viewport');viewport.scrollLeft=140;viewport.scrollTop=80;const bounds=viewport.getBoundingClientRect(),rect=document.querySelector('#image').getBoundingClientRect(),scale=rect.width/1200;return {scale,center:{x:(bounds.left+viewport.clientWidth/2-rect.left)/scale,y:(bounds.top+viewport.clientHeight/2-rect.top)/scale},scroll:[viewport.scrollLeft,viewport.scrollTop],dirty:document.querySelector('#dirty').textContent};});
+    const count=app.windows().length;await editor.locator('#editor-more').click();await editor.locator('#ocr').click();
+    await expect(editor.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});assert.equal(app.windows().length,count);
+    await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026/);
+    const after=await editor.evaluate(()=>{const viewport=document.querySelector('.inline-ocr .text-image-viewport'),rect=document.querySelector('.inline-ocr .text-image-inner').getBoundingClientRect(),bounds=viewport.getBoundingClientRect(),scale=rect.width/1200;return {scale,center:{x:(bounds.left+viewport.clientWidth/2-rect.left)/scale,y:(bounds.top+viewport.clientHeight/2-rect.top)/scale}};});
+    assert.ok(Math.abs(after.scale-before.scale)<.001);assert.ok(Math.abs(after.center.x-before.center.x)<2);assert.ok(Math.abs(after.center.y-before.center.y)<2);
+    await editor.locator('.inline-ocr [data-text-action=fit]').click();
+    const letter=editor.locator('.inline-ocr .text-selection-unit').filter({hasText:/^O$/}).first();await expect(letter).toBeVisible();await letter.click();
+    await editor.locator('.inline-ocr [data-text-action=copy]').click();assert.equal(await app.evaluate(({clipboard})=>clipboard.readText()),'O');
+    await editor.locator('.inline-ocr [data-text-action=rotate]').click();await editor.locator('.inline-ocr .text-selection-unit').filter({hasText:/^O$/}).first().click();
+    await editor.keyboard.press('Control+c');assert.equal(await app.evaluate(({clipboard})=>clipboard.readText()),'O');
+    await expect(editor.locator('.inline-ocr select')).toHaveCount(0);await expect(editor.locator('.inline-ocr [role=combobox]')).toHaveCount(2);
+    await editor.locator('.inline-ocr [data-text-action=translate]').click();await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
+    assert.equal(requests.length,1);assert.equal(requests[0].messages.at(-1).content,'O');await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026[\s\S]*COPY SECOND LINE/);
+    const splitter=editor.locator('.inline-ocr-divider'),beforeWidth=await editor.locator('.inline-ocr-image').evaluate(node=>node.clientWidth),splitBounds=await splitter.boundingBox();
+    await splitter.evaluate(node=>{node.__events=[];for(const name of ['pointerdown','pointermove','lostpointercapture'])node.addEventListener(name,event=>node.__events.push({name,x:event.clientX}));});
+    const splitterHit=await editor.evaluate(({x,y})=>document.elementFromPoint(x+3,y+80)?.className,splitBounds);
+    await editor.mouse.move(splitBounds.x+3,splitBounds.y+80);await editor.mouse.down();await editor.mouse.move(splitBounds.x-80,splitBounds.y+80);await editor.mouse.up();
+    try{await expect.poll(()=>editor.locator('.inline-ocr-image').evaluate(node=>node.clientWidth)).toBeLessThan(beforeWidth-40);}catch(error){console.log('Splitter evidence',splitterHit,splitBounds,await splitter.evaluate(node=>({events:node.__events,value:node.getAttribute('aria-valuenow'),width:node.parentElement.clientWidth,ratio:node.parentElement.style.getPropertyValue('--ocr-image-width')})));throw error;}
+    const editorId=await app.evaluate(()=>global.inlineSessions[0].result.id);
+    await assert.rejects(main.evaluate(id=>window.one.inlineOCR.run(id,'eng'),editorId),/调用来源/);
+    const opening=app.waitForEvent('window',{predicate:page=>page.url().includes('view=preview')});await main.evaluate(file=>window.one.preview(file),input);const preview=await opening;
+    await expect(preview.locator('#preview-ocr')).toBeVisible();await expect(preview.locator('.photo-visual img')).toBeVisible();
+    await preview.locator('#zoom-in').click();await preview.locator('#zoom-in').click();const previewCount=app.windows().length;await preview.locator('#preview-ocr').click();
+    await expect(preview.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});assert.equal(app.windows().length,previewCount);
+    await expect(preview.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);
+    await preview.locator('.inline-ocr-panel').click();
+    await assert.rejects(preview.evaluate(id=>window.one.inlineOCR.run(id,'eng'),editorId),/失效/);
+    const ids=await app.evaluate(()=>global.inlineSessions.map(value=>value.result.id));assert.notEqual(ids[0],ids[1]);
+    await preview.locator('.inline-ocr .text-image-viewport').focus();await preview.keyboard.press('Control+a');await preview.keyboard.press('Control+c');
+    assert.match(await app.evaluate(({clipboard})=>clipboard.readText()),/ONE OCR 2026[\s\S]*COPY SECOND LINE/);
+    holdTranslation=true;await preview.locator('.inline-ocr-translate').click();await expect.poll(()=>requests.length).toBe(2);
+    await preview.locator('.inline-ocr-cancel').click();await expect(preview.locator('.inline-ocr-loading')).toBeHidden();
+    await expect(preview.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);assert.equal(app.windows().length,previewCount);
+    holdTranslation=false;await preview.locator('.inline-ocr-translate').click();await expect(preview.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
+    await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026/);await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
+    await preview.locator('.inline-ocr .text-image-viewport').focus();
+    await preview.keyboard.press('Escape');await expect(preview.locator('.text-image-viewport')).toHaveAttribute('data-selection-start','-1');await preview.keyboard.press('Escape');await expect(preview.locator('.inline-ocr')).toHaveCount(0);assert.equal(preview.isClosed(),false);
+    await assert.rejects(preview.evaluate(id=>window.one.inlineOCR.run(id,'eng'),ids[1]),/失效/);
+    const workersBefore=await app.evaluate(()=>global.inlineWorkers.length);await editor.locator('.inline-ocr-run').click();
+    await expect.poll(()=>app.evaluate((_electron,count)=>global.inlineWorkers.length>count&&global.inlineWorkers.at(-1).active,workersBefore)).toBe(true);
+    await editor.locator('.inline-ocr-cancel').click();await expect(editor.locator('.inline-ocr-loading')).toBeHidden();
+    assert.equal(await app.evaluate(()=>global.inlineWorkers.at(-1).active),false);await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026/);
+    await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
+    await editor.locator('.inline-ocr-run').click();await expect(editor.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});await expect(editor.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);
+    await editor.locator('.inline-ocr-back').click();await expect(editor.locator('.inline-ocr')).toHaveCount(0);
+    const restored=await editor.evaluate(()=>({scroll:[document.querySelector('#viewport').scrollLeft,document.querySelector('#viewport').scrollTop],dirty:document.querySelector('#dirty').textContent}));
+    assert.deepEqual(restored.scroll,before.scroll);assert.equal(restored.dirty,before.dirty);await expect(editor.locator('#ocr')).toBeEnabled();
+    assert.equal(require('node:crypto').createHash('sha256').update(await fs.readFile(input)).digest('hex'),originalHash);
+    assert.deepEqual(errors,[]);console.log('Inline editor/preview: current model, frozen input, preserved zoom/pan, original/rotated glyph copy, keyboard copy, owner isolation, selected translation/cancel/retry, actual OCR worker cancellation/retry, exit restoration and original hash passed');
+    await app.close();app=undefined;
+  }finally{
+    await app?.close().catch(()=>{});server.closeAllConnections();await new Promise(resolve=>server.close(resolve));const actual=await fs.realpath(directory);assert.equal(path.dirname(actual),await fs.realpath(root));assert.ok(path.basename(actual).startsWith('inline-window-'));await fs.rm(actual,{recursive:true,force:true});
+  }
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,3 +1,4 @@
+import { inlineOCR } from './inline-ocr';
 import {contextBridge,ipcRenderer} from 'electron';
 import type {ImageEditorAPI} from '../shared/capture/image-editor-api';
 import type {OneAPI} from '../shared/types';
@@ -30,4 +31,4 @@ const common:WindowAPI={
   diagnosticsReport:(kind,detail)=>invoke('diagnostics-report',kind,detail),
 };
 /** This window receives editing and shared window services, never the main One API. */
-contextBridge.exposeInMainWorld('one',{...common,imageEditor});
+contextBridge.exposeInMainWorld('one',{...common,imageEditor,inlineOCR});

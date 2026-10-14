@@ -1,3 +1,4 @@
+import { inlineOCR } from './inline-ocr';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { OneAPI, ScanSummary } from '../shared/types';
 import { recording } from './recording';
@@ -27,6 +28,7 @@ async function scan(path:string):Promise<ScanSummary>{
   }finally{unsubscribe();}
 }
 const api: OneAPI = {
+  inlineOCR,
   recording,
   captureShortcutStatus:()=>invoke('capture-shortcut-status'),retryCaptureShortcuts:()=>invoke('capture-shortcut-retry'),onCaptureShortcutState:callback=>listen('capture-shortcut-state',callback),
   onCapturePreferences:callback=>listen('capture-preferences',callback),captureScroll:(displayId,options)=>invoke('capture-scroll',displayId,options),captureState:()=>invoke('capture-state'),captureDisplays:()=>invoke('capture-displays'),captureTake:(mode,displayId,options)=>invoke('capture-take',mode,displayId,options),captureCustom:(value,displayId,options)=>invoke('capture-custom',value,displayId,options),captureWindows:()=>invoke('capture-windows'),captureWindow:(token,options)=>invoke('capture-window',token,options),captureWindowSet:(tokens,options,placements)=>invoke('capture-window-set',tokens,options,placements),

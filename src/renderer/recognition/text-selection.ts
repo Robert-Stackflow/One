@@ -208,7 +208,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
       event.preventDefault(); anchor = 0; focus = tokens.length - 1; schedule(); return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copy(); return; }
-    if (event.key === 'Escape') { event.preventDefault(); anchor = focus = -1; schedule(); return; }
+    if (event.key === 'Escape') { if(anchor>=0){event.preventDefault();anchor = focus = -1;schedule();}return; }
     let next = focus;
     if (event.key === 'ArrowLeft') next = !event.shiftKey && anchor >= 0 && anchor !== focus ? Math.min(anchor, focus) : Math.max(0, focus - 1);
     else if (event.key === 'ArrowRight') next = !event.shiftKey && anchor >= 0 && anchor !== focus ? Math.max(anchor, focus) : Math.min(tokens.length - 1, focus + 1);
@@ -232,6 +232,17 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   image.addEventListener('load', layout);
   const resize = new ResizeObserver(layout); resize.observe(viewport);
   return {
+    viewState() {
+      const bounds=viewport.getBoundingClientRect(),rect=stage.getBoundingClientRect();
+      return {scale:view.scale,rotation,center:textViewToImage({x:bounds.left+viewport.clientWidth/2-rect.left,y:bounds.top+viewport.clientHeight/2-rect.top},view)};
+    },
+    setView(value:{scale:number;rotation?:TextRotation;center:{x:number;y:number}}){
+      if(!Number.isFinite(value.scale)||value.scale<=0||![value.center.x,value.center.y].every(Number.isFinite))return;
+      zoom=Math.max(.0001,Math.min(8,value.scale));rotation=value.rotation??0;layout();
+      const point=imageToTextView(value.center,view);
+      viewport.scrollLeft=stage.offsetLeft+point.x-viewport.clientWidth/2;
+      viewport.scrollTop=stage.offsetTop+point.y-viewport.clientHeight/2;schedule();
+    },
     setImagePreview(size:{width:number;height:number},request:(region:OCRImagePreviewRequest)=>Promise<Uint8Array>){
       raster?.dispose();imageSize={width:size.width,height:size.height};raster=mountImageRaster(image,inner,imageSize,request,options.message);layout();return raster.base();
     },

@@ -1,4 +1,8 @@
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
+const nativeOnly=()=>{throw Error('Native image/clipboard operations require the Electron integration test');};
+export const nativeImage={createFromBuffer:nativeOnly};
+export const clipboard={write:nativeOnly,read:nativeOnly};
+export class ClipboardItem { constructor(..._args:unknown[]){nativeOnly();} }
 const key=randomBytes(32);
 export const safeStorage={
   isEncryptionAvailable:()=>true,

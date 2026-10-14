@@ -48,6 +48,7 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   imageEditor?:import('./capture/image-editor-api').ImageEditorAPI;
   capture?:import('./capture/capture-session').CaptureAPI;
   scrollCapture?:import('./capture/scroll-capture').ScrollAPI;
+  inlineOCR?:import('./recognition/inline-ocr').InlineOCRAPI;
   recognition?:import('./recognition/ocr').OCRAPI;
   formulaRecognition?:import('./recognition/ocr').FormulaRecognitionAPI;
   recording?:import('./recording/recording').RecorderAPI;

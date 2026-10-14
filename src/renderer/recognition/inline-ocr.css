@@ -1,0 +1,27 @@
+.inline-ocr-host { position: relative; }
+.inline-ocr { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; min-width: 0; background: var(--surface); color: var(--fg); }
+.inline-ocr-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); flex: none; flex-wrap: wrap; }
+.inline-ocr-header button,.inline-ocr-header select { height: 34px; }
+.inline-ocr-back { display: flex; gap: 6px; align-items: center; }
+.inline-ocr-header svg { width: 17px; height: 17px; }
+.inline-ocr-image-tools { display: flex; flex: 1; }
+.inline-ocr-image-tools .text-image-tools { padding: 0; border: 0; flex-wrap: nowrap; }
+.inline-ocr-body { display: flex; flex: 1; min-height: 0; position: relative; }
+.inline-ocr-image { display: flex; flex: none; width:var(--ocr-image-width,67%); min-width: 0; min-height: 0; background: var(--soft); }
+.inline-ocr-result { display: flex; flex-direction: column; flex:1; min-width: 220px; padding: 14px; gap: 10px; }
+.inline-ocr-result[hidden] { display: none; }
+.inline-ocr-result label { font-size: 12px; }
+.inline-ocr-result textarea { flex: 1; min-height: 36px; min-width: 0; resize: none; border: 0; background: var(--surface); color: var(--fg); padding: 4px 0; }
+.inline-ocr-translation-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
+.inline-ocr-translation-tools .custom-select { min-width: 0; max-width: 150px; }
+.inline-ocr-result footer { display: flex; justify-content: flex-end; gap: 8px; }
+.inline-ocr-loading { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--soft); }
+.inline-ocr-loading[hidden] { display: none; }
+.inline-ocr-spinner { width: 22px; height: 22px; border: 2px solid var(--line); border-top-color: var(--fg); border-radius: 50%; animation: inline-ocr-spin .8s linear infinite; }
+@keyframes inline-ocr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .inline-ocr-spinner { animation: none; border-style: dotted; } }
+
+.inline-ocr-body.results-hidden .inline-ocr-image { width:auto;flex:1; }
+.inline-ocr-divider { width:6px;flex:none;cursor:col-resize;touch-action:none;background:var(--surface);border-left:1px solid var(--line); }
+.inline-ocr-divider:hover,.inline-ocr-divider:focus-visible { background:var(--line);outline:none; }
+.inline-ocr-body.results-hidden .inline-ocr-divider { display:none; }

@@ -1,3 +1,4 @@
+import { mountInlineOCR } from '../recognition/inline-ocr';
 import { annotationPreferences } from './annotation-preferences';
 import { annotationBrushCursor } from './annotation-brush-cursor';
 import { watermarkControls } from './watermark-controls';
@@ -62,6 +63,7 @@ import { mountOutputEffects } from './output-effects';
 import { mosaicControls } from './mosaic-controls';
 import { responsiveImageToolbar } from './responsive-image-toolbar';
 import { dismissFeedback, setupFloatingFeedback, transientNotice } from '../feedback';
+let inlineOCR: ReturnType<typeof mountInlineOCR> | undefined;
 let effectsUI: ReturnType<typeof mountOutputEffects>;
 let propertyUI: ReturnType<typeof captureProperties>;
 let watermarkBar: ReturnType<typeof watermarkToolbar> | undefined;
@@ -266,6 +268,7 @@ function paint() {
     viewport.getBoundingClientRect().top + 12 + 'px',
   );
   const zoom = q<HTMLSelectElement>('zoom').value;
+  q<HTMLSelectElement>('zoom').disabled=busy;
   const scale =
     zoom === 'fit'
       ? Math.min(
@@ -712,7 +715,19 @@ async function output(mode: 'asset' | 'copy' | 'export' | 'ocr') {
   }
 }
 q('copy').onclick = () => void output('copy');
-q('ocr').onclick = () => void output('ocr');
+q('ocr').onclick = () => {
+  if(active()||crop||!scene||!window.one.inlineOCR)return;
+  const rect=canvas.getBoundingClientRect(),bounds=viewport.getBoundingClientRect(),scale=rect.width/scene.width;
+  const initial={scale,center:{x:(bounds.left+viewport.clientWidth/2-rect.left)/scale,y:(bounds.top+viewport.clientHeight/2-rect.top)/scale}};
+  const snapshot=structuredClone(history.value);busy=true;annotations.clear();draw();
+  inlineOCR=mountInlineOCR(viewport,window.one.inlineOCR,{source:data.url,initial,back:'返回编辑',message,
+    snapshot:async()=>{
+      await loadSceneFonts(snapshot);const image=document.createElement('canvas');image.width=snapshot.width;image.height=snapshot.height;
+      try{paintCapture(image.getContext('2d')!,source,snapshot);return await canvasPng(image);}finally{image.width=image.height=0;}
+    },closed:()=>{inlineOCR=undefined;busy=false;draw();}
+  });
+};
+addEventListener('pagehide',()=>inlineOCR?.dispose());
 q('save').onclick = () => void output('asset');
 q('export').onclick = () => void output('export');
 q('save-project').onclick = () => void saveProject();
@@ -758,7 +773,7 @@ q('image-properties').addEventListener(
 viewport.addEventListener(
   'wheel',
   (e) => {
-    if (!e.ctrlKey) return;
+    if (inlineOCR || !e.ctrlKey) return;
     e.preventDefault();
     const values = ['fit', '0.5', '1', '2', '4'],
       current = values.indexOf(q<HTMLSelectElement>('zoom').value);
@@ -769,6 +784,7 @@ viewport.addEventListener(
   { passive: false },
 );
 document.addEventListener('keydown', (e) => {
+  if(inlineOCR){if(e.key==='Escape'&&!e.defaultPrevented){e.preventDefault();inlineOCR.dispose();}return;}
   if (!e.isComposing && e.key === 'Escape' && mosaicUI.active) {
     e.preventDefault();
     mosaicUI.cancel();

@@ -1,8 +1,7 @@
 import { q, icon, registerIcons } from '../ui';
 import { PanelRightClose, PanelRightOpen } from 'lucide';
-export function mountOCRWorkspace() {
+export function mountImageWorkspace(root:HTMLElement,divider:HTMLElement,toggle:HTMLButtonElement,visible=true) {
   registerIcons({ 'panel-right-close': PanelRightClose, 'panel-right-open': PanelRightOpen });
-  const root = q('ocr-workspace'), divider = q('ocr-divider'), toggle = q<HTMLButtonElement>('result-panel-toggle');
   let ratio = 0.67, hidden = false;
   try { const saved = Number(localStorage.getItem('ocr-image-ratio')); if (saved >= 0.3 && saved <= 0.8) ratio = saved; } catch {}
   function layout() {
@@ -27,7 +26,9 @@ export function mountOCRWorkspace() {
   };
   divider.onkeydown = event => { if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return; event.preventDefault(); ratio = Math.max(0.3, Math.min(0.8, Number(divider.getAttribute('aria-valuenow'))/100 + (event.key === 'ArrowLeft' ? -0.02 : 0.02))); layout(); save(); };
   divider.ondblclick = () => { ratio = 0.67; layout(); save(); };
-  const observer = new ResizeObserver(layout); observer.observe(root); show(true);
-  window.addEventListener('beforeunload', () => observer.disconnect(), { once: true });
-  return { show };
+  const observer = new ResizeObserver(layout); observer.observe(root); show(visible);
+  const dispose=()=>{observer.disconnect();window.removeEventListener('beforeunload',dispose);};
+  window.addEventListener('beforeunload',dispose,{once:true});
+  return { show,dispose };
 }
+export function mountOCRWorkspace(){return mountImageWorkspace(q('ocr-workspace'),q('ocr-divider'),q<HTMLButtonElement>('result-panel-toggle'));}
