@@ -42,6 +42,8 @@ export interface OCRState {
   waitingForInference?: boolean;
   translating: boolean;
   formulaRecognizing: boolean;
+  formulaProcessing?:boolean;
+  formulaHasOriginal?:boolean;
   imageBytes: number;
   progress: number;
   error: string;
@@ -104,7 +106,9 @@ export interface FormulaRecognitionAPI extends RecognitionServiceAPI,Recognition
   formulaConfig(): Promise<TranslationConfig>;
   saveFormula(value: TranslationSettings): Promise<TranslationConfig>;
   clearFormula(revision: string): Promise<TranslationConfig>;
-  recognizeFormula(token: string, revision: string): Promise<FormulaResult>;
+  recognizeFormula(token: string, revision: string,rotation?:import('./text-geometry').TextRotation): Promise<FormulaResult>;
+  cropFormula(token:string,crop?:import('./formula-image').FormulaCrop):Promise<void>;
+  outputFormula(token:string,text:string,mode:import('./formula-image').FormulaImageOutput):Promise<string|null>;
   cancelFormula(): Promise<void>;
   copyFormula(text: string): Promise<void>;
 }

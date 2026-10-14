@@ -1,10 +1,11 @@
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 async function main(){
-  const output=path.resolve('work/current/capture-reconstruction'),root=await fs.mkdtemp(path.join(output,'formula-window-')),profile=path.join(root,'profile'),input=path.join(output,'formula','official-sample.png'),errors=[];let app;
+  const output=path.resolve('work/current/capture-reconstruction'),root=await fs.mkdtemp(path.join(output,'formula-window-')),profile=path.join(root,'profile'),errors=[],rotation=Number(process.env.ONE_FORMULA_FIXTURE_ROTATION||0);let app,input=path.join(output,'formula','official-sample.png');
   try{
   const cached=path.join(output,'formula','managed-models','prepared'),names=await fs.readdir(cached);assert.equal(names.length,1);assert.match(names[0],/^pp-formulanet-plus-s-[a-f0-9]{24}-[a-f0-9]{16}$/);
   await fs.cp(cached,path.join(profile,'models','formula','prepared'),{recursive:true});
+  if(rotation){const rotated=path.join(root,'rotated.png');await sharp(input).rotate(rotation*90).png().toFile(rotated);input=rotated;}
     const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
     app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
     await app.evaluate(({dialog,clipboard,ipcMain},input)=>{
@@ -13,7 +14,7 @@ async function main(){
       const read='one:formula-recognition-local-models',models=ipcMain._invokeHandlers.get(read);ipcMain.removeHandler(read);ipcMain.handle(read,(...args)=>global.holdFormulaMetadata?new Promise((resolve,reject)=>{global.releaseFormulaMetadata=()=>{global.holdFormulaMetadata=false;Promise.resolve(models(...args)).then(resolve,reject);};}):models(...args));
     },input);
     await home.locator('[data-page=materials]').click();await home.getByRole('button',{name:'导入图片',exact:true}).click();await expect(home.locator('[data-material-card]')).toHaveCount(1);
-    const opened=app.waitForEvent('window');await home.getByRole('button',{name:'识别公式',exact:true}).click();let page=await opened;await page.waitForURL('**view=formula-recognition');await expect(page.locator('#source')).toHaveJSProperty('naturalWidth',448);await expect(page.locator('#formula-recognize')).toBeDisabled();
+    const opened=app.waitForEvent('window');await home.getByRole('button',{name:'识别公式',exact:true}).click();let page=await opened;await page.waitForURL('**view=formula-recognition');await expect(page.locator('#source')).toHaveJSProperty('naturalWidth',rotation%2?64:448);await expect(page.locator('#formula-recognize')).toBeDisabled();for(let n=0;n<(4-rotation)%4;n++)await page.locator('[data-text-action=rotate]').click();
     await app.evaluate(()=>global.holdFormulaMetadata=true);await page.locator('#formula-model-configure').click();await expect(page.locator('#local-model-settings')).toBeVisible();await expect(page.locator('#local-model-loading')).toBeVisible();assert.equal(await app.evaluate(()=>global.formulaNativeResults.length),0);
     await expect.poll(()=>app.evaluate(()=>typeof global.releaseFormulaMetadata==='function')).toBe(true);await app.evaluate(()=>global.releaseFormulaMetadata());await expect(page.locator('[data-select-model]')).toHaveCount(1);await expect(page.locator('#local-model-settings h2')).toHaveText('公式模型');await expect(page.locator('#local-model-metadata')).not.toContainText('图上选字');
     await sharp(await page.screenshot({scale:'css'})).resize({width:1280,height:1280,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(output,'formula','model-dialog-window.png'));

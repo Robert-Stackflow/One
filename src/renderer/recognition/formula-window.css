@@ -5,6 +5,9 @@ body[data-view='formula-recognition'] #source-name { color: var(--muted); font-s
 body[data-view='formula-recognition'] .window-controls { position: static; margin-left: auto; margin-right: 10px; align-self: stretch; -webkit-app-region: no-drag; }
 .formula-workbench { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 0; gap: 0; }
 .formula-commandbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.formula-export-menu { position: fixed; min-width: 140px; padding: 6px; margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg); box-shadow: 0 10px 32px #0002; }
+.formula-export-menu button { display: block; width: 100%; padding: 9px 12px; text-align: left; border: 0; border-radius: 7px; background: var(--surface); color: var(--fg); }
+.formula-export-menu button:hover,.formula-export-menu button:focus-visible { background: var(--soft); }
 .formula-workbench #formula-destination { padding: 8px 16px; margin: 0; color: var(--muted); font-size: calc(11px * var(--text-scale, 1)); overflow-wrap: anywhere; }
 .formula-workspace { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); flex: 1; min-height: 0; }
 .formula-source { position: relative; display: flex; background: var(--soft); min-width: 0; min-height: 0; overflow: hidden; }

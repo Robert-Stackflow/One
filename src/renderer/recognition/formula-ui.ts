@@ -5,12 +5,17 @@ import {mountLocalModels} from './local-models-ui';
 import { formulaText, FORMULA_TEXT, FORMULA_IMAGE } from '../../shared/recognition/formula';
 import type { TranslationConfig } from '../../shared/recognition/translation';
 import type { FormulaRecognitionAPI, OCRState } from '../../shared/recognition/ocr';
+import type {FormulaCrop,FormulaImageOutput} from '../../shared/recognition/formula-image';
+import type {TextRotation} from '../../shared/recognition/text-geometry';
+import {openAnchoredPopover,closeAnchoredPopover} from '../anchored-popover';
 export function mountFormula(
   api: FormulaRecognitionAPI,
   state: () => OCRState | undefined,
   message: (value: unknown) => void,
   changed: () => void|Promise<void>,
+  options:{rotation:()=>TextRotation;busy:(value:boolean)=>void}={rotation:()=>0,busy:()=>{}},
 ) {
+  let processing=false,operation='',previewReady=false;
   let mode = false,
     requesting = false,
     config: TranslationConfig | undefined,
@@ -23,11 +28,25 @@ export function mountFormula(
     preview = q('formula-preview'),
     previewState = q('formula-preview-status');
   editor.maxLength = FORMULA_TEXT;
-  const busy = () => requesting || !!state()?.formulaRecognizing;
+  const busy = () => requesting||processing || !!state()?.formulaRecognizing||!!state()?.formulaProcessing;
   const local=()=>!!state()?.formulaLocal&&state()!.formulaLocal!.choice.modelId!=='service';
   const source=q<HTMLSelectElement>('formula-source');
   const models=mountLocalModels(api,async()=>{await changed();render();},'formula');
   q('formula-model-configure').onclick=()=>void models().catch(message);
+  async function imageOperation(work:()=>Promise<unknown>,label:string){
+    if(busy()||!state())return;processing=true;operation=label;message('');render();
+    try{await work();await changed();}catch(error){message(error);}finally{processing=false;operation='';render();await changed();}
+  }
+  const crop=(value?:FormulaCrop)=>imageOperation(()=>api.cropFormula(state()!.token,value),'裁剪中');
+  q('formula-image-reset').onclick=()=>void crop();
+  const output=(mode:FormulaImageOutput)=>imageOperation(async()=>{const result=await api.outputFormula(state()!.token,editor.value,mode);if(result)message(mode==='copy'?result:'已导出 '+result);},'生成公式图片');
+  q('formula-copy-image').onclick=()=>void output('copy');
+  const exportButton=q<HTMLButtonElement>('formula-export'),menu=document.createElement('div');menu.className='formula-export-menu';menu.role='menu';menu.hidden=true;document.body.append(menu);let menuOpen=false;
+  const closeMenu=(focus=false)=>{menuOpen=false;exportButton.ariaExpanded='false';void closeAnchoredPopover(menu,{immediate:true});menu.hidden=true;if(focus)exportButton.focus();};
+  for(const [mode,label] of [['png','导出 PNG'],['svg','导出 SVG']] as const){const button=document.createElement('button');button.type='button';button.role='menuitem';button.textContent=label;button.onclick=()=>{closeMenu();void output(mode);};menu.append(button);}
+  exportButton.onclick=()=>{if(menuOpen){closeMenu();return;}menu.hidden=false;menuOpen=openAnchoredPopover(exportButton,menu,{preferred:'above',gap:6,width:160,mode:'manual',onDetach:()=>closeMenu()});exportButton.ariaExpanded=String(menuOpen);if(menuOpen)menu.querySelector('button')?.focus();else menu.hidden=true;};
+  document.addEventListener('pointerdown',event=>{if(menuOpen&&!menu.contains(event.target as Node)&&!exportButton.contains(event.target as Node))closeMenu();});
+  menu.onkeydown=event=>{const buttons=[...menu.querySelectorAll('button')];if(event.key==='Escape'){event.preventDefault();closeMenu(true);}else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(buttons.indexOf(document.activeElement as HTMLButtonElement)+(event.key==='ArrowDown'?1:buttons.length-1))%buttons.length].focus();}else if(event.key==='Tab')closeMenu();};
   source.onchange=async()=>{
     if(busy())return;try{
       if(source.value==='local'&&!local()){
@@ -46,6 +65,9 @@ export function mountFormula(
     q('formula-destination').hidden = true;
     q('formula-copy').hidden = !mode;
     const native=local(),ready=native?state()?.models.ready:config?.ready;
+    options.busy(active||other);if(active&&menuOpen)closeMenu();
+    q<HTMLButtonElement>('formula-copy-image').disabled=exportButton.disabled=active||other||!previewReady;
+    q('formula-image-reset').hidden=!state()?.formulaHasOriginal;q<HTMLButtonElement>('formula-image-reset').disabled=active||other;
     source.value=native?'local':'service';source.disabled=active||other;
     source.options[1].textContent=native?state()?.modelTitle||'本地模型':'本地模型';
     q<HTMLButtonElement>('formula-model-configure').disabled=active||other;
@@ -59,7 +81,7 @@ export function mountFormula(
     q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : native?(state()?.models.ready?'在本机识别当前图片':'请先在“公式模型”中下载并使用模型'):'发送当前图片并识别公式';
     q('formula-configure').hidden=native;
     q('image-loading').hidden = !active;
-    q('formula-loading-label').textContent=native&&state()?.waitingForInference?'等待本地任务':'识别中';
+    q('formula-loading-label').textContent=state()?.waitingForInference?'等待本地任务':operation||'识别中';
     q('source').parentElement!.ariaBusy = String(active);
     if (notice) { message(notice); notice = ''; }
   }
@@ -86,6 +108,7 @@ export function mountFormula(
     worker = undefined;
   }
   function updatePreview() {
+    previewReady=false;
     stopPreview();
     preview.replaceChildren();
     preview.removeAttribute('aria-busy');
@@ -117,6 +140,7 @@ export function mountFormula(
             ? '预览不可用：' + error
             : '';
           if (html) preview.innerHTML = html;
+          previewReady=!error&&!!html;render();
         };
         current.onmessage = (event: MessageEvent<{ id: number; html: string; error: string }>) => {
           if (event.data.id === id) finish(event.data.error, event.data.html);
@@ -143,7 +167,7 @@ export function mountFormula(
     render();
     changed();
     try {
-      const result = await api.recognizeFormula(state()!.token, local()?state()!.formulaLocal!.revision:config!.revision);
+      const result = await api.recognizeFormula(state()!.token, local()?state()!.formulaLocal!.revision:config!.revision,options.rotation());
       editor.value = result.text;
       updatePreview();
       notice = '';
@@ -167,6 +191,7 @@ export function mountFormula(
       .catch(message);
   window.addEventListener('beforeunload', stopPreview);
   return {
+    crop,
     render,
     busy,
     setMode: (value: boolean) => {

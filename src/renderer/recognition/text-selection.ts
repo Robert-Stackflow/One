@@ -2,7 +2,7 @@ import { readingTokens, selectedText, textBounds, textGroup, textVertical, type 
 import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type TextRotation, type TextView } from '../../shared/recognition/text-geometry';
 import './text-selection.css';
 import { icon, registerIcons } from '../ui';
-import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText,Scan } from 'lucide';
+import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText,Scan,Crop } from 'lucide';
 import { mountImageRaster } from './image-raster';
 import type { OCRImagePreviewRequest } from '../../shared/recognition/image-preview';
 
@@ -12,6 +12,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   translate(text: string): void;
   selected?(start: number, end: number): void;
   rerecognize?(selection:import('../../shared/recognition/text-area').OCRLocalSelection):void;
+  region?(region:import('../../shared/recognition/ocr-tiles').OCRRect):void;
   selectionChanged?():void;
   message(value: unknown): void;
 }) {
@@ -51,7 +52,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const less = button('缩小', () => setZoom(view.scale / 1.25)); less.dataset.textAction = 'zoom-out';
   const more = button('放大', () => setZoom(view.scale * 1.25)); more.dataset.textAction = 'zoom-in';
   const rotate = button('旋转', () => { rotation = ((rotation + 1) % 4) as TextRotation; layout(); }); rotate.dataset.textAction = 'rotate';
-  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText,'selection-area':Scan });
+  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText,'selection-area':options.region?Crop:Scan });
   for (const [node, glyph] of [[fit, 'image-fit'], [less, 'image-zoom-out'], [more, 'image-zoom-in'], [rotate, 'image-rotate']] as const) {
     node.title = node.ariaLabel = node.textContent; node.innerHTML = icon('lucide:' + glyph); node.classList.add('icon-button');
   }
@@ -65,8 +66,9 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const recognizeButton=options.rerecognize?button('重新识别',()=>{if(doc&&anchor>=0&&focus>=0)options.rerecognize?.({revision:doc.revision||0,anchor,focus});}):undefined;
   if(recognizeButton){recognizeButton.dataset.textAction='recognize';recognizeButton.ariaLabel='按完整词重新识别';recognizeButton.innerHTML=icon('lucide:selection-recognize')+'<span>重新识别</span>';actions.append(recognizeButton);}
   for(const node of [copyButton,translateButton,recognizeButton])if(node)node.title=node.ariaLabel||node.textContent||'';
-  const areaButton=options.rerecognize?button('框选局部识别',()=>{if(!areaValid)return;stop();setAreaMode(!areaMode);if(areaMode)viewport.focus({preventScroll:true});}):undefined;
-  if(areaButton){areaButton.dataset.textAction='area';areaButton.title=areaButton.ariaLabel='框选局部识别';areaButton.innerHTML=icon('lucide:selection-area');areaButton.classList.add('icon-button');areaButton.ariaPressed='false';}
+  const areaLabel=options.region?'裁剪识别区域':'框选局部识别';
+  const areaButton=options.rerecognize||options.region?button(areaLabel,()=>{if(!areaValid)return;stop();setAreaMode(!areaMode);if(areaMode)viewport.focus({preventScroll:true});}):undefined;
+  if(areaButton){areaButton.dataset.textAction='area';areaButton.title=areaButton.ariaLabel=areaLabel;areaButton.innerHTML=icon('lucide:selection-area');areaButton.classList.add('icon-button');areaButton.ariaPressed='false';}
   tools.append(status);
   function setAreaMode(value:boolean){areaMode=value;if(areaButton)areaButton.ariaPressed=String(value);viewport.classList.toggle('area-selecting',value);if(value)anchor=focus=-1;schedule();}
   function imagePoint(event:PointerEvent){const rect=stage.getBoundingClientRect(),point=textViewToImage({x:event.clientX-rect.left,y:event.clientY-rect.top},view);return {x:Math.max(0,Math.min(view.width,point.x)),y:Math.max(0,Math.min(view.height,point.y))};}
@@ -110,7 +112,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   function schedule() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); }); }
   function render() {
     options.selectionChanged?.();
-    if(areaButton){areaButton.disabled=!enabled||!visible||!areaValid;const title=areaValid?'框选局部识别':'原文已修改或没有字词坐标，请重新识别全文';if(areaButton.title!==title&&areaButton.dataset.tooltip!==title)areaButton.title=title;}
+    if(areaButton){areaButton.disabled=!enabled||!visible||!areaValid;const title=areaValid?areaLabel:'原文已修改或没有字词坐标，请重新识别全文';if(areaButton.title!==title&&areaButton.dataset.tooltip!==title)areaButton.title=title;}
     layer.hidden = !enabled || !visible || !tokens.length;
     copyButton.disabled = translateButton.disabled = !enabled || anchor < 0 || focus < 0 || !tokens.length;
     if(recognizeButton)recognizeButton.disabled=copyButton.disabled;
@@ -233,7 +235,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     const left=Math.floor(Math.min(area.start.x,area.end.x)),top=Math.floor(Math.min(area.start.y,area.end.y));
     const right=Math.min(view.width,Math.ceil(Math.max(area.start.x,area.end.x))),bottom=Math.min(view.height,Math.ceil(Math.max(area.start.y,area.end.y)));
     stop();if(!valid||right<=left||bottom<=top)return;setAreaMode(false);
-    options.rerecognize?.({revision:area.revision,region:{left,top,width:right-left,height:bottom-top}});
+    const region={left,top,width:right-left,height:bottom-top};if(options.region)options.region(region);else options.rerecognize?.({revision:area.revision,region});
   });viewport.addEventListener('pointercancel', stop);
   viewport.addEventListener('lostpointercapture', stop);
   viewport.addEventListener('click', event => {
@@ -302,6 +304,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     setImagePreview(size:{width:number;height:number},request:(region:OCRImagePreviewRequest)=>Promise<Uint8Array>){
       raster?.dispose();imageSize={width:size.width,height:size.height};raster=mountImageRaster(image,inner,imageSize,request,options.message);layout();return raster.base();
     },
+    setImageSize(size:{width:number;height:number}){raster?.dispose();raster=undefined;imageSize={...size};zoom=undefined;rotation=0;resetView=true;stop();setAreaMode(false);layout();},
     setDocument(value: TextDocument | undefined,allowArea=true) {
       stop();setAreaMode(false);
       doc = value; tokens = value ? readingTokens(value) : [];allSelected=false; anchor = focus = -1;

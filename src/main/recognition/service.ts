@@ -20,6 +20,9 @@ import { FormulaClient } from './formula-client';
 import {FormulaLocalRunner} from './formula-local-runner';
 import {FormulaModelStore} from './formula-model-store';
 import {FormulaRuntimeStore} from './formula-runtime-store';
+import {FormulaImageRunner} from './formula-image-runner';
+import {saveFormulaImage} from './formula-image-export';
+import {formulaCrop} from '../../shared/recognition/formula-image';
 import { formulaText, type FormulaResult } from '../../shared/recognition/formula';
 import { LocalModelManager } from '../local-model-manager';
 import { PaddleRunner } from './paddle-runner';
@@ -95,6 +98,10 @@ export class OCRService {
   private formulaRuntime?:FormulaRuntimeStore;
   private ownsFormulaModels:boolean;
   private formulaAbort?:AbortController;
+  private formulaImages=new FormulaImageRunner();
+  private formulaImageTask?:Promise<unknown>;
+  private formulaProcessing=false;
+  private formulaOriginal?:{png:Buffer;size:{width:number;height:number}};
   private serviceCheck?:AbortController;
   constructor(
     directory: string,
@@ -162,9 +169,10 @@ export class OCRService {
       uiScale:ctx.uiScale(),
       ...this.size,
       running: this.running,
-      waitingForInference: this.runner.waiting || this.paddle.waiting || this.native.waiting||this.formulaNative.waiting,
+      waitingForInference: this.runner.waiting || this.paddle.waiting || this.native.waiting||this.formulaNative.waiting||this.formulaImages.waiting,
       translating: this.translating,
       formulaRecognizing: this.formulaRecognizing,
+      formulaProcessing:this.formulaProcessing,formulaHasOriginal:!!this.formulaOriginal,
       imageBytes: this.png?.length || 0,
       progress: this.progress,
       error: this.error,
@@ -215,7 +223,7 @@ export class OCRService {
     handle('cancel-install', async () => this.localModels.cancel((await this.localModels.selection('ocr')).modelId));
     const modelAllowed=(id:unknown)=>{if(id==='tesseract'&&this.kind==='ocr')return;if(localModelCatalog.find(model=>model.id===id)?.purpose!==this.kind)throw Error('模型与当前窗口不匹配');};
     handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh,this.kind); });
-    handle('local-model-save', (purpose, choice, revision) => {if(purpose!==this.kind)throw Error('模型与当前窗口不匹配');if(this.running||this.formulaRecognizing)throw Error('请先结束当前识别');return this.localModels.save(purpose, choice, revision);});
+    handle('local-model-save', (purpose, choice, revision) => {if(purpose!==this.kind)throw Error('模型与当前窗口不匹配');if(this.running||this.formulaRecognizing||this.formulaProcessing)throw Error('请先结束当前识别');return this.localModels.save(purpose, choice, revision);});
     handle('local-model-install', (id,preference) => {modelAllowed(id);return this.localModels.install(id,preference);});
     handle('local-model-cancel', id => {modelAllowed(id);return this.localModels.cancel(id);});
     handle('local-model-delete', id => {modelAllowed(id);return this.localModels.remove(id);});
@@ -295,7 +303,7 @@ export class OCRService {
     );
     handle('formula-config', () => this.formulaStore.state());
     const configureFormula = async <T>(operation: () => Promise<T>) => {
-      if (this.formulaRecognizing || this.formulaConfiguring || this.workflow.active)
+      if (this.formulaRecognizing || this.formulaProcessing||this.formulaConfiguring || this.workflow.active)
         throw Error('请先结束公式识别或配置操作');
       this.formulaConfiguring = true;
       try {
@@ -308,11 +316,12 @@ export class OCRService {
     handle('formula-clear', (revision) =>
       configureFormula(() => this.formulaStore.clear(revision)),
     );
-    handle('formula-recognize', (token, revision) => {
+    handle('formula-recognize', (token, revision,rotation=0) => {
       if (this.workflow.active) throw Error('请先取消识别流程');
       if (token !== this.token || !this.png) throw Error('识别图片已失效');
-      if (this.running || this.translating || this.formulaRecognizing)
+      if (this.running || this.translating || this.formulaRecognizing||this.formulaProcessing)
         throw Error('请先结束当前识别或翻译');
+      if(![0,1,2,3].includes(rotation))throw Error('图片旋转参数无效');
       if (this.formulaConfiguring) throw Error('公式配置正在保存，请稍后重试');
       const generation = this.token,
         serial = ++this.formulaSerial;
@@ -320,7 +329,10 @@ export class OCRService {
       this.progress=0;
       const abort=this.formulaAbort=new AbortController();
       const task = (async () => {
+        let oriented:Buffer|undefined;
         try {
+          const source=rotation?(oriented=(await this.formulaImages.crop(this.png!,this.size,{region:{left:0,top:0,...this.size},rotation})).png):this.png!;
+          abort.signal.throwIfAborted();
           const selected=await this.localModels.selection('formula');abort.signal.throwIfAborted();
           if(selected.modelId!=='service'){
             if(revision!==await this.localModels.settingsRevision())throw Error('公式模型设置已改变，请重新识别');
@@ -330,7 +342,7 @@ export class OCRService {
               lease=await this.formulaModels.acquire(abort.signal);abort.signal.throwIfAborted();
               if(lease.model.id!==selected.modelId)throw Error('公式模型与准备缓存不匹配');
               if(generation!==this.token||serial!==this.formulaSerial||ctx.blocked())throw Error('公式识别已取消');
-              const result=await this.formulaNative.run(this.png!,lease.model,{device:selected.device.mode,deviceId:'gpu' in device?device.gpu!.deviceId:0,automaticBackend:device.backend},progress=>{if(generation===this.token&&serial===this.formulaSerial)this.progress=progress;});
+              const result=await this.formulaNative.run(source,lease.model,{device:selected.device.mode,deviceId:'gpu' in device?device.gpu!.deviceId:0,automaticBackend:device.backend},progress=>{if(generation===this.token&&serial===this.formulaSerial)this.progress=progress;});
               if(abort.signal.aborted||generation!==this.token||serial!==this.formulaSerial||ctx.blocked())throw Error('公式识别已取消');
               if(JSON.stringify(await this.localModels.selection('formula'))!==JSON.stringify(selected))throw Error('公式模型设置已改变，请重新识别');
               return {text:result.text,model:selected.modelId,endpoint:'local:'+selected.modelId,revision,inference:{backend:result.actualBackend,device:result.actualBackend==='cpu'?'CPU':'DirectML · '+result.deviceId,fallbackReason:result.fallbackReason}} as FormulaResult;
@@ -339,12 +351,13 @@ export class OCRService {
           const connection = await this.formulaStore.connection(revision);
           if (generation !== this.token || serial !== this.formulaSerial || ctx.blocked())
             throw Error('公式识别已取消');
-          const result = await this.formulaClient.run(connection, this.png!);
+          const result = await this.formulaClient.run(connection, source);
           if((await this.formulaStore.state()).revision!==connection.revision)throw Error('公式服务已改变，请重新识别');
           if (generation !== this.token || serial !== this.formulaSerial || ctx.blocked())
             throw Error('公式识别已取消');
           return result;
         } finally {
+          oriented?.fill(0);
           if (generation === this.token) this.formulaRecognizing = false;
         }
       })();
@@ -359,6 +372,22 @@ export class OCRService {
       if (!text.trim()) throw Error('没有可复制的公式');
       await clipboard.writeText(text);
     });
+    handle('formula-crop',(token,value)=>this.formulaImageOperation(token,async valid=>{
+      const next=value===undefined?this.formulaOriginal:await this.formulaImages.crop(this.png!,this.size,formulaCrop(value,this.size));
+      if(!next)return;
+      const png=next.png,size='size' in next?next.size:{width:next.width,height:next.height};
+      if(!valid())throw Error('公式裁剪已取消');await this.imagePreview?.close();if(!valid())throw Error('公式裁剪已取消');
+      const previous=this.png!;
+      if(value===undefined)this.formulaOriginal=undefined;else this.formulaOriginal||={png:previous,size:{...this.size}};
+      this.png=png;this.size=size;this.token=randomUUID();this.imagePreview=new OCRImagePreview(png,size);
+      if(previous!==this.formulaOriginal?.png&&previous!==png)previous.fill(0);
+    }));
+    handle('formula-output',(token,value,mode)=>this.formulaImageOperation(token,async valid=>{
+      if(!['copy','png','svg'].includes(mode))throw Error('公式导出格式无效');const text=formulaText(value);if(!text.trim())throw Error('没有可导出的公式');
+      const result=await this.formulaImages.render(text);if(!valid())throw Error('公式导出已取消');
+      if(mode==='copy'){await writeClipboardPng(result.png);return '已复制公式图片';}
+      return saveFormulaImage(this.window!,mode,mode==='svg'?Buffer.from(result.svg!):result.png,this.ctx.protect,valid);
+    }));
   }
   private get scope() { return this.kind === 'formula' ? 'formula-recognition' : 'recognition'; }
   private get url() { return 'one://app/index.html?view=' + this.scope; }
@@ -498,8 +527,17 @@ export class OCRService {
   private async cancelFormula() {
     this.formulaSerial++;
     this.formulaAbort?.abort();
-    await Promise.all([this.formulaClient.cancel(),this.formulaNative.cancel()]);
-    await this.formulaTask?.catch(() => {});
+    const tasks=[this.formulaTask,this.formulaImageTask];
+    await Promise.all([this.formulaClient.cancel(),this.formulaNative.cancel(),this.formulaImages.cancel()]);
+    await Promise.allSettled(tasks);
+  }
+  private formulaImageOperation<T>(token:unknown,work:(valid:()=>boolean)=>Promise<T>){
+    if(token!==this.token||!this.png)throw Error('公式图片已失效');
+    if(this.formulaRecognizing||this.formulaProcessing||this.formulaConfiguring||this.workflow.active)throw Error('请先结束当前公式任务');
+    this.formulaProcessing=true;const serial=++this.formulaSerial;
+    const valid=()=>token===this.token&&serial===this.formulaSerial&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed();
+    const task=Promise.resolve().then(()=>work(valid));this.formulaImageTask=task;
+    return task.finally(()=>{if(this.formulaImageTask===task){this.formulaImageTask=undefined;this.formulaProcessing=false;}});
   }
   async open(png: Buffer, name: string) {
     if (this.ctx.blocked()) throw Error('应用正在退出');
@@ -573,6 +611,7 @@ export class OCRService {
     const preview=this.imagePreview;this.imagePreview=undefined;
     const closingPreview=preview?.close();
     this.png?.fill(0);
+    this.formulaOriginal?.png.fill(0);this.formulaOriginal=undefined;
     this.png = undefined;
     this.result = undefined;this.translatedImage=undefined;
     this.models.cancel();
@@ -596,7 +635,7 @@ export class OCRService {
     this.window = undefined;
     this.clear();
     await this.settling;
-    await Promise.all([this.paddle.close(), this.native.close(),this.formulaNative.close(),this.localModels.stop()]);
+    await Promise.all([this.paddle.close(), this.native.close(),this.formulaNative.close(),this.formulaImages.close(),this.localModels.stop()]);
     if(this.ownsFormulaModels){await this.formulaModels.stop();await this.formulaRuntime?.stop();}
     if(this.ownsRuntimes)await this.runtimes.stop();
   }

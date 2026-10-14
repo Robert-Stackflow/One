@@ -25827,3 +25827,40 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+### One Markdown math token rules
+
+Adapted from marked-katex-extension 5.1.13 (https://github.com/UziTech/marked-katex-extension), retaining its MIT license:
+
+MIT License
+
+Copyright (c) 2021 @markedjs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+### Formula SVG export: MathJax 4.1.3 and MathJax TeX font
+
+The formula image worker bundles `@mathjax/src` 4.1.3 and
+`@mathjax/mathjax-tex-font` 4.1.3. Copyright MathJax Consortium.
+Both packages declare Apache-2.0 and are used under the Apache License,
+Version 2.0 reproduced above. Source: https://github.com/mathjax/MathJax-src
+and https://github.com/mathjax/MathJax-fonts .
+The worker uses the bundled font paths locally; it does not load a CDN,
+TeX extensions, user scripts, or external images.

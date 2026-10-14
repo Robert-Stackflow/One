@@ -1,5 +1,5 @@
 import {Marked} from 'marked';
-import markedKatex from 'marked-katex-extension';
+import {markedMath} from '../shared/markdown-math';
 import katex from 'katex';
 import hljs from 'highlight.js/lib/common';
 import DOMPurify from 'dompurify';
@@ -134,7 +134,7 @@ export async function renderMarkdown(host:HTMLElement,data:PreviewData,outline:S
   const isMdx=/\.mdx$/i.test(data.name);
   const {body,html:metadata}=frontmatter(data.text||'');
   const parser=new Marked({gfm:true,breaks:false});
-  const math=markedKatex({throwOnError:false,trust:false});
+  const math=markedMath();
   parser.use({...math,extensions:math.extensions?.map(extension=>({...extension,renderer(token){
     const value=String((token as {text?:string}).text||''),display=Boolean((token as {displayMode?:boolean}).displayMode);
     const tag=extension.name==='blockKatex'?'div':'span';
