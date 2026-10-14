@@ -96,13 +96,14 @@ export class PaddleRunner {
         if (packet.phase && Number.isFinite(packet.progress)) { progress(Math.max(0, Math.min(1, packet.progress)), String(packet.phase)); return; }
         if (!packet.ok) { finish(new InferenceError(typeof packet.error === 'string' ? packet.error.slice(0, 1000) : 'OCR 推理失败', String(packet.kind))); return; }
         try {
+          if(packet.result?.truncated===true)throw new InferenceError('文字区域过多，输入已保留，请裁剪图片后重试','result');
           const value = ocrResult(packet.result, size, language);
           // The child is owned by this service; preserve its source-bound document, not arbitrary renderer input.
           value.document = packet.result.document;
           const peak = packet.result.peakRSSMiB;
           if (peak !== undefined && (!Number.isFinite(peak) || peak < 1 || peak > 65536)) throw Error('OCR 内存记录无效');
           finish(undefined, { ...value, actualBackend: backend, deviceId: backend === 'dml' ? prefs.deviceId : undefined, peakRSSMiB: peak });
-        } catch { finish(new InferenceError('OCR 推理结果无效', 'result')); }
+        } catch(error) { finish(error instanceof InferenceError?error:new InferenceError('OCR 推理结果无效', 'result')); }
       };
       const timer = setTimeout(() => finish(new InferenceError('文字识别超时，输入已保留，请重试', 'timeout')), this.timeoutMs);
       signal.addEventListener('abort', cancel, { once: true }); child.on('message', message); child.once('exit', exit); child.once('error', failed);

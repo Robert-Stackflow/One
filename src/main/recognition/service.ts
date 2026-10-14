@@ -22,6 +22,8 @@ import { localModelCatalog } from '../local-model-catalog';
 import { nativeRuntimeLicenses } from '../../shared/recognition/model-sources';
 import { acquirePaddleModel } from './paddle-models';
 import { readInferenceDevices, resolveInferenceDevice } from '../inference-devices';
+import { recognizeOCRImage } from './ocr-image-task';
+import { needsOCRTiles } from '../../shared/recognition/ocr-tiles';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
   openFormula?(png:Buffer,title:string):Promise<void>;
@@ -272,10 +274,13 @@ export class OCRService {
       const releaseUse = this.localModels.use(choice.modelId);
       try {
         if (choice.modelId === 'tesseract') {
-          const result = await this.runner.run(this.png!, this.size, language, value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
+          const result = await recognizeOCRImage(this.png!,this.size,abort.signal,
+            (png,size,progress)=>this.runner.run(png,size,language,progress),
+            value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);});
           result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
         }
         if(deepseekOCRPresets.some(model=>model.id===choice.modelId)){
+          if(needsOCRTiles(this.size))throw Error('DeepSeek 当前不支持长图分块，请选择 Tesseract 或 PP-OCRv6；输入已保留');
           return await this.native.run(this.png!,this.size,language,choice.modelId,choice.device);
         }
         const lease = await acquirePaddleModel(this.localModels.store, choice.modelId);
@@ -286,11 +291,14 @@ export class OCRService {
             : await readInferenceDevices(abort.signal, process.env.ONE_TEST_MODE === '1' ? process.env.ONE_INFERENCE_MONITOR : undefined);
           const selected = resolveInferenceDevice(choice.device, devices, this.size.width * this.size.height);
           abort.signal.throwIfAborted();
-          const result = await this.paddle.run(this.png!, this.size, language, lease.model,
-            { device: selected.backend === 'cpu' ? 'cpu' : choice.device.mode === 'auto' ? 'auto' : 'gpu', deviceId: selected.gpu?.deviceId ?? 0, memoryMiB: lease.preset.memoryBudgetMiB },
-            value => { if (this.token === generation) this.progress = Math.max(this.progress, value); });
-          result.inference = { model: lease.preset.title + ' ' + lease.preset.size, backend: result.actualBackend, device: result.actualBackend === 'dml' ? selected.gpu!.name + ' · ' + selected.gpu!.deviceId : 'CPU',
-            fallbackReason: result.fallbackReason || selected.reason }; return result;
+          let cpuFallback=false;
+          return await recognizeOCRImage(this.png!,this.size,abort.signal,async(png,size,progress)=>{
+            const result=await this.paddle.run(png,size,language,lease.model,
+              {device:cpuFallback||selected.backend==='cpu'?'cpu':choice.device.mode==='auto'?'auto':'gpu',deviceId:selected.gpu?.deviceId??0,memoryMiB:lease.preset.memoryBudgetMiB},progress);
+            if(result.fallbackReason)cpuFallback=true;
+            result.inference={model:lease.preset.title+' '+lease.preset.size,backend:result.actualBackend,
+              device:result.actualBackend==='dml'?selected.gpu!.name+' · '+selected.gpu!.deviceId:'CPU',fallbackReason:result.fallbackReason||selected.reason};return result;
+          },value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);});
         } finally { lease.release(); }
       } finally { releaseUse(); }
     })();
@@ -409,7 +417,7 @@ export class OCRService {
       if (this.ctx.blocked()) throw Error('应用正在退出');
       const base64 = png.toString('base64'),
         header = pngDimensions(base64);
-      ocrDimensions(header.width, header.height);
+      if(this.kind==='formula')ocrDimensions(header.width, header.height);
       this.size = header;
       this.png = Buffer.from(png);
       this.token = randomUUID();

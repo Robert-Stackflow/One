@@ -3,7 +3,7 @@ const {build}=require('esbuild');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
 (async()=>{
-  const presets=process.argv.includes('--presets'),selectionCase=process.argv.includes('--selection'),timing=process.argv.includes('--timing');
+  const presets=process.argv.includes('--presets'),selectionCase=process.argv.includes('--selection'),timing=process.argv.includes('--timing'),longImage=process.argv.includes('--long');
   const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'model-ui-'));
   const profile=path.join(directory,'profile'),input=path.join(directory,'input.png'),errors=[];let app,imported=false;
   async function choose(page,id,label){await page.locator('#'+id).click();await page.getByRole('option',{name:label,exact:true}).click();}
@@ -23,7 +23,26 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await build({entryPoints:['tests/local-model-ui-prepare.ts'],outfile:path.join(directory,'prepare.mjs'),bundle:true,format:'esm',platform:'node',target:'node22',packages:'external',logLevel:'warning'});
     await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile,...(presets?{ONE_MODEL_UI_PRESETS:'1'}:{})},windowsHide:true,maxBuffer:64*1024});
     await sharp(Buffer.from('<svg width="680" height="120"><rect width="680" height="120" fill="white"/><text x="15" y="85" font-family="Arial" font-size="58">ONE OCR 2026</text></svg>')).png().toFile(input);
+    if(longImage)await sharp(Buffer.from(`<svg width="680" height="10000"><rect width="100%" height="100%" fill="white"/><g fill="black" font-family="Arial" font-size="42">${[100,1806,3596,5390,7185,8976,9800].map((y,index)=>`<text x="24" y="${y}">ONE ROW ${index+1} END</text>`).join('')}</g></svg>`)).png().toFile(input);
     let page=await open();assert.equal((await page.evaluate(()=>window.one.recognition.state())).modelTitle,'Tesseract fast');
+    if(longImage){
+      await app.evaluate(({clipboard})=>{global.__longCopied='';clipboard.writeText=value=>{global.__longCopied=value;};});
+      const info=await page.evaluate(()=>window.one.recognition.state());assert.equal(info.height,10000);
+      await page.locator('#run').click();await expect(page.locator('#result')).toHaveValue(/ONE ROW 7 END/,{timeout:60000});
+      const text=await page.locator('#result').inputValue();assert.equal((text.match(/ONE ROW/g)||[]).length,7);
+      await page.locator('#copy').click();assert.equal(await app.evaluate(()=>global.__longCopied),text);
+      await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');
+      await dialog.locator('[data-select-model=pp-ocrv6-tiny]').click();await choose(page,'local-model-device','CPU');
+      await dialog.locator('#local-model-save').click();await expect(dialog).not.toBeVisible();
+      await page.locator('#run').click();await page.evaluate(()=>window.one.recognition.cancel());await expect(page.locator('#run')).toBeEnabled();
+      assert.equal(await page.locator('#source').getAttribute('src'),info.image,'cancel preserves the original image');
+      const selected=await page.evaluate(async()=>{const api=window.one.recognition,state=await api.state();return api.run(state.token,'eng');});
+      await expect(page.locator('#run')).toBeEnabled({timeout:60000});await expect(page.locator('#result')).toHaveValue(/ONE ROW 7 END/);
+      assert.equal(((await page.locator('#result').inputValue()).match(/ONE ROW/g)||[]).length,7);
+      assert.equal(selected.document.source.height,10000);assert.ok(selected.words.some(word=>word.y>9000));
+      const tokens=selected.document.blocks.flatMap(block=>block.lines.flatMap(line=>line.tokens));assert.ok(tokens.some(token=>token.geometry==='ctc'&&token.quad[0].y>9000));
+      assert.deepEqual(errors,[]);console.log('long-image window: 10000px Tesseract/Paddle OCR, full copy, cancel/retry, preserved source and global CTC coordinates passed');return;
+    }
     if(timing){
       await app.evaluate(({ipcMain})=>{
         const channel='one:recognition-local-models',previous=ipcMain._invokeHandlers.get(channel);
