@@ -28,6 +28,11 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     },input);
     const [asset]=await main.evaluate(()=>window.one.materialsImportImages());await main.evaluate(id=>window.one.materialsRecognizeImage(id),asset);
     const page=app.windows().find(page=>page.url().includes('view=recognition'));assert(page);await expect(page.locator('#run')).toBeEnabled();
+    if(process.argv.includes('--area')){
+      const paddleArea=process.argv.includes('--area-paddle');
+      if(paddleArea){await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');await dialog.locator('[data-select-model=pp-ocrv6-tiny]').click();await choose(page,'local-model-device',gpu===undefined?'CPU':'GPU · DirectML');if(gpu!==undefined){await expect(page.locator('#local-model-gpu-info')).toContainText('GiB',{timeout:15000});await page.locator('#local-model-gpu').click();await page.getByRole('option',{name:new RegExp(' · '+gpu+'$')}).click();}await dialog.locator('#local-model-save').click();}
+      const state=await page.evaluate(()=>window.one.recognition.state());await require('./recognition-area-window.cjs')({app,page,id:state.token,long,cancelWorker:!paddleArea,device:paddleArea?gpu:undefined});assert.deepEqual(errors,[]);return;
+    }
     await page.locator('#run').click();await expect(page.locator('#result')).toHaveValue(/KEEP THIS LINE/,{timeout:60000});const original=await page.evaluate(()=>window.one.recognition.state());
     let baseline=await app.evaluate(()=>global.baseResult);
     if(long){for(let i=0;i<12;i++)await page.locator('[data-text-action=zoom-in]').click();await page.locator('.text-image-viewport').evaluate(node=>{const stage=node.querySelector('.text-image-stage'),scale=stage.querySelector('.text-image-inner').getBoundingClientRect().width/680;node.scrollLeft=stage.offsetLeft+80*scale-node.clientWidth/2;node.scrollTop=stage.offsetTop+8550*scale-node.clientHeight/2;});await page.waitForTimeout(80);}

@@ -84,6 +84,7 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await assert.rejects(editor.evaluate(({id,selection})=>window.one.inlineOCR.region(id,'eng',selection),{id:editorId,selection:regionReply.selection}),/已改变/);
     const correctionBase=await app.evaluate(()=>global.inlineResults.at(-1).result);
     await require('./recognition-word-correction.cjs')({app,page:editor,baseline:correctionBase,inline:true,id:editorId});
+    if(process.argv.includes('--area')){const baseline=await app.evaluate(()=>global.wordCorrections.at(-1).result);await require('./recognition-area-window.cjs')({app,page:editor,baseline,inline:true,id:editorId});}
     await editor.locator('.inline-ocr-back').click();await expect(editor.locator('.inline-ocr')).toHaveCount(0);
     const restored=await editor.evaluate(()=>({scroll:[document.querySelector('#viewport').scrollLeft,document.querySelector('#viewport').scrollTop],dirty:document.querySelector('#dirty').textContent}));
     assert.deepEqual(restored.scroll,before.scroll);assert.equal(restored.dirty,before.dirty);await expect(editor.locator('#ocr')).toBeEnabled();

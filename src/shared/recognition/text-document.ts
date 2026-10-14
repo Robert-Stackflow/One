@@ -42,7 +42,7 @@ export interface TextDocument {
   blocks: TextBlock[];
   revision?:number;
   corrections?:{revision:number;wordId:string;before:string;after:string;tokenIds:string[];sourceQuads?:TextQuad[]}[];
-  revisions?:{revision:number;region:{left:number;top:number;width:number;height:number};context?:{left:number;top:number;width:number;height:number};contextToSource?:[number,number,number,number,number,number];engine:TextDocument['engine'];language:string}[];
+  revisions?:{revision:number;kind?:'rectangle';requested?:{left:number;top:number;width:number;height:number};region:{left:number;top:number;width:number;height:number};context?:{left:number;top:number;width:number;height:number};contextToSource?:[number,number,number,number,number,number];engine:TextDocument['engine'];language:string}[];
 }
 export function textBounds(quad: TextQuad) {
   const x = Math.min(...quad.map(point => point.x)), y = Math.min(...quad.map(point => point.y));

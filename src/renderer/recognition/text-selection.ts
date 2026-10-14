@@ -2,7 +2,7 @@ import { readingTokens, selectedText, textBounds, textGroup, textVertical, type 
 import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type TextRotation, type TextView } from '../../shared/recognition/text-geometry';
 import './text-selection.css';
 import { icon, registerIcons } from '../ui';
-import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText } from 'lucide';
+import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText,Scan } from 'lucide';
 import { mountImageRaster } from './image-raster';
 import type { OCRImagePreviewRequest } from '../../shared/recognition/image-preview';
 
@@ -11,7 +11,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   copy(text: string): Promise<void>;
   translate(text: string): void;
   selected?(start: number, end: number): void;
-  rerecognize?(selection:import('../../shared/recognition/text-region').OCRRegionSelection):void;
+  rerecognize?(selection:import('../../shared/recognition/text-area').OCRLocalSelection):void;
   selectionChanged?():void;
   message(value: unknown): void;
 }) {
@@ -28,10 +28,12 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const stage = document.createElement('div'); stage.className = 'text-image-stage';
   const inner = document.createElement('div'); inner.className = 'text-image-inner';
   const layer = document.createElement('div'); layer.className = 'text-selection-layer';
+  const rectangle=document.createElement('div');rectangle.className='text-recognition-rectangle';rectangle.hidden=true;rectangle.ariaHidden='true';
   image.classList.add('text-selection-image');
-  inner.append(image, layer); stage.append(inner); canvas.append(stage); viewport.append(canvas); root.append(tools, viewport); host.append(root);
+  inner.append(image, layer,rectangle); stage.append(inner); canvas.append(stage); viewport.append(canvas); root.append(tools, viewport); host.append(root);
   const status = document.createElement('span'); status.className = 'text-image-status'; status.setAttribute('aria-live', 'polite');
   let doc: TextDocument | undefined, tokens: TextToken[] = [], enabled = true, visible = true, anchor = -1, focus = -1;
+  let allSelected=false;
   let imageSize:{width:number;height:number}|undefined,raster:ReturnType<typeof mountImageRaster>|undefined;
   let zoom: number | undefined, rotation: TextRotation = 0, view: TextView = { width: 1, height: 1, scale: 1, rotation: 0 };
   let lines: { top: number; bottom: number; left: number; right: number; prefixBottom: number; indices: number[] }[] = [];
@@ -40,15 +42,16 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   let visibleSignature = '';
   const nodes = new Map<number, HTMLSpanElement>();
   const correctionClipPrefix='ocr-word-'+crypto.randomUUID()+'-';
-  let drag: { id: number; pan: boolean; x: number; y: number; left: number; top: number } | undefined;
-  const text = () => selectedText(tokens, anchor, focus);
+  let areaMode=false,areaValid=true;
+  let drag: { id: number; pan: boolean; x: number; y: number; left: number; top: number;rectangle?:{start:{x:number;y:number};end:{x:number;y:number};revision:number} } | undefined;
+  const text = () => allSelected&&doc&&anchor===0&&focus===tokens.length-1?doc.text:selectedText(tokens, anchor, focus);
   const copy = () => { const value = text(); if (value) void options.copy(value).then(() => options.message('已复制选中文字')).catch(options.message); };
   let initialized = false, resetView = false, viewportWidth = 0, viewportHeight = 0;
   const fit = button('适应画布', () => { zoom = undefined; resetView = true; layout(); }); fit.dataset.textAction = 'fit';
   const less = button('缩小', () => setZoom(view.scale / 1.25)); less.dataset.textAction = 'zoom-out';
   const more = button('放大', () => setZoom(view.scale * 1.25)); more.dataset.textAction = 'zoom-in';
   const rotate = button('旋转', () => { rotation = ((rotation + 1) % 4) as TextRotation; layout(); }); rotate.dataset.textAction = 'rotate';
-  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText });
+  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText,'selection-area':Scan });
   for (const [node, glyph] of [[fit, 'image-fit'], [less, 'image-zoom-out'], [more, 'image-zoom-in'], [rotate, 'image-rotate']] as const) {
     node.title = node.ariaLabel = node.textContent; node.innerHTML = icon('lucide:' + glyph); node.classList.add('icon-button');
   }
@@ -62,7 +65,12 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const recognizeButton=options.rerecognize?button('重新识别',()=>{if(doc&&anchor>=0&&focus>=0)options.rerecognize?.({revision:doc.revision||0,anchor,focus});}):undefined;
   if(recognizeButton){recognizeButton.dataset.textAction='recognize';recognizeButton.ariaLabel='按完整词重新识别';recognizeButton.innerHTML=icon('lucide:selection-recognize')+'<span>重新识别</span>';actions.append(recognizeButton);}
   for(const node of [copyButton,translateButton,recognizeButton])if(node)node.title=node.ariaLabel||node.textContent||'';
+  const areaButton=options.rerecognize?button('框选局部识别',()=>{if(!areaValid)return;stop();setAreaMode(!areaMode);if(areaMode)viewport.focus({preventScroll:true});}):undefined;
+  if(areaButton){areaButton.dataset.textAction='area';areaButton.title=areaButton.ariaLabel='框选局部识别';areaButton.innerHTML=icon('lucide:selection-area');areaButton.classList.add('icon-button');areaButton.ariaPressed='false';}
   tools.append(status);
+  function setAreaMode(value:boolean){areaMode=value;if(areaButton)areaButton.ariaPressed=String(value);viewport.classList.toggle('area-selecting',value);if(value)anchor=focus=-1;schedule();}
+  function imagePoint(event:PointerEvent){const rect=stage.getBoundingClientRect(),point=textViewToImage({x:event.clientX-rect.left,y:event.clientY-rect.top},view);return {x:Math.max(0,Math.min(view.width,point.x)),y:Math.max(0,Math.min(view.height,point.y))};}
+  function drawRectangle(){if(!drag?.rectangle)return;const {start,end}=drag.rectangle;rectangle.hidden=false;rectangle.style.cssText=`left:${Math.min(start.x,end.x)/view.width*100}%;top:${Math.min(start.y,end.y)/view.height*100}%;width:${Math.abs(end.x-start.x)/view.width*100}%;height:${Math.abs(end.y-start.y)/view.height*100}%;`;}
   function setZoom(value: number, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) {
     if (drag && !drag.pan) return;
     const rect = stage.getBoundingClientRect(), bounds = viewport.getBoundingClientRect(), previous = view.scale;
@@ -102,6 +110,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   function schedule() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); }); }
   function render() {
     options.selectionChanged?.();
+    if(areaButton){areaButton.disabled=!enabled||!visible||!areaValid;const title=areaValid?'框选局部识别':'原文已修改或没有字词坐标，请重新识别全文';if(areaButton.title!==title&&areaButton.dataset.tooltip!==title)areaButton.title=title;}
     layer.hidden = !enabled || !visible || !tokens.length;
     copyButton.disabled = translateButton.disabled = !enabled || anchor < 0 || focus < 0 || !tokens.length;
     if(recognizeButton)recognizeButton.disabled=copyButton.disabled;
@@ -164,7 +173,8 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     }
     if (rebuild) layer.replaceChildren(fragment);
     visibleSignature = signature; layer.dataset.renderedTokens = String(indices.length);
-    if (anchor >= 0 && focus >= 0 && doc?.alignment === 'source') {
+    if(allSelected&&doc&&anchor===0&&focus===tokens.length-1)options.selected?.(0,doc.text.length);
+    else if (anchor >= 0 && focus >= 0 && doc?.alignment === 'source') {
       const first = tokens[Math.min(anchor, focus)], last = tokens[Math.max(anchor, focus)];
       if (first.sourceStart !== undefined && last.sourceEnd !== undefined) options.selected?.(first.sourceStart, last.sourceEnd);
     }
@@ -172,6 +182,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   }
   function choose(index: number, extend = false) {
     if (index < 0) return;
+    allSelected=false;
     if (!extend || anchor < 0) anchor = index;
     focus = index; schedule();
   }
@@ -190,6 +201,10 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   }
   viewport.addEventListener('pointerdown', event => {
     if (event.button !== 0 && event.button !== 1) return;
+    if(areaMode&&enabled&&visible&&!space&&event.button===0){
+      event.preventDefault();viewport.focus();viewport.setPointerCapture(event.pointerId);const point=imagePoint(event);
+      drag={id:event.pointerId,pan:false,x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop,rectangle:{start:point,end:point,revision:doc?.revision||0}};drawRectangle();return;
+    }
     const index = enabled && visible && !space && event.button === 0 ? hit(event) : -1;
     const pan = space || event.button === 1 || index < 0;
     if (pan) { anchor = focus = -1; viewport.classList.add('panning'); schedule(); }
@@ -199,6 +214,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   });
   viewport.addEventListener('pointermove', event => {
     if (!drag || event.pointerId !== drag.id) return;
+    if(drag.rectangle){drag.rectangle.end=imagePoint(event);drawRectangle();return;}
     if (drag.pan) { viewport.scrollLeft = drag.left + drag.x - event.clientX; viewport.scrollTop = drag.top + drag.y - event.clientY; }
     else {
       const bounds = viewport.getBoundingClientRect();
@@ -209,20 +225,30 @@ export function mountTextSelection(image: HTMLImageElement, options: {
       choose(hit(event, true), true);
     }
   });
-  const stop = () => { drag = undefined; if (!space) viewport.classList.remove('panning'); if (pendingLayout) layout(); };
-  viewport.addEventListener('pointerup', stop); viewport.addEventListener('pointercancel', stop);
+  const stop = () => { drag = undefined;rectangle.hidden=true; if (!space) viewport.classList.remove('panning'); if (pendingLayout) layout(); };
+  viewport.addEventListener('pointerup',event=>{
+    const area=drag?.rectangle;
+    if(!area){stop();return;}area.end=imagePoint(event);
+    const valid=Math.abs(area.end.x-area.start.x)*view.scale>=4&&Math.abs(area.end.y-area.start.y)*view.scale>=4;
+    const left=Math.floor(Math.min(area.start.x,area.end.x)),top=Math.floor(Math.min(area.start.y,area.end.y));
+    const right=Math.min(view.width,Math.ceil(Math.max(area.start.x,area.end.x))),bottom=Math.min(view.height,Math.ceil(Math.max(area.start.y,area.end.y)));
+    stop();if(!valid||right<=left||bottom<=top)return;setAreaMode(false);
+    options.rerecognize?.({revision:area.revision,region:{left,top,width:right-left,height:bottom-top}});
+  });viewport.addEventListener('pointercancel', stop);
   viewport.addEventListener('lostpointercapture', stop);
   viewport.addEventListener('click', event => {
     if (enabled && visible && focus >= 0 && event.detail >= 2) {
       const group = textGroup(tokens, focus, event.detail >= 3 ? 'line' : 'word');
-      anchor = group.anchor; focus = group.focus; schedule();
+      allSelected=false;anchor = group.anchor; focus = group.focus; schedule();
     }
   });
   viewport.addEventListener('keydown', event => {
     if (event.code === 'Space') { event.preventDefault(); space = true; viewport.classList.add('panning'); return; }
+    if(event.key==='Escape'&&areaMode){event.preventDefault();stop();setAreaMode(false);return;}
     if (!enabled || !visible || !tokens.length) return;
+    if(areaMode&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
-      event.preventDefault(); anchor = 0; focus = tokens.length - 1; schedule(); return;
+      event.preventDefault();setAreaMode(false);allSelected=true; anchor = 0; focus = tokens.length - 1; schedule(); return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copy(); return; }
     if (event.key === 'Escape') { if(anchor>=0){event.preventDefault();anchor = focus = -1;schedule();}return; }
@@ -258,7 +284,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     },
     selectWord(wordId:string,lineId:string) {
       const index=tokens.findIndex(token=>token.wordId===wordId&&token.lineId===lineId);
-      if(index>=0){const range=textGroup(tokens,index,'word');anchor=range.anchor;focus=range.focus;schedule();}
+      if(index>=0){const range=textGroup(tokens,index,'word');allSelected=false;anchor=range.anchor;focus=range.focus;schedule();}
     },
     viewState() {
       const bounds=viewport.getBoundingClientRect(),rect=stage.getBoundingClientRect();
@@ -274,9 +300,10 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     setImagePreview(size:{width:number;height:number},request:(region:OCRImagePreviewRequest)=>Promise<Uint8Array>){
       raster?.dispose();imageSize={width:size.width,height:size.height};raster=mountImageRaster(image,inner,imageSize,request,options.message);layout();return raster.base();
     },
-    setDocument(value: TextDocument | undefined) {
-      stop();
-      doc = value; tokens = value ? readingTokens(value) : []; anchor = focus = -1;
+    setDocument(value: TextDocument | undefined,allowArea=true) {
+      stop();setAreaMode(false);
+      doc = value; tokens = value ? readingTokens(value) : [];allSelected=false; anchor = focus = -1;
+      areaValid=allowArea&&(!value||!!tokens.length||!value.text.trim());
       nodes.clear(); visibleSignature = ''; layer.replaceChildren();
       const indices = new Map<string, number[]>();
       tokens.forEach((token, index) => { const row = indices.get(token.lineId) || []; row.push(index); indices.set(token.lineId, row); });

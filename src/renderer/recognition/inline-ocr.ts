@@ -43,11 +43,11 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   q('.inline-ocr-back').innerHTML=icon('lucide:inline-ocr-back');const label=document.createElement('span');label.textContent=options.back;q('.inline-ocr-back').append(label);
   function panel(show:boolean){panelVisible=show;q('.inline-ocr-result').hidden=!show;workspace.show(show);}
   function loading(value:boolean,label:string){busy=value;const editing=!!correction?.busy();root.ariaBusy=String(value||editing);q('.inline-ocr-loading').hidden=!value;q('.inline-ocr-loading-label').textContent=label;q<HTMLButtonElement>('.inline-ocr-run').disabled=value||editing||!ready;q<HTMLSelectElement>('.inline-ocr-language').disabled=value||editing;original.readOnly=value||editing;selection.setEnabled(!value&&!editing);}
-  async function run(region?:import('../../shared/recognition/text-region').OCRRegionSelection){
+  async function run(region?:import('../../shared/recognition/text-area').OCRLocalSelection){
     if(!ready||busy||disposed||correction?.busy())return;loading(true,'识别中');
     try{const language=q<HTMLSelectElement>('.inline-ocr-language').value as OCRLanguage;
       const result=await (region?api.region(id,language,region):api.run(id,language));if(disposed)return;
-      original.value=result.text;translated.value='';selection.setDocument(result.document);if(!result.words.length)panel(true);
+      original.value=result.text;translated.value='';selection.setDocument(result.document,!!result.document||!result.text.trim());if(!result.words.length)panel(true);
       q('.inline-ocr-run').title=result.inference?result.inference.model+' · '+result.inference.device:'';
     }catch(error){if(!disposed)options.message(error);}finally{if(!disposed)loading(false,'');}
   }
@@ -65,7 +65,7 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   q('.inline-ocr-copy').onclick=()=>void api.copy(id,original.value).then(()=>options.message('已复制原文')).catch(options.message);
   q('.inline-ocr-copy-translation').onclick=()=>void api.copy(id,translated.value).then(()=>options.message('已复制译文')).catch(options.message);
   q('.inline-ocr-cancel').onclick=()=>{if(id)void api.cancel(id).catch(options.message);else dispose();};
-  original.oninput=()=>selection.setDocument(undefined);
+  original.oninput=()=>selection.setDocument(undefined,false);
   panel(false);loading(true,'准备图片');
   void (async()=>{
     const png=await options.snapshot();if(disposed)return;

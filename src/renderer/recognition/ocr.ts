@@ -77,13 +77,13 @@ async function refresh() {
   try { state = await api.state(); await syncWorkflow(); if (!disposed) render(); } catch (error) { if (!disposed) message(error); }
   finally { polling = false; }
 }
-async function recognize(region?:import('../../shared/recognition/text-region').OCRRegionSelection){
+async function recognize(region?:import('../../shared/recognition/text-area').OCRLocalSelection){
   if (requesting || state.running || workflowBusy() || translation.busy() || correction?.busy()) return;
   requesting = true; render(); message('');
   try {
     const language=q<HTMLSelectElement>('language').value as OCRLanguage;
     const result = await (region?api.region(state.token,language,region):api.run(state.token,language));
-    q<HTMLTextAreaElement>('result').value = result.text; selection.setDocument(result.document); inference(result.inference); translation.sourceChanged();
+    q<HTMLTextAreaElement>('result').value = result.text; selection.setDocument(result.document,!!result.document||!result.text.trim()); inference(result.inference); translation.sourceChanged();
     if (!result.text.trim()) message('未识别到文字');
   } catch (error) { message(error); } finally { requesting = false; await refresh(); }
 }
@@ -92,7 +92,7 @@ q('overlay-cancel').onclick = () => void (state.models.downloading ? api.cancelI
 q('install').onclick = () => { void api.install().then(refresh).catch(message); void refresh(); };
 q('cancel-install').onclick = () => void api.cancelInstall().catch(message);
 q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
-q('result').oninput = () => { selection.setDocument(undefined); translation.sourceChanged(); if (state) render(); };
+q('result').oninput = () => { selection.setDocument(undefined,false); translation.sourceChanged(); if (state) render(); };
 registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);
 void api.state().then(async value => { state = value; q('source-name').textContent = state.name;loadImage(needsImagePreview(value)?selection.setImagePreview(value,region=>api.imagePreview(value.token,region)):value.image);await syncWorkflow(); render(); }).catch(message);
 void recognitionReady(()=>api.ready()).catch(message);

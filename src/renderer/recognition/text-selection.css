@@ -18,6 +18,10 @@ body[data-view='recognition'] .source-preview:has(.text-image-workspace) { displ
 .text-image-inner { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 img.text-selection-image, body[data-view='recognition'] .source-preview img.text-selection-image { display: block; max-width: none; max-height: none; width: 100%; height: 100%; user-select: none; pointer-events: none; }
 .text-selection-layer { position: absolute; inset: 0; }
+.text-recognition-rectangle { position: absolute; box-sizing: border-box; border: 1px dashed rgb(69 144 247); background: rgb(69 144 247 / 12%); pointer-events: none; }
+.text-recognition-rectangle[hidden] { display: none; }
+.text-image-viewport.area-selecting, .text-image-viewport.area-selecting .text-selection-unit { cursor: crosshair; }
+.text-image-tools [data-text-action='area'][aria-pressed='true'] { background: var(--soft); }
 .text-image-tiles { position: absolute; inset: 0; pointer-events: none; }
 .text-image-tiles[hidden] { display: none; }
 .text-image-tile { position: absolute; overflow: hidden; pointer-events: none; border: 0; }

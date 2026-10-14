@@ -25,6 +25,7 @@ import { InlineOCRSessions } from './inline-ocr';
 import { readInferenceDevices } from '../inference-devices';
 import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
 import { correctOCRWord } from '../../shared/recognition/text-correction';
+import { prepareOCRRectangle,replaceOCRRectangle } from '../../shared/recognition/text-area';
 import { OCRImagePreview } from './image-preview';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
@@ -283,8 +284,9 @@ export class OCRService {
     const language = ocrLanguage(value),
       generation = this.token;
     const base=selection===undefined?undefined:this.result;
-    if(selection!==undefined&&!base)throw Error('请先识别全文');
-    const region=base?selectedOCRRegion(base,selection):undefined;
+    const rectangle=selection&&typeof selection==='object'&&Object.hasOwn(selection,'region')?prepareOCRRectangle(base,this.size,selection):undefined;
+    if(selection!==undefined&&!base&&!rectangle)throw Error('请先识别全文');
+    const region=rectangle|| (base?selectedOCRRegion(base,selection):undefined);
     this.running = true;
     this.progress = 0;
     this.error = '';
@@ -292,7 +294,7 @@ export class OCRService {
     const task = (async () => {
       const result=await inferOCRImage({models:this.localModels,runner:this.runner,paddle:this.paddle,native:this.native},this.png!,this.size,language,abort.signal,
         value=>{if(this.token===generation)this.progress=Math.max(this.progress,value);},region?.context);
-      abort.signal.throwIfAborted();return base&&region?replaceOCRSelection(base,result,region.selection):result;
+      abort.signal.throwIfAborted();return rectangle?replaceOCRRectangle(base,result,rectangle.selection):base&&region?replaceOCRSelection(base,result,region.selection as import('../../shared/recognition/text-region').OCRRegionSelection):result;
     })();
     this.recognitionTask = task;
     try {

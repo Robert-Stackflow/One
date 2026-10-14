@@ -6,6 +6,7 @@ import type { TranslationConnection, TranslationResult } from '../../shared/reco
 import { TranslationClient } from './translation-client';
 import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
 import { correctOCRWord } from '../../shared/recognition/text-correction';
+import { prepareOCRRectangle,replaceOCRRectangle } from '../../shared/recognition/text-area';
 import type { OCRRect } from '../../shared/recognition/ocr-tiles';
 
 export interface InlineEngine {
@@ -71,11 +72,13 @@ export class InlineOCRSessions {
   }
   region(owner:number,id:unknown,language:unknown,value:unknown){
     const parsed=ocrLanguage(language),image=this.image(owner,id),base=image.result;
-    if(!base||!image.engine.region)throw Error('请先识别全文');
-    const region=selectedOCRRegion(base,value);
+    if(image.task)throw Error('请先结束当前识别或翻译');
+    const rectangle=value&&typeof value==='object'&&Object.hasOwn(value,'region')?prepareOCRRectangle(base,image.size,value):undefined;
+    if((!base&&!rectangle)||!image.engine.region)throw Error('请先识别全文');
+    const region=rectangle||selectedOCRRegion(base!,value);
     return this.work(owner,id,async(image,signal)=>{
       const patch=await image.engine.region!(image.png,image.size,parsed,signal,region.context);signal.throwIfAborted();
-      return replaceOCRSelection(base,patch,region.selection);
+      return rectangle?replaceOCRRectangle(base,patch,rectangle.selection):replaceOCRSelection(base!,patch,region.selection as import('../../shared/recognition/text-region').OCRRegionSelection);
     });
   }
   correct(owner:number,id:unknown,selection:unknown,text:unknown){

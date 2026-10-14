@@ -3,6 +3,7 @@ import { readingTokens,selectedText,textBounds,type TextDocument,type TextToken,
 import type { OCRRect } from './ocr-tiles';
 export interface OCRRegionSelection { revision:number;anchor:number;focus:number }
 interface Group { key:string;line:string;tokens:TextToken[];indices:number[];box:ReturnType<typeof textBounds> }
+export { groups as ocrWordGroups, bounds as ocrTokenBounds };
 const shape=(box:{x:number;y:number;width:number;height:number}):TextQuad=>[{x:box.x,y:box.y},{x:box.x+box.width,y:box.y},{x:box.x+box.width,y:box.y+box.height},{x:box.x,y:box.y+box.height}];
 function bounds(tokens:readonly TextToken[]){
   let x=Infinity,y=Infinity,right=-Infinity,bottom=-Infinity;
