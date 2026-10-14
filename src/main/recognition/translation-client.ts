@@ -18,7 +18,12 @@ class TranslationFailure extends Error {}
 export class TranslationClient {
   private abort?: AbortController;
   private active?: Promise<TranslationResult>;
-  private last?:TranslationResult;
+  private selection = false;
+  private fullResult?:TranslationResult;
+  private selectedResult?:TranslationResult;
+  private get last(){return this.selection?this.selectedResult:this.fullResult;}
+  private set last(value:TranslationResult|undefined){if(this.selection)this.selectedResult=value;else this.fullResult=value;}
+  private scope(value:unknown){if(typeof value!=='boolean')throw Error('翻译范围无效');this.selection=value;}
   constructor(
     private transport: typeof fetch = serviceRequest,
     private timeout = 45000,
@@ -28,8 +33,9 @@ export class TranslationClient {
     this.abort?.abort();
     await this.active?.catch(() => {});
   }
-  run(connection: TranslationConnection, value: unknown, language: unknown) {
+  run(connection: TranslationConnection, value: unknown, language: unknown, selection = false) {
     if (this.active) return Promise.reject(Error('正在翻译，请先取消当前任务'));
+    this.scope(selection);
     connection = { ...translationSettings(connection), key: connection.key };
     const source = translationDocumentText(value),
       target = translationLanguage(language),
@@ -38,10 +44,11 @@ export class TranslationClient {
     const task=!['ai','service'].includes(connection.provider)&&source.length<=TRANSLATION_INPUT?this.request(connection,source,target,abort).then(result=>{this.last={...result,id:randomUUID()};return this.snapshot()!;}):this.document(connection,source,target,abort);
     return this.track(task);
   }
-  snapshot(){return this.last?{...this.last,parts:this.last.parts?.map(part=>({...part}))}:undefined;}
-  clearSnapshot(){this.last=undefined;}
-  retry(connection:TranslationConnection,id:unknown,ids:unknown){
+  snapshot(selection=this.selection){if(typeof selection!=='boolean')throw Error('翻译范围无效');const result=selection?this.selectedResult:this.fullResult;return result?{...result,parts:result.parts?.map(part=>({...part}))}:undefined;}
+  clearSnapshot(){this.fullResult=this.selectedResult=undefined;}
+  retry(connection:TranslationConnection,id:unknown,ids:unknown,selection=false){
     if(this.active)return Promise.reject(Error('正在翻译，请先取消当前任务'));
+    this.scope(selection);
     connection={...translationSettings(connection),key:connection.key};const previous=this.snapshot();
     if(!previous?.parts||id!==previous.id||connection.revision!==previous.revision)throw Error('翻译结果或服务已改变，请重新翻译');
     if(!Array.isArray(ids)||!ids.length||ids.length>previous.parts.length||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!previous.parts!.some(part=>part.id===id&&part.status!=='translated')))throw Error('重试段落无效或已经翻译完成');

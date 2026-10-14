@@ -11,6 +11,16 @@ function client(budget:number,send:(paragraphs:AITaskParagraph[],signal:AbortSig
   return new TranslationClient(async()=>{throw Error('Legacy transport called');},1000,{translate:async()=>{throw Error('Old AI path called');},translationBudget:()=>budget,translateBatch:async(_connection,paragraphs,_target,signal)=>send(paragraphs,signal)});
 }
 const echo=async(paragraphs:AITaskParagraph[])=>({paragraphs:paragraphs.map(p=>({id:p.id,text:p.text.toUpperCase()})),model:'actual-model'});
+test('full and selected translations keep independent bounded snapshots and retry ownership',async()=>{
+  let fail=true;const c=client(128,async paragraphs=>({paragraphs:paragraphs.map(p=>fail&&p.text==='second'?{id:p.id,error:'retry fixture'}:{id:p.id,text:p.text.toUpperCase()}),model:'fixture'})),ref=connection();
+  const full=await c.run(ref,'first\nsecond','en');assert.equal(full.parts![1].status,'failed');
+  for(const text of ['first','second','third'])await c.run(ref,text,'en',true);
+  assert.deepEqual(c.snapshot(false),full);const selected=c.snapshot(true)!;assert.equal(selected.source,'third');
+  assert.throws(()=>c.retry(ref,full.id,['p2'],true),/已改变/);
+  fail=false;const repaired=await c.retry(ref,full.id,['p2'],false);assert.equal(repaired.text,'FIRST\nSECOND');assert.deepEqual(c.snapshot(true),selected);
+  assert.throws(()=>c.run(ref,'text','en','selection' as never),/范围无效/);
+  c.clearSnapshot();assert.equal(c.snapshot(false),undefined);assert.equal(c.snapshot(true),undefined);
+});
 async function until(check:()=>boolean){const end=Date.now()+3000;while(!check()){if(Date.now()>end)throw Error('Fixture not started');await new Promise(resolve=>setTimeout(resolve,5));}}
 test('paragraph ranges preserve indentation/blank lines/CRLF, word breaks and Unicode without empty sends',()=>{
   const source='  first\r\n\r\n\t'+'😀'.repeat(30)+'    \nlast  ',parts=translationParts(source,32);assert.deepEqual(parts.map(p=>p.paragraph),[1,2,2,3]);

@@ -23,6 +23,8 @@ body[data-view='recognition'] .source-preview img { max-width: 100%; object-fit:
 .ocr-result-section + .ocr-result-section { border-top: 1px solid var(--line); }
 .ocr-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 6px; font-size: calc(12px * var(--text-scale, 1)); }
 .ocr-result-heading span { font-size: calc(11px * var(--text-scale, 1)); color: var(--muted); }
+.ocr-result-heading #translation-source-note { margin-left: auto; }
+.ocr-result-heading #translation-restore-full { font: inherit; padding: 4px 8px; min-height: 28px; }
 body[data-view='recognition'] textarea { min-height: 50px; flex: 1; width: 100%; resize: none; border: 0; border-radius: 0; padding: 10px 12px; background: transparent; line-height: 1.65; font: inherit; font-size: calc(13px * var(--text-scale, 1)); user-select: text; }
 .ocr-translation-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 0 12px 6px; }
 .ocr-translation-tools button { font-size: calc(11px * var(--text-scale, 1)); padding: 5px 7px; }

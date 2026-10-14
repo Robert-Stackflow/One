@@ -89,17 +89,17 @@ export class InlineOCRSessions {
     image.result=result;image.documentRevision=result.document!.revision||image.documentRevision;
     return result;
   }
-  translate(owner: number, id: unknown, text: unknown, target: unknown) {
+  translate(owner: number, id: unknown, text: unknown, target: unknown,selection=false) {
     return this.work(owner, id, async (image, signal) => {
       const connection = await this.connection(); signal.throwIfAborted();
-      const result=await image.translation.run(connection, text, target);signal.throwIfAborted();
+      const result=await image.translation.run(connection, text, target,selection);signal.throwIfAborted();
       if((await this.connection()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');
       return result;
     });
   }
-  async partialTranslation(owner:number,id:unknown){const image=this.image(owner,id),connection=await this.connection(),result=image.translation.snapshot();return result?.revision===connection.revision?result:undefined;}
-  retryTranslation(owner:number,id:unknown,job:unknown,parts:unknown){
-    return this.work(owner,id,async(image,signal)=>{const connection=await this.connection();signal.throwIfAborted();const result=await image.translation.retry(connection,job,parts);signal.throwIfAborted();if((await this.connection()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');return result;});
+  async partialTranslation(owner:number,id:unknown,selection=false){const image=this.image(owner,id),connection=await this.connection(),result=image.translation.snapshot(selection);return result?.revision===connection.revision?result:undefined;}
+  retryTranslation(owner:number,id:unknown,job:unknown,parts:unknown,selection=false){
+    return this.work(owner,id,async(image,signal)=>{const connection=await this.connection();signal.throwIfAborted();const result=await image.translation.retry(connection,job,parts,selection);signal.throwIfAborted();if((await this.connection()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');return result;});
   }
   copy(owner: number, id: unknown, text: unknown) { this.image(owner, id); return ocrText(text); }
   private async cancelImage(image: ImageSession) {

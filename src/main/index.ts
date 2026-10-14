@@ -1336,9 +1336,9 @@ async function start() {
     else if(name==='region')result=await inline.region(owner,id,args[0],args[1]);
     else if(name==='correct')result=inline.correct(owner,id,args[0],args[1]);
     else if(name==='preview')result=await inline.preview(owner,id,args[0]);
-    else if(name==='translate')result=await inline.translate(owner,id,args[0],args[1]);
-    else if(name==='translation-partial')result=await inline.partialTranslation(owner,id);
-    else if(name==='translation-retry')result=await inline.retryTranslation(owner,id,args[0],args[1]);
+    else if(name==='translate')result=await inline.translate(owner,id,args[0],args[1],args[2]);
+    else if(name==='translation-partial')result=await inline.partialTranslation(owner,id,args[0]);
+    else if(name==='translation-retry')result=await inline.retryTranslation(owner,id,args[0],args[1],args[2]);
     else if(name==='config')result=await recognition!.service.translationStore.state();
     else if(name==='save-config')result=await recognition!.service.translationStore.save(args[0]);
     else if(name==='clear-config')result=await recognition!.service.translationStore.clear(args[0]);

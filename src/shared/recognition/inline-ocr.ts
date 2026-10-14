@@ -18,9 +18,9 @@ export interface InlineOCRAPI {
   run(id: string, language: OCRLanguage): Promise<OCRResult>;
   region(id:string,language:OCRLanguage,selection:import('./text-area').OCRLocalSelection):Promise<OCRResult>;
   preview(id: string, region: OCRImagePreviewRequest): Promise<Uint8Array>;
-  translate(id: string, text: string, target: TranslationLanguage): Promise<TranslationResult>;
-  partialTranslation(id:string):Promise<TranslationResult|undefined>;
-  retryTranslation(id:string,job:string,parts:string[]):Promise<TranslationResult>;
+  translate(id: string, text: string, target: TranslationLanguage,selection?:boolean): Promise<TranslationResult>;
+  partialTranslation(id:string,selection?:boolean):Promise<TranslationResult|undefined>;
+  retryTranslation(id:string,job:string,parts:string[],selection?:boolean):Promise<TranslationResult>;
   copy(id: string, text: string): Promise<void>;
   cancel(id: string): Promise<void>;
   release(id: string): Promise<void>;

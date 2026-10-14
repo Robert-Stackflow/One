@@ -230,29 +230,29 @@ export class OCRService {
     handle('translation-clear', (revision) => {
       return this.configureTranslation(() => this.translationStore.clear(revision));
     });
-    handle('translate', (token, text, target, revision) => {
+    handle('translate', (token, text, target, revision, selection=false) => {
       if (this.workflow.active) throw Error('正在执行识别流程，请先取消当前任务');
-      return this.translate(token, text, target, revision);
+      return this.translate(token, text, target, revision,undefined,selection);
     });
-    handle('translation-retry',(token,id,parts,revision)=>{
+    handle('translation-retry',(token,id,parts,revision,selection=false)=>{
       if(this.workflow.active||token!==this.translationSnapshotToken)throw Error('翻译结果已失效');
-      return this.translate(token,undefined,undefined,revision,{id,parts});
+      return this.translate(token,undefined,undefined,revision,{id,parts},selection);
     });
-    handle('translation-partial',async(token,revision)=>{
+    handle('translation-partial',async(token,revision,selection=false)=>{
       if(token!==this.token||token!==this.translationSnapshotToken)throw Error('翻译结果已失效');
       if((await this.translationStore.state()).revision!==revision)throw Error('翻译服务已改变');
-      const result=this.translationClient.snapshot();return result?.revision===revision?result:undefined;
+      const result=this.translationClient.snapshot(selection);return result?.revision===revision?result:undefined;
     });
     handle('image-translation',async(token,id,revision)=>{
       if(this.kind==='formula'||token!==this.token||token!==this.translationSnapshotToken||this.running||this.translating||this.ctx.blocked())throw Error('图片翻译已失效');
       if((await this.translationStore.state()).revision!==revision)throw Error('翻译服务已改变');
-      const result=this.translationClient.snapshot(),document=this.result?.document;
+      const result=this.translationClient.snapshot(false),document=this.result?.document;
       if(token!==this.token||this.running||this.translating||!document||!result||result.id!==id||result.revision!==revision)throw Error('图片文字或译文已改变');
       this.translatedImage=imageTranslationDocument(document,result,randomUUID());return this.translatedImage;
     });
     handle('image-translation-output',async(token,id,mode,png)=>{
       const document=this.translatedImage;
-      const valid=()=>!!document&&document.id===id&&token===this.token&&document===this.translatedImage&&document.sourceId===this.result?.document?.id&&document.recognitionRevision===(this.result?.document?.revision||0)&&document.translationId===this.translationClient.snapshot()?.id&&!this.running&&!this.translating&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed();
+      const valid=()=>!!document&&document.id===id&&token===this.token&&document===this.translatedImage&&document.sourceId===this.result?.document?.id&&document.recognitionRevision===(this.result?.document?.revision||0)&&document.translationId===this.translationClient.snapshot(false)?.id&&!this.running&&!this.translating&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed();
       if(!valid()||!['copy','export'].includes(mode))throw Error('图片翻译已失效');
       if((await this.translationStore.state()).revision!==document!.serviceRevision||!valid())throw Error('翻译服务或图片已改变');
       const header=pngDimensions(png);if(header.width!==document!.width||header.height!==document!.height)throw Error('译图尺寸与原图不一致');
@@ -265,7 +265,7 @@ export class OCRService {
     });
     handle('image-translation-editor',async(token,id,value,past)=>{
       const base=this.translatedImage;
-      const valid=()=>!!base&&base.id===id&&token===this.token&&base===this.translatedImage&&base.sourceId===this.result?.document?.id&&base.recognitionRevision===(this.result?.document?.revision||0)&&base.translationId===this.translationClient.snapshot()?.id&&!this.running&&!this.translating&&!this.ctx.blocked();
+      const valid=()=>!!base&&base.id===id&&token===this.token&&base===this.translatedImage&&base.sourceId===this.result?.document?.id&&base.recognitionRevision===(this.result?.document?.revision||0)&&base.translationId===this.translationClient.snapshot(false)?.id&&!this.running&&!this.translating&&!this.ctx.blocked();
       if(!valid()||!this.png||!this.ctx.openTranslatedImage)throw Error('图片翻译已失效或编辑器不可用');
       if((await this.translationStore.state()).revision!==base!.serviceRevision||!valid())throw Error('翻译服务或图片已改变');
       if(!Array.isArray(past)||past.length>20)throw Error('翻译修改历史无效');
@@ -386,7 +386,7 @@ export class OCRService {
     await Promise.all([this.runner.cancel(), this.paddle.cancel(),this.native.cancel()]);
     await this.recognitionTask?.catch(() => {});
   }
-  private async translate(token: unknown, text: unknown, target: unknown, revision: unknown,retry?:{id:unknown;parts:unknown}) {
+  private async translate(token: unknown, text: unknown, target: unknown, revision: unknown,retry?:{id:unknown;parts:unknown},selection=false) {
     if (token !== this.token || !this.png) throw Error('识别图片已失效');
     if (this.translating || this.running || this.formulaRecognizing)
       throw Error('请先结束当前识别或翻译');
@@ -400,11 +400,11 @@ export class OCRService {
         if (generation !== this.token || serial !== this.translationSerial || this.ctx.blocked())
           throw Error('翻译已取消');
         this.translationSnapshotToken=generation;
-        const result = await (retry?this.translationClient.retry(connection,retry.id,retry.parts):this.translationClient.run(connection, text, target));
+        const result = await (retry?this.translationClient.retry(connection,retry.id,retry.parts,selection):this.translationClient.run(connection, text, target,selection));
         if((await this.translationStore.state()).revision!==connection.revision)throw Error('翻译服务已改变，请重新翻译');
         if (generation !== this.token || serial !== this.translationSerial || this.ctx.blocked())
           throw Error('翻译已取消');
-        this.workflow.acceptTranslation(result);
+        if(!selection)this.workflow.acceptTranslation(result);
         return result;
       } finally {
         if (generation === this.token) this.translating = false;

@@ -21,6 +21,10 @@ export function mountTranslation(
     requesting = false,
     notice = '',
     result: TranslationResult | undefined;
+  let full: {result:TranslationResult|undefined;text:string}|undefined;
+  const restore=document.createElement('button');restore.type='button';restore.className='quiet';restore.id='translation-restore-full';restore.textContent='返回全文译文';restore.hidden=true;q('translation-source-note').after(restore);
+  function restoreFull(){if(full){result=full.result;q<HTMLTextAreaElement>('translated').value=full.text;full=undefined;}selectionSource=undefined;render();changed();}
+  restore.onclick=restoreFull;
   const source = () => selectionSource ?? q<HTMLTextAreaElement>('result').value,
     target = () => q<HTMLSelectElement>('translation-language').value as TranslationLanguage;
   const busy = () => requesting || !!state()?.translating;
@@ -42,6 +46,7 @@ export function mountTranslation(
     q('translation-copy').hidden = !mode;
     q('ocr-tools').hidden = false;
     q('translation-source-note').textContent = selectionSource === undefined ? '' : '选中文字';
+    restore.hidden=selectionSource===undefined||!full;restore.disabled=active||ocr;
     q<HTMLTextAreaElement>('result').readOnly = active || ocr;
     q<HTMLTextAreaElement>('translated').readOnly = active || ocr;
     q<HTMLSelectElement>('translation-language').disabled = active || ocr;
@@ -85,11 +90,12 @@ export function mountTranslation(
     render();
     changed();
     try {
-      result = await (retry?api.retryTranslation(token,job!,retry,revision):api.translate(token,input,language,revision));
+      const selected=selectionSource!==undefined;
+      result = await (retry?api.retryTranslation(token,job!,retry,revision,selected):api.translate(token,input,language,revision,selected));
       q<HTMLTextAreaElement>('translated').value = result.text;
       notice = '';
     } catch (error) {
-      const partial=await api.partialTranslation(token,revision).catch(()=>undefined);
+      const partial=await api.partialTranslation(token,revision,selectionSource!==undefined).catch(()=>undefined);
       if(partial?.parts&&partial.source===input&&partial.target===language&&partial.revision===revision){result=partial;q<HTMLTextAreaElement>('translated').value=partial.text;notice='';}
       else notice = error instanceof Error ? error.message : String(error);
     } finally {
@@ -98,7 +104,7 @@ export function mountTranslation(
       changed();
     }
   }
-  q('translate').onclick = () => { selectionSource = undefined; void translate(); };
+  q('translate').onclick = () => { restoreFull(); void translate(); };
   q('translation-cancel').onclick = () =>
     void api.cancelTranslation().catch((error) => {
       notice = String(error);
@@ -121,7 +127,7 @@ export function mountTranslation(
     imageReady:()=>!!config?.ready,
     imageValid:(id?:string)=>valid()&&(!id||result?.id===id)&&q<HTMLTextAreaElement>('translated').value===result?.text,
     imageResult:async(force=false)=>{
-      selectionSource=undefined;
+      restoreFull();
       if(!force&&valid()){
         if(q<HTMLTextAreaElement>('translated').value!==result?.text)
           throw Error('译文已手动修改。请保留当前文字，或点击“翻译全文”重新生成后再制作译图。');
@@ -135,6 +141,7 @@ export function mountTranslation(
       error: string,
     ) {
       selectionSource = undefined;
+      full=undefined;
       q<HTMLSelectElement>('translation-language').value = language;
       result = value;
       q<HTMLTextAreaElement>('translated').value = value?.text || '';
@@ -143,8 +150,8 @@ export function mountTranslation(
       render();
     },
     render,
-    sourceChanged: () => { selectionSource = undefined; invalidate(); },
-    translateSelection: (text: string) => { selectionSource = text; if (!config?.ready) { message('请先配置翻译服务'); void settings.open(); return; } void translate(); },
+    sourceChanged: () => { restoreFull(); invalidate(); },
+    translateSelection: (text: string) => { if (!config?.ready) { message('请先配置翻译服务'); void settings.open(); return; } if(selectionSource===undefined)full={result,text:q<HTMLTextAreaElement>('translated').value};selectionSource = text;result=undefined;q<HTMLTextAreaElement>('translated').value='';void translate(); },
     busy,
     isTranslation: () => mode,
     setMode: (value: boolean) => {
