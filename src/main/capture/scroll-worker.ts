@@ -5,7 +5,7 @@ import { ScrollStitch } from '../../shared/capture/scroll-stitch';
 import { ScrollSettle } from '../../shared/capture/scroll-settle';
 import type {PixelFrame} from '../../shared/capture/scroll-stitch';
 const storage=workerData?.directory?new ScrollDiskStorage(workerData.directory,workerData.token):undefined;
-let engine = new ScrollStitch(storage);
+let engine = new ScrollStitch(storage,true);
 let settling: ScrollSettle;
 let staged:PixelFrame|undefined;
 function clearStage(){staged?.pixels.fill(0);staged=undefined;}
@@ -14,7 +14,7 @@ parentPort!.on('message', ({ id, kind, value }) => {
     let result;
     if (kind === 'configure'||kind==='restart') {
       clearStage();
-      if(kind==='restart'){storage?.reset();engine=new ScrollStitch(storage);}
+      if(kind==='restart'){storage?.reset();engine=new ScrollStitch(storage,true);}
       result = engine.configure(value.options, value.source);
       settling = new ScrollSettle(value.options, value.source);
     } else if(kind==='stage'){
@@ -48,6 +48,7 @@ parentPort!.on('message', ({ id, kind, value }) => {
       parentPort!.postMessage({ id, output }, [output.pixels.buffer as ArrayBuffer]);
       return;
     } else throw Error('拼接操作无效');
+    if(result?.fixed)settling.excludeFixed(result.fixed.start,result.fixed.end);
     const preview = (kind==='commit'||kind==='sample')&&['unchanged','ambiguous','backwards'].includes(result!.match)?null:engine.preview();
     parentPort!.postMessage(
       { id, result, preview },

@@ -33,3 +33,4 @@ body[data-view='scroll-capture'] #preview-addition{border-style:dashed;border-co
 body[data-view='scroll-capture'] #app > footer{flex:none;padding:8px 12px;border-top:1px solid var(--line)}
 body[data-view='scroll-capture'] footer .scroll-actions{justify-content:flex-end;gap:8px}
 @media(max-width:400px){body[data-view='scroll-capture'] #app > main{grid-template-columns:minmax(0,1fr)}body[data-view='scroll-capture'] .scroll-preview{display:none}}
+body[data-view='scroll-capture'] #preview-fixed-start,body[data-view='scroll-capture'] #preview-fixed-end{position:absolute;pointer-events:none;box-sizing:border-box;border:2px solid #d97706}

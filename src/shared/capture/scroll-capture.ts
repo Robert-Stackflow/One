@@ -17,6 +17,9 @@ export function scrollControlBounds(area:ControlRect,selection:ControlRect,heigh
   return {x:Math.round(area.x+Math.max(0,area.width-width-gap)),y:Math.round(area.y+Math.min(gap,Math.max(0,area.height-h))),width,height:h};
 }
 export interface ScrollOptions {
+  autoFixed?:boolean;
+  retainStart?:number;
+  retainEnd?:number;
   axis: ScrollAxis;
   trimStart: number;
   trimEnd: number;
@@ -25,6 +28,7 @@ export interface ScrollOptions {
 }
 export type ScrollMatch = 'first' | 'accepted' | 'unchanged' | 'ambiguous' | 'backwards';
 export interface ScrollView {
+  fixed?:{start:number;end:number};
   recovering:boolean;
   mode:ScrollMode;
   previewExpanded:boolean;
@@ -58,6 +62,9 @@ export interface ScrollAPI {
   answerClose(token:string,accepted:boolean):Promise<void>;
 }
 export const scrollDefaults = (): ScrollOptions => ({
+  autoFixed:true,
+  retainStart:0,
+  retainEnd:0,
   axis: 'vertical',
   trimStart: 0,
   trimEnd: 0,
@@ -66,14 +73,20 @@ export const scrollDefaults = (): ScrollOptions => ({
 });
 export function scrollOptions(value: unknown, width: number, height: number): ScrollOptions {
   const v = value as ScrollOptions;
+  if(v?.autoFixed!==undefined&&typeof v.autoFixed!=='boolean')throw Error('固定栏检测设置无效');
   if (!v || !['vertical', 'horizontal'].includes(v.axis)) throw Error('长截图方向无效');
   const axis = v.axis === 'vertical' ? height : width,
     cross = v.axis === 'vertical' ? width : height;
   for (const key of ['trimStart', 'trimEnd', 'ignoreStart', 'ignoreEnd'] as const)
     if (!Number.isSafeInteger(v[key]) || v[key] < 0) throw Error('排除区域无效');
-  if (axis - v.trimStart - v.trimEnd < 64 || cross - v.ignoreStart - v.ignoreEnd < 32)
+  const retainStart=v.retainStart??0,retainEnd=v.retainEnd??0;
+  if(!Number.isSafeInteger(retainStart)||!Number.isSafeInteger(retainEnd)||retainStart<0||retainEnd<0)throw Error('固定栏区域无效');
+  if (axis - v.trimStart - v.trimEnd-retainStart-retainEnd < 64 || cross - v.ignoreStart - v.ignoreEnd < 32)
     throw Error('请至少保留 64 像素滚动区域和 32 像素匹配宽度');
   return {
+    autoFixed:v.autoFixed!==false,
+    retainStart,
+    retainEnd,
     axis: v.axis,
     trimStart: v.trimStart,
     trimEnd: v.trimEnd,

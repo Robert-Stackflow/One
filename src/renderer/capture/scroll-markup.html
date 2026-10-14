@@ -11,6 +11,13 @@
       </div>
       <p id="message" class="feedback-inline" role="status" aria-live="polite"></p>
       <details id="setup" class="scroll-settings"><summary>匹配设置</summary>
+        <label><input id="auto-fixed" type="checkbox" checked />自动检测固定栏并保留一次</label>
+        <p id="fixed-note" class="help" hidden></p>
+        <details>
+          <summary>手动修正固定栏</summary>
+          <div class="field-pair"><label>开头保留一次<input id="retain-start" type="number" value="0" min="0" step="1" /></label><label>末尾保留一次<input id="retain-end" type="number" value="0" min="0" step="1" /></label></div>
+          <button id="copy-fixed" type="button" class="quiet" hidden>采用检测值</button>
+        </details>
         <label
           >滚动方向<select id="axis">
             <option value="vertical">向下</option>
@@ -19,9 +26,9 @@
         >
         <div class="field-pair">
           <label
-            >排除开头固定栏<input id="trim-start" type="number" value="0" min="0" step="1" /></label
+            >排除开头区域<input id="trim-start" type="number" value="0" min="0" step="1" /></label
           ><label
-            >排除末尾固定栏<input id="trim-end" type="number" value="0" min="0" step="1"
+            >排除末尾区域<input id="trim-end" type="number" value="0" min="0" step="1"
           /></label>
         </div>
         <details>
@@ -57,7 +64,7 @@
       </div>
       </section>
       <aside class="scroll-preview" aria-label="长截图预览">
-        <div id="preview-paper" hidden><img id="preview" alt="拼接结果预览" hidden /><span id="preview-viewport" aria-label="最后采集视口"></span><span id="preview-addition" aria-label="本次新增区域" hidden></span></div>
+        <div id="preview-paper" hidden><img id="preview" alt="拼接结果预览" hidden /><span id="preview-viewport" aria-label="最后采集视口"></span><span id="preview-addition" aria-label="本次新增区域" hidden></span><span id="preview-fixed-start" aria-label="固定开头" hidden></span><span id="preview-fixed-end" aria-label="固定末尾" hidden></span></div>
         <p id="empty" class="help">等待稳定画面</p>
       </aside>
     </main>

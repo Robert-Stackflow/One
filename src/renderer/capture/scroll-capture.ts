@@ -1,6 +1,6 @@
 import './scroll-capture.css';
 import { customControls } from '../controls';
-import type { ScrollCommand, ScrollView } from '../../shared/capture/scroll-capture';
+import type { ScrollCommand, ScrollView, ScrollOptions } from '../../shared/capture/scroll-capture';
 import {applyCaptureScale} from './appearance';
 import {confirmDialog} from '../dialog';
 import {icon,registerIcons} from '../ui';
@@ -22,14 +22,17 @@ function render(next: ScrollView) {
   q('preview-paper').hidden=!next.preview;
   if (next.preview && q<HTMLImageElement>('preview').src !== next.preview)
     q<HTMLImageElement>('preview').src = next.preview;
-  const vertical=next.options.axis==='vertical',length=vertical?next.height:next.width,viewport=(vertical?next.source.height:next.source.width)-next.options.trimStart-next.options.trimEnd;
+  const vertical=next.options.axis==='vertical',length=vertical?next.height:next.width,fixedStart=next.fixed?.start||0,fixedEnd=next.fixed?.end||0,viewport=(vertical?next.source.height:next.source.width)-next.options.trimStart-next.options.trimEnd-fixedStart-fixedEnd;
   for(const [id,size] of [['preview-viewport',viewport],['preview-addition',next.offset]] as const){
-    const node=q(id),start=id==='preview-viewport'?length-viewport+(next.match==='backwards'?next.offset:0):length-size;
+    const node=q(id),start=id==='preview-viewport'?length-fixedEnd-viewport+(next.match==='backwards'?next.offset:0):length-fixedEnd-size;
     const clipped=Math.max(0,start),fraction=Math.max(0,Math.min(length,start+size)-clipped)/Math.max(1,length)*100,position=clipped/Math.max(1,length)*100;
     node.style.cssText=vertical?`left:0;right:0;top:${position}%;height:${fraction}%`:`top:0;bottom:0;left:${position}%;width:${fraction}%`;
     node.hidden=!next.preview||(id==='preview-viewport'&&next.recovering&&next.match==='ambiguous')||(id==='preview-addition'&&(next.match!=='accepted'||next.pending||!next.offset));
     if(id==='preview-viewport')node.ariaLabel=next.match==='backwards'?'当前视口与已拼内容的重叠区域':'最后采集视口';
   }
+  for(const [id,size,end] of [['preview-fixed-start',fixedStart,false],['preview-fixed-end',fixedEnd,true]] as const){const node=q(id);node.hidden=!next.preview||!size;const fraction=size/Math.max(1,length)*100;node.style.cssText=vertical?`left:0;right:0;${end?'bottom':'top'}:0;height:${fraction}%`:`top:0;bottom:0;${end?'right':'left'}:0;width:${fraction}%`;}
+  q('fixed-note').hidden=!next.fixed;q('fixed-note').textContent=next.fixed?`固定开头 ${fixedStart}px、末尾 ${fixedEnd}px，各保留一次。可手动修正后重新开始。`:'';
+  q('copy-fixed').hidden=!next.fixed;q<HTMLButtonElement>('copy-fixed').disabled=pending||next.phase==='running';
   q('dimensions').textContent = next.count
     ? `${next.width} × ${next.height} · ${next.count} 帧`
     : '尚未采集';
@@ -50,13 +53,22 @@ function render(next: ScrollView) {
     (next.options.axis === 'vertical' ? next.source.height : next.source.width) -
       next.options.trimStart -
       next.options.trimEnd -
+      fixedStart-fixedEnd-
       32,
   );
-  for (const id of ['trim-start', 'trim-end', 'ignore-start', 'ignore-end'])
+  for (const id of ['trim-start', 'trim-end', 'ignore-start', 'ignore-end','retain-start','retain-end'])
     q<HTMLInputElement>(id).disabled = pending || running;
   q<HTMLSelectElement>('axis').disabled = pending || running;
+  q<HTMLInputElement>('auto-fixed').disabled=pending||running;
   customControls(document.body);
 }
+function selectedOptions():ScrollOptions{return {
+  autoFixed:q<HTMLInputElement>('auto-fixed').checked,
+  retainStart:Number(q<HTMLInputElement>('retain-start').value),retainEnd:Number(q<HTMLInputElement>('retain-end').value),
+  axis:q<HTMLSelectElement>('axis').value as 'vertical'|'horizontal',
+  trimStart:Number(q<HTMLInputElement>('trim-start').value),trimEnd:Number(q<HTMLInputElement>('trim-end').value),
+  ignoreStart:Number(q<HTMLInputElement>('ignore-start').value),ignoreEnd:Number(q<HTMLInputElement>('ignore-end').value),
+};}
 async function send(command: ScrollCommand) {
   if (pending && !['cancel', 'pause'].includes(command.kind)) return false;
   pending = true;
@@ -66,13 +78,7 @@ async function send(command: ScrollCommand) {
     if (!view.count && ['sample','manual', 'auto'].includes(command.kind))
       await api.command(view.token, {
         kind: 'configure',
-        options: {
-          axis: q<HTMLSelectElement>('axis').value as 'vertical' | 'horizontal',
-          trimStart: Number(q<HTMLInputElement>('trim-start').value),
-          trimEnd: Number(q<HTMLInputElement>('trim-end').value),
-          ignoreStart: Number(q<HTMLInputElement>('ignore-start').value),
-          ignoreEnd: Number(q<HTMLInputElement>('ignore-end').value),
-        },
+        options: selectedOptions(),
       });
     const next = await api.command(view.token, command);
     if (next) {render(next);success=true;}
@@ -99,9 +105,10 @@ q('preview-toggle').onclick=()=>void send({kind:'layout',preview:!view.previewEx
 q<HTMLDetailsElement>('setup').ontoggle=()=>{const open=q<HTMLDetailsElement>('setup').open;if(!view)return;void (async()=>{if(open)await send({kind:'pause'});await send({kind:'layout',preview:view.previewExpanded,settings:open});})();};
 q('apply-settings').onclick=()=>void(async()=>{
   if(view.count&&!await confirmDialog({title:'重新开始长截图',message:'应用新设置会清空本次拼接结果，选区保持不变。',confirm:'重新开始'}))return;
-  await send({kind:'restart',options:{axis:q<HTMLSelectElement>('axis').value as 'vertical'|'horizontal',trimStart:Number(q<HTMLInputElement>('trim-start').value),trimEnd:Number(q<HTMLInputElement>('trim-end').value),ignoreStart:Number(q<HTMLInputElement>('ignore-start').value),ignoreEnd:Number(q<HTMLInputElement>('ignore-end').value)}});
+  await send({kind:'restart',options:selectedOptions()});
   q<HTMLDetailsElement>('setup').open=false;
 })();
+q('copy-fixed').onclick=()=>{if(!view.fixed||pending||view.phase==='running')return;q<HTMLInputElement>('retain-start').value=String(view.fixed.start);q<HTMLInputElement>('retain-end').value=String(view.fixed.end);q<HTMLInputElement>('auto-fixed').checked=false;render(view);};
 q('join').onclick = () => {
   void send({ kind: 'join', offset: Number(q<HTMLInputElement>('offset').value) });
 };

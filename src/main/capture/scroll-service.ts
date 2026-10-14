@@ -417,7 +417,7 @@ export class ScrollCaptureService {
         }
         if (generation !== this.generation || !this.automatic) return;
         await this.sample(true);
-        if(this.view.match==='accepted')this.motion.accepted(this.view.offset,(this.view.options.axis==='vertical'?this.view.source.height:this.view.source.width)-this.view.options.trimStart-this.view.options.trimEnd);
+        if(this.view.match==='accepted')this.motion.accepted(this.view.offset,(this.view.options.axis==='vertical'?this.view.source.height:this.view.source.width)-this.view.options.trimStart-this.view.options.trimEnd-(this.view.fixed?.start||0)-(this.view.fixed?.end||0));
         if(this.view.match==='unchanged'){this.view.message='等待页面加载或新增内容…';this.publish();}
         if (this.view.pending || this.view.match === 'backwards') {
           this.pause();

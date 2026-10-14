@@ -14,6 +14,64 @@ import {readFile,writeFile,unlink,readdir,lstat,mkdtemp,rmdir} from 'node:fs/pro
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {createInterface} from 'node:readline';
+import {detectScrollFixedEdges} from '../../src/shared/capture/scroll-fixed';
+
+test('automatic fixed edges are retained once in exact vertical and horizontal output and undo',()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96,frame=(offset:number)=>{const result=scrollPixels(width,height,vertical?0:offset,vertical?offset:0);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const row=vertical?y:x;if(row<20||row>=148)result.pixels.set([160,160,160,255],(y*width+x)*4);}return result;};
+    const engine=new ScrollStitch(undefined,true);engine.configure({...scrollDefaults(),axis},{width,height});engine.sample(frame(0));assert.equal(engine.sample(frame(39)).match,'accepted');assert.deepEqual(engine.status().fixed,{start:20,end:12});engine.sample(frame(78));assert.equal(vertical?engine.status().height:engine.status().width,238);
+    const output=engine.output(),body=scrollPixels(vertical?96:206,vertical?206:96,vertical?0:20,vertical?20:0);const expected=new Uint8Array(output.pixels.length);
+    for(let y=0;y<output.height;y++)for(let x=0;x<output.width;x++){const row=vertical?y:x,at=(y*output.width+x)*4;if(row<20||row>=226)expected.set([160,160,160,255],at);else{const from=vertical?((y-20)*96+x)*4:(y*206+x-20)*4;expected.set(body.pixels.subarray(from,from+4),at);}}
+    assert.deepEqual(output.pixels,expected);engine.undo();assert.equal(vertical?engine.status().height:engine.status().width,199);engine.undo();assert.deepEqual(engine.output(),frame(0));
+  }
+});
+test('ordinary blank margins and ambiguous movement do not become automatically removed edges',()=>{
+  const width=96,height=160,a=scrollPixels(width,height),b=scrollPixels(width,height,0,39);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const at=(y*width+x)*4;a.pixels[at]=a.pixels[at+1]=a.pixels[at+2]=255;b.pixels[at]=b.pixels[at+1]=b.pixels[at+2]=255;}
+  assert.equal(detectScrollFixedEdges(a.pixels,b.pixels,height,width,0,width),undefined);
+});
+
+test('detected and manually corrected fixed edges do not delay otherwise quiet frames',()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96,frame=(color:number)=>{
+      const result=scrollPixels(width,height);
+      for(let y=0;y<height;y++)for(let x=0;x<width;x++){const row=vertical?y:x;if(row<20||row>=148)result.pixels.set([color,color,color,255],(y*width+x)*4);}
+      return result;
+    };
+    const options={...scrollDefaults(),axis},plain=new ScrollSettle(options,{width,height});
+    const detected=new ScrollSettle(options,{width,height});detected.excludeFixed(20,12);
+    const manual=new ScrollSettle({...options,retainStart:20,retainEnd:12},{width,height});
+    for(const item of [detected,manual]){assert.equal(item.observe(frame(20),0),false);assert.equal(item.observe(frame(100),150),false);assert.equal(item.observe(frame(200),300),true);item.excludeFixed(18,10);assert.equal(item.observe(frame(20),310),false);assert.equal(item.observe(frame(100),460),false);assert.equal(item.observe(frame(200),610),false);}
+    plain.observe(frame(20),0);plain.observe(frame(100),150);assert.equal(plain.observe(frame(200),300),false);
+  }
+});
+
+test('disk-backed automatic edges preserve original strips, preview rows and undo on both axes',async()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const lease=await createScrollDirectory(process.env.ONE_SCROLL_TEST_ROOT!),disk=new ScrollDiskStorage(lease.directory,lease.token);
+    try{
+      const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96,frame=(offset:number)=>{
+        const result=scrollPixels(width,height,vertical?0:offset,vertical?offset:0);
+        for(let y=0;y<height;y++)for(let x=0;x<width;x++){const row=vertical?y:x;if(row<20||row>=148)result.pixels.set([160,160,160,255],(y*width+x)*4);}
+        return result;
+      },engine=new ScrollStitch(disk,true),memory=new ScrollStitch(undefined,true);
+      for(const item of [engine,memory]){item.configure({...scrollDefaults(),axis},{width,height});item.sample(frame(0));item.sample(frame(39));}
+      assert.deepEqual(engine.status().fixed,{start:20,end:12});
+      assert.equal(engine.storageStats().residentBytes,(128*2+32)*96*4);
+      assert.deepEqual(engine.output(),memory.output());assert.deepEqual(engine.preview(),memory.preview());
+      engine.undo();memory.undo();assert.deepEqual(engine.output(),frame(0));assert.deepEqual(engine.preview(),memory.preview());
+      engine.configure({...scrollDefaults(),axis,autoFixed:false},{width,height});assert.equal(disk.bytes,0);engine.sample(frame(0));
+      assert.equal(engine.sample(frame(39)).fixed,undefined);assert.deepEqual(engine.output(),frame(0));
+      engine.configure({...scrollDefaults(),axis,autoFixed:false,trimStart:4,trimEnd:4,retainStart:16,retainEnd:8},{width,height});
+      engine.sample(frame(0));assert.deepEqual(engine.status().fixed,{start:16,end:8});assert.equal(engine.sample(frame(39)).match,'accepted');memory.sample(frame(39));
+      const full=memory.output(),output=engine.output(),cropped=new Uint8Array(output.pixels.length);
+      assert.equal(vertical?output.height:output.width,191);
+      for(let y=0;y<output.height;y++)for(let x=0;x<output.width;x++){const from=((y+(vertical?4:0))*full.width+x+(vertical?0:4))*4;cropped.set(full.pixels.subarray(from,from+4),(y*output.width+x)*4);}
+      assert.deepEqual(output.pixels,cropped);
+      assert.throws(()=>engine.configure({...scrollDefaults(),axis,retainStart:-1},{width,height}),/固定栏/);
+      assert.throws(()=>engine.configure({...scrollDefaults(),axis,trimStart:50,retainEnd:50},{width,height}),/64/);
+    }finally{disk.reset();await cleanScrollDirectory(lease);}
+  }
+});
 
 test('cache sweep reclaims an abruptly killed owner and preserves live, foreign and unmarked directories',async()=>{
   const base=await mkdtemp(join(process.env.ONE_SCROLL_TEST_ROOT!,'crash-cases-'));let child:ReturnType<typeof spawn>|undefined,crashed:Awaited<ReturnType<typeof createScrollDirectory>>|undefined;

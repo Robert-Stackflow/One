@@ -15,6 +15,8 @@ export class ScrollSettle {
   private rows: number;
   private width: number;
   private height: number;
+  private fixedStart=0;
+  private fixedEnd=0;
   constructor(options: ScrollOptions, source: { width: number; height: number }) {
     imageDimensions(source.width, source.height);
     this.options = scrollOptions(options, source.width, source.height);
@@ -29,6 +31,14 @@ export class ScrollSettle {
       96,
       (vertical ? source.height : source.width) - options.trimStart - options.trimEnd,
     );
+    if(options.retainStart||options.retainEnd)this.excludeFixed(options.retainStart||0,options.retainEnd||0);
+  }
+  excludeFixed(start:number,end:number){
+    if(start===this.fixedStart&&end===this.fixedEnd)return;
+    this.options=scrollOptions({...this.options,retainStart:0,retainEnd:0,trimStart:this.options.trimStart-this.fixedStart+start,trimEnd:this.options.trimEnd-this.fixedEnd+end},this.width,this.height);
+    this.fixedStart=start;this.fixedEnd=end;
+    this.rows=Math.min(96,(this.options.axis==='vertical'?this.height:this.width)-this.options.trimStart-this.options.trimEnd);
+    this.reset();
   }
   reset() {
     this.reference = undefined;
