@@ -1,9 +1,11 @@
 import {dialog,nativeImage,shell,type BrowserWindow} from 'electron';
-import {readFile,stat} from 'node:fs/promises';
-import {basename,parse} from 'node:path';
+import {readFile,stat,copyFile,writeFile} from 'node:fs/promises';
+import {constants} from 'node:fs';
+import {basename,parse,join} from 'node:path';
 import {imageSize} from 'image-size';
 import {IMAGE_BYTES,imageDimensions} from '../../shared/capture/image-limits';
-import type {MaterialsState} from '../../shared/materials';
+import {validMaterialId,type MaterialsState,type MaterialsExportResult} from '../../shared/materials';
+import {RECORDING_PROJECT_FORMAT} from '../../shared/media-project';
 import {readClipboardPng,writeClipboardPng} from '../capture/clipboard';
 import {MaterialLibrary} from './library';
 import {MaterialResources} from './resources';
@@ -76,6 +78,34 @@ export class MaterialsService {
     const png=await this.library.images.read(id);this.owner(owner);await atomicWrite(answer.filePath,png);return true;
   });}
   removeImage(owner:number,id:string){return this.run(owner,()=>this.library.removeImage(id));}
+  exportBatch(owner:number,kind:'images'|'recordings',ids:string[]){return this.run(owner,async()=>{
+    if(!['images','recordings'].includes(kind)||!Array.isArray(ids)||!ids.length||ids.length>1000||!ids.every(validMaterialId)||new Set(ids).size!==ids.length)throw Error('素材选择无效');
+    const answer=await dialog.showOpenDialog(this.owner(owner),{title:'选择批量导出目录',properties:['openDirectory','createDirectory']});
+    const result:MaterialsExportResult={completed:[],failed:[],canceled:answer.canceled};
+    if(answer.canceled||!answer.filePaths[0])return result;
+    this.library.protect(answer.filePaths[0]);
+    for(const id of ids){
+      this.owner(owner);
+      try{
+        const item=kind==='images'?this.library.images.get(id):this.library.list().find(item=>item.id===id);
+        if(!item)throw Error('素材不存在');
+        const name=parse(item.title).name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/,'').slice(0,100)||'素材';
+        const extension=kind==='images'?'.png':RECORDING_PROJECT_FORMAT.extension;
+        // Exclusive creation preserves files already present in the chosen folder.
+        for(let suffix=0;;suffix++){
+          const file=join(answer.filePaths[0],name+'-'+id.slice(0,8)+(suffix?' ('+suffix+')':'')+extension);
+          this.library.protect(file);
+          try{
+            if(kind==='images'){const png=await this.library.images.read(id);this.owner(owner);await writeFile(file,png,{flag:'wx'});}
+            else await copyFile(this.library.recordingPath(id),file,constants.COPYFILE_EXCL);
+            break;
+          }catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST'&&suffix<1000)continue;throw error;}
+        }
+        result.completed.push(id);
+      }catch(error){result.failed.push({id,error:error instanceof Error?error.message:String(error)});}
+    }
+    return result;
+  });}
   removeRecording(owner:number,id:string){return this.run(owner,()=>this.library.removeRecording(id));}
   openDirectory(owner:number){return this.run(owner,async()=>{const error=await shell.openPath(this.library.directory);if(error)throw Error(error);});}
   release(owner:number){this.resources.release(owner);}

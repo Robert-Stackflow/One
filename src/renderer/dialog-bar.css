@@ -7,6 +7,8 @@ html:has(body.dialog-companion),body.dialog-companion{background:transparent!imp
 .dialog-companion .search-input-row input{height:32px;font-size:14px;padding:0;border:0;background:transparent;outline:0}
 .dialog-bar-buttons{display:flex;gap:2px;flex:none;border-left:1px solid var(--line);padding-left:6px}
 .dialog-results-panel{min-height:0;border-top:1px solid var(--line);overflow:hidden;flex:1;animation:dialog-results-in .13s var(--ease)}
+.dialog-results-above .dialog-companion-shell{flex-direction:column-reverse}
+.dialog-results-above .dialog-results-panel{border-top:0;border-bottom:1px solid var(--line)}
 .dialog-companion .search-results{height:100%;padding:4px;scrollbar-gutter:auto}
 .dialog-companion .search-row-actions{display:none}
 .dialog-companion .search-empty{padding:12px;font-size:12px}

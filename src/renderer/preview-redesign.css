@@ -66,6 +66,8 @@
 .preview-window .detail-cover{height:112px;display:flex;align-items:center;justify-content:center;margin:4px 0 14px;padding:12px;border-radius:10px;background:var(--soft);flex:0 0 auto;overflow:hidden}
 .preview-window .detail-cover>img{width:auto;height:auto;max-height:100%;max-width:100%;object-fit:contain;border-radius:4px}
 .preview-window .detail-cover>.file-type-icon{width:48px;height:48px;flex-basis:48px}
+.preview-window [data-file-icon]>.windows-file-icon{width:100%;height:100%;object-fit:contain}
+.preview-window .file-type-icon{display:inline-flex;align-items:center;justify-content:center;flex:none}
 .preview-window .preview-details h3{font-size:13px;line-height:1.6;text-align:left;font-weight:550;overflow-wrap:anywhere;margin:0 0 20px;flex-shrink:0}
 .preview-detail-section{margin-bottom:22px}
 .preview-detail-section h4{font-size:11px;font-weight:550;color:var(--fg);margin:0 0 9px}

@@ -45,7 +45,7 @@ export async function renderDialogBar(){
  });
  for(const key of ['bookmarks','recent'] as const)q('dialog-'+key).onclick=()=>{const next=group===key?'':key;clear();group=next;q('dialog-'+key).setAttribute('aria-pressed',String(!!group));input.focus();void api.dialogBarData().then(acceptData).catch(toast);};
  q('dialog-settings').onclick=()=>void api.dialogBarSettings();
- api.onDialogBarData(acceptData);api.onDialogBarCollapse(clear);onWindowVisibility(visible=>{if(!visible)clear();else defaults();});
+ api.onDialogBarPlacement(side=>document.body.classList.toggle('dialog-results-above',side==='above'));api.onDialogBarData(acceptData);api.onDialogBarCollapse(clear);onWindowVisibility(visible=>{if(!visible)clear();else defaults();});
  api.onSearchState(()=>{if(input.value.trim()&&isWindowVisible()){if(running)pending=true;else{clearTimeout(timer);timer=setTimeout(()=>void query(),160);}}});
  acceptData(await api.dialogBarData());
 }

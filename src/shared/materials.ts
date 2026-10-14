@@ -8,6 +8,7 @@ export interface ImageMaterialView extends ImageMaterial {thumbnail:string}
 export interface RecordingMaterial {id:string;title:string;created:number;seconds:number;bytes:number;mode:'video'|'audio'}
 export interface RecordingMaterialView extends RecordingMaterial {thumbnail:string}
 export interface MaterialsState {images:ImageMaterialView[];recordings:RecordingMaterialView[];directory:string;error:string}
+export interface MaterialsExportResult {completed:string[];failed:{id:string;error:string}[];canceled:boolean}
 export interface MaterialsAPI {
   materialsState():Promise<MaterialsState>;
   materialsImportImages():Promise<string[]>;
@@ -16,6 +17,7 @@ export interface MaterialsAPI {
   materialsRecordingURL(id:string):Promise<string>;
   materialsCopyImage(id:string):Promise<void>;
   materialsExportImage(id:string):Promise<boolean>;
+  materialsExportBatch(kind:'images'|'recordings',ids:string[]):Promise<MaterialsExportResult>;
   materialsRemoveImage(id:string):Promise<void>;
   materialsOpenRecording(id:string):Promise<void>;
   materialsImportRecording(kind:'project'|'video'):Promise<void>;

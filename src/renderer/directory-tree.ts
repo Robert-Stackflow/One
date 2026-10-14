@@ -1,5 +1,5 @@
 import {api,esc,icon} from './ui';
-import {fileIcon} from './file-icons';
+import {systemFileIcon,hydrateFileIcons} from './shell-icons';
 import {VirtualRows} from './virtual-rows';
 import {DirectoryPages} from './directory-pages';
 import type {DirectoryInfo} from '../shared/directory';
@@ -8,6 +8,7 @@ import './directory-view.css';
 export function renderDirectoryTree(host:HTMLElement,info:DirectoryInfo,select:(path:string)=>void){
  const root:Node={info,children:new Map()},view=document.createElement('div');view.className='file-tree directory-tree';view.innerHTML='<div class="directory-tree-toolbar">'+info.count.toLocaleString()+' 项</div><div class="directory-tree-scroll" role="tree" tabindex="0" aria-label="目录内容"></div>';host.append(view);
  const scroll=view.querySelector<HTMLElement>('.directory-tree-scroll')!;let selected=0,disposed=false,version=0,queue=Promise.resolve();
+ let iconsQueued=false;const hydrate=()=>{if(iconsQueued)return;iconsQueued=true;queueMicrotask(()=>{iconsQueued=false;if(!disposed)hydrateFileIcons(scroll,()=>!disposed);});};
  const pages=new DirectoryPages(()=>rows.refresh(),error=>{if(!disposed){const message='目录读取失败：'+error.message;scroll.setAttribute('aria-label',message);view.querySelector('.directory-tree-toolbar')!.textContent=message;}});pages.add(info);
  const rows=new VirtualRows(scroll,()=>rowCount(root),(position,previous)=>{
   const value=at(root,position),entry=value.index>=0?pages.get(value.node.info,value.index):undefined,row=previous?.tagName===(value.note?'DIV':'BUTTON')?previous:document.createElement(value.note?'div':'button');row.className=value.note?'directory-note':'file-tree-row';row.style.setProperty('--directory-depth',String(value.depth));row.dataset.flat=String(position);row.setAttribute('role',value.note?'note':'treeitem');row.tabIndex=-1;
@@ -16,8 +17,8 @@ export function renderDirectoryTree(host:HTMLElement,info:DirectoryInfo,select:(
   row.setAttribute('aria-level',String(value.depth+1));row.setAttribute('aria-selected',String(position===selected));
   if(!entry){row.innerHTML='<span class="directory-skeleton"></span>';delete row.dataset.path;delete row.dataset.tooltip;row.removeAttribute('title');row.removeAttribute('aria-expanded');row.onclick=null;row.ondblclick=null;return row;}
   const expanded=value.node.children.has(value.index),changed=row.dataset.path!==entry.path;
-  if(changed){row.innerHTML=(entry.directory?icon('chevron').replace('class="icon ','class="icon tree-chevron '):'<span class="tree-spacer"></span>')+fileIcon(entry.name,entry.directory,expanded)+'<span class="directory-entry-name">'+esc(entry.name)+'</span>';row.dataset.path=entry.path;row.dataset.tooltip=entry.name;row.removeAttribute('title');}
-  if(entry.directory){row.setAttribute('aria-expanded',String(expanded));if(row.dataset.open!==String(expanded)){row.dataset.open=String(expanded);const holder=document.createElement('div');holder.innerHTML=fileIcon(entry.name,true,expanded);row.querySelector('.file-type-icon')?.replaceWith(holder.firstChild!);}}else {row.removeAttribute('aria-expanded');delete row.dataset.open;}
+  if(changed){row.innerHTML=(entry.directory?icon('chevron').replace('class="icon ','class="icon tree-chevron '):'<span class="tree-spacer"></span>')+systemFileIcon(entry.path,entry.directory)+'<span class="directory-entry-name">'+esc(entry.name)+'</span>';row.dataset.path=entry.path;row.dataset.tooltip=entry.name;row.removeAttribute('title');hydrate();}
+  if(entry.directory){row.setAttribute('aria-expanded',String(expanded));row.dataset.open=String(expanded);}else {row.removeAttribute('aria-expanded');delete row.dataset.open;}
   const empty=entry.directory&&expanded&&value.node.children.get(value.index)?.node?.info.count===0,emptyLabel=row.querySelector('.directory-empty-label');
   if(empty&&!emptyLabel){const label=document.createElement('span');label.className='directory-empty-label';label.textContent='空文件夹';row.append(label);}else if(!empty)emptyLabel?.remove();
   row.onclick=()=>{version++;selected=position;scroll.focus({preventScroll:true});rows.refresh();if(entry.directory)void toggle(value);else select(entry.path);};row.ondblclick=entry.directory?()=>select(entry.path):null;return row;

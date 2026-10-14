@@ -4,7 +4,7 @@ import { icon, toast, registerIcons } from '../ui';
 import { Eye, EyeOff, MousePointer2, Copy, Download, Folder, Images, MoreHorizontal, Pencil, Pin, Plus, Settings2, Trash2 } from 'lucide';
 import { ActionScope } from '../action-scope';
 import { customControls, closeControls, openControl } from '../controls';
-import {dialogMarkup,openDialog,closeDialog,lockDialogDismiss} from '../dialog';
+import {dialogMarkup,openDialog,closeDialog,lockDialogDismiss,confirmDialog} from '../dialog';
 import {positionAnchoredPopover} from '../anchored-popover';
 import {searchField,setupSearchField} from '../search-field';
 import './pins-page.css';
@@ -94,6 +94,12 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
   const many = async (ids: string[], action: PinAction) => {
     for (const id of ids) await api.pinsAction(id, action);
   };
+  const removeSelected = async (ids:string[]) => {
+    if(!ids.length||!await confirmDialog({title:'删除所选贴图',message:`删除这 ${ids.length} 个贴图？素材工程会保留。`,confirm:'删除',danger:true}))return;
+    let completed=0;const failures:string[]=[];
+    for(const id of ids){try{await api.pinsAction(id,{kind:'remove'});selected.delete(id);completed++;}catch(reason){failures.push(reason instanceof Error?reason.message:String(reason));}}
+    update();toast(failures.length?`已删除 ${completed} 项，${failures.length} 项未完成：${failures[0]}`:`已删除 ${completed} 个贴图`);
+  };
   function update() {
     if (disposed||!active) return;
     const workspace = get();
@@ -127,7 +133,7 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
       checked = pins.filter((p) => selected.has(p.id)).length;
     root.innerHTML = `<div class="pins-controls"><div class="pins-overview"><h2>${escape(group==='all'?'全部贴图':group==='none'?'未分组':workspace.groups.find(item=>item.id===group)?.name||'贴图')}</h2><p>${pinsInGroup().length} 个贴图<span>·</span>${pinsInGroup().filter(p=>p.view.visible).length} 个正在显示</p></div><div class="pins-toolbar">${searchField('pins-search', '搜索贴图', '搜索贴图')}<select id="pins-group-filter" aria-label="贴图分组"><option value="all">全部分组</option><option value="none">未分组</option>${workspace.groups.map((g) => `<option value="${g.id}">${escape(g.name)}</option>`).join('')}</select><select id="pins-visibility" aria-label="显示状态"><option value="all">全部状态</option><option value="visible">正在显示</option><option value="hidden">已隐藏</option></select><button type="button" class="quiet icon-button" data-pin-menu="pins-manage-menu" aria-label="管理贴图与分组" aria-expanded="false">${icon('lucide:more')}</button>
       <div id="pins-manage-menu" class="select-popup pins-action-menu" popover="manual"><button class="quiet" id="pins-new-group">${icon('lucide:plus')}新建分组</button>${group !== 'all' && group !== 'none' ? '<button class="quiet" id="pins-rename-group">重命名分组</button><button class="quiet" id="pins-remove-group">解散分组</button>' : ''}<hr><button class="quiet" id="pins-show-group">显示当前分组</button><button class="quiet" id="pins-hide-group">隐藏当前分组</button><button class="quiet" id="pins-restore-group">恢复当前分组交互</button><hr><button class="quiet" id="pins-toggle-all">隐藏 / 显示全部贴图</button><button class="quiet" id="pins-next-group">切换到另一贴图组</button></div></div>
-      <div class="pins-selection" aria-label="贴图选择与批量操作" ${pins.length?'':'hidden'}><label><input id="pins-select-all" type="checkbox" ${pins.length && checked === pins.length ? 'checked' : ''} ${pins.length ? '' : 'disabled'}><span>${checked ? '已选 ' + checked + ' 项' : pins.length + ' 个贴图'}</span></label>${checked ? '' : `<span class="pins-visible-count">${pins.filter((p) => p.view.visible).length} 个正在显示</span>`}<div class="actions" ${checked ? '' : 'hidden'}><button class="quiet icon-button" data-batch="show" title="显示所选贴图" aria-label="显示所选贴图">${icon('lucide:eye')}</button><button class="quiet icon-button" data-batch="hide" title="隐藏所选贴图" aria-label="隐藏所选贴图">${icon('lucide:eye-off')}</button><button class="quiet icon-button" data-batch="restore" title="恢复所选贴图交互" aria-label="恢复所选贴图交互">${icon('lucide:pointer')}</button><select id="pins-batch-group" aria-label="移动所选贴图"><option value="choose">移动到分组</option><option value="">未分组</option>${workspace.groups.map((g) => `<option value="${g.id}">${escape(g.name)}</option>`).join('')}</select></div></div></div>
+      <div class="pins-selection" aria-label="贴图选择与批量操作" ${pins.length?'':'hidden'}><label><input id="pins-select-all" type="checkbox" ${pins.length && checked === pins.length ? 'checked' : ''} ${pins.length ? '' : 'disabled'}><span>${checked ? '已选 ' + checked + ' 项' : pins.length + ' 个贴图'}</span></label>${checked ? '' : `<span class="pins-visible-count">${pins.filter((p) => p.view.visible).length} 个正在显示</span>`}<div class="actions" ${checked ? '' : 'hidden'}><button class="quiet icon-button" data-batch="show" title="显示所选贴图" aria-label="显示所选贴图">${icon('lucide:eye')}</button><button class="quiet icon-button" data-batch="hide" title="隐藏所选贴图" aria-label="隐藏所选贴图">${icon('lucide:eye-off')}</button><button class="quiet icon-button" data-batch="restore" title="恢复所选贴图交互" aria-label="恢复所选贴图交互">${icon('lucide:pointer')}</button><button class="quiet icon-button danger" data-batch="remove" title="删除所选贴图" aria-label="删除所选贴图">${icon('lucide:trash')}</button><select id="pins-batch-group" aria-label="移动所选贴图"><option value="choose">移动到分组</option><option value="">未分组</option>${workspace.groups.map((g) => `<option value="${g.id}">${escape(g.name)}</option>`).join('')}</select></div></div></div>
       ${
         pins.length
           ? `<section class="pins-grid">${pins
@@ -297,7 +303,7 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
         api.pinsAction(b.dataset.id!, { kind: 'rename', title }),
       ),
     );
-    bind('[data-batch]', (b) =>
+    bind('[data-batch]', (b) => b.dataset.batch==='remove'?removeSelected(pins.filter(p=>selected.has(p.id)).map(p=>p.id)):
       many(
         pins.filter((p) => selected.has(p.id)).map((p) => p.id),
         { kind: b.dataset.batch as 'show' | 'hide' | 'restore' },

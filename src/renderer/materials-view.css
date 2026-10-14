@@ -13,6 +13,13 @@
 .materials-page .asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
 .materials-page .asset-card{border:1px solid var(--line);border-radius:16px;overflow:hidden;min-width:0;background:var(--surface);transition:border-color .15s,background .15s}
 .materials-page .asset-card:hover{border-color:color-mix(in srgb,var(--fg) 18%,var(--surface))}
+.materials-selection{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex:none;min-height:34px}
+.materials-selection>label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:var(--control-font)}
+.materials-selection .actions{display:flex;gap:6px;flex-wrap:wrap}
+.materials-page .asset-card{position:relative}
+.materials-page .asset-card:has([data-material-select]:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.material-select{position:absolute;top:10px;left:10px;z-index:1;display:flex;padding:6px;border-radius:8px;background:var(--surface);box-shadow:0 2px 8px #0002;cursor:pointer}
+.material-select input{margin:0;width:16px;height:16px;cursor:pointer}
 .materials-page .asset-preview{display:block;border:0;border-radius:0;background:var(--soft);width:100%;height:180px;padding:12px;cursor:pointer}
 .materials-page .asset-preview img{display:block;width:100%;height:100%;object-fit:contain;border-radius:5px}
 .materials-page .asset-body{padding:14px 16px}

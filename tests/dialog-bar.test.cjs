@@ -13,6 +13,17 @@ test('操作栏先附着，再异步读取目录；过期窗口的结果不会�
  const third=bar.show(3);bar.stop();pending[2].resolve({kind:'dialog',hwnd:3,pid:42,created:'third',folders:[]});await third;assert.equal(bar.context,undefined);assert.equal(windows[0].destroyed,true);config.dialogSwitch=false;bar.warm();assert.equal(windows.length,1);
 });
 
+test('屏幕边缘展开保持输入锚点，结果只占用对话框外的空间',async()=>{
+ const {dialogBarLayout}=await moduleFor('src/shared/dialog-bar.ts'),area={x:0,y:0,width:1280,height:900};
+ for(const owner of [{x:100,y:40,width:1100,height:650},{x:100,y:220,width:1100,height:650}]){
+  const idle=dialogBarLayout(owner,area),expanded=dialogBarLayout(owner,area,6,true),b=expanded.bounds;
+  assert.equal(expanded.side,idle.side);
+  if(expanded.side==='below'){assert.equal(b.y,idle.bounds.y);assert.ok(b.y>=owner.y+owner.height);}
+  else{assert.equal(b.y+b.height,idle.bounds.y+idle.bounds.height);assert.ok(b.y+b.height<=owner.y);}
+  assert.ok(b.y>=area.y&&b.y+b.height<=area.y+area.height);assert.ok(b.height<428,'long results shrink to available space');
+ }
+});
+
 test('预热窗口已经首次绘制但仍在加载时，无需再次聚焦就能附着',async()=>{
  const attached=[],config={dialogSwitch:true,bookmarks:[]},window=new EventEmitter(),contents=new EventEmitter();let loading=true;
  window.isDestroyed=()=>false;window.hide=()=>{};window.webContents=Object.assign(contents,{id:1,isLoadingMainFrame:()=>loading,send:()=>{}});

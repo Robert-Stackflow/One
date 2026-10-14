@@ -1,4 +1,7 @@
-import {api} from './ui';
+import {api,esc,icon} from './ui';
+
+/** A neutral placeholder until Windows supplies the associated file icon. */
+export function systemFileIcon(path:string,directory=false){return `<span class="file-type-icon" data-file-icon="${esc(path)}">${icon(directory?'folder':'file')}</span>`;}
 
 /** Hydrate visible file rows without blocking layout or applying results to replaced rows. */
 export function hydrateFileIcons(root:HTMLElement,available:()=>boolean=()=>true){
