@@ -47,3 +47,16 @@ test('complex or transparent backgrounds request an explicit readable plate with
   const source={width,height,data},output={width,height,data:data.slice()},block={...imageTranslationDocument(document(),result(),'image').blocks[0],rect:{x:8,y:10,width:64,height:24}};
   assert.equal(repairTranslationBackground(source,output,block).kind,'plate');assert.deepEqual(output.data,data);
 });
+test('gradient repair follows the local color plane instead of flattening it, with exact preservation outside glyph masks',()=>{
+  const width=100,height=60,data=new Uint8ClampedArray(width*height*4);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++)data.set([120+x,150+Math.round(y*.5),230-Math.round(x*.3),255],(y*width+x)*4);
+  const truth=data.slice();for(let y=24;y<37;y++)for(let x=35;x<40;x++)data.set([0,0,0,255],(y*width+x)*4);
+  const block={...imageTranslationDocument(document(),result(),'image').blocks[0],rect:{x:18,y:16,width:64,height:30},glyphs:[[{x:20,y:18},{x:80,y:18},{x:80,y:44},{x:20,y:44}]] as TextQuad[]},output={width,height,data:data.slice()};
+  const background=repairTranslationBackground({width,height,data},output,block);assert.equal(background.kind,'gradient');let error=0;
+  for(let y=23;y<38;y++)for(let x=34;x<41;x++)for(let channel=0;channel<3;channel++)error=Math.max(error,Math.abs(output.data[(y*width+x)*4+channel]-truth[(y*width+x)*4+channel]));assert.ok(error<=2,'gradient fill must stay within rounding error: '+error);
+  assert.deepEqual(output.data.subarray(0,100*4),data.subarray(0,100*4));assert.notEqual(output.data[(30*width+34)*4],output.data[(30*width+40)*4]);
+});
+test('a sharp split or a gradient crossing dark/light contrast uses a readable plate instead of inventing a smooth background',()=>{
+  const width=100,height=60,block={...imageTranslationDocument(document(),result(),'image').blocks[0],rect:{x:10,y:10,width:80,height:35},glyphs:[[{x:12,y:12},{x:88,y:12},{x:88,y:43},{x:12,y:43}]] as TextQuad[]};
+  for(const smooth of [false,true]){const data=new Uint8ClampedArray(width*height*4);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const color=smooth?Math.round(x/99*255):x<50?30:230;data.set([color,color,color,255],(y*width+x)*4);}const output={width,height,data:data.slice()};assert.equal(repairTranslationBackground({width,height,data},output,block).kind,'plate');assert.deepEqual(output.data,data);}
+});
