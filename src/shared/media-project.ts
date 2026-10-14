@@ -1,9 +1,9 @@
-/** One-native project identities. Each schema starts at version 1 of the latest business model. */
+/** One-native project identities. Readers retain explicitly supported earlier versions. */
 export const IMAGE_PROJECT_FORMAT = {
   id: 'one-image',
   extension: '.oneimage',
   magic: 'ONEIMAGE',
-  version: 1,
+  version: 2,
 } as const;
 
 export const RECORDING_PROJECT_FORMAT = {

@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pngDimensions,decodePng,writeClipboardPng } from '../capture/clipboard';
 import {saveImage} from '../capture/image-export';
-import {imageTranslationDocument,type ImageTranslationDocument} from '../../shared/recognition/image-translation';
+import {imageTranslationDocument,imageTranslationSnapshot,type ImageTranslationDocument} from '../../shared/recognition/image-translation';
+import {ImageHistory,type ImageDocument,type ImageHistoryState} from '../../shared/capture/image-document';
 import { OCRModels } from './ocr-models';
 import { OCRRunner } from './ocr-runner';
 import { SensitiveScanner } from './sensitive-scanner';
@@ -33,6 +34,7 @@ import { prepareOCRRectangle,replaceOCRRectangle } from '../../shared/recognitio
 import { OCRImagePreview } from './image-preview';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
+  openTranslatedImage?(png:Buffer,title:string,document:ImageDocument,history:ImageHistoryState):Promise<void>;
   openFormula?(png:Buffer,title:string):Promise<void>;
   blocked():boolean;
   background<T>(task:Promise<T>):Promise<T>;
@@ -260,6 +262,19 @@ export class OCRService {
         if(mode==='copy'){await writeClipboardPng(decoded.data);return '已复制译图';}
         return await saveImage(this.window!,{payload:{png}},path=>this.ctx.protect(path),valid,{title:'保存译图',defaultPath:'One-translated.png'});
       }finally{decoded.data.fill(0);}
+    });
+    handle('image-translation-editor',async(token,id,value,past)=>{
+      const base=this.translatedImage;
+      const valid=()=>!!base&&base.id===id&&token===this.token&&base===this.translatedImage&&base.sourceId===this.result?.document?.id&&base.recognitionRevision===(this.result?.document?.revision||0)&&base.translationId===this.translationClient.snapshot()?.id&&!this.running&&!this.translating&&!this.ctx.blocked();
+      if(!valid()||!this.png||!this.ctx.openTranslatedImage)throw Error('图片翻译已失效或编辑器不可用');
+      if((await this.translationStore.state()).revision!==base!.serviceRevision||!valid())throw Error('翻译服务或图片已改变');
+      if(!Array.isArray(past)||past.length>20)throw Error('翻译修改历史无效');
+      const initial=new ImageHistory(this.size.width,this.size.height,true).value;
+      const scene=(document:unknown):ImageDocument=>({...initial,translation:{visible:true,document:imageTranslationSnapshot(base!,document)}});
+      const current=scene(value),history:ImageHistoryState={past:[],future:[]};
+      for(const previous of past){if(!valid())throw Error('图片翻译已失效');history.past.push(scene(previous));await new Promise<void>(resolve=>setImmediate(resolve));}
+      if(!valid()||(await this.translationStore.state()).revision!==base!.serviceRevision)throw Error('图片翻译已失效');const png=Buffer.from(this.png);
+      try{await this.ctx.openTranslatedImage(png,('译图 · '+this.name).slice(0,180),current,history);}finally{png.fill(0);}
     });
     handle('translation-cancel', () =>
       this.workflow.active ? this.workflow.cancel() : this.cancelTranslation(),

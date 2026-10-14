@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { imageDimensions } from '../../shared/capture/image-limits';
 import { validateImageDocument, type ImageDocument } from '../../shared/capture/image-document';
 import { readImageProject, writeImageProject } from './image-project';
-import { imageProject } from '../../shared/capture/image-project';
+import { imageProject,imageProjectVersion } from '../../shared/capture/image-project';
 import type { ImageSaveRequest } from '../../shared/capture/image-editor-api';
 import { outputLayout } from '../../shared/capture/image-output';
 import type {ImageMaterialDetail as Detail} from '../../shared/materials';
@@ -208,11 +208,11 @@ export class ImageEditorService {
       this.opening = false;
     }
   }
-  async openTransient(png: Buffer, title: string) {
+  async openTransient(png: Buffer, title: string,document?:ImageDocument,history?:import('../../shared/capture/image-document').ImageHistoryState) {
     if (this.opening) throw new Error(tr('正在打开图片，请稍后'));
     this.opening = true;
     try {
-      await this.openImage(randomUUID(), { png, title });
+      await this.openImage(randomUUID(), { png, title,document,history });
     } finally {
       this.opening = false;
     }
@@ -346,7 +346,7 @@ export class ImageEditorService {
     this.live(generation);
     const document = validateImageDocument(request.document, this.source!.size);
     const project = imageProject(
-      { format: IMAGE_PROJECT_FORMAT.id, version: 1, name: this.source!.name.slice(0, 180), document, history: request.history },
+      { format: IMAGE_PROJECT_FORMAT.id, version: imageProjectVersion(document,request.history), name: this.source!.name.slice(0, 180), document, history: request.history },
       this.source!.size,
     );
     if (
@@ -435,7 +435,7 @@ export class ImageEditorService {
     const generation = this.generation;
     this.live(generation);
     const project = imageProject(
-      { format: IMAGE_PROJECT_FORMAT.id, version: 1, name: this.source!.name.slice(0, 180), document, history },
+      { format: IMAGE_PROJECT_FORMAT.id, version: imageProjectVersion(document,history), name: this.source!.name.slice(0, 180), document, history },
       this.source!.size,
     );
     this.busy = true;

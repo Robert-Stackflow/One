@@ -11,6 +11,33 @@ export interface ImageTranslationDocument {
   schema:1;id:string;sourceId:string;recognitionRevision:number;translationId:string;
   width:number;height:number;target:TranslationLanguage;serviceRevision:string;version:number;blocks:ImageTranslationBlock[];
 }
+export interface ImageTranslationLayer {visible:boolean;document:ImageTranslationDocument}
+export function validateImageTranslation(value:unknown,size:{width:number;height:number}):ImageTranslationDocument {
+  const doc=value as ImageTranslationDocument;
+  const keys=(object:object,allowed:string[])=>Object.keys(object).every(key=>allowed.includes(key));
+  const text=(value:unknown,max:number)=>typeof value==='string'&&value.length<=max&&!value.includes('\0');
+  if(!doc||typeof doc!=='object'||Array.isArray(doc)||!keys(doc,['schema','id','sourceId','recognitionRevision','translationId','width','height','target','serviceRevision','version','blocks'])||doc.schema!==1||doc.width!==size.width||doc.height!==size.height||!text(doc.id,128)||!doc.id||!text(doc.sourceId,2048)||!doc.sourceId||!text(doc.translationId,128)||!doc.translationId||!text(doc.serviceRevision,128)||!doc.serviceRevision||!['zh-Hans','zh-Hant','en','ja','ko','fr','de','es','ru','pt','it','ar'].includes(doc.target)||![doc.recognitionRevision,doc.version].every(number=>Number.isSafeInteger(number)&&number>=0&&number<=1_000_000)||!Array.isArray(doc.blocks)||!doc.blocks.length||doc.blocks.length>2048)throw Error('翻译文字层无效');
+  imageDimensions(size.width,size.height);let characters=0,glyphs=0;const ids=new Set<string>();
+  for(const block of doc.blocks){
+    const rect=block?.rect;
+    if(!block||!keys(block,['id','source','text','rect','glyphs','fontSize','status','reason'])||!text(block.id,128)||!block.id||ids.has(block.id)||!text(block.source,200000)||!text(block.text,600000)||(characters+=block.source.length+block.text.length)>800000||!['ready','untranslated','unsupported'].includes(block.status)||block.status==='ready'&&(!block.text.trim()||block.text.length>60000)||block.reason!==undefined&&!text(block.reason,300)||!rect||!keys(rect,['x','y','width','height'])||![rect.x,rect.y,rect.width,rect.height].every(Number.isSafeInteger)||rect.x<0||rect.y<0||rect.width<1||rect.height<1||rect.x+rect.width>size.width||rect.y+rect.height>size.height||!Number.isFinite(block.fontSize)||block.fontSize<9||block.fontSize>16384||!Array.isArray(block.glyphs)||!block.glyphs.length||(glyphs+=block.glyphs.length)>400000)throw Error('翻译文字块无效');
+    for(const quad of block.glyphs)if(!Array.isArray(quad)||quad.length!==4||quad.some(point=>!point||!keys(point,['x','y'])||!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.y<0||point.x>size.width||point.y>size.height)||Math.abs(quad.reduce((sum,point,index)=>sum+point.x*quad[(index+1)%4].y-point.y*quad[(index+1)%4].x,0))<.02)throw Error('翻译文字位置无效');
+    ids.add(block.id);
+  }
+  for(const block of doc.blocks)if(block.status==='ready'&&doc.blocks.some(other=>other.id!==block.id&&block.rect.x<other.rect.x+other.rect.width&&block.rect.x+block.rect.width>other.rect.x&&block.rect.y<other.rect.y+other.rect.height&&block.rect.y+block.rect.height>other.rect.y))throw Error('翻译文字区域重叠');
+  if(new TextEncoder().encode(JSON.stringify(doc)).byteLength>8*1024*1024)throw Error('翻译文字层过大');
+  return structuredClone(doc);
+}
+/** Only editable text/size/status/version can change while transferring a prepared OCR snapshot. */
+export function imageTranslationSnapshot(base:ImageTranslationDocument,value:unknown):ImageTranslationDocument {
+  const next=validateImageTranslation(value,base);
+  if(['id','sourceId','recognitionRevision','translationId','target','serviceRevision'].some(key=>next[key as keyof ImageTranslationDocument]!==base[key as keyof ImageTranslationDocument])||next.blocks.length!==base.blocks.length)throw Error('翻译文字层来源已改变');
+  for(let index=0;index<next.blocks.length;index++){
+    const block=next.blocks[index],original=base.blocks[index];
+    if(block.id!==original.id||block.source!==original.source||block.fontSize!==original.fontSize||block.rect.x!==original.rect.x||block.rect.y!==original.rect.y||JSON.stringify(block.glyphs)!==JSON.stringify(original.glyphs)||original.status==='unsupported'&&block.status!=='unsupported')throw Error('翻译文字层来源已改变');
+  }
+  return next;
+}
 /** Source offsets, never guessed text matches, bind each translated paragraph to its image geometry. */
 export function imageTranslationDocument(document:TextDocument,result:TranslationResult,id:string):ImageTranslationDocument {
   imageDimensions(document.source.width,document.source.height);

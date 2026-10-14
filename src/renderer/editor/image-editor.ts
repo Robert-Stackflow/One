@@ -44,6 +44,7 @@ import {
 } from '../../shared/capture/image-document';
 import type { ImageEditorAPI, ImageEditorState } from '../../shared/capture/image-editor-api';
 import { paintCapture, captureOutput } from './capture-paint';
+import {mountEditorTranslation} from './translation-layer';
 import { canvasPng } from './image-encode';
 import { AnnotationEditor } from './annotation-editor';
 import { stepOrderControls } from './step-order';
@@ -88,6 +89,8 @@ let tool: CaptureTool = 'move',
   saved = '',
   crop: ImageDocument['selection'] = null;
 let textTarget: Annotation | undefined;
+let translationEditor:ReturnType<typeof mountEditorTranslation>|undefined;
+const currentImage=()=>translationEditor?.image(scene)||source;
 let pointer: Point | undefined;
 const brushCursor = annotationBrushCursor(surface);
 const annotationSelection = new AnnotationSelection(
@@ -142,7 +145,7 @@ const point = (e: MouseEvent | PointerEvent): Point => {
     y: limit(Math.round(((e.clientY - r.y) * scene.height) / r.height), 0, scene.height),
   };
 };
-const active = () => busy || !!cropGesture || annotations?.active || !textForm.hidden;
+const active = () => busy || !!cropGesture || annotations?.active || !textForm.hidden||!!translationEditor?.busy();
 function fingerprint() {
   return JSON.stringify(history.value);
 }
@@ -170,7 +173,7 @@ function changed(next: ImageDocument, committed: boolean) {
     message('');
     notifyDirty();
   }
-  draw();
+  void translationEditor?.sync(next).catch(message);draw();
 }
 function commit(next: ImageDocument) {
   annotations.commit(next);
@@ -211,7 +214,7 @@ const sensitiveUI = sensitiveControls(q('sensitive-controls'), {
   token: () => data.token,
   locked: () => !!active() || !!crop,
   document: () => history.value,
-  source: () => source,
+  source: () => currentImage(),
   pending: (value) => {
     busy = value;
     if (value) annotations.clear();
@@ -226,7 +229,7 @@ const sensitiveUI = sensitiveControls(q('sensitive-controls'), {
 });
 const mosaicUI = mosaicControls(q('mosaic-controls'), {
   document: () => history.value,
-  source: () => source,
+  source: () => currentImage(),
   selected: () => scene.annotations.find((a) => a.id === annotations.selectedId),
   locked: () => !!active() || !!crop,
   pending: (value) => {
@@ -294,7 +297,7 @@ function paint() {
   const c = canvas.getContext('2d')!;
   c.setTransform(canvas.width / scene.width, 0, 0, canvas.height / scene.height, 0, 0);
   if (textTarget) layoutText();
-  paintCapture(c, source, textTarget ? textEditor.scene(scene) : scene);
+  paintCapture(c, currentImage(), textTarget ? textEditor.scene(scene) : scene);translationEditor?.render();
   const o = overlay.getContext('2d')!;
   o.setTransform(overlay.width / scene.width, 0, 0, overlay.height / scene.height, 0, 0);
   o.clearRect(0, 0, scene.width, scene.height);
@@ -682,7 +685,8 @@ async function output(mode: 'asset' | 'copy' | 'export' | 'ocr') {
   try {
     await dirtyQueue;
     await loadSceneFonts(history.value);
-    exported = captureOutput(source, history.value);
+    await translationEditor?.sync(history.value);const translationError=translationEditor?.outputError();if(translationError)throw Error(translationError);
+    exported = captureOutput(currentImage(), history.value);
     const png = await canvasPng(exported);
     const result = await api.save({
       token: data.token,
@@ -723,7 +727,7 @@ q('ocr').onclick = () => {
   inlineOCR=mountInlineOCR(viewport,window.one.inlineOCR,{source:data.url,initial,back:'返回编辑',message,
     snapshot:async()=>{
       await loadSceneFonts(snapshot);const image=document.createElement('canvas');image.width=snapshot.width;image.height=snapshot.height;
-      try{paintCapture(image.getContext('2d')!,source,snapshot);return await canvasPng(image);}finally{image.width=image.height=0;}
+      try{paintCapture(image.getContext('2d')!,currentImage(),snapshot);return await canvasPng(image);}finally{image.width=image.height=0;}
     },closed:()=>{inlineOCR=undefined;busy=false;draw();}
   });
 };
@@ -904,6 +908,8 @@ strokeStyleControl(q<HTMLSelectElement>('stroke-style'));
 watermarkBar = watermarkToolbar(document.querySelector<HTMLElement>('.options')!, true);
 
 customControls(document.body);
+translationEditor=mountEditorTranslation({source,document:()=>scene,locked:()=>!!active()||!!crop,interactive:()=>tool==='move'&&!crop&&!annotations?.selectedId,commit,draw,message});
+addEventListener('beforeunload',()=>translationEditor?.dispose(),{once:true});
 void api
   .state()
   .then(async (initial) => {
@@ -920,6 +926,7 @@ void api
     if (initial.document) history.restore(initial.document, initial.history);
     // Publish the scene only after font loading; resize callbacks can paint while awaiting fonts.
     await loadSceneFonts(history.value);
+    await translationEditor.sync(history.value);
     scene = history.value;
     saved = fingerprint();
     annotations = new AnnotationEditor({
@@ -936,7 +943,7 @@ void api
       value: () => history.value.effects,
       disabled: () => !!active() || !!crop,
       change: (value) => commit({ ...history.value, effects: value }),
-      preview: () => ({ source, document: scene }),
+      preview: () => ({ source:currentImage(), document: scene }),
       error: message,
     });
     q('source-name').textContent = initial.name;

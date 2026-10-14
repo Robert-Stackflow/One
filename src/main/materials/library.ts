@@ -19,6 +19,7 @@ import type { ImageMaterial } from '../../shared/materials';
 import { atomicWrite } from './atomic-file';
 import { imageSize } from 'image-size';
 import {IMAGE_PROJECT_FORMAT,RECORDING_PROJECT_FORMAT} from '../../shared/media-project';
+import {imageProjectVersion} from '../../shared/capture/image-project';
 import {MATERIAL_INDEX_FORMAT,validMaterialId as validId,recordingMaterial} from '../../shared/materials';
 const pendingFormat='one-recording-material-pending';
 
@@ -236,7 +237,7 @@ export class MaterialLibrary {
     };
     await writeImageProject(
       this.imagePath(asset.id),
-      { format:IMAGE_PROJECT_FORMAT.id,version: 1, name: asset.title.slice(0, 180), document: scene, history },
+      { format:IMAGE_PROJECT_FORMAT.id,version: imageProjectVersion(scene,history), name: asset.title.slice(0, 180), document: scene, history },
       original,
       () => true,
     );

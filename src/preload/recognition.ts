@@ -30,6 +30,7 @@ const api: OCRAPI = {
   cancelTranslation: () => call('translation-cancel'),
   imageTranslation:(token,id,revision)=>call('image-translation',token,id,revision),
   outputImageTranslation:(token,id,mode,png)=>call('image-translation-output',token,id,mode,png),
+  editImageTranslation:(token,id,document,past)=>call('image-translation-editor',token,id,document,past),
   partialTranslation:(token,revision)=>call('translation-partial',token,revision),retryTranslation:(token,id,parts,revision)=>call('translation-retry',token,id,parts,revision),
 };
 const listen=(name:string,callback:(value:any)=>void)=>{const handler=(_event:Electron.IpcRendererEvent,value:unknown)=>callback(value);ipcRenderer.on('one:'+name,handler);return()=>ipcRenderer.removeListener('one:'+name,handler);};

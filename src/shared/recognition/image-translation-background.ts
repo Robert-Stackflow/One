@@ -1,10 +1,12 @@
 import {textBounds} from './text-document';
-import type {ImageTranslationBlock} from './image-translation';
+import type {ImageTranslationBlock,TranslationRect} from './image-translation';
 export interface TranslationRaster {width:number;height:number;data:Uint8ClampedArray}
-export interface TranslationBackground {kind:'flat'|'plate';color:string;textColor:string;pixels:number}
+export interface TranslationBackground {kind:'flat'|'plate';color:string;textColor:string;pixels:number;sourceRect:TranslationRect}
 /** Read only the frozen source. Repair is constrained to OCR glyph boxes; horizontal rules stay intact. */
 export function repairTranslationBackground(source:TranslationRaster,output:TranslationRaster,block:ImageTranslationBlock):TranslationBackground {
-  const {width,height,data}=source,rect=block.rect;
+  const {width,height,data}=source;
+  const extent=block.glyphs.reduce((value,quad)=>{const box=textBounds(quad);return {left:Math.min(value.left,box.x),top:Math.min(value.top,box.y),right:Math.max(value.right,box.x+box.width),bottom:Math.max(value.bottom,box.y+box.height)};},{left:Infinity,top:Infinity,right:0,bottom:0});
+  const x=Math.max(0,Math.floor(extent.left)-1),y=Math.max(0,Math.floor(extent.top)-1),rect={x,y,width:Math.min(width,Math.ceil(extent.right)+1)-x,height:Math.min(height,Math.ceil(extent.bottom)+1)-y};
   if(output.width!==width||output.height!==height||output.data.length!==data.length)throw Error('图片像素尺寸不一致');
   const samples:number[][]=[];
   const sample=(x:number,y:number)=>{x=Math.max(0,Math.min(width-1,Math.round(x)));y=Math.max(0,Math.min(height-1,Math.round(y)));const at=(y*width+x)*4;samples.push([data[at],data[at+1],data[at+2],data[at+3]]);};
@@ -12,7 +14,7 @@ export function repairTranslationBackground(source:TranslationRaster,output:Tran
   const background=[0,1,2,3].map(channel=>samples.map(item=>item[channel]).sort((a,b)=>a-b)[Math.floor(samples.length/2)]);
   const flat=samples.filter(item=>item.every((value,index)=>Math.abs(value-background[index])<22)).length/samples.length>.85&&background[3]>245;
   const color=`rgb(${background.slice(0,3).join(',')})`,textColor=background[0]*.299+background[1]*.587+background[2]*.114>140?'#202020':'#ffffff';
-  if(!flat||block.glyphs.some(quad=>{const box=textBounds(quad);return box.width*box.height>2_000_000;}))return {kind:'plate',color:'#ffffff',textColor:'#202020',pixels:0};
+  if(!flat||block.glyphs.some(quad=>{const box=textBounds(quad);return box.width*box.height>2_000_000;}))return {kind:'plate',color:'#ffffff',textColor:'#202020',pixels:0,sourceRect:rect};
   let pixels=0;
   for(const quad of block.glyphs){
     const box=textBounds(quad),left=Math.max(0,Math.floor(box.x)-1),top=Math.max(0,Math.floor(box.y)-1);
@@ -33,5 +35,5 @@ export function repairTranslationBackground(source:TranslationRaster,output:Tran
       }}
     }
   }
-  return {kind:'flat',color,textColor,pixels};
+  return {kind:'flat',color,textColor,pixels,sourceRect:rect};
 }

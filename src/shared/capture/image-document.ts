@@ -10,6 +10,7 @@ import { strokeStyles, strokeRadius, type StrokeStyle } from './stroke-style';
 
 import { imageDimensions } from './image-limits';
 import { defaultEffects, outputEffects, outputLayout, type OutputEffects } from './image-output';
+import {validateImageTranslation,type ImageTranslationLayer} from '../recognition/image-translation';
 
 /** All geometry is in source pixels. CSS/DIP coordinates never enter the document. */
 export interface Point {
@@ -105,6 +106,7 @@ function validTransform(value: Affine) {
     throw Error('图片变换无效');
 }
 export interface ImageDocument {
+  translation?:ImageTranslationLayer;
   width: number;
   height: number;
   selection: Rectangle | null;
@@ -574,6 +576,10 @@ export function validateImageDocument(
   )
     throw Error('图片原图已改变');
   imageDimensions(doc.width, doc.height);
+  if(doc.translation!==undefined){
+    if(!doc.translation||typeof doc.translation!=='object'||Object.keys(doc.translation).sort().join(',')!=='document,visible'||typeof doc.translation.visible!=='boolean')throw Error('翻译文字层无效');
+    validateImageTranslation(doc.translation.document,original);
+  }
   outputEffects(doc.effects);
   validTransform(doc.transform);
   const corners = [

@@ -7,6 +7,7 @@ import { ImageHistory, transformImage, type Annotation } from '../../src/shared/
 import { imageProject, IMAGE_PROJECT_METADATA_BYTES } from '../../src/shared/capture/image-project';
 import { readImageProject, writeImageProject } from '../../src/main/capture/image-project';
 import { IMAGE_PROJECT_FORMAT } from '../../src/shared/media-project';
+import type {ImageTranslationDocument} from '../../src/shared/recognition/image-translation';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4WQAAAAASUVORK5CYII=',
@@ -24,6 +25,18 @@ const mark: Annotation = {
   strength: 8,
   number: 1,
 };
+test('translated image projects preserve original PNG and editable revisions, while v1 cannot claim the new layer',()=>fixture(async directory=>{
+  const layer:ImageTranslationDocument={schema:1,id:'layer',sourceId:'ocr',recognitionRevision:1,translationId:'job',width:1,height:1,target:'en',serviceRevision:'service',version:0,blocks:[{id:'block',source:'原文',text:'Text',rect:{x:0,y:0,width:1,height:1},glyphs:[[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}]],fontSize:9,status:'ready'}]};
+  const base=new ImageHistory(1,1,true).value,original={...base,translation:{visible:true,document:layer}},current={...original,translation:{visible:false,document:{...layer,version:1,blocks:layer.blocks.map(block=>({...block,text:'Edited'}))}}};
+  const project=imageProject({format:'one-image',version:2,name:'Translation',document:current,history:{past:[original],future:[]}},base.original),file=join(directory,'translation.oneimage');
+  await writeImageProject(file,project,png);const loaded=await readImageProject(file);assert.deepEqual(loaded.png,png);assert.deepEqual(loaded.project,project);
+  const history=new ImageHistory(1,1,true);history.restore(loaded.project.document,loaded.project.history);history.undo();assert.equal(history.value.translation!.document.blocks[0].text,'Text');history.redo();assert.equal(history.value.translation!.document.blocks[0].text,'Edited');assert.equal(history.value.translation!.visible,false);
+  assert.throws(()=>imageProject({...project,version:1},base.original),/新版图片工程/);
+  const conflicting={...original,translation:{visible:true,document:{...layer,blocks:layer.blocks.map(block=>({...block,text:'Same version, different text'}))}}};
+  assert.throws(()=>imageProject({...project,history:{past:[original,conflicting],future:[]}},base.original),/版本不一致/);
+  assert.throws(()=>imageProject({...project,document:{...current,translation:{...current.translation,document:{...current.translation.document,apiKey:'must-not-be-stored'}}}},base.original),/文字层无效/);
+  assert.throws(()=>imageProject({...project,document:{...current,translation:{...current.translation,document:{...layer,blocks:[{...layer.blocks[0],glyphs:[[{x:-1,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}]]}]}}}},base.original),/文字位置无效/);
+}));
 test('One image identity rejects old products and unknown schemas even when renamed', () =>
   fixture(async (directory) => {
     const file = join(directory, 'identity.oneimage');
@@ -43,7 +56,7 @@ test('One image identity rejects old products and unknown schemas even when rena
       await writeFile(file, invalid);
       await assert.rejects(readImageProject(file), /不是 One 图片工程/);
     }
-    for (const patch of [{format: undefined}, {format: 'frame-image'}, {version: 0}, {version: 2}]) {
+    for (const patch of [{format: undefined}, {format: 'frame-image'}, {version: 0}, {version: 3}]) {
       const metadata = Buffer.from(JSON.stringify({
         ...manifest, project: {...manifest.project, ...patch},
       }));
@@ -123,7 +136,7 @@ test('image projects preserve original bytes, editable geometry/effects and a fr
     assert.deepEqual(restored.value, value.document);
     restored.redo();
     assert.equal(restored.value.annotations.length, 0);
-    assert.throws(() => imageProject({ ...value, version: 2 }, { width: 1, height: 1 }), /版本/);
+    assert.throws(() => imageProject({ ...value, version: 3 }, { width: 1, height: 1 }), /版本/);
     assert.throws(
       () =>
         imageProject(
@@ -152,7 +165,7 @@ test('image project corruption, bounded reads, cancellation and competing target
       if (kind === 'version') {
         const end = 12 + data.readUInt32LE(8);
         const manifest = JSON.parse(data.toString('utf8', 12, end));
-        manifest.project.version = 2;
+        manifest.project.version = 3;
         const metadata = Buffer.from(JSON.stringify(manifest)),
           header = Buffer.from(data.subarray(0, 12));
         header.writeUInt32LE(metadata.length, 8);

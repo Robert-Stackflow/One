@@ -10,7 +10,7 @@ import {
 export const IMAGE_PROJECT_METADATA_BYTES = 16 * 1024 * 1024;
 export interface ImageProject {
   format: typeof IMAGE_PROJECT_FORMAT.id;
-  version: 1;
+  version: 1|2;
   name: string;
   document: ImageDocument;
   history?: ImageHistoryState;
@@ -25,7 +25,7 @@ export function imageProject(
   if (
     !v ||
     v.format !== IMAGE_PROJECT_FORMAT.id ||
-    v.version !== IMAGE_PROJECT_FORMAT.version ||
+    ![1,2].includes(v.version) ||
     typeof v.name !== 'string' ||
     !v.name.trim() ||
     v.name.length > 180 ||
@@ -33,6 +33,10 @@ export function imageProject(
   )
     throw Error('图片工程信息无效或版本不支持');
   const document = validateImageDocument(v.document, original);
+  const history=v.history===undefined?undefined:imageHistoryState(v.history,original);
+  const revisions=new Map<string,string>();
+  for(const scene of [document,...history?.past||[],...history?.future||[]])if(scene.translation){const layer=scene.translation.document,key=layer.id+':'+layer.version,content=JSON.stringify(layer);if(revisions.has(key)&&revisions.get(key)!==content)throw Error('翻译文字层版本不一致');revisions.set(key,content);}
+  if(v.version===1&&(document.translation||history?.past.some(item=>item.translation)||history?.future.some(item=>item.translation)))throw Error('翻译文字层需要新版图片工程');
   if (
     !document.selection ||
     document.selection.x !== 0 ||
@@ -43,9 +47,10 @@ export function imageProject(
     throw Error('请先应用或取消裁剪选区');
   return {
     format: IMAGE_PROJECT_FORMAT.id,
-    version: IMAGE_PROJECT_FORMAT.version,
+    version: v.version,
     name: v.name,
     document,
-    ...(v.history === undefined ? {} : { history: imageHistoryState(v.history, original) }),
+    ...(history === undefined ? {} : { history }),
   };
 }
+export function imageProjectVersion(document:unknown,history?:unknown):1|2{const value=document as Partial<ImageDocument>|undefined,state=history as Partial<ImageHistoryState>|undefined;return value?.translation||Array.isArray(state?.past)&&state.past.some(item=>item?.translation)||Array.isArray(state?.future)&&state.future.some(item=>item?.translation)?2:1;}
