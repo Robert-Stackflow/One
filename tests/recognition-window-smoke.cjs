@@ -1,11 +1,12 @@
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),sharp=require('sharp');
 async function verifyCanvas(page) {
+  await page.bringToFront();
   const viewport=page.locator('.text-image-viewport'),stage=page.locator('.text-image-stage');
   await expect(viewport).toBeVisible();assert.equal(await viewport.evaluate(node=>getComputedStyle(node).overflow),'hidden');
   await expect(page.locator('progress')).toHaveCount(0);await expect(page.getByRole('button',{name:'取消识别',exact:true})).toHaveCount(0);
-  const box=await viewport.boundingBox(),before=await stage.boundingBox(),x=box.x+box.width*.4,y=box.y+box.height*.4;
-  await page.mouse.move(x,y);await page.mouse.wheel(0,-180);
+  const box=await viewport.boundingBox(),x=box.x+box.width*.4,y=box.y+box.height*.4;
+  await viewport.hover({position:{x:box.width*.4,y:box.height*.4}});const before=await stage.boundingBox();await page.mouse.wheel(0,-180);
   await expect.poll(async()=>(await stage.boundingBox()).width).toBeGreaterThan(before.width*1.15);
   const after=await stage.boundingBox();assert.ok(Math.abs((x-before.x)/before.width-(x-after.x)/after.width)<.01,'wheel zoom must preserve the image point under the pointer');
   const panBefore=await stage.boundingBox();await page.mouse.move(box.x+box.width*.5,box.y+box.height-35);await page.mouse.down();await page.mouse.move(box.x+box.width*.5+40,box.y+box.height-10,{steps:5});await page.mouse.up();
@@ -131,9 +132,9 @@ async function main(){
     assert.deepEqual(await page.evaluate(() => ['table', 'copyTable', 'saveTable'].map(name => typeof window.one.recognition[name])), ['undefined', 'undefined', 'undefined']);
     assert.deepEqual(await page.evaluate(()=>['formulaConfig','recognizeFormula'].map(name=>typeof window.one.recognition[name])),['undefined','undefined']);
     await page.locator('#translation-configure').click();await expect(page.locator('#translation-settings')).toBeVisible();
-    await page.locator('#translation-provider').click();await page.getByRole('option',{name:'独立 Chat Completions 接口',exact:true}).click();
-    await page.locator('#translation-endpoint').fill(endpoint+'/translate/exact/completions');await page.locator('#translation-model').fill('fixture-translation');await page.locator('#translation-key').fill('translation-fixture-key');
-    await page.locator('#translation-save').click();await expect(page.locator('#translation-settings')).not.toBeVisible();
+    await expect(page.locator('#translation-settings input')).toHaveCount(0);await page.locator('#modal-close').click();
+    await page.evaluate(async endpoint=>{const config=await window.one.recognition.translationConfig();await window.one.recognition.saveTranslation({revision:config.revision,provider:'chat',endpoint,model:'fixture-translation',region:'',key:'translation-fixture-key'});},endpoint+'/translate/exact/completions');
+    await page.locator('#translation-configure').click();await expect(page.locator('#translation-legacy-details')).toContainText(endpoint+'/translate/exact/completions');await expect(page.locator('#translation-save')).toBeDisabled();await page.locator('#translation-migrate').click();await expect(page.locator('#modal-error')).toContainText('原配置已保留');await page.locator('#modal-close').click();
     await page.locator('#result').fill('Hello, One.');await page.locator('#translate').click();await expect(page.locator('#translated')).toHaveValue('你好，One。');
     assert.equal(requests[0].url,'/translate/exact/completions');assert.equal(requests[0].authorization,'Bearer translation-fixture-key');assert.equal(JSON.stringify(requests[0]).includes('data:image/'),false);
     const ai=await home.evaluate(()=>window.one.aiState());assert.deepEqual(ai.conversations,[]);assert.deepEqual(ai.history,[]);assert.deepEqual(ai.profiles,[]);
@@ -141,9 +142,9 @@ async function main(){
     assert.equal(await formulaPage.evaluate(()=>!!window.one.formulaRecognition&&!window.one.recognition),true);
     const formulaSource=await formulaPage.evaluate(async()=> (await window.one.formulaRecognition.state()).image);
     assert.equal(await page.evaluate(async url=>{try{await fetch(url);return false;}catch{return true;}},formulaSource),true);
-    await formulaPage.locator('#formula-provider').click();await formulaPage.getByRole('option',{name:'独立 Chat Completions 接口',exact:true}).click();
-    await formulaPage.locator('#formula-endpoint').fill(endpoint+'/vision/exact/completions');await formulaPage.locator('#formula-model').fill('fixture-vision');await formulaPage.locator('#formula-key').fill('vision-fixture-key');
-    await formulaPage.locator('#formula-save').click();await expect(formulaPage.locator('#formula-settings')).not.toBeVisible();assert.equal(requests.length,1);await verifyCanvas(formulaPage);
+    await formulaPage.locator('#formula-provider').click();assert.deepEqual(await formulaPage.getByRole('option').allTextContents(),['One AI 服务']);await formulaPage.keyboard.press('Escape');await expect(formulaPage.locator('#formula-settings input')).toHaveCount(0);await formulaPage.locator('#formula-modal-close').click();
+    await formulaPage.evaluate(async endpoint=>{const config=await window.one.formulaRecognition.formulaConfig();await window.one.formulaRecognition.saveFormula({revision:config.revision,provider:'chat',endpoint,model:'fixture-vision',region:'',key:'vision-fixture-key'});},endpoint+'/vision/exact/completions');
+    await formulaPage.locator('#formula-configure').click();await expect(formulaPage.locator('#formula-legacy-details')).toContainText(endpoint+'/vision/exact/completions');await expect(formulaPage.locator('#formula-save')).toBeDisabled();await formulaPage.locator('#formula-modal-close').click();assert.equal(requests.length,1);await verifyCanvas(formulaPage);
     await formulaPage.locator('#formula-recognize').click();await expect(formulaPage.locator('#formula-text')).toHaveValue('\\frac{a}{b}');await expect(formulaPage.locator('#formula-preview .katex')).toBeVisible();
     assert.equal(requests[1].url,'/vision/exact/completions');assert.equal(requests[1].authorization,'Bearer vision-fixture-key');
     const image=requests[1].body.messages.flatMap(message=>Array.isArray(message.content)?message.content:[]).find(value=>value.type==='image_url');assert.equal(image.image_url.url,'data:image/png;base64,'+Buffer.from(sourceBytes).toString('base64'));
