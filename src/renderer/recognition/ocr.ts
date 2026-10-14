@@ -12,18 +12,27 @@ import './workbench.css';
 import { recognitionNotice } from './notice';
 import { recognitionReady, prepareRecognitionImage } from './ready';
 import { needsImagePreview } from '../../shared/recognition/image-preview';
+import { mountWordCorrection } from './word-correction';
 export function mountOCR() {
 const api = window.one.recognition!;
 let state: OCRState, disposed = false, requesting = false, polling = false, workflowRead = '', reportedError = '';
+let correction:ReturnType<typeof mountWordCorrection>|undefined;
 const workspace = mountOCRWorkspace();
 const workflowBusy = () => ['recognizing', 'translating'].includes(state?.workflow?.status || '');
 const message = recognitionNotice(q('message'));
-const translation = mountTranslation(api, () => state ? { ...state, running: state.running || requesting || workflowBusy() } : undefined, message, () => { if (state) render(); });
+const translation = mountTranslation(api, () => state ? { ...state, running: state.running || requesting || workflowBusy() || !!correction?.busy() } : undefined, message, () => { if (state) render(); });
 const selection = mountTextSelection(q<HTMLImageElement>('source'), {
   copy: text => api.copy(text), message,
   rerecognize:value=>void recognize(value),
+  selectionChanged:()=>correction?.sync(),
   selected: (start, end) => { if (!requesting && !state?.running) q<HTMLTextAreaElement>('result').setSelectionRange(start, end); },
   translate: text => { if (!requesting && !state.running && !workflowBusy() && !translation.busy()) { workspace.show(true); translation.translateSelection(text); } },
+});
+correction=mountWordCorrection(q<HTMLTextAreaElement>('result'),q('result-label').parentElement!,{
+  word:()=>selection.wordSelection(),busy:()=>requesting||!!state?.running||workflowBusy()||translation.busy(),message,
+  apply:(word,text)=>api.correct(state.token,word.selection,text),
+  applied:(result,word)=>{q<HTMLTextAreaElement>('result').value=result.text;selection.setDocument(result.document);selection.selectWord(word.wordId,word.lineId);translation.sourceChanged();},
+  stateChanged:()=>{if(state)render();},
 });
 const tools = document.querySelector('.text-image-tools'); if (tools) q('ocr-image-tools').append(tools);
 const loadImage=prepareRecognitionImage(q<HTMLImageElement>('source'),message);
@@ -37,7 +46,7 @@ function inference(value: OCRResult['inference']) {
 }
 function render() {
   const root = q('app'); if (root.dataset.captureScale !== String(state.uiScale)) applyCaptureScale(root, state.uiScale);
-  const busy = requesting || state.running || workflowBusy();
+  const busy = requesting || state.running || workflowBusy() || !!correction?.busy();
   q('model-download-note').textContent = `${state.modelTitle || 'Tesseract fast'} 模型尚未就绪。下载后在本机识别图片。`;
   q('models').hidden = state.models.ready && !state.models.downloading && !state.models.error;
   q<HTMLButtonElement>('run').disabled = busy || translation.busy() || state.models.downloading || !state.models.ready;
@@ -47,7 +56,7 @@ function render() {
   q('cancel-install').hidden = !state.models.downloading;
   q<HTMLButtonElement>('copy').disabled = !q<HTMLTextAreaElement>('result').value.trim();
   q('workflow-back').hidden = !state.workflow?.returnToCapture;
-  const loading = busy || state.models.downloading || translation.busy();
+  const loading = requesting || state.running || workflowBusy() || state.models.downloading || translation.busy();
   q('image-loading').hidden = !loading; q('source').parentElement!.ariaBusy = String(loading);
   q('image-loading-label').textContent = state.models.downloading ? '下载模型中' : state.waitingForInference ? '等待其他本地任务' : translation.busy() || state.workflow?.status === 'translating' ? '翻译中' : '识别中';
   q<HTMLButtonElement>('overlay-cancel').disabled = false;
@@ -69,7 +78,7 @@ async function refresh() {
   finally { polling = false; }
 }
 async function recognize(region?:import('../../shared/recognition/text-region').OCRRegionSelection){
-  if (requesting || state.running || workflowBusy() || translation.busy()) return;
+  if (requesting || state.running || workflowBusy() || translation.busy() || correction?.busy()) return;
   requesting = true; render(); message('');
   try {
     const language=q<HTMLSelectElement>('language').value as OCRLanguage;
@@ -88,5 +97,5 @@ registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:sc
 void api.state().then(async value => { state = value; q('source-name').textContent = state.name;loadImage(needsImagePreview(value)?selection.setImagePreview(value,region=>api.imagePreview(value.token,region)):value.image);await syncWorkflow(); render(); }).catch(message);
 void recognitionReady(()=>api.ready()).catch(message);
 const timer = setInterval(() => void refresh(), 400);
-window.addEventListener('beforeunload', () => { disposed = true; selection.dispose(); clearInterval(timer); }, { once: true });
+window.addEventListener('beforeunload', () => { disposed = true; correction?.dispose(); selection.dispose(); clearInterval(timer); }, { once: true });
 }

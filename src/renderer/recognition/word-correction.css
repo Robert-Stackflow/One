@@ -1,0 +1,7 @@
+.text-word-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
+.text-word-heading .text-word-correct { width: 28px; height: 28px; padding: 5px; flex: none; }
+.text-word-editor { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 6px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); flex: none; }
+.text-word-editor[hidden] { display: none; }
+.text-word-editor input { width: 100%; min-width: 0; }
+.text-word-editor button { padding: 6px 9px; white-space: nowrap; }
+.inline-ocr-result .text-word-editor { padding: 0 0 10px; }

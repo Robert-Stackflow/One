@@ -19,7 +19,7 @@ function groups(document:TextDocument):Group[]{
   for(const group of result)group.box=bounds(group.tokens);
   return result;
 }
-export function selectedOCRRegion(result:OCRResult,value:unknown){
+export function validateOCRSelection(result:OCRResult,value:unknown){
   const document=result.document,tokens=document?readingTokens(document):[];
   if(!document||!tokens.length)throw Error('当前结果没有可用的字词坐标，请先识别全文');
   const start=tokens[0].sourceStart,end=tokens.at(-1)!.sourceEnd,leading=start===undefined?'':document.text.slice(0,start),trailing=end===undefined?'':document.text.slice(end);
@@ -28,6 +28,10 @@ export function selectedOCRRegion(result:OCRResult,value:unknown){
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length!==3||!['revision','anchor','focus'].every(key=>Object.hasOwn(value,key)))throw Error('局部识别选择无效');
   const selection=value as OCRRegionSelection;
   if(!Object.values(selection).every(Number.isSafeInteger)||selection.revision!==(document.revision||0)||Math.min(selection.anchor,selection.focus)<0||Math.max(selection.anchor,selection.focus)>=tokens.length)throw Error('选中文字已改变，请重新选择');
+  return {document,tokens,selection};
+}
+export function selectedOCRRegion(result:OCRResult,value:unknown){
+  const {document,tokens,selection}=validateOCRSelection(result,value);
   if((document.revisions?.length||0)>=64)throw Error('局部识别次数已满，请重新识别全文');
   const first=Math.min(selection.anchor,selection.focus),last=Math.max(selection.anchor,selection.focus);
   const selected=groups(document).filter(group=>group.indices.some(index=>index>=first&&index<=last));

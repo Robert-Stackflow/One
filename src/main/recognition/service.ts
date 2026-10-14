@@ -24,6 +24,7 @@ import { inferOCRImage, InlineOCREngine } from './image-inference';
 import { InlineOCRSessions } from './inline-ocr';
 import { readInferenceDevices } from '../inference-devices';
 import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
+import { correctOCRWord } from '../../shared/recognition/text-correction';
 import { OCRImagePreview } from './image-preview';
 export const RECOGNITION_URL = 'one://app/index.html?view=recognition';
 export interface RecognitionContext {
@@ -157,6 +158,13 @@ export class OCRService {
     handle('region',(token,value,selection)=>{
       if(this.workflow.active)throw Error('正在执行识别流程，请先取消当前任务');
       return this.recognize(token,value,'text',selection);
+    });
+    handle('correct',(token,selection,text)=>{
+      if(token!==this.token||!this.png||!this.result||this.ctx.blocked())throw Error('识别图片已失效');
+      if(this.running||this.translating||this.workflow.active)throw Error('请先结束当前识别或翻译');
+      const result=correctOCRWord(this.result,selection,text);
+      this.result=result;this.documentRevision=result.document!.revision||this.documentRevision;
+      return result;
     });
     handle('workflow-result', (token, id) => this.workflow.read(token, id));
     handle('workflow-back', (token, id) => {

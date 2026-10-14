@@ -5,6 +5,7 @@ import { ocrLanguage, ocrText, type OCRLanguage, type OCRResult } from '../../sh
 import type { TranslationConnection, TranslationResult } from '../../shared/recognition/translation';
 import { TranslationClient } from './translation-client';
 import { selectedOCRRegion,replaceOCRSelection } from '../../shared/recognition/text-region';
+import { correctOCRWord } from '../../shared/recognition/text-correction';
 import type { OCRRect } from '../../shared/recognition/ocr-tiles';
 
 export interface InlineEngine {
@@ -76,6 +77,14 @@ export class InlineOCRSessions {
       const patch=await image.engine.region!(image.png,image.size,parsed,signal,region.context);signal.throwIfAborted();
       return replaceOCRSelection(base,patch,region.selection);
     });
+  }
+  correct(owner:number,id:unknown,selection:unknown,text:unknown){
+    const image=this.image(owner,id);
+    if(image.task)throw Error('请先结束当前识别或翻译');
+    if(!image.result)throw Error('请先识别全文');
+    const result=correctOCRWord(image.result,selection,text);
+    image.result=result;image.documentRevision=result.document!.revision||image.documentRevision;
+    return result;
   }
   translate(owner: number, id: unknown, text: unknown, target: unknown) {
     return this.work(owner, id, async (image, signal) => {

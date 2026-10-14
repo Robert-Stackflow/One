@@ -82,6 +82,8 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
     await editor.locator('.inline-ocr-run').click();await expect(editor.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});await expect(editor.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);
     await assert.rejects(editor.evaluate(({id,selection})=>window.one.inlineOCR.region(id,'eng',selection),{id:editorId,selection:regionReply.selection}),/已改变/);
+    const correctionBase=await app.evaluate(()=>global.inlineResults.at(-1).result);
+    await require('./recognition-word-correction.cjs')({app,page:editor,baseline:correctionBase,inline:true,id:editorId});
     await editor.locator('.inline-ocr-back').click();await expect(editor.locator('.inline-ocr')).toHaveCount(0);
     const restored=await editor.evaluate(()=>({scroll:[document.querySelector('#viewport').scrollLeft,document.querySelector('#viewport').scrollTop],dirty:document.querySelector('#dirty').textContent}));
     assert.deepEqual(restored.scroll,before.scroll);assert.equal(restored.dirty,before.dirty);await expect(editor.locator('#ocr')).toBeEnabled();

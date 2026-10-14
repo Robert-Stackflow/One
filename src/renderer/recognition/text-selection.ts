@@ -12,6 +12,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   translate(text: string): void;
   selected?(start: number, end: number): void;
   rerecognize?(selection:import('../../shared/recognition/text-region').OCRRegionSelection):void;
+  selectionChanged?():void;
   message(value: unknown): void;
 }) {
   const host = image.parentElement!;
@@ -38,6 +39,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   let pendingLayout = false;
   let visibleSignature = '';
   const nodes = new Map<number, HTMLSpanElement>();
+  const correctionClipPrefix='ocr-word-'+crypto.randomUUID()+'-';
   let drag: { id: number; pan: boolean; x: number; y: number; left: number; top: number } | undefined;
   const text = () => selectedText(tokens, anchor, focus);
   const copy = () => { const value = text(); if (value) void options.copy(value).then(() => options.message('已复制选中文字')).catch(options.message); };
@@ -99,6 +101,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); }); }
   function render() {
+    options.selectionChanged?.();
     layer.hidden = !enabled || !visible || !tokens.length;
     copyButton.disabled = translateButton.disabled = !enabled || anchor < 0 || focus < 0 || !tokens.length;
     if(recognizeButton)recognizeButton.disabled=copyButton.disabled;
@@ -143,8 +146,17 @@ export function mountTextSelection(image: HTMLImageElement, options: {
           node = document.createElement('span'); node.className = 'text-selection-unit'; node.dataset.token = String(tokenIndex);
           node.dataset.geometry = token.geometry; node.textContent = token.text;
           if(token.geometry==='ctc'){node.title='近似字符位置（CTC 对齐与像素投影）';node.ariaLabel=token.text+'，位置近似';}
+          if(token.correctionRevision){const approximate=token.sourceGeometry?.includes('ctc');node.title=approximate?'人工校正，原词位置近似':'人工校正，按原词范围选择';node.ariaLabel=token.text+'，人工校正'+(approximate?'，位置近似':'');}
           node.style.cssText = `left:${box.x / view.width * 100}%;top:${box.y / view.height * 100}%;width:${box.width / view.width * 100}%;height:${box.height / view.height * 100}%;`;
           node.style.clipPath = `polygon(${token.quad.map(point => `${(point.x - box.x) / box.width * 100}% ${(point.y - box.y) / box.height * 100}%`).join(',')})`;
+          if(token.sourceQuads?.length){
+            const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),defs=document.createElementNS(ns,'defs');
+            const clip=document.createElementNS(ns,'clipPath'),path=document.createElementNS(ns,'path');
+            svg.setAttribute('width','0');svg.setAttribute('height','0');svg.setAttribute('aria-hidden','true');
+            clip.id=correctionClipPrefix+tokenIndex;clip.setAttribute('clipPathUnits','objectBoundingBox');
+            path.setAttribute('d',token.sourceQuads.map(quad=>'M'+quad.map(point=>`${(point.x-box.x)/box.width},${(point.y-box.y)/box.height}`).join(' L')+' Z').join(' '));
+            clip.append(path);defs.append(clip);svg.append(defs);node.append(svg);node.style.clipPath=`url(#${clip.id})`;
+          }
           nodes.set(tokenIndex, node);
         }
         node.classList.toggle('selected', anchor >= 0 && tokenIndex >= start && tokenIndex <= end);
@@ -170,7 +182,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
     // Visible nodes provide exact quad hit-testing. During a drag, the nearest visible unit bridges whitespace.
     for (const element of layer.querySelectorAll<HTMLElement>('[data-token]')) {
       const index = Number(element.dataset.token), token = tokens[index], box = textBounds(token.quad);
-      if (!nearest && !insideTextQuad(point, token.quad)) continue;
+      if (!nearest && !(token.sourceQuads||[token.quad]).some(quad=>insideTextQuad(point,quad))) continue;
       const value = Math.hypot(point.x - box.x - box.width / 2, point.y - box.y - box.height / 2);
       if (value < distance) { distance = value; best = index; }
     }
@@ -237,6 +249,17 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   image.addEventListener('load', layout);
   const resize = new ResizeObserver(layout); resize.observe(viewport);
   return {
+    wordSelection() {
+      if(!enabled||!visible||!doc||anchor<0||focus<0)return undefined;
+      const first=Math.min(anchor,focus),last=Math.max(anchor,focus),range=textGroup(tokens,first,'word');
+      if(last>range.focus||tokens[first].lineId!==tokens[last].lineId)return undefined;
+      return {selection:{revision:doc.revision||0,...range},text:selectedText(tokens,range.anchor,range.focus),
+        sourceText:doc.text,wordId:tokens[first].wordId,lineId:tokens[first].lineId};
+    },
+    selectWord(wordId:string,lineId:string) {
+      const index=tokens.findIndex(token=>token.wordId===wordId&&token.lineId===lineId);
+      if(index>=0){const range=textGroup(tokens,index,'word');anchor=range.anchor;focus=range.focus;schedule();}
+    },
     viewState() {
       const bounds=viewport.getBoundingClientRect(),rect=stage.getBoundingClientRect();
       return {scale:view.scale,rotation,center:textViewToImage({x:bounds.left+viewport.clientWidth/2-rect.left,y:bounds.top+viewport.clientHeight/2-rect.top},view)};

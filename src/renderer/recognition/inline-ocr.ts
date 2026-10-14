@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide';
 import { customControls } from '../controls';
 import { mountImageWorkspace } from './workspace';
 import './inline-ocr.css';
+import { mountWordCorrection } from './word-correction';
 
 /** The same image-space selection engine, mounted inside an existing image workspace. */
 export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
@@ -14,6 +15,7 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   back:string; message:(error:unknown)=>void; closed:()=>void;
 }) {
   let disposed=false,id='',busy=false,ready=false,panelVisible=false;
+  let correction:ReturnType<typeof mountWordCorrection>|undefined;
   const scroll={left:host.scrollLeft,top:host.scrollTop},overflow=host.style.overflow;
   host.classList.add('inline-ocr-host');host.scrollLeft=host.scrollTop=0;host.style.overflow='clip';
   const root=document.createElement('section');root.className='inline-ocr';root.setAttribute('aria-label','图片文字识别');
@@ -27,15 +29,22 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
   const workspace=mountImageWorkspace(q('.inline-ocr-body'),q('.inline-ocr-divider'),q<HTMLButtonElement>('.inline-ocr-panel'),false);
   const selection=mountTextSelection(image,{copy:text=>api.copy(id,text),message:options.message,
     rerecognize:value=>void run(value),
+    selectionChanged:()=>correction?.sync(),
     selected:(start,end)=>original.setSelectionRange(start,end),translate:text=>void translate(text)});
+  const heading=document.createElement('div'),wordLabel=original.previousElementSibling!;wordLabel.replaceWith(heading);heading.append(wordLabel);
+  correction=mountWordCorrection(original,heading,{word:()=>selection.wordSelection(),busy:()=>busy,message:options.message,
+    apply:(word,text)=>api.correct(id,word.selection,text),
+    applied:(result,word)=>{original.value=result.text;translated.value='';selection.setDocument(result.document);selection.selectWord(word.wordId,word.lineId);},
+    stateChanged:()=>loading(busy,q('.inline-ocr-loading-label').textContent||''),
+  });
   const tools=root.querySelector<HTMLElement>('.text-image-tools')!;q('.inline-ocr-image-tools').append(tools);
   tools.querySelector('.text-image-status')?.remove();
   registerIcons({'inline-ocr-back':ArrowLeft});
   q('.inline-ocr-back').innerHTML=icon('lucide:inline-ocr-back');const label=document.createElement('span');label.textContent=options.back;q('.inline-ocr-back').append(label);
   function panel(show:boolean){panelVisible=show;q('.inline-ocr-result').hidden=!show;workspace.show(show);}
-  function loading(value:boolean,label:string){busy=value;root.ariaBusy=String(value);q('.inline-ocr-loading').hidden=!value;q('.inline-ocr-loading-label').textContent=label;q<HTMLButtonElement>('.inline-ocr-run').disabled=value||!ready;q<HTMLSelectElement>('.inline-ocr-language').disabled=value;selection.setEnabled(!value);}
+  function loading(value:boolean,label:string){busy=value;const editing=!!correction?.busy();root.ariaBusy=String(value||editing);q('.inline-ocr-loading').hidden=!value;q('.inline-ocr-loading-label').textContent=label;q<HTMLButtonElement>('.inline-ocr-run').disabled=value||editing||!ready;q<HTMLSelectElement>('.inline-ocr-language').disabled=value||editing;original.readOnly=value||editing;selection.setEnabled(!value&&!editing);}
   async function run(region?:import('../../shared/recognition/text-region').OCRRegionSelection){
-    if(!ready||busy||disposed)return;loading(true,'识别中');
+    if(!ready||busy||disposed||correction?.busy())return;loading(true,'识别中');
     try{const language=q<HTMLSelectElement>('.inline-ocr-language').value as OCRLanguage;
       const result=await (region?api.region(id,language,region):api.run(id,language));if(disposed)return;
       original.value=result.text;translated.value='';selection.setDocument(result.document);if(!result.words.length)panel(true);
@@ -43,12 +52,12 @@ export function mountInlineOCR(host:HTMLElement, api:InlineOCRAPI, options:{
     }catch(error){if(!disposed)options.message(error);}finally{if(!disposed)loading(false,'');}
   }
   async function translate(text:string){
-    if(busy||!id||!text.trim())return;panel(true);loading(true,'翻译中');
+    if(busy||correction?.busy()||!id||!text.trim())return;panel(true);loading(true,'翻译中');
     try{const result=await api.translate(id,text,target.value as TranslationLanguage);if(!disposed)translated.value=result.text;}
     catch(error){if(!disposed)options.message(error);}finally{if(!disposed)loading(false,'');}
   }
   function dispose(){
-    if(disposed)return;disposed=true;workspace.dispose();selection.dispose();root.remove();host.classList.remove('inline-ocr-host');host.style.overflow=overflow;
+    if(disposed)return;disposed=true;workspace.dispose();correction?.dispose();selection.dispose();root.remove();host.classList.remove('inline-ocr-host');host.style.overflow=overflow;
     host.scrollLeft=scroll.left;host.scrollTop=scroll.top;if(id)void api.release(id).catch(()=>{});options.closed();
   }
   q('.inline-ocr-back').onclick=dispose;q('.inline-ocr-panel').onclick=()=>panel(!panelVisible);

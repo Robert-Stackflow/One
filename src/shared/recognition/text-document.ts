@@ -15,6 +15,9 @@ export interface TextToken {
   sourceStart?: number;
   sourceEnd?: number;
   recognitionRevision?: number;
+  correctionRevision?: number;
+  sourceQuads?: TextQuad[];
+  sourceGeometry?: TextToken['geometry'][];
 }
 export interface TextLine {
   id: string;
@@ -38,6 +41,7 @@ export interface TextDocument {
   alignment: 'source' | 'reconstructed';
   blocks: TextBlock[];
   revision?:number;
+  corrections?:{revision:number;wordId:string;before:string;after:string;tokenIds:string[];sourceQuads?:TextQuad[]}[];
   revisions?:{revision:number;region:{left:number;top:number;width:number;height:number};context?:{left:number;top:number;width:number;height:number};contextToSource?:[number,number,number,number,number,number];engine:TextDocument['engine'];language:string}[];
 }
 export function textBounds(quad: TextQuad) {

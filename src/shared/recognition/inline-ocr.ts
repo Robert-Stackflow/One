@@ -4,6 +4,7 @@ import type { TranslationLanguage, TranslationResult } from './translation';
 
 /** A frozen image owned by one existing preview/editor window. */
 export interface InlineOCRAPI {
+  correct(id:string,selection:import('./text-region').OCRRegionSelection,text:string):Promise<OCRResult>;
   readSource(source:string):Promise<Uint8Array>;
   prepare(source: string, png: string): Promise<{ id: string; width: number; height: number }>;
   run(id: string, language: OCRLanguage): Promise<OCRResult>;
