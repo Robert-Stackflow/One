@@ -50,8 +50,9 @@ export class OneAIService{
   if(this.data.profiles.length>=24)throw Error('AI 服务数量已满，原配置已保留');
   if(!serviceCredentialCrypto.available())throw Error('系统加密不可用，原配置已保留');
   const checked=validateAIProfile({name,kind:'openai',baseUrl,model,models:[{id:model,name:model}],maxTokens:8192,timeoutSeconds:60,temperature:0,tokenField:'max_tokens'}),id=randomUUID();
+  let encrypted:string;try{const bytes=serviceCredentialCrypto.encrypt(key);try{encrypted=bytes.toString('base64');}finally{bytes.fill(0);}}catch{throw Error('迁入服务密钥无法加密，原配置已保留');}
   const previous={profiles:this.data.profiles,keys:this.data.keys};
-  this.data.profiles=[...previous.profiles,{...checked,id}];this.data.keys={...previous.keys,[id]:serviceCredentialCrypto.encrypt(key).toString('base64')};
+  this.data.profiles=[...previous.profiles,{...checked,id}];this.data.keys={...previous.keys,[id]:encrypted};
   try{this.save();}catch(error){this.data.profiles=previous.profiles;this.data.keys=previous.keys;throw error;}
   return {profileId:id,model,revision:this.taskRevision(this.data.profiles.at(-1)!)};
  }

@@ -44,6 +44,11 @@ test('failed binding persistence does not replace legacy or its restore key',()=
   const broken=new RecognitionConnectionStore({...storage,write:async()=>{throw Error('fixture write failed');}},serviceCredentialCrypto,'translation',ai);
   await assert.rejects(broken.save(settings(saved.revision,ref)),/write failed/);assert.equal((await broken.connection(saved.revision)).key,secret);assert.equal((await store.state()).revision,saved.revision);
 }));
+test('failed credential encryption leaves no partially imported AI profile',()=>fixture(async(ai,store)=>{
+  const saved=await store.save({...legacy,revision:(await store.state()).revision}),before=ai.state(),encrypt=serviceCredentialCrypto.encrypt;
+  serviceCredentialCrypto.encrypt=()=>{throw Error('private failure');};
+  try{await assert.rejects(store.migrateLegacy(saved.revision),/^Error: 迁入服务密钥无法加密，原配置已保留$/);assert.deepEqual(ai.state(),before);assert.equal((await store.connection(saved.revision)).key,secret);}finally{serviceCredentialCrypto.encrypt=encrypt;}
+}));
 test('feature clients use fixed AI tasks, report actual model, never invoke legacy transport or add chat history',()=>fixture(async(ai,store)=>{
   const ref=await ai.importRecognitionConnection(legacy.endpoint,legacy.model,secret,'Task profile'),bound=await store.save(settings((await store.state()).revision,ref));
   const tasks=new RecognitionTaskProvider(ai,()=>71),client=new TranslationClient(async()=>{throw Error('legacy called');},1,tasks);
