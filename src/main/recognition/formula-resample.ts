@@ -50,25 +50,26 @@ function reduce(image:RGB,fx:number,fy:number):RGB {
   }
   return {data,width,height};
 }
-function thumbnailSize(width:number,height:number){
+function thumbnailSize(width:number,height:number,side:number){
   const aspect=width/height;
   const rounded=(value:number,error:(n:number)=>number)=>{const low=Math.floor(value),high=Math.ceil(value);return Math.max(1,error(low)<=error(high)?low:high);};
-  return aspect<=1?{width:rounded(384*aspect,n=>Math.abs(aspect-n/384)),height:384}:{width:384,height:rounded(384/aspect,n=>n===0?0:Math.abs(aspect-384/n))};
+  return aspect<=1?{width:rounded(side*aspect,n=>Math.abs(aspect-n/side)),height:side}:{width:side,height:rounded(side/aspect,n=>n===0?0:Math.abs(aspect-side/n))};
 }
 const mean=f32(.7931),deviation=f32(.1738),red=f32(.114),green=f32(.587),blue=f32(.299);
 const normalize=(value:number)=>f32(f32(f32(value/255)-mean)/deviation);
 const gray=(r:number,g:number,b:number)=>f32(f32(f32(normalize(r)*red)+f32(normalize(g)*green))+f32(normalize(b)*blue));
 /** Official two-stage resize, black letterbox and NumPy float32 operation order. */
-export function formulaPixels(data:Uint8Array,width:number,height:number){
-  const w=width<=height?384:Math.floor(384*width/height),h=height<=width?384:Math.floor(384*height/width);
-  if(Math.min(width,height)<2||w*h>8_388_608)throw Error('公式区域过于狭长，请分段裁剪后识别');
+export function formulaPixels(data:Uint8Array,width:number,height:number,side:384|768=384){
+  if(side!==384&&side!==768)throw Error('公式模型输入尺寸无效');
+  const w=width<=height?side:Math.floor(side*width/height),h=height<=width?side:Math.floor(side*height/width);
+  if(Math.min(width,height)<2||w*h>8_388_608*(side/384)**2)throw Error('公式区域过于狭长，请分段裁剪后识别');
   let image=resize({data,width,height},w,h,'linear');
   try{
-    const target=thumbnailSize(w,h),fx=Math.max(1,Math.floor(w/target.width/2)),fy=Math.max(1,Math.floor(h/target.height/2));
+    const target=thumbnailSize(w,h,side),fx=Math.max(1,Math.floor(w/target.width/2)),fy=Math.max(1,Math.floor(h/target.height/2));
     if(fx>1||fy>1){const next=reduce(image,fx,fy);image.data.fill(0);image=next;}
     if(image.width!==target.width||image.height!==target.height||w/fx!==image.width||h/fy!==image.height){const next=resize(image,target.width,target.height,'cubic',w/fx,h/fy);image.data.fill(0);image=next;}
-    const output=new Float32Array(384*384);output.fill(gray(0,0,0));const dx=Math.floor((384-image.width)/2),dy=Math.floor((384-image.height)/2);
-    for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){const at=(y*image.width+x)*3;output[(y+dy)*384+x+dx]=gray(image.data[at],image.data[at+1],image.data[at+2]);}
+    const output=new Float32Array(side*side);output.fill(gray(0,0,0));const dx=Math.floor((side-image.width)/2),dy=Math.floor((side-image.height)/2);
+    for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){const at=(y*image.width+x)*3;output[(y+dy)*side+x+dx]=gray(image.data[at],image.data[at+1],image.data[at+2]);}
     return output;
   }finally{image.data.fill(0);}
 }

@@ -63,6 +63,78 @@
       "height": 67,
       "border": 7,
       "sha256": "a31e3d3080723779e40a0177158deb085eb9a5db3ab816af68c077fcabe3b12b"
+    },
+    {
+      "id": "tiny-768",
+      "width": 7,
+      "height": 5,
+      "border": 1,
+      "sha256": "c960afac7a3bb098075b01075593ebbcc0544e4d2d011ac761a0891e1381e550",
+      "inputSize": 768
+    },
+    {
+      "id": "odd-768",
+      "width": 73,
+      "height": 39,
+      "border": 3,
+      "sha256": "11902044b9365518a165d900d4b12c5ab6f471a48b4fecd04f9847eb02c0b471",
+      "inputSize": 768
+    },
+    {
+      "id": "portrait-768",
+      "width": 39,
+      "height": 73,
+      "border": 3,
+      "sha256": "97ce2fb4d7071205b69a65537e91915284ceeedd245b9465c8eaf7f5a762bbe7",
+      "inputSize": 768
+    },
+    {
+      "id": "wide-768",
+      "width": 499,
+      "height": 37,
+      "border": 4,
+      "sha256": "5e7543048aa973476ec8bb0906f49f63c4876ca81b15823e113559645c1fe398",
+      "inputSize": 768
+    },
+    {
+      "id": "tall-768",
+      "width": 37,
+      "height": 499,
+      "border": 4,
+      "sha256": "45009cd9884d02a3fbddd657b52d26ab8b1c68ed5db60bcc1347ab094d24e536",
+      "inputSize": 768
+    },
+    {
+      "id": "downsample-768",
+      "width": 801,
+      "height": 601,
+      "border": 7,
+      "sha256": "b85fbd1897fe985c7e89e97268d07cacb8cb74ec1d59cd3f3c3f287f78b821a2",
+      "inputSize": 768
+    },
+    {
+      "id": "near-square-768",
+      "width": 401,
+      "height": 397,
+      "border": 5,
+      "sha256": "08ee5a3b37aae1d8c25f3a2355e08502449ff4b972c619fd175e9c99417ccd80",
+      "inputSize": 768
+    },
+    {
+      "id": "exact-768",
+      "width": 384,
+      "height": 384,
+      "border": 0,
+      "sha256": "b93b0753fb9cc45f4afe101b30d4888ed6cbc97b8eb45f3f8deb27eec59609e1",
+      "inputSize": 768
+    },
+    {
+      "id": "reduce-corner-768",
+      "width": 521,
+      "height": 67,
+      "border": 7,
+      "sha256": "adc9bfd3b1f123b705ade32a306fe49306ceaaa47c0491c3e7a303edb7fbd59f",
+      "inputSize": 768
     }
   ]
 }

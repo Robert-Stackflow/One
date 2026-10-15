@@ -19,6 +19,7 @@ import type { TranslationResult } from '../../shared/recognition/translation';
 import { FormulaClient } from './formula-client';
 import {FormulaLocalRunner} from './formula-local-runner';
 import {FormulaModels} from './formula-models';
+import {formulaProfiles} from './formula-model-catalog';
 import {FormulaRuntimeStore} from './formula-runtime-store';
 import {FormulaImageRunner} from './formula-image-runner';
 import {saveFormulaImage} from './formula-image-export';
@@ -336,7 +337,8 @@ export class OCRService {
           const selected=await this.localModels.selection('formula');abort.signal.throwIfAborted();
           if(selected.modelId!=='service'){
             if(revision!==await this.localModels.settingsRevision())throw Error('公式模型设置已改变，请重新识别');
-            const device=selected.device.mode==='gpu'?resolveInferenceDevice(selected.device,await readInferenceDevices(abort.signal,process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined),384*384):{backend:'cpu' as const};
+            const preset=formulaProfiles.find(profile=>profile.source.id===selected.modelId);if(!preset)throw Error('公式预设尚未适配');
+            const device=selected.device.mode==='gpu'?resolveInferenceDevice(selected.device,await readInferenceDevices(abort.signal,process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined),preset.inputSize**2):{backend:'cpu' as const};
             const release=this.localModels.use(selected.modelId);let lease:Awaited<ReturnType<FormulaModels['acquire']>>|undefined;
             try{
               lease=await this.formulaModels.acquire(selected.modelId,abort.signal);abort.signal.throwIfAborted();

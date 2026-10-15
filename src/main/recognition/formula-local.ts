@@ -15,7 +15,7 @@ async function artifact(file:PaddleArtifact,limit:number){
   const bytes=await readFile(file.path);if(bytes.length!==file.bytes||createHash('sha256').update(bytes).digest('hex')!==file.sha256){bytes.fill(0);throw Error('公式模型校验失败');}return bytes;
 }
 /** Single-equation crop/letterbox; large decoding and resize stay in the child. */
-export async function formulaInput(png:Buffer){
+export async function formulaInput(png:Buffer,inputSize:384|768=384){
   if(png.length<24||png.length>FORMULA_IMAGE||!png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))throw Error('公式图片支持最多 8 MiB PNG');
   const {data,info}=await sharp(png,{limitInputPixels:4_194_304}).flatten({background:'#fff'}).removeAlpha().toColourspace('srgb').raw().toBuffer({resolveWithObject:true});
   const gray=new Uint8Array(info.width*info.height);let low=255,high=0;
@@ -26,7 +26,7 @@ export async function formulaInput(png:Buffer){
   const width=right-left,height=bottom-top,cropped=new Uint8Array(width*height*3);
   try{
     for(let y=0;y<height;y++)cropped.set(data.subarray(((top+y)*info.width+left)*3,((top+y)*info.width+right)*3),y*width*3);
-    return formulaPixels(cropped,width,height);
+    return formulaPixels(cropped,width,height,inputSize);
   }finally{data.fill(0);gray.fill(0);cropped.fill(0);}
 }
 export function formulaDecoder(config:unknown){
@@ -45,21 +45,29 @@ export function formulaDecoder(config:unknown){
     return formulaOutput(new TextDecoder('utf8',{fatal:true}).decode(new Uint8Array(output)));
   };
 }
+function profileFor(model:FormulaModelFiles){
+  const profile=formulaProfiles.find(profile=>profile.source.id===model.id&&profile.source.revision===model.revision&&profile.output.sha256===model.onnx.sha256);
+  if(!profile)throw Error('公式预设尚未适配此运行器');return profile;
+}
+export function formulaInputSize(model:FormulaModelFiles){return profileFor(model).inputSize;}
 export class FormulaLocalPipeline {
-  private constructor(private session:ort.InferenceSession,private decode:ReturnType<typeof formulaDecoder>){}
+  private constructor(private session:ort.InferenceSession,private decode:ReturnType<typeof formulaDecoder>,private inputSize:384|768){}
   static async create(model:FormulaModelFiles,backend:'cpu'|'dml',deviceId:number){
-    const profile=formulaProfiles.find(profile=>profile.source.id===model.id&&profile.source.revision===model.revision&&profile.output.sha256===model.onnx.sha256);
-    if(!profile||!profile.source.backends.includes(backend))throw Error('公式预设尚未适配此运行器');
+    const profile=profileFor(model);
+    if(!profile.source.backends.includes(backend))throw Error('公式预设尚未适配此运行器');
     const buffers:Buffer[]=[];let session:ort.InferenceSession|undefined;
     try{
       if(model.config.sha256!==profile.source.artifacts.find(file=>file.role==='config')!.sha256||model.onnx.bytes!==profile.output.bytes)throw Error('公式模型配置与预设不一致');
-      const config=await artifact(model.config,8*1024*1024);buffers.push(config);const decode=formulaDecoder(JSON.parse(config.toString('utf8')));
+      const config=await artifact(model.config,8*1024*1024);buffers.push(config);const configuration=JSON.parse(config.toString('utf8')),ops=configuration.PreProcess?.transform_ops;
+      const shape=Array.isArray(ops)?ops.find(op=>op.UniMERNetImgDecode)?.UniMERNetImgDecode.input_size:undefined,limit=Array.isArray(ops)?ops.find(op=>op.UniMERNetLabelEncode)?.UniMERNetLabelEncode.max_seq_len:undefined;
+      if(!Array.isArray(shape)||shape.length!==2||shape.some(value=>value!==profile.inputSize)||limit!==profile.maxTokens)throw Error('公式模型输入配置与预设不一致');
+      const decode=formulaDecoder(configuration);
       const weights=await artifact(model.onnx,1024*1024*1024);buffers.push(weights);
       session=await ort.InferenceSession.create(weights,{executionProviders:backend==='dml'?[{name:'dml',deviceId}]:['cpu'],executionMode:'sequential',enableMemPattern:backend==='cpu',intraOpNumThreads:2,interOpNumThreads:1,logSeverityLevel:3});
       if(session.inputNames.length!==1||session.outputNames.length!==1)throw Error('公式模型输入输出不兼容');
-      return new FormulaLocalPipeline(session,decode);
+      return new FormulaLocalPipeline(session,decode,profile.inputSize);
     }catch(error){await session?.release();throw error;}finally{for(const buffer of buffers)buffer.fill(0);}
   }
-  async run(pixels:Float32Array){const values=await this.session.run({[this.session.inputNames[0]]:new ort.Tensor('float32',pixels,[1,1,384,384])}),output=values[this.session.outputNames[0]];if(output.type!=='int64'||!(output.data instanceof BigInt64Array))throw Error('公式输出类型无效');return this.decode(output.data);}
+  async run(pixels:Float32Array){const values=await this.session.run({[this.session.inputNames[0]]:new ort.Tensor('float32',pixels,[1,1,this.inputSize,this.inputSize])}),output=values[this.session.outputNames[0]];if(output.type!=='int64'||!(output.data instanceof BigInt64Array))throw Error('公式输出类型无效');return this.decode(output.data);}
   close(){return this.session.release();}
 }

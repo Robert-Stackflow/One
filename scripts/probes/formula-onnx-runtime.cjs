@@ -19,18 +19,20 @@ async function main(){
   const deviceId=Number(args.device||0);assert.ok(Number.isSafeInteger(deviceId)&&deviceId>=0&&deviceId<=31);
   assert.match(args.sha256||'',/^[a-f0-9]{64}$/);
   const model=await fs.readFile(args.model);assert.equal(createHash('sha256').update(model).digest('hex'),args.sha256);
-  const pixels=await fs.readFile(args.tensor);assert.equal(pixels.length,384*384*4);
   const config=JSON.parse(await fs.readFile(args.config,'utf8')),reference=JSON.parse(await fs.readFile(args.reference,'utf8'));
+  const shape=config.PreProcess.transform_ops.find(op=>op.UniMERNetImgDecode).UniMERNetImgDecode.input_size,maxTokens=config.PreProcess.transform_ops.find(op=>op.UniMERNetLabelEncode).UniMERNetLabelEncode.max_seq_len;
+  assert.ok(shape.length===2&&shape[0]===shape[1]&&[384,768].includes(shape[0]));assert.ok([1024,2560].includes(maxTokens));assert.deepEqual(reference.inputShape,[1,1,...shape]);
+  const pixels=await fs.readFile(args.tensor);assert.equal(pixels.length,shape[0]*shape[1]*4);
   assert.match(reference.results[0].tokenSha256||'',/^[a-f0-9]{64}$/);
   const directory=path.dirname(args.report);await fs.mkdir(directory,{recursive:true});const prefix=path.basename(args.report,'.json')+'-profile-'+randomUUID();
   const started=performance.now();let session;
   try{
     session=await ort.InferenceSession.create(model,{executionProviders:backend==='dml'?[{name:'dml',deviceId}]:['cpu'],executionMode:'sequential',enableMemPattern:backend!=='dml',intraOpNumThreads:2,interOpNumThreads:1,logSeverityLevel:3,enableProfiling:true,profileFilePrefix:path.join(directory,prefix)});
     assert.equal(session.inputNames.length,1);assert.equal(session.outputNames.length,1);
-    const loaded=Math.round(performance.now()-started),tensor=new ort.Tensor('float32',new Float32Array(pixels.buffer,pixels.byteOffset,pixels.length/4),[1,1,384,384]),results=[];
+    const loaded=Math.round(performance.now()-started),tensor=new ort.Tensor('float32',new Float32Array(pixels.buffer,pixels.byteOffset,pixels.length/4),[1,1,...shape]),results=[];
     for(let index=0;index<2;index++){
       const start=performance.now(),values=await session.run({[session.inputNames[0]]:tensor}),output=values[session.outputNames[0]];
-      assert.equal(output.type,'int64');assert.ok(output.data.length>0&&output.data.length<=(config.Global.model_name==='PP-FormulaNet_plus-M'?2560:1024));
+      assert.equal(output.type,'int64');assert.ok(output.data.length>0&&output.data.length<=maxTokens);
       const tokenSha256=createHash('sha256').update(Buffer.from(output.data.buffer,output.data.byteOffset,output.data.byteLength)).digest('hex');assert.equal(tokenSha256,reference.results[0].tokenSha256);
       const text=decode(output.data,config);assert.equal(text,reference.results[0].latex);
       katex.renderToString(text,{throwOnError:true,trust:false});

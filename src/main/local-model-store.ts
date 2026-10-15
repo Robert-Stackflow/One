@@ -41,10 +41,12 @@ export function localModelIdentity(input: LocalArtifactBundle) {
     let url: URL;
     try { url = new URL(artifact.url); } catch { throw Error('模型下载地址无效'); }
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) throw Error('模型下载地址无效');
+    const range=artifact.byteRange;
+    if(range!==undefined&&(!range||typeof range!=='object'||Array.isArray(range)||Object.keys(range).some(key=>!['offset','total'].includes(key))||!Number.isSafeInteger(range.offset)||range.offset<0||!Number.isSafeInteger(range.total)||range.total<range.offset+artifact.bytes||range.total>16*1024**3))throw Error('模型归档范围无效');
     names.add(artifact.name.toLowerCase()); roles.add(artifact.role);
   }
   const hash = createHash('sha256').update(JSON.stringify([input.id, input.revision,
-    input.artifacts.map(({ name, role, url, bytes, sha256 }) => [name, role, url, bytes, sha256])])).digest('hex');
+    input.artifacts.map(({ name, role, url, bytes, sha256,byteRange }) => byteRange?[name,role,url,bytes,sha256,[byteRange.offset,byteRange.total]]:[name, role, url, bytes, sha256])])).digest('hex');
   return input.id + '-' + hash.slice(0, 24);
 }
 
@@ -132,16 +134,17 @@ export class LocalModelStore {
     reset();
     try {
       signal.throwIfAborted();
+      const range=artifact.byteRange,remoteStart=(range?.offset||0)+received,remoteEnd=(range?.offset||0)+artifact.bytes-1;
       const response = await this.transport(artifact.url, { signal: controller.signal, credentials: 'omit', redirect: 'follow',
-        headers: { 'Accept-Encoding': 'identity', ...(received ? { Range: `bytes=${received}-` } : {}) } });
+        headers: { 'Accept-Encoding': 'identity', ...(range?{Range:`bytes=${remoteStart}-${remoteEnd}`} :received ? { Range: `bytes=${received}-` } : {}) } });
       if (!response.ok || !response.body) throw Error(`模型下载失败：HTTP ${response.status}`);
       reader = response.body.getReader();
       const encoding = response.headers.get('content-encoding');
       if (encoding && encoding !== 'identity') throw Error('模型服务器返回了不支持的压缩响应');
       if (response.status === 206) {
         const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('content-range') || '');
-        if (!match || Number(match[1]) !== received || Number(match[2]) !== artifact.bytes - 1 || Number(match[3]) !== artifact.bytes) throw Error('模型断点响应范围不符');
-      } else if (response.status === 200) received = 0; // A server without ranges can still restart safely.
+        if (!match || Number(match[1]) !== remoteStart || Number(match[2]) !== remoteEnd || Number(match[3]) !== (range?.total||artifact.bytes)) throw Error('模型断点响应范围不符');
+      } else if (response.status === 200&&!range) received = 0; // A raw file without ranges can still restart safely.
       else throw Error('模型下载响应无效');
       const length = response.headers.get('content-length');
       if (length !== null && Number(length) !== artifact.bytes - received) throw Error('模型下载大小不符');

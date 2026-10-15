@@ -7,6 +7,52 @@ import { join } from 'node:path';
 import { LocalModelStore, localModelIdentity } from '../src/main/local-model-store';
 import { localModelCatalog,miganModel } from '../src/main/local-model-catalog';
 import type { LocalModelDescriptor } from '../src/shared/local-models';
+import {formulaPlusL} from '../src/main/recognition/formula-model-catalog';
+import {createReadStream} from 'node:fs';
+import {Readable} from 'node:stream';
+import {resolve} from 'node:path';
+
+test('official plus-L archive prefix matches the portion originally received from Hugging Face',{skip:process.env.ONE_MODEL_LIVE_PREFIX!=='1'},async()=>{
+  const source=resolve('work/current/capture-reconstruction/formula/plus-l/inference.pdiparams'),weight=formulaPlusL.source.artifacts.find(file=>file.role==='weights')!,bytes=101711872,hash=createHash('sha256');
+  assert.equal((await stat(source)).size,weight.bytes);for await(const chunk of createReadStream(source,{start:0,end:bytes-1}))hash.update(chunk);
+  const model={id:'plus-l-prefix-proof',revision:formulaPlusL.source.revision,artifacts:[{...weight,name:'prefix.bin',bytes,sha256:hash.digest('hex')}]},directory=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'archive-prefix-'));
+  const store=new LocalModelStore(directory);await store.install(model,new AbortController().signal);const lease=await store.acquire(model);
+  try{assert.equal((await stat(lease.files[0].path)).size,bytes);}finally{lease.release();}
+});
+
+test('official Paddle archive resumes the last MiB and verifies the pinned full weight without retransferring it',{skip:process.env.ONE_MODEL_LIVE_FORMULA!=='1'},async()=>{
+  const directory=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'live-slice-')),source=resolve('work/current/capture-reconstruction/formula/plus-l'),model=formulaPlusL.source,weight=model.artifacts.find(file=>file.role==='weights')!,range=weight.byteRange!,tail=1024**2;
+  let live=false,networkBytes=0;const requests:string[]=[];
+  const transport:typeof fetch=async(url,options)=>{
+    assert.equal(String(url),weight.url);const header=new Headers(options?.headers).get('range')!;requests.push(header);
+    if(live){const response=await fetch(url,options);networkBytes+=Number(response.headers.get('content-length'));return response;}
+    const stream=Readable.toWeb(createReadStream(join(source,'inference.pdiparams'),{end:weight.bytes-tail-1}),{strategy:{highWaterMark:1024**2,size:chunk=>chunk.byteLength}});
+    return new Response(stream as ReadableStream<Uint8Array>,{status:206,headers:{'content-range':`bytes ${range.offset}-${range.offset+weight.bytes-1}/${range.total}`,'content-length':String(weight.bytes)}});
+  };
+  const store=new LocalModelStore(directory,transport),sources={graph:join(source,'inference.json'),config:join(source,'config.json')};
+  await assert.rejects(store.install(model,new AbortController().signal,undefined,sources),/中断/);
+  live=true;await store.install(model,new AbortController().signal,undefined,sources);const lease=await store.acquire(model);
+  try{assert.equal(networkBytes,tail);assert.equal((await stat(lease.files.find(file=>file.role==='weights')!.path)).size,weight.bytes);assert.deepEqual(requests,[`bytes=${range.offset}-${range.offset+weight.bytes-1}`,`bytes=${range.offset+weight.bytes-tail}-${range.offset+weight.bytes-1}`]);}
+  finally{lease.release();}
+});
+
+test('archive slices resume logical artifact bytes and reject whole archives or wrong ranges without losing progress',async()=>{
+  const root=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'slice-')),content=Buffer.from('fixed weight bytes'),offset=512,total=1024;
+  const model:LocalModelDescriptor={id:'slice-fixture',revision:'1',title:'Slice',size:'S',purpose:'formula',languages:['en'],weightLicense:{name:'test',source:'https://fixture.invalid'},backends:['cpu'],precision:'fp32',runtime:'fixture',artifacts:[{name:'model.bin',role:'weights',url:'https://fixture.invalid/model.tar',bytes:content.length,sha256:createHash('sha256').update(content).digest('hex'),byteRange:{offset,total}}]};
+  const requests:string[]=[],abort=new AbortController();let mode='partial',cancelled=0;
+  const transport:typeof fetch=async(_url,options)=>{
+    const range=new Headers(options?.headers).get('range')!;requests.push(range);const start=Number(/^bytes=(\d+)-/.exec(range)![1])-offset;
+    const status=mode==='whole'?200:206,headers={'content-length':String(content.length-start),'content-range':`bytes ${offset+start+(mode==='wrong'?1:0)}-${offset+content.length-1}/${mode==='total'?total+1:total}`};
+    return new Response(new ReadableStream({start(controller){if(mode==='partial')controller.enqueue(content.subarray(start,start+4));else controller.enqueue(content.subarray(start));if(mode==='partial')options?.signal?.addEventListener('abort',()=>controller.close(),{once:true});else controller.close();},cancel(){cancelled++;}}),{status,headers});
+  };
+  const store=new LocalModelStore(root,transport),key=localModelIdentity(model),partial=join(root,key+'.partial','model.bin.part');
+  await assert.rejects(store.install(model,abort.signal,value=>{if(value.received>=4)abort.abort();}),/取消/);assert.equal((await readFile(partial)).length,4);
+  for(mode of ['whole','wrong','total']){await assert.rejects(store.install(model,new AbortController().signal),/响应/);assert.equal((await readFile(partial)).length,4);}
+  mode='normal';await store.install(model,new AbortController().signal);const lease=await store.acquire(model);assert.deepEqual(await readFile(lease.files[0].path),content);lease.release();
+  assert.equal(requests[0],`bytes=${offset}-${offset+content.length-1}`);assert.ok(requests.slice(1).every(range=>range===`bytes=${offset+4}-${offset+content.length-1}`));assert.ok(cancelled>=3);
+  const raw=structuredClone(model);delete raw.artifacts[0].byteRange;assert.notEqual(localModelIdentity(model),localModelIdentity(raw));
+  for(const byteRange of [{offset:-1,total},{offset:1,total:2},{offset:1.5,total},{offset:0,total:17*1024**3}]){const invalid=structuredClone(model);invalid.artifacts[0].byteRange=byteRange;assert.throws(()=>localModelIdentity(invalid),/归档范围/);}
+});
 
 test('shared model bundles resume, publish atomically and preserve active/versioned models', async () => {
   const directory = await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!, 'cache-'));

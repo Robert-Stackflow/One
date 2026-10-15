@@ -6,6 +6,8 @@ export interface LocalModelArtifact {
   url: string;
   bytes: number;
   sha256: string;
+  /** Download only these raw bytes from an uncompressed archive; hash covers the slice. */
+  byteRange?: {offset:number;total:number};
 }
 /** Integrity and storage contract shared by model weights and native runtime packages. */
 export interface LocalArtifactBundle {

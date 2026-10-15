@@ -31,6 +31,16 @@ PRESETS = {
         617064962,
         "f16ef9b5c8227da70d3ec969a5195f4d62c1154427b883f4d6cff07633654041",
     ),
+    "PP-FormulaNet-L": (
+        "9994c2af5c2070b239f1fd2ecc2b40fbf378ea1d",
+        724452527,
+        "039b320b0d1b64361a053f7496b05db9f53fabd22d27c80ccfab4c59d3881318",
+    ),
+    "PP-FormulaNet_plus-L": (
+        "0809597a77f735bfb35354edb632f2e6dff606f3",
+        727598255,
+        "4245c39c181d1d21e472bc85c7434df9b23f177be46552c0542bf153addbc355",
+    ),
 }
 
 
@@ -71,7 +81,9 @@ def main():
     config = yaml.safe_load(yaml_file.read_text(encoding="utf8")) if yaml_file.exists() else json.loads((args.model_root / "config.json").read_text(encoding="utf8"))
     name = config["Global"]["model_name"]
     revision, size, sha = PRESETS[name]
-    max_tokens = 2560 if name == "PP-FormulaNet_plus-M" else 1024
+    max_tokens = next(op["UniMERNetLabelEncode"]["max_seq_len"] for op in config["PreProcess"]["transform_ops"] if "UniMERNetLabelEncode" in op)
+    if max_tokens not in [1024, 2560]:
+        raise ValueError("Unexpected model sequence limit")
     weights = args.model_root / "inference.pdiparams"
     if weights.stat().st_size != size or digest(weights) != sha:
         raise ValueError("Official model weights failed size/SHA-256 validation")

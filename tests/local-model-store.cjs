@@ -9,7 +9,7 @@ const assert=require('node:assert/strict');
   const directory=await mkdtemp(join(root,'local-model-test-'));
   try{
     await build({entryPoints:['tests/local-model-store.ts'],outfile:join(directory,'test.cjs'),bundle:true,platform:'node',target:'node22',packages:'external',logLevel:'warning'});
-    const env={...process.env,ONE_MODEL_TEST_ROOT:directory};delete env.NODE_TEST_CONTEXT;
+    const env={...process.env,ONE_MODEL_TEST_ROOT:directory,ONE_MODEL_LIVE_FORMULA:process.argv.includes('--live')?'1':'0',ONE_MODEL_LIVE_PREFIX:process.argv.includes('--prefix')?'1':'0'};delete env.NODE_TEST_CONTEXT;
     const result=await promisify(execFile)(process.execPath,['--test',join(directory,'test.cjs')],{env,windowsHide:true,maxBuffer:64*1024});
     console.log(result.stdout.split('\n').filter(line=>/^# (tests|pass|fail|skipped) /.test(line)).join('; '));
   }catch(error){console.error(((error.stdout||'')+(error.stderr||'')||error.stack).slice(-5000));process.exitCode=1;}

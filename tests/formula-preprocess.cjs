@@ -13,9 +13,9 @@ async function main(){
     await build({entryPoints:['src/main/recognition/formula-local.ts'],outfile:path.join(directory,'pipeline.cjs'),bundle:true,platform:'node',format:'cjs',packages:'external',logLevel:'warning'});
     const {formulaInput}=require(path.join(directory,'pipeline.cjs')),gold=JSON.parse(await fs.readFile('tests/fixtures/formula-preprocess.json','utf8')),results=[];
     for(const item of gold.cases){
-      const data=fixture(item),png=await sharp(data,{raw:{width:item.width,height:item.height,channels:3}}).png().toBuffer(),start=performance.now(),pixels=await formulaInput(png);
+      const data=fixture(item),png=await sharp(data,{raw:{width:item.width,height:item.height,channels:3}}).png().toBuffer(),side=item.inputSize||384,start=performance.now(),pixels=await formulaInput(png,side);
       const hash=createHash('sha256').update(Buffer.from(pixels.buffer)).digest('hex');assert.equal(hash,item.sha256,item.id+' differs from '+gold.reference);
-      assert.equal(pixels.length,384*384);assert.ok(pixels.every(Number.isFinite));results.push({id:item.id,elapsedMs:Math.round(performance.now()-start),sha256:hash});data.fill(0);pixels.fill(0);
+      assert.equal(pixels.length,side*side);assert.ok(pixels.every(Number.isFinite));results.push({id:item.id,inputSize:side,elapsedMs:Math.round(performance.now()-start),sha256:hash});data.fill(0);pixels.fill(0);
     }
     const blank=await sharp({create:{width:20,height:20,channels:3,background:'#fff'}}).png().toBuffer();await assert.rejects(formulaInput(blank),/笔画/);
     const thin=await sharp({create:{width:100,height:4,channels:3,background:'#fff'}}).composite([{input:Buffer.from('<svg width="100" height="4"><rect width="100" height="1" fill="black"/></svg>')}]).png().toBuffer();await assert.rejects(formulaInput(thin),/狭长/);

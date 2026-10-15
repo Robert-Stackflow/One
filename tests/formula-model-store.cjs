@@ -32,12 +32,13 @@ async function main(){
     console.log('Formula model store: shared preparation, scoped cancellation/cleanup, leases, bounded metadata, integrity repair, foreign-file protection, verified publication and offline reuse passed.');
     const combined=[];const missingRuntime={...runtime,state:async()=>({ready:false}),install:async(_signal,report)=>{const total=combined[0].total-artifacts.reduce((sum,file)=>sum+file.bytes,0);for(const received of [0,Math.floor(total/2),total])report({phase:'downloading',received,total});}};
     const combinedStore=new FormulaModelStore(path.join(testRoot,'combined'),missingRuntime,{transport:offline,profile,build:builder});stores.push(combinedStore);await combinedStore.install(new AbortController().signal,value=>combined.push({...value}),sources);assert.ok(combined.every((item,index)=>item.total===combined[0].total&&(!index||item.received>=combined[index-1].received)));assert.equal(combined.at(-1).received,combined.at(-1).total);
-    if(process.argv.includes('--medium')||process.argv.includes('--base')){
+    if(['--medium','--base','--base-large','--plus-large'].some(flag=>process.argv.includes(flag))){
       await Promise.all(['formula-runtime-store','formula-models','formula-model-catalog','formula-local-runner','formula-local-worker'].map(name=>build({...options,entryPoints:['src/main/recognition/'+name+'.ts'],outfile:path.join(testRoot,name+'.cjs')})));
-      const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{FormulaModels}=require(path.join(testRoot,'formula-models.cjs')),{formulaPlusM,formulaPlusS,formulaBaseS}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));
-      const runtime=new FormulaRuntimeStore(path.join(root,'managed-runtime'),offline),registry=new FormulaModels(path.join(root,'managed-models'),runtime,offline);stores.push(registry,runtime);
-      const target=process.argv.includes('--base')?formulaBaseS:formulaPlusM,folder=process.argv.includes('--base')?'base-s':'plus-m';
-      const smallBefore=await registry.state(formulaPlusS.source.id),localSources=Object.fromEntries(target.source.artifacts.map(file=>[file.role,path.join(root,folder,file.name)]));
+      const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{FormulaModels}=require(path.join(testRoot,'formula-models.cjs')),{formulaPlusM,formulaPlusS,formulaBaseS,formulaBaseL,formulaPlusL}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));
+      const variant=process.argv.includes('--base-large')?'base-l':process.argv.includes('--plus-large')?'plus-l':process.argv.includes('--base')?'base-s':'plus-m',target=variant==='base-l'?formulaBaseL:variant==='plus-l'?formulaPlusL:variant==='base-s'?formulaBaseS:formulaPlusM,folder=variant;
+      const network=process.argv.includes('--network'),networkRequests=[],transport=network?async(url,options)=>{assert.equal(String(url),target.source.artifacts.find(file=>file.role==='weights').url);const response=await fetch(url,options);networkRequests.push({url:String(url),range:new Headers(options.headers).get('range'),bytes:Number(response.headers.get('content-length'))});return response;}:offline;
+      const runtime=new FormulaRuntimeStore(path.join(root,'managed-runtime'),offline),registry=new FormulaModels(path.join(root,'managed-models'),runtime,transport);stores.push(registry,runtime);
+      const smallBefore=await registry.state(formulaPlusS.source.id),localSources=Object.fromEntries(target.source.artifacts.filter(file=>!network||file.role!=='weights').map(file=>[file.role,path.join(root,folder,file.name)]));
       assert.throws(()=>registry.acquire('unknown'),/未适配/);
       const started=Date.now();await registry.install(target.source.id,new AbortController().signal,undefined,localSources);const lease=await registry.acquire(target.source.id);
       const runner=new FormulaLocalRunner(path.join(testRoot,'formula-local-worker.cjs'));
@@ -57,7 +58,7 @@ async function main(){
           }
           await fs.writeFile(path.join(root,folder,'case-results.json'),JSON.stringify(cases,null,2));assert.ok(cases.every(item=>item.paddleParity),'Native/Paddle corpus mismatch; inspect saved case-results.json');console.log('Fixed formula corpus: '+cases.length+' native/Paddle matches; '+cases.filter(item=>!item.previewError).length+' KaTeX previews; '+cases.filter(item=>item.normalizedExact).length+' normalized exact strings (not a semantic accuracy score).');
         }
-        await fs.writeFile(path.join(root,folder,'managed-runtime.json'),JSON.stringify({elapsedMs:Date.now()-started,results},null,2));
+        await fs.writeFile(path.join(root,folder,'managed-runtime.json'),JSON.stringify({elapsedMs:Date.now()-started,results,networkRequests},null,2));
         console.log('Actual '+target.source.title+' '+target.source.size+' registry: fixed conversion/hash/checker, independent preset ownership, CPU → NVIDIA → AMD → CPU with official Paddle text parity passed.');
       }finally{await runner.close();lease.release();}
     }
