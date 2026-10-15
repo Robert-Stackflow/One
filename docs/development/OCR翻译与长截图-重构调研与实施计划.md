@@ -29,6 +29,10 @@
 
 源码中未找到完全一致的“原窗口已改变”字面量，找到的相近错误为“窗口位置或尺寸已改变”和“来源尺寸或显示器配置已改变”。下一步需核对用户运行版本、报错阶段、显式/隐式刷新及原生采集错误；本轮没有复现该问题，不把推测写成已确认根因。
 
+PP-OCRv5 mobile/server 已接入同一固定哈希模型库：检测与识别分别绑定官方 ONNX 仓库的不可变版本，复用已验证的行方向模型。v5 配置指定 `resize_long: 960`，检测输入按长边缩放后向上对齐 128；v6 原有最短边/32 步幅路径保留。尺寸规则依据 [PaddleX 检测预处理](https://github.com/PaddlePaddle/PaddleX/blob/develop/paddlex/inference/models/text_detection/processors.py)，权重来源为官方 [mobile 检测](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx)、[mobile 识别](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx)、[server 检测](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_det_onnx)、[server 识别](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx)。
+
+`ONE_PADDLE_TEST_FAMILY=v5 node tests/paddle-presets-runtime.cjs` 在 CPU、DirectML 0（NVIDIA）、DirectML 1（AMD）各通过 15 次实际推理（mobile→server→mobile，英文、倒置、中英/邮箱深浅背景、90°），覆盖源图/版本、租约、热复用和切换前进程退出；DirectML 通过设置 `ONE_PADDLE_TEST_GPU=0/1` 重现，强制 GPU 不回退 CPU。本组合成样本 CPU 峰值约 315/839 MiB，预算保留 1536/3072 MiB，显存尚未测量。真实 OCR 弹窗已验证两档选用即关闭、版本和 server 热运行；dev 已离线导入。142 项识别业务检查及检测尺寸/无效配置检查通过。真实分层语料、与 Tesseract/v6 的默认质量比较仍待完成。
+
 ## 3. OCR 选型与图上选字
 
 ### 3.1 方案比较
@@ -50,7 +54,7 @@ One 已有 `onnxruntime-node`、Sharp 和模型下载/校验能力。优先在�
 
 small/medium 已接入模型目录与实际推理，使用官方 [small](https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx)、[medium](https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx) 与 [PP-LCNet 文字行方向模型](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx)，全部版本/大小/SHA-256 固定在 `local-model-catalog.ts`。官方方向预处理为 RGB、160×80 线性缩放与归一化，按 0°/180° 分类翻转真实透视裁剪行，不补造字符框。tiny 保留原四文件兼容入口。三档共计 14 份不同文件，`node scripts/prepare-recognition-benchmark.mjs --all-ocr` 只验证本地文件；显式加 `--prepare` 才允许准备缺失文件，支持 `--preset` 限定预设。
 
-small/medium 各通过五组合成图像（英文、中英/邮箱、深色、180°、90°）的 CPU、NVIDIA 与 AMD DirectML 原型核验；不等于真实语料质量门槛通过。五组 CPU 进程采样峰值分别约 1126/2046 MiB，预设 RSS 预算为 1536/3072 MiB，显存仍未知；这些峰值是该组样本的测量值，不是最低配置要求。`node tests/paddle-presets-runtime.cjs` 通过固定缓存/哈希、缺失方向配置拒绝、实际倒置与深色混排、源图哈希/模型版本、租约、同预设热复用，以及 small→medium→small 切换；模型、设备或预算变化时先结束旧原生进程，再运行新任务，避免残留内存占用破坏较小预设的预算。`node tests/local-model-ui.cjs --presets` 验证从真实弹窗选择 small/medium、应用后关闭、正确版本与 medium 热运行预算。默认仍为 Tesseract，v5、其他模型和真实分层质量验收继续按 A 门槛推进。
+small/medium 各通过五组合成图像（英文、中英/邮箱、深色、180°、90°）的 CPU、NVIDIA 与 AMD DirectML 原型核验；不等于真实语料质量门槛通过。五组 CPU 进程采样峰值分别约 1126/2046 MiB，预设 RSS 预算为 1536/3072 MiB，显存仍未知；这些峰值是该组样本的测量值，不是最低配置要求。`node tests/paddle-presets-runtime.cjs` 通过固定缓存/哈希、缺失方向配置拒绝、实际倒置与深色混排、源图哈希/模型版本、租约、同预设热复用，以及 small→medium→small 切换；模型、设备或预算变化时先结束旧原生进程，再运行新任务，避免残留内存占用破坏较小预设的预算。`node tests/local-model-ui.cjs --presets` 验证从真实弹窗选择 small/medium、应用后关闭、正确版本与 medium 热运行预算。默认仍为 Tesseract，其他模型和真实分层质量验收继续按 A 门槛推进。
 
 识别界面按最新交互要求统一为图片编辑器式工作台：顶栏识别/缩放/旋转图标、底栏复制，图片与结果可拖动调宽，默认图片更宽且结果栏可完全收起。OCR 原文与翻译同时置于右栏；选中文字翻译保留原文。LaTeX 识别使用独立窗口、图片副本、preload/IPC 和资源授权，关闭 OCR 不取消公式任务。“OCR 模型”弹窗仅管理 OCR，采用左侧模型、右侧设备/资源的结构，删除移至模型标题栏；翻译/视觉服务设置按连接与身份验证分组。OCR/公式共用无滚动条的图片画布，普通滚轮锚点缩放、空白/空格/中键拖动；处理时显示不透明纯色遮罩，无进度条、磨砂效果或常驻提示条。图上选字操作条使用实色表面，两按钮中间直角衔接；顶栏移除重复的取消识别按钮。真实窗口回归已覆盖分栏/收起、图上选字、翻译、独立公式与退出/重新打开；完整模型家族及其他阶段仍按本计划验收。
 

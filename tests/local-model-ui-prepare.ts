@@ -8,4 +8,4 @@ for (const language of ['eng', 'chi_sim']) await copyFile(resolve('work/current/
 const suffixes: Record<string, string> = { detection: 'det.onnx', detectionConfig: 'det.yml', recognition: 'rec.onnx', recognitionConfig: 'rec.yml' };
 const store=new LocalModelStore(join(profile,'models','library'),async()=>{throw Error('UI fixture must not download');});
 for(const preset of process.env.ONE_MODEL_UI_PRESETS==='1'?paddleOCRPresets:[paddleTinyModel])await store.install(preset,new AbortController().signal,()=>{},
-  Object.fromEntries(preset.artifacts.map(file=>[file.role,resolve('work/current/capture-reconstruction',file.role==='orientation'?'pp-textline-orientation.onnx':file.role==='orientationConfig'?'pp-textline-orientation.yml':`pp-ocrv6-${preset.size}-${suffixes[file.role]}`)])));
+  Object.fromEntries(preset.artifacts.map(file=>[file.role,resolve('work/current/capture-reconstruction',file.role==='orientation'?'pp-textline-orientation.onnx':file.role==='orientationConfig'?'pp-textline-orientation.yml':preset.id.startsWith('pp-ocrv5-')?`paddle-v5/${preset.size}-${suffixes[file.role]}`:`pp-ocrv6-${preset.size}-${suffixes[file.role]}`)])));

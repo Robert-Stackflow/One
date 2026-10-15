@@ -24,6 +24,24 @@ test('detector normalizes BGR and bounds resize before rounding to the model str
   assert.ok(Math.abs(input.data[0] - (0 - 0.485) / 0.229) < 1e-6);
   assert.ok(Math.abs(input.data[2048] - (1 - 0.406) / 0.225) < 1e-6);
 });
+test('v5 long-side resize follows PaddleX stride 128 for landscape, portrait and large input',()=>{
+  const v5={...config,resizeLong:960};
+  for(const [width,height,w,h] of [[680,120,1024,256],[120,680,256,1024],[1920,1080,1024,640],[100,100,1024,1024],[1000,1,1024,128]]){
+    const input=paddleDetInput(new Uint8Array(width*height*3),width,height,v5);
+    assert.deepEqual(input.dims,[1,3,h,w]);
+  }
+  assert.throws(()=>paddleDetInput(new Uint8Array(3),1,1,{...v5,resizeLong:NaN}),/缩放/);
+  const yaml=`Global: {model_name: fixture}
+PreProcess:
+  transform_ops:
+    - DecodeImage: {img_mode: BGR}
+    - DetResizeForTest: {resize_long: 960}
+    - NormalizeImage: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225], scale: '1./255.'}
+PostProcess: {name: DBPostProcess, thresh: 0.2, box_thresh: 0.4, unclip_ratio: 1.4, max_candidates: 3000}`;
+  assert.equal(paddleDetConfig(yaml).resizeLong,960);
+  assert.throws(()=>paddleDetConfig(yaml.replace('resize_long: 960','limit_side_len: 960')),/缩放/);
+  assert.throws(()=>paddleDetConfig(yaml.replace('resize_long: 960','resize_long: -1')),/缩放/);
+});
 test('perspective crop retains corner correspondence and rotates a tall crop without scaling its source coordinates', () => {
   const rgb = new Uint8Array(10 * 10 * 3);
   for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) { rgb[(y * 10 + x) * 3] = x * 10; rgb[(y * 10 + x) * 3 + 1] = y * 10; }

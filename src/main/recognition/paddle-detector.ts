@@ -3,12 +3,15 @@ import { parse } from 'yaml';
 import { insideTextQuad } from '../../shared/recognition/text-geometry';
 import type { TextPoint, TextQuad } from '../../shared/recognition/text-document';
 
-export interface PaddleDetConfig { name: string; threshold: number; boxThreshold: number; unclip: number; maxCandidates: number; mean: number[]; std: number[] }
+export interface PaddleDetConfig { name: string; threshold: number; boxThreshold: number; unclip: number; maxCandidates: number; mean: number[]; std: number[]; resizeLong?: number }
 export interface PaddleTextBox { quad: TextQuad; confidence: number }
 export function paddleDetConfig(yaml: string): PaddleDetConfig {
   if (yaml.length > 1024 * 1024) throw Error('OCR 检测配置过大');
   const value = parse(yaml, { maxAliasCount: 100 }), post = value?.PostProcess;
   const ops = value?.PreProcess?.transform_ops, normalization = Array.isArray(ops) && ops.find(op => op?.NormalizeImage)?.NormalizeImage;
+  const resize = Array.isArray(ops) && ops.find(op => op && 'DetResizeForTest' in op)?.DetResizeForTest;
+  if(resize!=null&&(typeof resize!=='object'||Array.isArray(resize)||Object.keys(resize).some(key=>key!=='resize_long')||
+      !Number.isSafeInteger(resize.resize_long)||resize.resize_long<128||resize.resize_long>3968))throw Error('OCR 检测缩放配置不兼容');
   if (post?.name !== 'DBPostProcess' || typeof value?.Global?.model_name !== 'string' ||
       ![post.thresh, post.box_thresh].every(number => typeof number === 'number' && number > 0 && number < 1) ||
       !Number.isFinite(post.unclip_ratio) || post.unclip_ratio < 0 || post.unclip_ratio > 4 ||
@@ -17,16 +20,18 @@ export function paddleDetConfig(yaml: string): PaddleDetConfig {
       !normalization.mean.every(Number.isFinite) || !normalization.std.every((number: number) => Number.isFinite(number) && number > 0) ||
       normalization.scale !== '1./255.' || !ops.some((op: { DecodeImage?: { img_mode?: string } }) => op?.DecodeImage?.img_mode === 'BGR')) throw Error('OCR 检测模型配置不兼容');
   return { name: value.Global.model_name, threshold: post.thresh, boxThreshold: post.box_thresh, unclip: post.unclip_ratio,
-    maxCandidates: post.max_candidates, mean: [...normalization.mean], std: [...normalization.std] };
+    maxCandidates: post.max_candidates, mean: [...normalization.mean], std: [...normalization.std],...(resize?{resizeLong:resize.resize_long}:{}) };
 }
 
-/** Upstream's min-side resize, capped before rounding to multiples of 32. */
+/** PaddleX type 0 uses a minimum side; type 2 fits a long side and rounds up to stride 128. */
 export function paddleDetInput(rgb: Uint8Array, width: number, height: number, config: PaddleDetConfig, minSide = 736, maxSide = 4000) {
   if (![width, height].every(Number.isSafeInteger) || width < 1 || height < 1 || width > 16384 || height > 16384 ||
       width * height > 40_000_000 || rgb.length !== width * height * 3) throw Error('OCR 检测图像无效');
   if (![minSide, maxSide].every(Number.isSafeInteger) || minSide < 32 || maxSide < minSide || maxSide > 4000) throw Error('OCR 检测缩放配置无效');
-  const ratio = Math.min(Math.max(1, minSide / Math.min(width, height)), maxSide / Math.max(width, height));
-  const w = Math.max(32, Math.round(Math.floor(width * ratio) / 32) * 32), h = Math.max(32, Math.round(Math.floor(height * ratio) / 32) * 32);
+  if(config.resizeLong!==undefined&&(!Number.isSafeInteger(config.resizeLong)||config.resizeLong<128||config.resizeLong>3968))throw Error('OCR 检测缩放配置无效');
+  const ratio = config.resizeLong===undefined?Math.min(Math.max(1, minSide / Math.min(width, height)), maxSide / Math.max(width, height)):config.resizeLong/Math.max(width,height);
+  const side=(value:number)=>config.resizeLong===undefined?Math.max(32,Math.round(Math.floor(value*ratio)/32)*32):Math.max(128,Math.ceil(Math.floor(value*ratio)/128)*128);
+  const w=side(width),h=side(height);
   if (w * h > 4_000_000) throw Error('OCR 检测图像过大，请分块识别');
   const pixels = w * h, data = new Float32Array(pixels * 3);
   for (let y = 0; y < h; y++) {

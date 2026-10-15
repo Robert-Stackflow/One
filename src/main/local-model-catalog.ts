@@ -49,7 +49,33 @@ export const paddleMediumModel: PaddleOCRPreset = {
     ...orientationArtifacts(),
   ],
 };
-export const paddleOCRPresets: readonly PaddleOCRPreset[] = [paddleTinyModel, paddleSmallModel, paddleMediumModel];
+export const paddleV5MobileModel: PaddleOCRPreset = {
+  id: 'pp-ocrv5-mobile', revision: 'det-e6f4fa8-rec-ed152b8-ori-7fdcf3c', title: 'PP-OCRv5', size: 'mobile', purpose: 'ocr',
+  languages: ['中文', 'English'], precision: 'fp32', runtime: 'onnxruntime-node@1.30.0', backends: ['cpu', 'dml'],
+  memoryBudgetMiB: 1536, measuredMemoryMiB: 315,
+  weightLicense: { name: 'Apache-2.0', source: 'https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx' },
+  artifacts: [
+    paddle('PP-OCRv5_mobile_det_onnx', 'e6f4fa85f00e168c862bc462aebca69eef9b3d3d', 'det.onnx', 'detection', 'inference.onnx', 4826518, 'a431985659dc921974177a95adcfbb90fd9e51989a5e04d70d0b75f597b6e61d'),
+    paddle('PP-OCRv5_mobile_det_onnx', 'e6f4fa85f00e168c862bc462aebca69eef9b3d3d', 'det.yml', 'detectionConfig', 'inference.yml', 903, '98069072e1b6b37d727fd9d9f11725faa46d6ea0de012f2ed26caea011c37699'),
+    paddle('PP-OCRv5_mobile_rec_onnx', 'ed152b8b495f84de93cda5709d768548a9127622', 'rec.onnx', 'recognition', 'inference.onnx', 16534782, 'da72dc72ca4dc220df0dfde68c1dedc31c58d3e76a25871122e5056227d50092'),
+    paddle('PP-OCRv5_mobile_rec_onnx', 'ed152b8b495f84de93cda5709d768548a9127622', 'rec.yml', 'recognitionConfig', 'inference.yml', 148345, '5dfeb2777f6d0db8177d8128a8acfcf6e6276dc4ac73ea3bf0dc06d6a5e85d8e'),
+    ...orientationArtifacts(),
+  ],
+};
+export const paddleV5ServerModel: PaddleOCRPreset = {
+  id: 'pp-ocrv5-server', revision: 'det-dcf248c-rec-b70df21-ori-7fdcf3c', title: 'PP-OCRv5', size: 'server', purpose: 'ocr',
+  languages: ['中文', 'English'], precision: 'fp32', runtime: 'onnxruntime-node@1.30.0', backends: ['cpu', 'dml'],
+  memoryBudgetMiB: 3072, measuredMemoryMiB: 839,
+  weightLicense: { name: 'Apache-2.0', source: 'https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx' },
+  artifacts: [
+    paddle('PP-OCRv5_server_det_onnx', 'dcf248c4dcc064c6d030db241255f9e8fbc6733a', 'det.onnx', 'detection', 'inference.onnx', 88116791, '10803475a591f7dc623e24670fb5752ec94d39a1f8cf069aac1b6f0ce19cfc85'),
+    paddle('PP-OCRv5_server_det_onnx', 'dcf248c4dcc064c6d030db241255f9e8fbc6733a', 'det.yml', 'detectionConfig', 'inference.yml', 903, '28fb721efc3634fc8aa677e474b9602cb815a91cf569ef357a7a553d7b3ce685'),
+    paddle('PP-OCRv5_server_rec_onnx', 'b70df217f4fd99d14f970bad092cebe7d74cc4d1', 'rec.onnx', 'recognition', 'inference.onnx', 84503027, 'd9dc333c9c7b042c6dffb8e33d72b6f65c9c1d463d0a3c2f78174fea55e94752'),
+    paddle('PP-OCRv5_server_rec_onnx', 'b70df217f4fd99d14f970bad092cebe7d74cc4d1', 'rec.yml', 'recognitionConfig', 'inference.yml', 148345, '2c719dba044c4e2228aef8ff92f5f575394d75d24c16de096a33b7cfd902f66d'),
+    ...orientationArtifacts(),
+  ],
+};
+export const paddleOCRPresets: readonly PaddleOCRPreset[] = [paddleTinyModel, paddleSmallModel, paddleMediumModel, paddleV5MobileModel, paddleV5ServerModel];
 export const miganModel: LocalModelDescriptor = {
   id: 'migan-pipeline-v2', revision: '406830d0fa60666da0071c342ad2fbc8f30c5c64', title: 'MI-GAN', size: 'pipeline v2', purpose: 'repair',
   languages: [], precision: 'fp32', runtime: 'onnxruntime-node@1.30.0', backends: ['cpu'],

@@ -156,19 +156,19 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
       assert.deepEqual(errors,[]);console.log('CTC selection UI: approximate metadata, character copy, keyboard expansion/editor sync, rotation, select-all and stale geometry disable passed');return;
     }
     if(presets){
-      for(const id of ['pp-ocrv6-small','pp-ocrv6-medium']){
+      for(const id of ['pp-ocrv6-small','pp-ocrv6-medium','pp-ocrv5-mobile','pp-ocrv5-server']){
         await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');
         await dialog.locator(`[data-select-model=${id}]`).click();await choose(page,'local-model-device','CPU');
         await dialog.locator('#local-model-save').click();await expect(dialog).not.toBeVisible();
         const state=await page.evaluate(()=>window.one.recognition.localModels());assert.equal(state.choices.ocr.modelId,id);
-        const revision=state.entries.find(entry=>entry.id===id).revision;
-        for(let run=0;run<(id.endsWith('medium')?2:1);run++){
+        const entry=state.entries.find(entry=>entry.id===id),revision=entry.revision;
+        for(let run=0;run<(id.endsWith('medium')||id.endsWith('server')?2:1);run++){
           const result=await page.evaluate(async()=>{const api=window.one.recognition,state=await api.state();return api.run(state.token,'eng');});
           assert.match(result.text,/ONE\s*OCR\s*2026/);assert.equal(result.document.engine.model,revision);
-          assert.equal(result.inference.model,'PP-OCRv6 '+id.split('-').at(-1));assert.equal(result.inference.backend,'cpu');
+          assert.equal(result.inference.model,entry.title+' '+entry.size);assert.equal(result.inference.backend,'cpu');
         }
       }
-      assert.deepEqual(errors,[]);console.log('model preset UI: small/medium apply-close, exact model revisions and medium warm CPU budget passed');return;
+      assert.deepEqual(errors,[]);console.log('model preset UI: v6 small/medium and v5 mobile/server apply-close, exact model revisions and warm CPU budgets passed');return;
     }
     await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');await expect(dialog).toBeVisible();await expect(dialog.locator('[data-select-model=tesseract] .model-current')).toBeVisible();
     await page.locator('[data-select-model=pp-ocrv6-tiny]').click();await expect(dialog.locator('[data-select-model=tesseract] .model-current')).toBeVisible();await expect(dialog.locator('[data-select-model=pp-ocrv6-tiny] .model-current')).not.toBeVisible();

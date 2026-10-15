@@ -27,8 +27,8 @@ export async function inferOCRImage(context:Context,png:Buffer,size:{width:numbe
           result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
         }
         if(deepseekOCRPresets.some(model=>model.id===choice.modelId)){
-          if(region)throw Error('当前 DeepSeek 模型不提供字词坐标，请选择 Tesseract 或 PP-OCRv6 后局部识别；原文已保留');
-          if(needsOCRTiles(size))throw Error('DeepSeek 当前不支持长图分块，请选择 Tesseract 或 PP-OCRv6；输入已保留');
+          if(region)throw Error('当前 DeepSeek 模型不提供字词坐标，请选择 Tesseract 或 PP-OCR 后局部识别；原文已保留');
+          if(needsOCRTiles(size))throw Error('DeepSeek 当前不支持长图分块，请选择 Tesseract 或 PP-OCR；输入已保留');
           return await context.native.run(png,size,language,choice.modelId,choice.device);
         }
         const lease = await acquirePaddleModel(context.models.store, choice.modelId);
