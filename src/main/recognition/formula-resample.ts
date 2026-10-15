@@ -5,20 +5,28 @@
  */
 interface RGB {data:Uint8Array;width:number;height:number}
 const precision=1<<22,half=precision/2,f32=Math.fround;
-type Filter='linear'|'cubic';
+type Filter='linear'|'cubic'|'lanczos';
 function coefficients(input:number,start:number,end:number,output:number,filter:Filter){
   start=f32(start);end=f32(end);
-  const scale=f32(end-start)/output,stretch=Math.max(1,scale),support=(filter==='linear'?1:2)*stretch,inverse=1/stretch;
+  const scale=f32(end-start)/output,stretch=Math.max(1,scale),support=(filter==='linear'?1:filter==='cubic'?2:3)*stretch,inverse=1/stretch;
   return Array.from({length:output},(_,index)=>{
     const center=start+(index+.5)*scale,left=Math.max(0,Math.trunc(center-support+.5)),right=Math.min(input,Math.trunc(center+support+.5));
     const weights=new Float64Array(right-left);let total=0;
     for(let at=0;at<weights.length;at++){
       const x=Math.abs((at+left-center+.5)*inverse);
-      const value=filter==='linear'?Math.max(0,1-x):x<1?((1.5*x-2.5)*x*x+1):x<2?(((x-5)*x+8)*x-4)*-.5:0;
+      const value=filter==='linear'?Math.max(0,1-x):filter==='lanczos'?(x===0?1:x<3?Math.sin(Math.PI*x)/(Math.PI*x)*Math.sin(Math.PI*x/3)/(Math.PI*x/3):0):x<1?((1.5*x-2.5)*x*x+1):x<2?(((x-5)*x+8)*x-4)*-.5:0;
       weights[at]=value;total+=value;
     }
     return {left,weights:Int32Array.from(weights,value=>{const scaled=(total?value/total:value)*precision;return Math.trunc(scaled+(scaled<0?-.5:.5));})};
   });
+}
+/** Pillow L-mode resize; pix2tex uses bilinear enlargement and Lanczos reduction. */
+export function formulaGrayResize(data:Uint8Array,width:number,height:number,targetWidth:number,targetHeight:number,filter:'linear'|'lanczos'){
+  if(![width,height,targetWidth,targetHeight].every(value=>Number.isSafeInteger(value)&&value>0&&value<=8192)||width*height!==data.length||width*height>4_718_592||targetWidth*height>4_718_592||targetWidth*targetHeight>4_718_592)throw Error('公式缩放尺寸无效');
+  let horizontal=data;
+  if(width!==targetWidth){const rows=coefficients(width,0,width,targetWidth,filter);horizontal=new Uint8Array(targetWidth*height);for(let y=0;y<height;y++)for(let x=0;x<targetWidth;x++){const row=rows[x];let value=half;for(let i=0;i<row.weights.length;i++)value+=data[y*width+row.left+i]*row.weights[i];horizontal[y*targetWidth+x]=clip(value);}}
+  if(height===targetHeight)return horizontal===data?data.slice():horizontal;
+  try{const rows=coefficients(height,0,height,targetHeight,filter),output=new Uint8Array(targetWidth*targetHeight);for(let y=0;y<targetHeight;y++)for(let x=0;x<targetWidth;x++){const row=rows[y];let value=half;for(let i=0;i<row.weights.length;i++)value+=horizontal[(row.left+i)*targetWidth+x]*row.weights[i];output[y*targetWidth+x]=clip(value);}return output;}finally{if(horizontal!==data)horizontal.fill(0);}
 }
 const clip=(value:number)=>Math.max(0,Math.min(255,Math.floor(value/precision)));
 function resize(image:RGB,width:number,height:number,filter:Filter,right=image.width,bottom=image.height):RGB {

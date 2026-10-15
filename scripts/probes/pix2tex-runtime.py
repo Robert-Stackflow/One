@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
     parser.add_argument("--pipeline", choices=["reference", "core"], default="reference")
+    parser.add_argument("--greedy", action="store_true")
     args = parser.parse_args()
     root, cases, report = args.model_root.resolve(), args.cases.resolve(), args.report.resolve()
     started = time.monotonic()
@@ -77,6 +78,19 @@ def main():
                            no_resize=False))
     assert model.args.device == args.device and model.image_resizer is not None
     init_ms = round((time.monotonic() - started) * 1000)
+    if args.greedy:
+        @torch.no_grad()
+        def greedy(image, **_options):
+            context = model.model.encoder(image)
+            ids = torch.full((1, 1), model.args.bos_token, dtype=torch.int64, device=image.device)
+            for _ in range(model.args.max_seq_len):
+                logits = model.model.decoder.net(ids, mask=torch.ones_like(ids, dtype=torch.bool), context=context)[:, -1, :]
+                next_id = logits.argmax(-1, keepdim=True)
+                ids = torch.cat((ids, next_id), dim=-1)
+                if next_id.item() == model.args.eos_token:
+                    break
+            return ids[:, 1:]
+        model.model.generate = greedy
     generate, tokens, tensors = model.model.generate, [], []
 
     def capture(image, **options):
@@ -89,7 +103,7 @@ def main():
     model.model.generate = capture
     versions = {item.metadata["Name"]: item.version for item in importlib.metadata.distributions()}
     results = []
-    payload = {"model": "pix2tex", "package": "0.1.4", "weightsRelease": "v0.0.1", "pipeline": args.pipeline,
+    payload = {"model": "pix2tex", "package": "0.1.4", "weightsRelease": "v0.0.1", "pipeline": args.pipeline, "greedy": args.greedy,
                "backend": args.device, "artifacts": ARTIFACTS, "versions": versions,
                "runnerSha256": digest(Path(__file__)),
                "coreSha256": digest(Path(__file__).with_name("pix2tex_core.py")),

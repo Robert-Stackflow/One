@@ -6,11 +6,11 @@ import {formulaOutput,FORMULA_IMAGE} from '../../shared/recognition/formula';
 import type {PaddleArtifact,PaddlePreferences} from './paddle-job';
 import {formulaProfiles} from './formula-model-catalog';
 import {formulaPixels} from './formula-resample';
-export interface FormulaModelFiles {id:string;revision:string;onnx:PaddleArtifact;config:PaddleArtifact}
+export interface FormulaModelFiles {id:string;revision:string;engine?:'paddle'|'pix2tex';onnx:PaddleArtifact;config:PaddleArtifact;decoder?:PaddleArtifact;resizer?:PaddleArtifact}
 export interface FormulaLocalJob {id:number;png:Buffer;model:FormulaModelFiles;backend:'cpu'|'dml';deviceId:number;memoryMiB:number}
 export interface FormulaLocalResult {text:string;sourceSha256:string;model:string;revision:string;actualBackend:'cpu'|'dml';deviceId?:number;peakRSSMiB:number;fallbackReason?:string}
 export type FormulaLocalPreferences=PaddlePreferences&{automaticBackend?:'cpu'|'dml'};
-async function artifact(file:PaddleArtifact,limit:number){
+export async function formulaArtifact(file:PaddleArtifact,limit:number){
   const stat=await lstat(file.path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==file.bytes||file.bytes<1||file.bytes>limit||!/^[a-f0-9]{64}$/.test(file.sha256))throw Error('公式模型文件无效');
   const bytes=await readFile(file.path);if(bytes.length!==file.bytes||createHash('sha256').update(bytes).digest('hex')!==file.sha256){bytes.fill(0);throw Error('公式模型校验失败');}return bytes;
 }
@@ -46,6 +46,7 @@ export function formulaDecoder(config:unknown){
   };
 }
 function profileFor(model:FormulaModelFiles){
+  if(model.engine!==undefined&&model.engine!=='paddle')throw Error('公式模型引擎不匹配');
   const profile=formulaProfiles.find(profile=>profile.source.id===model.id&&profile.source.revision===model.revision&&profile.output.sha256===model.onnx.sha256);
   if(!profile)throw Error('公式预设尚未适配此运行器');return profile;
 }
@@ -58,11 +59,11 @@ export class FormulaLocalPipeline {
     const buffers:Buffer[]=[];let session:ort.InferenceSession|undefined;
     try{
       if(model.config.sha256!==profile.source.artifacts.find(file=>file.role==='config')!.sha256||model.onnx.bytes!==profile.output.bytes)throw Error('公式模型配置与预设不一致');
-      const config=await artifact(model.config,8*1024*1024);buffers.push(config);const configuration=JSON.parse(config.toString('utf8')),ops=configuration.PreProcess?.transform_ops;
+      const config=await formulaArtifact(model.config,8*1024*1024);buffers.push(config);const configuration=JSON.parse(config.toString('utf8')),ops=configuration.PreProcess?.transform_ops;
       const shape=Array.isArray(ops)?ops.find(op=>op.UniMERNetImgDecode)?.UniMERNetImgDecode.input_size:undefined,limit=Array.isArray(ops)?ops.find(op=>op.UniMERNetLabelEncode)?.UniMERNetLabelEncode.max_seq_len:undefined;
       if(!Array.isArray(shape)||shape.length!==2||shape.some(value=>value!==profile.inputSize)||limit!==profile.maxTokens)throw Error('公式模型输入配置与预设不一致');
       const decode=formulaDecoder(configuration);
-      const weights=await artifact(model.onnx,1024*1024*1024);buffers.push(weights);
+      const weights=await formulaArtifact(model.onnx,1024*1024*1024);buffers.push(weights);
       session=await ort.InferenceSession.create(weights,{executionProviders:backend==='dml'?[{name:'dml',deviceId}]:['cpu'],executionMode:'sequential',enableMemPattern:backend==='cpu',intraOpNumThreads:2,interOpNumThreads:1,logSeverityLevel:3});
       if(session.inputNames.length!==1||session.outputNames.length!==1)throw Error('公式模型输入输出不兼容');
       return new FormulaLocalPipeline(session,decode,profile.inputSize);
