@@ -28,10 +28,12 @@ export async function inferOCRImage(context:Context,png:Buffer,size:{width:numbe
           result.inference = { model: 'Tesseract fast', backend: 'cpu', device: 'CPU' }; return result;
         }
         if(deepseekOCRPresets.some(model=>model.id===choice.modelId)){
-          if(!region&&needsOCRTiles(size))throw Error('DeepSeek 当前不支持长图分块，请选择 Tesseract 或 PP-OCR；输入已保留');
+          const requiresRegions=!!region||needsOCRTiles(size);let cpuFallback=false;
           return await recognizeOCRImage(png,size,signal,async(chunk,dimensions)=>{
-            const result=await context.native.run(chunk,dimensions,language,choice.modelId,choice.device);
-            if(region&&result.text.trim()&&!result.words.length)throw Error('DeepSeek 未返回有效区域位置，原文已保留');
+            signal.throwIfAborted();
+            const result=await context.native.run(chunk,dimensions,language,choice.modelId,cpuFallback?{mode:'cpu'}:choice.device);
+            if(choice.device.mode==='auto'&&result.actualBackend==='cpu')cpuFallback=true;
+            if(requiresRegions&&result.text.trim()&&!result.words.length)throw Error('DeepSeek 未返回有效区域位置，输入已保留');
             return result;
           },progress,undefined,region);
         }
