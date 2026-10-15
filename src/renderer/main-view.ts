@@ -167,13 +167,16 @@ export function renderMain() {
   void Promise.allSettled(informationTabs.map(([kind])=>api.systemInformation(kind)));
 }
 function previewPage() {
-  return `<div class="empty" id="dropzone"><div class="big-icon">${icon('preview')}</div><h2 id="preview-drop-title">拖入文件或文件夹</h2><p id="preview-drop-detail" hidden>松开以打开预览</p><div class="toolbar">${button('pick-preview','选择文件','file',true)}${button('pick-preview-folder','选择文件夹','folder')}</div></div><div class="settings-card">${settingRow('用空格快速预览','资源管理器文件列表中选中文件后，按空格查看。',switchControl('preview-enabled','开启空格预览'))}</div>`;
+  return `<div class="empty" id="dropzone"><div class="big-icon">${icon('preview')}</div><h2 id="preview-drop-title">拖入文件或文件夹</h2><p id="preview-drop-detail" hidden>松开以打开预览</p><div class="toolbar">${button('pick-preview','选择文件','file',true)}${button('pick-preview-folder','选择文件夹','folder')}</div></div><div class="settings-card">${settingRow('用空格快速预览','资源管理器文件列表中选中文件后，按空格查看。',switchControl('preview-enabled','开启空格预览'))}${settingRow('预览应用程序类型文件','支持 EXE、DLL、MSIX 和 MSIXBUNDLE 等文件。开启后仅静态读取文件信息，不运行或安装程序。',switchControl('preview-applications','预览应用程序类型文件'))}</div>`;
 }
 function setupPreviewPage() {
   const enabled = q<HTMLInputElement>('preview-enabled');
   enabled.disabled = true;
   void api.settings().then(settings => { enabled.checked = settings.explorerPreview; }).catch(toast).finally(() => { enabled.disabled = false; });
   bindPreference(enabled,()=>({explorerPreview:enabled.checked}),async()=>{enabled.checked=(await api.settings()).explorerPreview;});
+  const applications=q<HTMLInputElement>('preview-applications');applications.disabled=true;
+  void api.settings().then(settings=>{applications.checked=settings.preview.applicationFiles;}).catch(toast).finally(()=>{applications.disabled=false;});
+  bindPreference(applications,()=>({preview:{applicationFiles:applications.checked}}),async()=>{applications.checked=(await api.settings()).preview.applicationFiles;});
   action('pick-preview-folder',async()=>{const path=await api.pickDirectory();if(path)await api.preview(path);});
   action('pick-preview', async () => { const path = await api.pickFile(); if (path) await api.preview(path); });
   const zone = q('dropzone');

@@ -1,13 +1,14 @@
 export interface PreviewPreferences {
-  pinned:boolean; held:boolean; files:boolean;
+  pinned:boolean; held:boolean; files:boolean; applicationFiles:boolean;
   leftWidth:number; leftTab:'files'|'details'|'outline'|'overview'; wrap:boolean;
 }
-export const defaultPreview=():PreviewPreferences=>({pinned:false,held:false,files:false,leftWidth:280,leftTab:'files',wrap:false});
+export const defaultPreview=():PreviewPreferences=>({pinned:false,held:false,files:false,applicationFiles:false,leftWidth:280,leftTab:'files',wrap:false});
 export function validatePreview(value:unknown):PreviewPreferences{
   const result=defaultPreview();if(value===undefined)return result;
   if(!value||typeof value!=='object')throw new Error('预览设置无效');
   const v=value as PreviewPreferences & {details?:boolean};
   for(const k of ['pinned','held','files','wrap'] as const){if(typeof v[k]!=='boolean')throw new Error('预览开关无效');result[k]=v[k];}
+  if(v.applicationFiles!==undefined){if(typeof v.applicationFiles!=='boolean')throw Error('应用程序预览开关无效');result.applicationFiles=v.applicationFiles;}
   if(!Number.isInteger(v.leftWidth)||v.leftWidth<180||v.leftWidth>480)throw new Error('预览栏宽度无效');result.leftWidth=v.leftWidth;
   if(!['files','details','outline','overview'].includes(v.leftTab))throw new Error('预览侧栏无效');result.leftTab=v.leftTab;
   // Migrate the former right pane into the shared left pane.

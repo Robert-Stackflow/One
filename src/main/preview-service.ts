@@ -1,3 +1,4 @@
+import {applicationPreviewExtension,packagePreviewExtensions} from '../shared/application-preview';
 import {stat} from 'node:fs/promises';
 import {basename,dirname,extname,join} from 'node:path';
 import {Worker} from 'node:worker_threads';
@@ -8,7 +9,7 @@ import type {DirectoryInfo} from '../shared/directory';
 import {isArchivePath} from '../shared/archive-actions';
 import {inspectMotionPhoto,inspectLivp,releaseLivpTemporary,type FileSegment,type LivpContents,type LivpTemporary} from './motion-photo';
 import {isAnimatedPng,previewImageDimensions} from './preview-resource';
-function inspect(path:string,kind:string):Promise<{entries?:FileEntry[];metadata?:Record<string,string>;photoLocation?:import('../shared/photo-metadata').PhotoLocation;cover?:string;lyrics?:import('../shared/preview').LyricLine[];workbook?:import('../shared/workbook').WorkbookData}>{return new Promise((resolve,reject)=>{
+function inspect(path:string,kind:string):Promise<{application?:PreviewData['application'];richText?:PreviewData['richText'];entries?:FileEntry[];metadata?:Record<string,string>;photoLocation?:import('../shared/photo-metadata').PhotoLocation;cover?:string;lyrics?:import('../shared/preview').LyricLine[];workbook?:import('../shared/workbook').WorkbookData}>{return new Promise((resolve,reject)=>{
   const worker=new Worker(join(__dirname,'preview-worker.cjs'),{workerData:{path,kind},resourceLimits:{maxOldGenerationSizeMb:192}});
   const timer=setTimeout(()=>{void worker.terminate();reject(new Error('文件解析超时，请用默认程序打开'));},15000);
   const finish=()=>{clearTimeout(timer);void worker.terminate();};worker.once('message',message=>{finish();message.error?reject(new Error(message.error)):resolve(message.result);});worker.once('error',error=>{finish();reject(error);});worker.once('exit',code=>{clearTimeout(timer);if(code!==0)reject(new Error('文件解析已终止'));});
@@ -20,12 +21,25 @@ export async function reloadWorkbook(path:string):Promise<import('../shared/work
 }
 const images:Record<string,string>={png:'image/png',apng:'image/png',heic:'image/heic',heif:'image/heif',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',ico:'image/x-icon',svg:'image/svg+xml',avif:'image/avif'};
 const media:Record<string,string>={mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',flac:'audio/flac',opus:'audio/ogg',aac:'audio/aac',m4a:'audio/mp4',mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',webm:'video/webm',mkv:'video/x-matroska'};
-export async function preparePreview(path:string,register:(path:string,mime:string,segment?:FileSegment,temporary?:LivpTemporary)=>string,directory:(path:string,target?:string)=>Promise<DirectoryInfo>):Promise<PreviewData>{
+export function blockedApplicationPreview(data:PreviewData):PreviewData{
+  return {...data,type:'unsupported',applicationBlocked:true,error:'在 One 的“快速预览”中开启“预览应用程序类型文件”。',metadata:{'类型':extname(data.path).slice(1).toUpperCase()},application:undefined,richText:undefined,text:undefined,textURL:undefined,url:undefined,cover:undefined,entries:undefined};
+}
+export async function preparePreview(path:string,register:(path:string,mime:string,segment?:FileSegment,temporary?:LivpTemporary)=>string,directory:(path:string,target?:string)=>Promise<DirectoryInfo>,options:{applicationFiles?:boolean}={}):Promise<PreviewData>{
   const info=await stat(path),ext=extname(path).slice(1).toLowerCase();
   const navigation=await directory(dirname(path),path).catch(()=>undefined);
   const data:PreviewData={name:basename(path)||path,path,size:info.size,type:'unsupported',siblings:[],navigation,modified:info.mtimeMs,created:info.birthtimeMs,metadata:{'类型':info.isDirectory()?'文件夹':(ext.toUpperCase()||'文件')}};
   if(info.isDirectory()){data.directory=await directory(path);data.type='folder';data.metadata!['项目']=String(data.directory.count);return data;}
   if(!info.isFile())throw new Error('此项目无法预览');
+  if(applicationPreviewExtension(ext)){
+    if(!options.applicationFiles)return blockedApplicationPreview(data);
+    try{const result=await inspect(path,packagePreviewExtensions.test(ext)?'package':'program');data.type='application';data.application=result.application;Object.assign(data.metadata!,result.metadata);}
+    catch(error){data.error=(error as Error).message;}return data;
+  }
+  if(ext==='rtf'){
+    if(info.size>8*1024*1024){data.error='RTF 超过 8 MB，无法预览';return data;}
+    try{const result=await inspect(path,'rtf');data.type='rtf';data.richText=result.richText;Object.assign(data.metadata!,result.metadata);}
+    catch(error){data.error=(error as Error).message;}return data;
+  }
   if(ext==='docx'){
     if(info.size>50*1024*1024){data.error='文件超过预览大小上限';return data;}
     try{const result=await inspect(path,'docx');Object.assign(data.metadata!,result.metadata);data.type='docx';data.url=register(path,'application/vnd.openxmlformats-officedocument.wordprocessingml.document');}

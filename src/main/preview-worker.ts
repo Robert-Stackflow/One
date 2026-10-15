@@ -1,3 +1,6 @@
+import {inspectProgram} from './preview-program';
+import {inspectPackage} from './preview-package';
+import {inspectRtf} from './preview-rtf';
 import {parseLyrics} from '../shared/preview';
 import {photoMetadata} from '../shared/photo-metadata';
 import {extname} from 'node:path';
@@ -55,6 +58,9 @@ export function parseAndroidManifest(b:Buffer):Record<string,string>{
 }
 async function run(){
   const {path,kind}=workerData;
+  if(kind==='program')return inspectProgram(path);
+  if(kind==='package')return inspectPackage(path);
+  if(kind==='rtf')return inspectRtf(path);
   if(kind==='xlsx'){
     const result=await archive(path,true),names=new Set(result.entries.map(entry=>entry.path));
     for(const name of ['[Content_Types].xml','_rels/.rels','xl/workbook.xml','xl/_rels/workbook.xml.rels'])if(!names.has(name))throw new Error('不是有效的 XLSX 工作簿');

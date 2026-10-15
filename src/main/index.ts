@@ -1,3 +1,4 @@
+import {applicationPreviewExtension} from '../shared/application-preview';
 import {searchUrl} from '../shared/search-url';
 import {chooseCodexExecutable,openCodexLogin,copyCodexCode} from './ai-account-controls';
 import {previewArchive} from './preview-archive';
@@ -115,7 +116,7 @@ import {colorFormats} from '../shared/colors';
 import {ColorEditor} from './color-editor';
 import {fileResponse} from './file-response';
 import type {ScreenCapture} from '../shared/types';
-import {preparePreview as loadPreview,reloadWorkbook} from './preview-service';
+import {preparePreview as loadPreview,reloadWorkbook,blockedApplicationPreview} from './preview-service';
 import {NativePreviewService} from './native-preview';
 import {nativePreviewBounds} from '../shared/native-preview';
 import {NativeTooltipService} from './native-tooltip';
@@ -567,7 +568,7 @@ async function preparePreview(path: string, owner: number): Promise<PreviewData>
   void recognition?.service.inline.releaseOwner(owner).catch(()=>{});
   nativeOfficePreview.stop(owner);
   releasePreviewAssets(owner);
-  const held:string[]=[];try{const next=await loadPreview(path,(path,mime,segment,temporary)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime,segment,temporary});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return next;}catch(error){releasePreviewAssets(owner);for(const id of held)directories.release(owner,id);throw error;}
+  const held:string[]=[];try{const next=await loadPreview(path,(path,mime,segment,temporary)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const token=randomUUID();assets.set(token,{path,owner,mime,segment,temporary});return `one-file://asset/${token}/${encodeURIComponent(basename(path))}`;},async(directory,target)=>{if(!roles.has(owner))throw new Error('预览窗口已关闭');const info=await directories.open(owner,directory,target);held.push(info.id);return info;},{applicationFiles:settings.preview.applicationFiles});if(next.workbook)next.workbookToken=randomUUID();if(next.type==='native-office')next.nativeOfficeToken=randomUUID();const previous=previews.get(owner);for(const info of [previous?.directory,previous?.navigation])if(info)directories.release(owner,info.id);return !settings.preview.applicationFiles&&applicationPreviewExtension(extname(path).slice(1))?blockedApplicationPreview(next):next;}catch(error){releasePreviewAssets(owner);for(const id of held)directories.release(owner,id);throw error;}
 }
 function foregroundPreview(window:BrowserWindow){
  if(window.isDestroyed())return;if(window.isMinimized())window.restore();
@@ -584,6 +585,21 @@ async function preview(path: string) {
  catch(error){if(!window.isDestroyed())window.close();throw error;}
 }
 function ElectronContents(id: number) { const window = BrowserWindow.getAllWindows().find(w => w.webContents.id === id); if (!window) throw new Error('预览窗口已关闭'); return window.webContents; }
+let applicationPreviewRefreshQueue:Promise<void>=Promise.resolve();
+function refreshApplicationPreviews(){
+  for(const [owner,data]of previews){
+    if(!applicationPreviewExtension(extname(data.path).slice(1)))continue;
+    const window=BrowserWindow.fromWebContents(ElectronContents(owner));if(!window||window.isDestroyed())continue;
+    if(!settings.preview.applicationFiles){previews.set(owner,blockedApplicationPreview(data));window.webContents.send('one:preview-changed');continue;}
+    const job=Promise.all([applicationPreviewRefreshQueue,(previewQueues.get(owner)||Promise.resolve()).catch(()=>{})]).then(async()=>{
+      if(window.isDestroyed()||previews.get(owner)!==data||!settings.preview.applicationFiles)return;
+      window.webContents.send('one:preview-loading');const result=await preparePreview(data.path,owner);
+      if(window.isDestroyed()||previews.get(owner)!==data){const current=previews.get(owner);for(const info of [result.directory,result.navigation])if(info&&![current?.directory?.id,current?.navigation?.id].includes(info.id))directories.release(owner,info.id);return;}
+      previews.set(owner,result);window.webContents.send('one:preview-changed');
+    }).catch(error=>{runtimeLog(app.getPath('userData'),'preview-error',String(error));if(!window.isDestroyed()&&previews.get(owner)===data){previews.set(owner,{...data,type:'unsupported',applicationBlocked:undefined,error:'文件无法读取，请确认文件仍然存在。'});window.webContents.send('one:preview-changed');}});
+    applicationPreviewRefreshQueue=job;previewQueues.set(owner,job);
+  }
+}
 async function persistSettings(next:Settings){await mkdir(app.getPath('userData'),{recursive:true});const temporary=settingsPath()+'.tmp';await writeFile(temporary,JSON.stringify(next,null,2),'utf8');await rename(temporary,settingsPath());settings=next;}
 let saving:Promise<unknown>=Promise.resolve();
 function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortcutConflict=false}:{allowShortcutConflict?:boolean}={}){
@@ -602,6 +618,7 @@ function saveSettings(value:Settings|((current:Settings)=>Settings),{allowShortc
     if(changed('themeSchedule'))void themeAutomation?.configure(next.themeSchedule);
     const inputKeys=['quickActions','capsLock','echo','keyEcho','onlyCombinations','edgeScroll','copyMenu','explorerPreview','pauseFullscreen','excludedApps','dwellMs','cornerPixels','cooldownMs','copyIntervalMs','volumeStep','edgePixels','corners','edges','cornerBindings','utilities'] as const;
     if(inputKeys.some(changed)){if(inputPaused)input?.stop();else input?.update(next);}
+    if(previous.preview.applicationFiles!==next.preview.applicationFiles)refreshApplicationPreviews();
     if(changed('search')){
       const bridgeKeys=['shortcut','programShortcut','doubleCtrl','explorerTyping','explorerMenu','dialogSwitch'] as const;
       if(bridgeKeys.some(k=>next.search[k]!==previous.search[k]))searchBridge?.update(next.search);
