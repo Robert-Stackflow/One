@@ -43,7 +43,9 @@ const {execFile}=require('node:child_process'),{promisify}=require('node:util'),
     await page.locator('#result').fill('');await page.locator('#run').click();await expect(page.locator('#result')).toHaveValue(/ONE\s*OCR\s*2026/,{timeout:180000});
     const result=await page.evaluate(async()=>{const api=window.one.recognition,state=await api.state();return api.run(state.token,'chi_sim+eng');});
     assert.equal(result.inference.backend,backend);assert.match(result.document.engine.model,new RegExp(model));
-    assert.deepEqual(result.words,[]);assert.deepEqual(result.document.blocks,[]);return result;
+    assert.ok(result.words.length>0);const tokens=result.document.blocks.flatMap(block=>block.lines.flatMap(line=>line.tokens));
+    assert.ok(tokens.length>0&&tokens.every(token=>token.geometry==='region'&&token.confidence===undefined));
+    assert.ok(!result.text.includes('<|'));return result;
   }
   try{
     const prepare=path.join(directory,'prepare.cjs');await build({entryPoints:['tests/recognition/native-ocr-ui-prepare.ts'],outfile:prepare,bundle:true,platform:'node',target:'node22',packages:'external',logLevel:'warning'});

@@ -10,7 +10,7 @@ export interface TextToken {
   text: string;
   separatorAfter: string;
   quad: TextQuad;
-  geometry: 'character' | 'word' | 'ctc';
+  geometry: 'character' | 'word' | 'ctc' | 'region';
   confidence?: number;
   sourceStart?: number;
   sourceEnd?: number;

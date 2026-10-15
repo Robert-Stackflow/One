@@ -155,10 +155,10 @@ export class LocalModelManager {
         weightLicenseSource:model.weightLicense.source,source:native?model.artifacts[0].url.split('/resolve/')[0]:undefined,
         runtimeReady:native?runtime:undefined,
         preparationBytes:model.purpose==='formula'?formulaRuntimeProfile.artifacts.reduce((sum,file)=>sum+file.bytes,0):undefined,
-        selection:model.purpose==='ocr'?(native?'text':'ctc'):undefined,
+        selection:model.purpose==='ocr'?(native?'region':'ctc'):undefined,
         orientationModel:model.purpose==='ocr'&&!native?model.artifacts.some(file=>file.role==='orientation'):undefined,
         progress: progress ? progress.received / progress.total : 0,phase:progress?.phase, downloadedBytes: downloading && progress ? Math.min(cached.totalBytes,progress.received) : cached.downloadedBytes,
-        error: this.errors.get(model.id) || '', note: model.purpose==='formula'?'印刷公式；自动模式使用 CPU':native?'CPU / NVIDIA CUDA；当前仅提供文字结果，不提供图上选字':model.purpose === 'ocr' ? '已验证 CPU/DirectML；CTC 与高对比像素投影提供近似定位，缺失对齐时保留行框' : '已验证 CPU；保留旧缓存供旧版使用' });
+        error: this.errors.get(model.id) || '', note: model.purpose==='formula'?'印刷公式；自动模式使用 CPU':native?'CPU / NVIDIA CUDA；模型估计区域按整段选择，位置可能偏移':model.purpose === 'ocr' ? '已验证 CPU/DirectML；CTC 与高对比像素投影提供近似定位，缺失对齐时保留行框' : '已验证 CPU；保留旧缓存供旧版使用' });
     }
     return { revision: this.revision, choices: structuredClone(this.choices), entries, devices: structuredClone(this.devices) };
   }

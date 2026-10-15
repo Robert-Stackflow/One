@@ -28,7 +28,8 @@ export function mergeOCRTiles(parts:readonly OCRTileResult[],size:{width:number;
       // Discard clipped context fragments, never text touching the real image border.
       if(!owned&&(tile.left>0&&source.x<2||tile.top>0&&source.y<2||tile.left+tile.width<size.width&&tile.width-source.x-source.width<2||tile.top+tile.height<size.height&&tile.height-source.y-source.height<2))return;
       const word={...source,x,y,symbols:source.symbols?.map(symbol=>({...symbol,x:symbol.x+tile.left,y:symbol.y+tile.top}))};
-      const pieces=(tokens.get(index)||[]).map(token=>({...token,quad:token.quad.map(point=>({x:point.x+tile.left,y:point.y+tile.top})) as TextQuad}));
+      const move=(shape:TextQuad)=>shape.map(point=>({x:point.x+tile.left,y:point.y+tile.top})) as TextQuad;
+      const pieces=(tokens.get(index)||[]).map(token=>({...token,quad:move(token.quad),sourceQuads:token.sourceQuads?.map(move)}));
       const candidate={word,tokens:pieces,owned,margin:Math.min(source.x,source.y,tile.width-source.x-source.width,tile.height-source.y-source.height)};
       const bx=Math.floor(cx/64),by=Math.floor(cy/64),text=source.text.trim();let duplicate:Candidate|undefined;
       for(let dy=-1;dy<=1&&!duplicate;dy++)for(let dx=-1;dx<=1&&!duplicate;dx++)for(const other of bins.get(`${text}:${bx+dx}:${by+dy}`)||[]){

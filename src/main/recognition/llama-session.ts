@@ -150,7 +150,7 @@ export class LlamaSession {
       const device=backend==='cpu'?'none':'CUDA'+deviceId;
       const args=['inference-host',String(this.options.memoryMiB??preset.memoryBudgetMiB),executable,
         '-m',weights,'--mmproj',projector,'--no-jinja','--chat-template','deepseek-ocr','--host','127.0.0.1','--port',String(this.port),
-        '--api-key-file',keyFile,'--offline','--no-webui','--parallel','1','--flash-attn','off','--no-warmup',
+        '--api-key-file',keyFile,'--offline','--no-webui','--parallel','1','--flash-attn','off','--no-warmup','--special',
         '--fit','off','-c',String(preset.contextTokens),'-b','128','-ub','128','--device',device,'--mmproj-device',device,
         '-ngl',backend==='cpu'?'0':'99'];
       if(backend==='cpu')args.push('--no-mmproj-offload');
@@ -190,7 +190,7 @@ export class LlamaSession {
     this.busy=true;
     try{
       combined.throwIfAborted();
-      const body=JSON.stringify({messages:[{role:'user',content:[{type:'image_url',image_url:{url:'data:image/png;base64,'+png.toString('base64')}},{type:'text',text:'Free OCR.'}]}],
+      const body=JSON.stringify({messages:[{role:'user',content:[{type:'image_url',image_url:{url:'data:image/png;base64,'+png.toString('base64')}},{type:'text',text:'<|grounding|>OCR this image.'}]}],
         stream:false,temperature:0,max_tokens:this.options.preset.outputTokens});
       const response=await this.json('/v1/chat/completions',combined,body);
       if(response.status!==200)throw failure(response.status===500?'inference':'protocol','本地识别请求失败');

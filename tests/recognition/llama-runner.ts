@@ -13,7 +13,7 @@ import type { InferenceDevices } from '../../src/shared/inference-devices';
 const gpu={id:'00000000:00000003',deviceId:19,name:'NVIDIA fixture',vendorId:0x10de,pciDeviceId:1,dedicatedMemory:8*1024**3,sharedMemory:0,d3d12:true,cudaDeviceId:3,cudaDriverVersion:12040};
 const devices:InferenceDevices={gpus:[gpu]};
 const png=()=>sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
-async function setup(config:{failGPU?:string;failWeights?:boolean;failClose?:boolean;idleMs?:number;missingCUDA?:boolean}={}){
+async function setup(config:{failGPU?:string;failWeights?:boolean;failClose?:boolean;idleMs?:number;missingCUDA?:boolean;response?:string}={}){
   const directory=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'runner-'));
   const files=[{role:'language',path:join(directory,'language')},{role:'vision',path:join(directory,'vision')}],executable=join(directory,'server.exe');
   for(const path of [...files.map(file=>file.path),executable])await writeFile(path,'fixture');
@@ -28,7 +28,7 @@ async function setup(config:{failGPU?:string;failWeights?:boolean;failClose?:boo
       let alive=false;
       return {get alive(){return alive;},peakRSSMiB:42,async start(signal:AbortSignal){signal.throwIfAborted();alive=true;stats.starts.push(options);},
         async recognize(bytes:Buffer,signal:AbortSignal){signal.throwIfAborted();stats.inputs.push(Buffer.from(bytes));
-          if(options.backend==='cuda'&&config.failGPU)throw new NativeInferenceError('fixture GPU failure',config.failGPU as any);return 'ONE OCR 2026';},
+          if(options.backend==='cuda'&&config.failGPU)throw new NativeInferenceError('fixture GPU failure',config.failGPU as any);return config.response??'ONE OCR 2026';},
         async close(){if(failClose){failClose=false;throw Error('fixture process has not stopped');}alive=false;stats.closed++;}} as unknown as LlamaSession;
     }});
   return {runner,stats,scheduler,files};
@@ -108,5 +108,14 @@ test('idle unload ignores removal of a different model and close rejects new wor
     await runner.run(await png(),{width:8,height:8},'eng','deepseek-ocr-v1',{mode:'cpu'});
     await runner.unload('deepseek-ocr-v2');await new Promise(resolve=>setTimeout(resolve,100));assert.equal(stats.weightLeases,0);
     await runner.close();await assert.rejects(runner.run(await png(),{width:8,height:8},'eng','deepseek-ocr-v1',{mode:'cpu'}),/关闭/);
+  }finally{await runner.close();}
+});
+
+test('runner attaches native region provenance without exposing tags or fabricating characters',async()=>{
+  const {runner}=await setup({response:'<|ref|>ONE OCR 2026<|/ref|><|det|>[[0,0,999,999]]<|/det|><｜end▁of▁sentence｜>'});
+  try{const result=await runner.run(await png(),{width:8,height:8},'eng','deepseek-ocr-v2',{mode:'cpu'});
+    assert.equal(result.text,'ONE OCR 2026');assert.equal(result.words.length,1);
+    const token=result.document!.blocks[0].lines[0].tokens[0];assert.equal(token.geometry,'region');assert.equal(token.confidence,undefined);
+    assert.ok(result.document!.engine.version.endsWith('+grounding-v1'));
   }finally{await runner.close();}
 });

@@ -5,7 +5,7 @@ import { LocalModelStore } from '../local-model-store';
 import { readInferenceDevices, resolveCUDAInferenceDevice } from '../inference-devices';
 import { inferencePreference, type InferencePreference } from '../../shared/inference-devices';
 import { ocrDimensions, ocrLanguage, type OCRResult } from '../../shared/recognition/ocr';
-import { textDocument } from '../../shared/recognition/text-document';
+import {deepseekGroundedResult} from './deepseek-grounding';
 import { localInference, type LocalInferenceClient, type LocalInferenceScheduler } from '../local-inference-scheduler';
 import { LlamaRuntimeStore } from './llama-runtime-store';
 import { deepseekOCRPresets, type DeepSeekOCRPreset } from './deepseek-models';
@@ -121,11 +121,11 @@ export class LlamaRunner {
     }
     try{
       signal.throwIfAborted();progress('recognizing');const text=await this.cached.session.recognize(png,signal);signal.throwIfAborted();
-      const result:LlamaTaskResult={text,confidence:0,...size,words:[],language,actualBackend:device.backend,deviceId:device.deviceId,
+      const decoded=deepseekGroundedResult(text,size,language,createHash('sha256').update(png).digest('hex'),
+        {id:'deepseek-ocr',version:model.runtime+'+grounding-v1',model:model.revision,device:device.backend});
+      const result:LlamaTaskResult={...decoded,actualBackend:device.backend,deviceId:device.deviceId,
         fallbackReason:device.reason,peakRSSMiB:this.cached.session.peakRSSMiB,
         inference:{model:model.title+' '+model.size,backend:device.backend,device:device.gpu?.name||'CPU',fallbackReason:device.reason}};
-      result.document=textDocument(result,createHash('sha256').update(png).digest('hex'),
-        {id:'deepseek-ocr',version:model.runtime,model:model.revision,device:device.backend});
       return result;
     }catch(error){await this.unload();throw error;}
   }

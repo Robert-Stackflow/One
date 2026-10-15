@@ -157,7 +157,8 @@ export function mountTextSelection(image: HTMLImageElement, options: {
           node = document.createElement('span'); node.className = 'text-selection-unit'; node.dataset.token = String(tokenIndex);
           node.dataset.geometry = token.geometry; node.textContent = token.text;
           if(token.geometry==='ctc'){node.title='近似字符位置（CTC 对齐与像素投影）';node.ariaLabel=token.text+'，位置近似';}
-          if(token.correctionRevision){const approximate=token.sourceGeometry?.includes('ctc');node.title=approximate?'人工校正，原词位置近似':'人工校正，按原词范围选择';node.ariaLabel=token.text+'，人工校正'+(approximate?'，位置近似':'');}
+          if(token.geometry==='region'){node.title='模型估计区域，按整段选择';node.ariaLabel=token.text+'，区域位置近似，按整段选择';}
+          if(token.correctionRevision){const approximate=token.sourceGeometry?.some(geometry=>geometry==='ctc'||geometry==='region');node.title=approximate?'人工校正，原词位置近似':'人工校正，按原词范围选择';node.ariaLabel=token.text+'，人工校正'+(approximate?'，位置近似':'');}
           node.style.cssText = `left:${box.x / view.width * 100}%;top:${box.y / view.height * 100}%;width:${box.width / view.width * 100}%;height:${box.height / view.height * 100}%;`;
           node.style.clipPath = `polygon(${token.quad.map(point => `${(point.x - box.x) / box.width * 100}% ${(point.y - box.y) / box.height * 100}%`).join(',')})`;
           if(token.sourceQuads?.length){

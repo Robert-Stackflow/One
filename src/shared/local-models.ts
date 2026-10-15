@@ -58,7 +58,7 @@ export interface LocalModelEntry extends LocalModelState {
   weightLicenseSource?: string;
   source?: string;
   runtimeReady?:{cpu:boolean;cuda:boolean};
-  selection?:'glyph'|'ctc'|'text';
+  selection?:'glyph'|'ctc'|'text'|'region';
   orientationModel?:boolean;
   runtime: string;
   precision: string;

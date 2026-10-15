@@ -3,12 +3,12 @@ const {build}=require('esbuild');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
 (async()=>{
-  const presets=process.argv.includes('--presets'),selectionCase=process.argv.includes('--selection'),timing=process.argv.includes('--timing'),rasterCase=process.argv.includes('--raster'),formulaRaster=process.argv.includes('--formula-raster'),longImage=process.argv.includes('--long')||rasterCase;
+  const nativeRegion=process.argv.includes('--native-region'),presets=process.argv.includes('--presets'),selectionCase=process.argv.includes('--selection'),timing=process.argv.includes('--timing'),rasterCase=process.argv.includes('--raster'),formulaRaster=process.argv.includes('--formula-raster'),longImage=process.argv.includes('--long')||rasterCase;
   const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'model-ui-'));
   const profile=path.join(directory,'profile'),input=path.join(directory,'input.png'),errors=[];let app,imported=false;
   async function choose(page,id,label){await page.locator('#'+id).click();await page.getByRole('option',{name:label,exact:true}).click();}
   async function open(){
-    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,ONE_INFERENCE_MONITOR:path.resolve('work/current/capture-reconstruction/One.Monitor.Devices.exe')};delete env.ELECTRON_RUN_AS_NODE;
+    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile,ONE_INFERENCE_MONITOR:path.resolve(nativeRegion?'dist/native/One.Monitor.exe':'work/current/capture-reconstruction/One.Monitor.Devices.exe')};delete env.ELECTRON_RUN_AS_NODE;
     app=await electron.launch({args:[path.resolve('.')],env});
     if(rasterCase||formulaRaster)await app.evaluate(({app})=>{global.__originalRasterRequests=[];app.on('web-contents-created',(_event,contents)=>{contents.session.webRequest.onBeforeRequest({urls:['one-file://recognition/*','one-file://formula-recognition/*']},(details,callback)=>{global.__originalRasterRequests.push(details.url);callback({});});});});
     const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
@@ -21,13 +21,41 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await expect(page.locator('#run')).toBeEnabled();return page;
   }
   try{
-    await build({entryPoints:['tests/local-model-ui-prepare.ts'],outfile:path.join(directory,'prepare.mjs'),bundle:true,format:'esm',platform:'node',target:'node22',packages:'external',logLevel:'warning'});
-    await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile,...(presets?{ONE_MODEL_UI_PRESETS:'1'}:{})},windowsHide:true,maxBuffer:64*1024});
+    await build({entryPoints:[nativeRegion?'tests/recognition/native-ocr-ui-prepare.ts':'tests/local-model-ui-prepare.ts'],outfile:path.join(directory,'prepare.mjs'),bundle:true,format:'esm',platform:'node',target:'node22',packages:'external',logLevel:'warning'});
+    await execFile(process.execPath,[path.join(directory,'prepare.mjs')],{env:{...process.env,ONE_MODEL_UI_PROFILE:profile,...(presets?{ONE_MODEL_UI_PRESETS:'1'}:{})},windowsHide:true,maxBuffer:64*1024,timeout:180000});
     await sharp(Buffer.from('<svg width="680" height="120"><rect width="680" height="120" fill="white"/><text x="15" y="85" font-family="Arial" font-size="58">ONE OCR 2026</text></svg>')).png().toFile(input);
     if(longImage)await sharp(Buffer.from(`<svg width="680" height="10000"><rect width="100%" height="100%" fill="white"/><g fill="black" font-family="Arial" font-size="42">${[100,1806,3596,5390,7185,8976,9800].map((y,index)=>`<text x="24" y="${y}">ONE ROW ${index+1} END</text>`).join('')}</g></svg>`)).png().toFile(input);
     if(rasterCase)await sharp(Buffer.from('<svg width="2400" height="16000"><rect x="0" y="7500" width="2400" height="1000" fill="red" fill-opacity=".5"/></svg>')).png().toFile(input);
     if(formulaRaster)await sharp(Buffer.from('<svg width="3000" height="1800"><rect width="3000" height="1800" fill="red" fill-opacity=".5"/></svg>')).png().toFile(input);
     let page=await open();assert.equal((await page.evaluate(()=>window.one.recognition.state())).modelTitle,'Tesseract fast');
+    if(nativeRegion){
+      await app.evaluate(({ipcMain,clipboard})=>{
+        global.__nativeCopied='';global.__nativeResults=[];global.__nativeRegionResults=[];
+        clipboard.writeText=value=>{global.__nativeCopied=value;};
+        for(const [name,target] of [['one:recognition-run','__nativeResults'],['one:recognition-region','__nativeRegionResults']]){
+          const handler=ipcMain._invokeHandlers.get(name);assertHandler(handler);ipcMain.removeHandler(name);ipcMain.handle(name,async(...args)=>{const value=await handler(...args);global[target].push(value);return value;});
+        }
+        function assertHandler(handler){if(!handler)throw Error('Missing recognition handler');}
+      });
+      for(const id of ['deepseek-ocr-v2','deepseek-ocr-v1']){
+        await page.locator('#local-model-configure').click();const dialog=page.locator('#local-model-settings');await dialog.locator(`[data-select-model=${id}]`).click();await choose(page,'local-model-device','CPU');
+        await expect(dialog.locator('#local-model-metadata')).toContainText('近似区域（整段）');await dialog.locator('#local-model-save').click();await expect(dialog).not.toBeVisible();
+        const completed=await app.evaluate(()=>global.__nativeResults.length);await page.locator('#run').click();
+        await expect.poll(()=>app.evaluate(()=>global.__nativeResults.length),{timeout:180000}).toBe(completed+1);
+        await expect(page.locator('#result')).toHaveValue(/ONE\s*OCR\s*2026/);
+        const unit=page.locator('.text-selection-unit[data-geometry=region]').first();await expect(unit).toBeVisible();await expect(unit).toHaveAttribute('aria-label',/区域位置近似/);
+        await unit.click();await page.locator('[data-text-action=copy]').click();assert.match(await app.evaluate(()=>global.__nativeCopied),/ONE\s*OCR\s*2026/);
+        await page.locator('[data-text-action=rotate]').click();await unit.click();await page.locator('[data-text-action=copy]').click();assert.match(await app.evaluate(()=>global.__nativeCopied),/ONE\s*OCR\s*2026/);
+        if(id==='deepseek-ocr-v2'){
+          await unit.click();await page.locator('[data-text-action=recognize]').click();await expect.poll(()=>app.evaluate(()=>global.__nativeRegionResults.length),{timeout:180000}).toBe(1);
+          const [before,after]=await app.evaluate(()=>[global.__nativeResults.at(-1),global.__nativeRegionResults.at(-1)]);
+          assert.equal(after.document.source.sha256,before.document.source.sha256);assert.match(after.text,/ONE\s*OCR\s*2026/);
+          const tokens=after.document.blocks.flatMap(block=>block.lines.flatMap(line=>line.tokens));assert.ok(tokens.length&&tokens.every(token=>token.geometry==='region'));
+          for(const token of tokens){assert.equal(after.text.slice(token.sourceStart,token.sourceEnd),token.text);assert.ok(token.quad.every(point=>point.x>=0&&point.y>=0&&point.x<=after.width&&point.y<=after.height));}
+        }
+      }
+      assert.deepEqual(errors,[]);console.log('DeepSeek v1/v2 real CPU windows: coarse-region metadata, apply-close, native selection/copy, rotation and v2 regional re-recognition passed');return;
+    }
     if(formulaRaster){
       const original=await page.evaluate(()=>window.one.recognition.state()),opening=app.waitForEvent('window');
       await page.locator('#open-formula').click();page=await opening;await page.waitForURL('**view=formula-recognition');page.on('pageerror',error=>errors.push(String(error)));

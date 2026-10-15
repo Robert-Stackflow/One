@@ -14,7 +14,7 @@ const fixture=String.raw`
 const http=require('node:http'),fs=require('node:fs'),assert=require('node:assert/strict');
 const args=process.argv.slice(1),arg=name=>args[args.indexOf(name)+1],mode=arg('-m').split(/[\\/]/).pop();
 const key=fs.readFileSync(arg('--api-key-file'),'utf8');
-for(const flag of ['--offline','--no-webui','--no-warmup'])assert.ok(args.includes(flag));
+for(const flag of ['--offline','--no-webui','--no-warmup','--special'])assert.ok(args.includes(flag));
 assert.equal(arg('--host'),'127.0.0.1');assert.equal(arg('--chat-template'),'deepseek-ocr');assert.equal(arg('--parallel'),'1');
 if(mode==='cancel-start')setInterval(()=>{},1000);
 else if(mode==='quota'){const values=[];setInterval(()=>{values.push(Buffer.alloc(32*1024*1024,1))},5);}
@@ -25,7 +25,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(req.url,'/v1/chat/completions');assert.equal(req.method,'POST');
   let text='';req.on('data',chunk=>text+=chunk);req.on('end',()=>{
     const body=JSON.parse(text),content=body.messages[0].content;
-    assert.equal(content[1].text,'Free OCR.');assert.match(content[0].image_url.url,/^data:image\/png;base64,/);
+    assert.equal(content[1].text,'<|grounding|>OCR this image.');assert.match(content[0].image_url.url,/^data:image\/png;base64,/);
     assert.equal(body.stream,false);assert.equal(body.temperature,0);assert.equal(body.max_tokens,8192);
     if(mode==='hang')return;
     if(mode==='oversize'){res.writeHead(200,{'Content-Length':3*1024*1024});res.end('x');return;}
