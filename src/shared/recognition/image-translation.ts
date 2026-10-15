@@ -12,6 +12,25 @@ export interface ImageTranslationDocument {
   width:number;height:number;target:TranslationLanguage;serviceRevision:string;version:number;blocks:ImageTranslationBlock[];
 }
 export interface ImageTranslationLayer {visible:boolean;document:ImageTranslationDocument}
+/** Quad edges retain OCR reading direction, independently of the image's axis-aligned bounds. */
+export function imageTranslationRotation(glyphs:TextQuad[]):0|90|180|270|undefined {
+  let rotation:0|90|180|270|undefined;
+  for(const quad of glyphs){
+    const dx=quad[1].x-quad[0].x,dy=quad[1].y-quad[0].y;
+    const downX=quad[3].x-quad[0].x,downY=quad[3].y-quad[0].y;
+    if(Math.hypot(dx,dy)<.01||Math.hypot(downX,downY)<.01||dx*downY-dy*downX<=0)return;
+    const next=Math.abs(dy)<=Math.abs(dx)*.08?(dx>0?0:180):Math.abs(dx)<=Math.abs(dy)*.08?(dy>0?90:270):undefined;
+    if(next===undefined||rotation!==undefined&&rotation!==next)return;
+    // Reject sheared or independently rotated height edges as well as mixed baselines.
+    if(next%180===0?Math.abs(downX)>Math.abs(downY)*.08:Math.abs(downY)>Math.abs(downX)*.08)return;
+    rotation=next;
+  }
+  return rotation;
+}
+export function imageTranslationFrame(block:ImageTranslationBlock){
+  const rotation=imageTranslationRotation(block.glyphs)??0;
+  return {rotation,width:rotation%180?block.rect.height:block.rect.width,height:rotation%180?block.rect.width:block.rect.height};
+}
 export function validateImageTranslation(value:unknown,size:{width:number;height:number}):ImageTranslationDocument {
   const doc=value as ImageTranslationDocument;
   const keys=(object:object,allowed:string[])=>Object.keys(object).every(key=>allowed.includes(key));
@@ -55,7 +74,12 @@ export function imageTranslationDocument(document:TextDocument,result:Translatio
     if(!matched.length)throw Error('有段落缺少图片坐标，请重新识别');
     let covered=start;
     const exact=matched.every(token=>{const aligned=token.sourceStart!>=covered&&token.sourceEnd!<=last&&/^\s*$/.test(result.source.slice(covered,token.sourceStart))&&result.source.slice(token.sourceStart,token.sourceEnd)===token.text;covered=token.sourceEnd!;return aligned;})&&/^\s*$/.test(result.source.slice(covered,last));
-    const horizontal=matched.every((token,index)=>Math.abs(token.quad[1].y-token.quad[0].y)<=Math.max(1,textBounds(token.quad).height*.08)&&(index===0||matched[index-1].lineId!==token.lineId||Math.abs(textBounds(token.quad).y-textBounds(matched[index-1].quad).y)<Math.max(textBounds(token.quad).height,textBounds(matched[index-1].quad).height)*.6));
+    const rotation=imageTranslationRotation(matched.map(token=>token.quad));
+    const thickness=(quad:TextQuad)=>Math.hypot(quad[3].x-quad[0].x,quad[3].y-quad[0].y);
+    const aligned=rotation!==undefined&&matched.every((token,index)=>{
+      const previous=matched[index-1];if(!previous||previous.lineId!==token.lineId)return true;
+      const axis=rotation%180?'x':'y';return Math.abs(token.quad[0][axis]-previous.quad[0][axis])<Math.max(thickness(token.quad),thickness(previous.quad))*.6;
+    });
     const bounds=matched.map(token=>textBounds(token.quad));
     const extent=bounds.reduce((value,box)=>({left:Math.min(value.left,box.x),top:Math.min(value.top,box.y),right:Math.max(value.right,box.x+box.width),bottom:Math.max(value.bottom,box.y+box.height)}),{left:Infinity,top:Infinity,right:0,bottom:0});
     const x=Math.max(0,Math.floor(extent.left-1)),y=Math.max(0,Math.floor(extent.top-1));
@@ -67,9 +91,9 @@ export function imageTranslationDocument(document:TextDocument,result:Translatio
     const complete=parts.every(part=>part.status==='translated'&&!!part.text?.trim());
     blocks.push({id:'paragraph-'+paragraph,source:result.source.slice(start,last),text,
       rect:{x,y,width:right-x,height:bottom-y},glyphs:matched.map(token=>token.quad),
-      fontSize:Math.max(9,Math.round(bounds.reduce((sum,box)=>sum+box.height,0)/bounds.length*.85)),
-      status:!exact||!horizontal||text.length>60000?'unsupported':complete?'ready':'untranslated',
-      ...(text.length>60000?{reason:'译文段落过长，保留原图'}:!exact||!horizontal?{reason:'文字方向或原文定位暂不支持'}:!complete?{reason:'段落翻译未完成，保留原图'}:{})});
+      fontSize:Math.max(9,Math.round(matched.reduce((sum,token)=>sum+thickness(token.quad),0)/matched.length*.85)),
+      status:!exact||!aligned||text.length>60000?'unsupported':complete?'ready':'untranslated',
+      ...(text.length>60000?{reason:'译文段落过长，保留原图'}:!exact||!aligned?{reason:'文字方向或原文定位暂不支持'}:!complete?{reason:'段落翻译未完成，保留原图'}:{})});
   }
   for(const block of blocks)if(blocks.some(other=>other.id!==block.id&&block.rect.x<other.rect.x+other.rect.width&&block.rect.x+block.rect.width>other.rect.x&&block.rect.y<other.rect.y+other.rect.height&&block.rect.y+block.rect.height>other.rect.y)){block.status='unsupported';block.reason='文字区域重叠，保留原图';}
   return {schema:1,id,sourceId:document.id,recognitionRevision:document.revision||0,translationId:result.id,width:document.source.width,height:document.source.height,target:result.target,serviceRevision:result.revision,version:0,blocks};
@@ -85,7 +109,7 @@ export function editImageTranslation(document:ImageTranslationDocument,id:string
 export interface ImageTextLayout {fontSize:number;lineHeight:number;lines:string[];overflow:boolean}
 /** Keep a readable font floor; overflow is explicit and never silently shrunk indefinitely. */
 function* imageTextLayoutSteps(block:ImageTranslationBlock,measure:(text:string,size:number)=>number):Generator<void,ImageTextLayout> {
-  const width=Math.max(1,block.rect.width-4),height=Math.max(1,block.rect.height-4),floor=Math.max(9,Math.ceil(block.fontSize*.6));
+  const frame=imageTranslationFrame(block),width=Math.max(1,frame.width-4),height=Math.max(1,frame.height-4),floor=Math.max(9,Math.ceil(block.fontSize*.6));
   const characters:string[]=[];let work=0;
   for(const {segment} of new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(block.text)){characters.push(segment);if(++work%256===0)yield;}
   let answer:ImageTextLayout={fontSize:floor,lineHeight:floor*1.2,lines:[],overflow:true};

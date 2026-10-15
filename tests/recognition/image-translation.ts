@@ -1,12 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {textDocument,type TextQuad} from '../../src/shared/recognition/text-document';
-import {imageTranslationDocument,imageTextLayout,imageTextLayoutAsync,editImageTranslation,imageTranslationSnapshot,validateImageTranslation} from '../../src/shared/recognition/image-translation';
+import {imageTranslationDocument,imageTextLayout,imageTextLayoutAsync,imageTranslationRotation,imageTranslationFrame,editImageTranslation,imageTranslationSnapshot,validateImageTranslation} from '../../src/shared/recognition/image-translation';
 import {repairTranslationBackground} from '../../src/shared/recognition/image-translation-background';
 import type {TranslationResult} from '../../src/shared/recognition/translation';
 import {ImageHistory,transformImage,validateImageDocument} from '../../src/shared/capture/image-document';
 const document=()=>textDocument({text:'Hello One\nAgain',width:160,height:90,confidence:90,language:'eng',words:[{text:'Hello',x:10,y:10,width:30,height:15,line:0,confidence:90},{text:'One',x:50,y:10,width:25,height:15,line:0,confidence:90},{text:'Again',x:10,y:50,width:50,height:15,line:1,confidence:90}]},'a'.repeat(64),{id:'fixture',version:'1',model:'test',device:'cpu'});
 const result=():TranslationResult=>({id:'job',source:'Hello One\nAgain',text:'你好\n再次',target:'zh-Hans',revision:'service',endpoint:'fixture',parts:[{id:'source',start:0,end:9,paragraph:1,chunk:1,status:'translated',text:'你好'},{id:'p2',start:10,end:15,paragraph:2,chunk:1,status:'translated',text:'再次'}]});
+
+test('quarter-turn OCR paragraphs retain reading direction, font size, layout and editable project geometry',()=>{
+  const base=imageTranslationDocument(document(),result(),'image');
+  for(const rotation of [0,90,180,270]){
+    const source=document(),map=({x,y}:{x:number;y:number})=>rotation===90?{x:90-y,y:x}:rotation===180?{x:160-x,y:90-y}:rotation===270?{x:y,y:160-x}:{x,y};
+    if(rotation%180)[source.source.width,source.source.height]=[90,160];
+    for(const block of source.blocks){block.quad=block.quad.map(map) as TextQuad;for(const line of block.lines){line.quad=line.quad.map(map) as TextQuad;for(const token of line.tokens)token.quad=token.quad.map(map) as TextQuad;}}
+    const value=imageTranslationDocument(source,result(),'image');
+    for(let index=0;index<value.blocks.length;index++){
+      const block=value.blocks[index],frame=imageTranslationFrame(block),original=base.blocks[index];
+      assert.equal(block.status,'ready');assert.equal(frame.rotation,rotation);assert.equal(block.fontSize,original.fontSize);
+      assert.deepEqual([frame.width,frame.height],[original.rect.width,original.rect.height]);
+      assert.deepEqual(imageTextLayout(block,(text,size)=>text.length*size*.5),imageTextLayout(original,(text,size)=>text.length*size*.5));
+    }
+    assert.deepEqual(validateImageTranslation(value,value),value);
+    const edited=editImageTranslation(value,value.blocks[0].id,'OK',value.blocks[0].rect.width,value.blocks[0].rect.height);
+    assert.deepEqual(imageTranslationSnapshot(value,edited),edited);
+    const history=new ImageHistory(value.width,value.height,true);history.commit({...history.value,translation:{visible:true,document:edited}});
+    assert.deepEqual(validateImageDocument(JSON.parse(JSON.stringify(history.value)),history.value.original).translation?.document,JSON.parse(JSON.stringify(edited)));
+  }
+});
+
+test('separate paragraphs can differ in direction; mixed, skewed, mirrored and vertical-writing lines preserve source',()=>{
+  const source=document(),last=source.blocks.flatMap(block=>block.lines).at(-1)!.tokens[0];
+  last.quad=[last.quad[2],last.quad[3],last.quad[0],last.quad[1]];
+  const paragraphs=imageTranslationDocument(source,result(),'image');assert.deepEqual(paragraphs.blocks.map(block=>block.status),['ready','ready']);assert.equal(imageTranslationFrame(paragraphs.blocks[1]).rotation,180);
+  const first=source.blocks[0].lines[0].tokens;first[1].quad=[first[1].quad[2],first[1].quad[3],first[1].quad[0],first[1].quad[1]];
+  assert.equal(imageTranslationDocument(source,result(),'mixed').blocks[0].status,'unsupported');
+  const normal=document().blocks[0].lines[0].tokens[0].quad;
+  assert.equal(imageTranslationRotation([]),undefined);
+  assert.equal(imageTranslationRotation([[normal[1],normal[0],normal[3],normal[2]]]),undefined);
+  assert.equal(imageTranslationRotation([[{x:10,y:10},{x:40,y:20},{x:40,y:35},{x:10,y:25}]]),undefined);
+  const vertical=document(),tokens=vertical.blocks[0].lines[0].tokens;tokens[1].quad=tokens[1].quad.map(point=>({x:point.x-40,y:point.y+20})) as TextQuad;
+  assert.equal(imageTranslationDocument(vertical,result(),'vertical').blocks[0].status,'unsupported');
+});
 test('editor transfer accepts text edits but rejects changed source geometry, identities or secret fields',()=>{
   const base=imageTranslationDocument(document(),result(),'image'),edited=editImageTranslation(base,base.blocks[0].id,'edited',80,25);assert.deepEqual(imageTranslationSnapshot(base,edited),edited);assert.deepEqual(validateImageTranslation(edited,{width:160,height:90}),edited);
   assert.throws(()=>imageTranslationSnapshot(base,{...edited,serviceRevision:'changed'}),/来源/);assert.throws(()=>imageTranslationSnapshot(base,{...edited,id:'other'}),/来源/);

@@ -1,4 +1,4 @@
-import {imageTextLayoutAsync,type ImageTranslationDocument} from '../../shared/recognition/image-translation';
+import {imageTextLayoutAsync,imageTranslationFrame,type ImageTranslationDocument} from '../../shared/recognition/image-translation';
 import {repairTranslationBackground} from '../../shared/recognition/image-translation-background';
 
 /** Pure composition shared by OCR previews and editable image projects; source pixels stay immutable. */
@@ -22,9 +22,12 @@ export async function renderImageTranslation(value:ImageTranslationDocument,sour
       if(layout.overflow)overflow.add(block.id);
       const {x,y,width,height}=block.rect;context.save();context.beginPath();context.rect(x,y,width,height);context.clip();
       if(background.kind==='plate'){context.fillStyle=background.color;context.fillRect(x,y,width,height);}
+      const frame=imageTranslationFrame(block);
+      context.translate(x+(frame.rotation===90||frame.rotation===180?width:0),y+(frame.rotation===180||frame.rotation===270?height:0));
+      context.rotate(frame.rotation*Math.PI/180);
       context.font=`${layout.fontSize}px system-ui`;context.fillStyle=background.textColor;context.textBaseline='top';context.direction=value.target==='ar'?'rtl':'ltr';context.textAlign=value.target==='ar'?'right':'left';
-      const visibleLines=Math.ceil(Math.max(0,height-2)/layout.lineHeight);
-      layout.lines.slice(0,visibleLines).forEach((line,index)=>context.fillText(line,value.target==='ar'?x+width-2:x+2,y+2+index*layout.lineHeight));context.restore();
+      const visibleLines=Math.ceil(Math.max(0,frame.height-2)/layout.lineHeight);
+      layout.lines.slice(0,visibleLines).forEach((line,index)=>context.fillText(line,value.target==='ar'?frame.width-2:2,2+index*layout.lineHeight));context.restore();
       await yieldControl();
     }
     if(!valid())throw Error('图片翻译已取消');return {canvas,overflow,plates};
