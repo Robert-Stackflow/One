@@ -1,0 +1,68 @@
+{
+  "reference": "Pillow 12.3.0 / NumPy 1.26.4; UniMERNet RGB resize/thumbnail/float32",
+  "cases": [
+    {
+      "id": "tiny",
+      "width": 7,
+      "height": 5,
+      "border": 1,
+      "sha256": "8020fcd0fe557e3cbe6e4d093c97651475c7751b7e08f1435ab0d2b719e7e41a"
+    },
+    {
+      "id": "odd",
+      "width": 73,
+      "height": 39,
+      "border": 3,
+      "sha256": "e317fb6bbd9ab3093c3a70351008f7b898c67e947e92605da8d103a1dc4ce25c"
+    },
+    {
+      "id": "portrait",
+      "width": 39,
+      "height": 73,
+      "border": 3,
+      "sha256": "a892ccdf488372df1f2dcf0d1c33060d947abcddcdd1145c6f21ec31dae36846"
+    },
+    {
+      "id": "wide",
+      "width": 499,
+      "height": 37,
+      "border": 4,
+      "sha256": "60c57c61993b8813a0e758f1cad3e8e608ebea58a5e83c681b6a202ed707ae44"
+    },
+    {
+      "id": "tall",
+      "width": 37,
+      "height": 499,
+      "border": 4,
+      "sha256": "eff8e4719bda3dc3fe2f1e9f82b24c2cb30fefa95e7512b68e1539754989766b"
+    },
+    {
+      "id": "downsample",
+      "width": 801,
+      "height": 601,
+      "border": 7,
+      "sha256": "de4f786df4830660b11e2c57a9108727c8022198e50d82252033fe91c3499e23"
+    },
+    {
+      "id": "near-square",
+      "width": 401,
+      "height": 397,
+      "border": 5,
+      "sha256": "0f84c95e2bce6ca9b7014d3057671dc9276efc8f3f16944fef81a8aea517e128"
+    },
+    {
+      "id": "exact",
+      "width": 384,
+      "height": 384,
+      "border": 0,
+      "sha256": "d09abcf777638bbeeada71b9a3abcceda03d7a3e027a55f75f0ffc5acbd03770"
+    },
+    {
+      "id": "reduce-corner",
+      "width": 521,
+      "height": 67,
+      "border": 7,
+      "sha256": "a31e3d3080723779e40a0177158deb085eb9a5db3ab816af68c077fcabe3b12b"
+    }
+  ]
+}

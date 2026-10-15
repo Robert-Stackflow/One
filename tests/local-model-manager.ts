@@ -7,7 +7,7 @@ import { OCRModels } from '../src/main/recognition/ocr-models';
 import { paddleTinyModel, miganModel } from '../src/main/local-model-catalog';
 import { aiModelPath, repairModel } from '../src/main/image-ai-model';
 import { LlamaRuntimeStore } from '../src/main/recognition/llama-runtime-store';
-import {formulaPlusS,formulaPlusM} from '../src/main/recognition/formula-model-catalog';
+import {formulaPlusS,formulaPlusM,formulaProfiles} from '../src/main/recognition/formula-model-catalog';
 import type {FormulaModels} from '../src/main/recognition/formula-models';
 
 test('OCR and formula managers share live settings without lost writes; formula metadata avoids inference and unrelated models',async()=>{
@@ -16,7 +16,7 @@ test('OCR and formula managers share live settings without lost writes; formula 
   const formulas={state:async(id:string)=>({ready:ready.has(id),downloading:false,inUse:false,diskBytes:ready.has(id)?12:0,totalBytes:20,downloadedBytes:0}),install:async(id:string)=>{installed++;ready.add(id);},remove:async(id:string)=>{removed++;ready.delete(id);}} as unknown as FormulaModels;
   const a=new LocalModelManager(root,models,fetch,async()=>{throw Error('unexpected GPU probe');},{formulas,unloadNative:async()=>{unloaded++;}}),b=new LocalModelManager(root,models,fetch,async()=>({gpus:[]}),{formulas});
   a.store.state=async()=>{throw Error('unexpected unrelated model read');};models.state=async()=>{throw Error('unexpected Tesseract read');};
-  let state=await a.state(false,'formula');assert.deepEqual(state.entries.map(entry=>entry.id),[formulaPlusS.source.id,formulaPlusM.source.id]);assert.equal(state.choices.formula?.modelId,'service');
+  let state=await a.state(false,'formula');assert.deepEqual(state.entries.map(entry=>entry.id),formulaProfiles.map(profile=>profile.source.id));assert.equal(state.choices.formula?.modelId,'service');
   const stale=state.revision;await a.save('formula',{modelId:formulaPlusS.source.id,device:{mode:'cpu'}},stale);
   assert.equal((await b.selection('formula')).modelId,formulaPlusS.source.id);await assert.rejects(b.save('ocr',{modelId:'tesseract',device:{mode:'cpu'}},stale),/已更新/);
   await b.save('ocr',{modelId:paddleTinyModel.id,device:{mode:'auto'}},await b.settingsRevision());assert.equal((await a.selection('ocr')).modelId,paddleTinyModel.id);

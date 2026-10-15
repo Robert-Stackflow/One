@@ -5,6 +5,7 @@ import {readFile,lstat} from 'node:fs/promises';
 import {formulaOutput,FORMULA_IMAGE} from '../../shared/recognition/formula';
 import type {PaddleArtifact,PaddlePreferences} from './paddle-job';
 import {formulaProfiles} from './formula-model-catalog';
+import {formulaPixels} from './formula-resample';
 export interface FormulaModelFiles {id:string;revision:string;onnx:PaddleArtifact;config:PaddleArtifact}
 export interface FormulaLocalJob {id:number;png:Buffer;model:FormulaModelFiles;backend:'cpu'|'dml';deviceId:number;memoryMiB:number}
 export interface FormulaLocalResult {text:string;sourceSha256:string;model:string;revision:string;actualBackend:'cpu'|'dml';deviceId?:number;peakRSSMiB:number;fallbackReason?:string}
@@ -20,19 +21,13 @@ export async function formulaInput(png:Buffer){
   const gray=new Uint8Array(info.width*info.height);let low=255,high=0;
   for(let i=0;i<gray.length;i++){const at=i*3,value=(data[at]*19595+data[at+1]*38470+data[at+2]*7471+32768)>>16;gray[i]=value;low=Math.min(low,value);high=Math.max(high,value);}
   if(high-low<8){data.fill(0);gray.fill(0);throw Error('未检测到可识别的公式笔画');}
-  let left=info.width,right=0,top=info.height,bottom=0;const threshold=low+(high-low)*200/255;
-  for(let y=0;y<info.height;y++)for(let x=0;x<info.width;x++)if(gray[y*info.width+x]<threshold){left=Math.min(left,x);right=Math.max(right,x+1);top=Math.min(top,y);bottom=Math.max(bottom,y+1);}
-  const width=right-left,height=bottom-top,short=Math.min(width,height),w=width<=height?384:Math.floor(384*width/height),h=height<=width?384:Math.floor(384*height/width);
-  if(short<2||w*h>8_388_608){data.fill(0);gray.fill(0);throw Error('公式区域过于狭长，请分段裁剪后识别');}
+  let left=info.width,right=0,top=info.height,bottom=0;
+  for(let y=0;y<info.height;y++)for(let x=0;x<info.width;x++)if((gray[y*info.width+x]-low)/(high-low)*255<200){left=Math.min(left,x);right=Math.max(right,x+1);top=Math.min(top,y);bottom=Math.max(bottom,y+1);}
+  const width=right-left,height=bottom-top,cropped=new Uint8Array(width*height*3);
   try{
-    const enlarged=await sharp(data,{raw:{width:info.width,height:info.height,channels:3}}).extract({left,top,width,height}).resize(w,h,{kernel:'linear'}).raw().toBuffer();
-    try{
-      const scaled=await sharp(enlarged,{raw:{width:w,height:h,channels:3}}).resize({width:384,height:384,fit:'inside',withoutEnlargement:true,kernel:'cubic'}).raw().toBuffer({resolveWithObject:true});
-      const output=new Float32Array(384*384);output.fill(-.7931/.1738);const dx=Math.floor((384-scaled.info.width)/2),dy=Math.floor((384-scaled.info.height)/2);
-      for(let y=0;y<scaled.info.height;y++)for(let x=0;x<scaled.info.width;x++){const at=(y*scaled.info.width+x)*3;output[(y+dy)*384+x+dx]=((scaled.data[at]*.114+scaled.data[at+1]*.587+scaled.data[at+2]*.299)/255-.7931)/.1738;}
-      scaled.data.fill(0);return output;
-    }finally{enlarged.fill(0);}
-  }finally{data.fill(0);gray.fill(0);}
+    for(let y=0;y<height;y++)cropped.set(data.subarray(((top+y)*info.width+left)*3,((top+y)*info.width+right)*3),y*width*3);
+    return formulaPixels(cropped,width,height);
+  }finally{data.fill(0);gray.fill(0);cropped.fill(0);}
 }
 export function formulaDecoder(config:unknown){
   const value=config as any,tokenizer=value?.PostProcess?.character_dict?.fast_tokenizer_file;

@@ -36,4 +36,18 @@ export const formulaPlusM:FormulaPreparedProfile={
   conversion:{memoryMiB:6144,rawSha256:'1cad8bae0dc02c17bfb9a56221dba5f26c205180f8b798f0c22fba05e623e94b',scalarNode:'If.7',api:true},
   output:{name:'model.onnx',bytes:720109023,sha256:'2787955eda423df7d048926d0269a0e918c1866b31f75c7271d12577b50fa3c0'},
 };
-export const formulaProfiles:readonly FormulaPreparedProfile[]=[formulaPlusS,formulaPlusM];
+const baseRevision='0572450e501be9eb1b1cdb7e00fccf4b22fab4df';
+const baseURL=(name:string)=>`https://huggingface.co/PaddlePaddle/PP-FormulaNet-S/resolve/${baseRevision}/${name}`;
+export const formulaBaseS:FormulaPreparedProfile={
+  source:{id:'pp-formulanet-s',revision:baseRevision,title:'PP-FormulaNet',size:'S',purpose:'formula',languages:['en'],
+    weightLicense:{name:'Apache-2.0',source:`https://huggingface.co/PaddlePaddle/PP-FormulaNet-S/tree/${baseRevision}`},
+    backends:['cpu','dml'],precision:'fp32',runtime:'formula-paddle2onnx',measuredMemoryMiB:1036,artifacts:[
+      {name:'inference.json',role:'graph',url:baseURL('inference.json'),bytes:504505,sha256:'2c8fc31a94d461a7325fe06e8cbaa5db6c5658c490f74d3d6116defe8c859d6f'},
+      {name:'inference.pdiparams',role:'weights',url:baseURL('inference.pdiparams'),bytes:231675001,sha256:'b6392296d16e2a9f414c0a751d7ccbd1bd9d8272b68aab72df1d3875f35a7489'},
+      {name:'config.json',role:'config',url:baseURL('config.json'),bytes:3951671,sha256:'ea32742b976ba34711042cac4e46206f114067949448c2bd8dec60a44d3de1fb'},
+    ]},recipe:'base-s-opset19-scalar-v1',modelName:'PP-FormulaNet-S',maxTokens:1024,memoryMiB:2048,
+  conversion:{memoryMiB:4096,rawSha256:'a588f558afc23177bfdbf533904f5a2e0c02f3065d850d5844de0cf470f7939d',scalarNode:'If.3'},
+  output:{name:'model.onnx',bytes:308743452,sha256:'fa840f4f486dbee62f2ef507fa2871702ab9746d6922024ef641db4ce08a6a69'},
+};
+// Preserve the initial local selection; new candidates require explicit selection.
+export const formulaProfiles:readonly FormulaPreparedProfile[]=[formulaPlusS,formulaPlusM,formulaBaseS];

@@ -32,22 +32,33 @@ async function main(){
     console.log('Formula model store: shared preparation, scoped cancellation/cleanup, leases, bounded metadata, integrity repair, foreign-file protection, verified publication and offline reuse passed.');
     const combined=[];const missingRuntime={...runtime,state:async()=>({ready:false}),install:async(_signal,report)=>{const total=combined[0].total-artifacts.reduce((sum,file)=>sum+file.bytes,0);for(const received of [0,Math.floor(total/2),total])report({phase:'downloading',received,total});}};
     const combinedStore=new FormulaModelStore(path.join(testRoot,'combined'),missingRuntime,{transport:offline,profile,build:builder});stores.push(combinedStore);await combinedStore.install(new AbortController().signal,value=>combined.push({...value}),sources);assert.ok(combined.every((item,index)=>item.total===combined[0].total&&(!index||item.received>=combined[index-1].received)));assert.equal(combined.at(-1).received,combined.at(-1).total);
-    if(process.argv.includes('--medium')){
+    if(process.argv.includes('--medium')||process.argv.includes('--base')){
       await Promise.all(['formula-runtime-store','formula-models','formula-model-catalog','formula-local-runner','formula-local-worker'].map(name=>build({...options,entryPoints:['src/main/recognition/'+name+'.ts'],outfile:path.join(testRoot,name+'.cjs')})));
-      const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{FormulaModels}=require(path.join(testRoot,'formula-models.cjs')),{formulaPlusM,formulaPlusS}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));
+      const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{FormulaModels}=require(path.join(testRoot,'formula-models.cjs')),{formulaPlusM,formulaPlusS,formulaBaseS}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));
       const runtime=new FormulaRuntimeStore(path.join(root,'managed-runtime'),offline),registry=new FormulaModels(path.join(root,'managed-models'),runtime,offline);stores.push(registry,runtime);
-      const smallBefore=await registry.state(formulaPlusS.source.id),localSources=Object.fromEntries(formulaPlusM.source.artifacts.map(file=>[file.role,path.join(root,'plus-m',file.name)]));
+      const target=process.argv.includes('--base')?formulaBaseS:formulaPlusM,folder=process.argv.includes('--base')?'base-s':'plus-m';
+      const smallBefore=await registry.state(formulaPlusS.source.id),localSources=Object.fromEntries(target.source.artifacts.map(file=>[file.role,path.join(root,folder,file.name)]));
       assert.throws(()=>registry.acquire('unknown'),/未适配/);
-      const started=Date.now();await registry.install(formulaPlusM.source.id,new AbortController().signal,undefined,localSources);const lease=await registry.acquire(formulaPlusM.source.id);
+      const started=Date.now();await registry.install(target.source.id,new AbortController().signal,undefined,localSources);const lease=await registry.acquire(target.source.id);
       const runner=new FormulaLocalRunner(path.join(testRoot,'formula-local-worker.cjs'));
       try{
-        assert.equal(lease.model.id,formulaPlusM.source.id);assert.equal(lease.model.onnx.sha256,formulaPlusM.output.sha256);assert.equal((await registry.state(formulaPlusS.source.id)).ready,smallBefore.ready);
-        const png=await fs.readFile(path.join(root,'official-sample.png')),reference=JSON.parse(await fs.readFile(path.join(root,'plus-m/paddle-cpu.json'),'utf8')),results=[];
+        assert.equal(lease.model.id,target.source.id);assert.equal(lease.model.onnx.sha256,target.output.sha256);assert.equal((await registry.state(formulaPlusS.source.id)).ready,smallBefore.ready);
+        const png=await fs.readFile(path.join(root,'official-sample.png')),reference=JSON.parse(await fs.readFile(path.join(root,folder,'paddle-cpu.json'),'utf8')),results=[];
         for(const [device,deviceId] of [['cpu',0],['gpu',0],['gpu',1],['cpu',0]]){
           const start=Date.now(),result=await runner.run(png,lease.model,{device,deviceId});assert.equal(result.text,reference.results[0].latex);assert.equal(result.actualBackend,device==='cpu'?'cpu':'dml');results.push({device,deviceId,elapsedMs:Date.now()-start,peakRSSMiB:result.peakRSSMiB});
         }
-        await fs.writeFile(path.join(root,'plus-m/managed-runtime.json'),JSON.stringify({elapsedMs:Date.now()-started,results},null,2));
-        console.log('Actual plus-M registry: fixed conversion/hash/checker, independent S/M ownership, CPU → NVIDIA → AMD → CPU with official Paddle text parity passed.');
+        if(process.argv.includes('--cases')){
+          const fixtures=JSON.parse(await fs.readFile(path.join(root,'cases/cases.json'),'utf8')),cases=[];
+          for(const item of fixtures){
+            assert.match(item.id,/^[a-z-]{1,40}$/);const image=await fs.readFile(path.join(root,'cases',item.id+'.png')),gold=JSON.parse(await fs.readFile(path.join(root,folder,'cases',item.id+'-paddle.json'),'utf8'));
+            const value=await runner.run(image,lease.model,{device:'cpu',deviceId:0});assert.equal(value.sourceSha256,sha(image));let previewError='';
+            try{require('katex').renderToString(value.text,{throwOnError:true,trust:false});}catch(error){previewError=error.message.slice(0,200);}
+            cases.push({id:item.id,expected:item.latex,text:value.text,paddle:gold.results[0].latex,previewError,paddleParity:value.text===gold.results[0].latex,normalizedExact:value.text.replace(/\s/g,'')===item.latex.replace(/\s/g,'')});
+          }
+          await fs.writeFile(path.join(root,folder,'case-results.json'),JSON.stringify(cases,null,2));assert.ok(cases.every(item=>item.paddleParity),'Native/Paddle corpus mismatch; inspect saved case-results.json');console.log('Fixed formula corpus: '+cases.length+' native/Paddle matches; '+cases.filter(item=>!item.previewError).length+' KaTeX previews; '+cases.filter(item=>item.normalizedExact).length+' normalized exact strings (not a semantic accuracy score).');
+        }
+        await fs.writeFile(path.join(root,folder,'managed-runtime.json'),JSON.stringify({elapsedMs:Date.now()-started,results},null,2));
+        console.log('Actual '+target.source.title+' '+target.source.size+' registry: fixed conversion/hash/checker, independent preset ownership, CPU → NVIDIA → AMD → CPU with official Paddle text parity passed.');
       }finally{await runner.close();lease.release();}
     }
     if(process.argv.includes('--runtime')){
