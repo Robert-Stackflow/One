@@ -6,7 +6,6 @@ import { customControls } from '../controls';
 import type { OCRLanguage, OCRState, OCRResult } from '../../shared/recognition/ocr';
 import { mountTranslation } from './translation-ui';
 import { mountTextSelection } from './text-selection';
-import { mountLocalModels } from './local-models-ui';
 import { mountOCRWorkspace } from './workspace';
 import './workbench.css';
 import { recognitionNotice } from './notice';
@@ -45,21 +44,20 @@ const tools = document.querySelector('.text-image-tools'); if (tools) q('ocr-ima
 const loadImage=prepareRecognitionImage(q<HTMLImageElement>('source'),message);
 picture=mountImageTranslation(api,{state:()=>state?{...state,running:state.running||requesting||workflowBusy()||!!correction?.busy()||translation.busy()}:undefined,document:()=>selection.document(),layer:()=>selection.imageLayer(),translate:force=>translation.imageResult(force),available:()=>translation.imageReady(),valid:id=>translation.imageValid(id),changed:()=>{if(state)render();},message});
 const pictureTools=document.querySelector('.image-translation-tools');if(pictureTools)q('message').after(pictureTools);
-const openLocalModels = mountLocalModels(api, async()=>{await refresh();await services?.syncLocal('ocr');});
 const formulaAPI=window.one.formulaRecognition!;
-formula=mountFormula(formulaAPI,()=>state?{...state,models:state.formulaModels||state.models,modelTitle:state.formulaTitle}:undefined,message,refresh,{rotation:()=>selection.viewState().rotation,busy:()=>{},unified:true,modelsChanged:async()=>{await services?.syncLocal('formula');}});
+formula=mountFormula(formulaAPI,()=>state?{...state,models:state.formulaModels||state.models,modelTitle:state.formulaTitle}:undefined,message,refresh,{rotation:()=>selection.viewState().rotation,busy:()=>{},unified:true,openModels:async()=>{await services?.configure('formula');},modelsChanged:async()=>{await services?.syncLocal('formula');}});
 translation.setMode(false);
 services=mountWorkbenchServices(api,formulaAPI,{
   mode:()=>mode,state:()=>state,busy:()=>requesting||!!state?.running||!!state?.translating||!!state?.formulaRecognizing||!!state?.formulaProcessing||workflowBusy()||translation.busy()||!!formula?.busy()||!!picture?.busy()||!!correction?.busy(),
   changed:()=>{if(state)render();},refresh,reconfigure:async()=>{await Promise.all([translation.reloadConfig(),formula!.reloadConfig()]);},
-  models:purpose=>purpose==='formula'?formula!.openModels():openLocalModels(),message,
+  message,
 });
 function setMode(next:WorkbenchMode){
   mode=next;translation.setMode(next==='translation');formula?.setMode(next==='formula');workspace.show(true);if(state)render();
 }
 for(const tab of document.querySelectorAll<HTMLButtonElement>('[data-mode]'))tab.onclick=()=>{setMode(tab.dataset.mode as WorkbenchMode);};
 const segments=setupSegments(q('app'));
-q('local-model-configure').onclick = () => void openLocalModels().catch(message);
+q('local-model-configure').onclick = () => void services?.configure('ocr').catch(message);
 q('open-formula').onclick = () => setMode('formula');
 q('workflow-back').onclick = () => { if (state.workflow) void api.returnToCapture(state.token, state.workflow.id).catch(message); };
 function inference(value: OCRResult['inference']) {

@@ -13,7 +13,7 @@ body[data-view='formula-recognition'] .window-controls { position: static; margi
 .formula-source { position: relative; display: flex; background: var(--soft); min-width: 0; min-height: 0; overflow: hidden; }
 .formula-source img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .formula-workbench #formula-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 12px; border-left: 1px solid var(--line); gap: 8px; }
-.formula-workbench #formula-text { flex: 1; width: 100%; min-height: 80px; resize: none; font-family: monospace; user-select: text; }
+.formula-workbench #formula-text { flex: 1; width: 100%; min-height: 80px; resize: none; font-family: inherit; user-select: text; }
 .formula-workbench #formula-preview { flex: 1; min-height: 80px; overflow: auto; user-select: text; }
 .formula-workbench #formula-preview-status:empty { display: none; }
 .formula-workbench #formula-preview-status { color: var(--muted); font-size: calc(11px * var(--text-scale, 1)); }

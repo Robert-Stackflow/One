@@ -12,7 +12,7 @@ type Choice={option:SelectOption;ai?:AITaskReference;service?:{serviceId:string;
 /** One selector lists concrete model bindings; provider categories never become an extra navigation step. */
 export function mountWorkbenchServices(api:OCRAPI,formula:FormulaRecognitionAPI,options:{
   mode():WorkbenchMode;state():OCRState|undefined;busy():boolean;changed():void;refresh():Promise<void>;
-  reconfigure():Promise<void>;models(purpose:'ocr'|'formula'):Promise<void>;message(value:unknown):void;
+  reconfigure():Promise<void>;message(value:unknown):void;
 }){
   let profiles:AITaskProfile[]=[],translation:Awaited<ReturnType<OCRAPI['dedicatedServices']>>=[],formulas:typeof translation=[];
   let local:Partial<Record<'ocr'|'formula',LocalModelManagerState>>={},configs:Partial<Record<'translation'|'formula',TranslationConfig>>={};
@@ -52,7 +52,7 @@ export function mountWorkbenchServices(api:OCRAPI,formula:FormulaRecognitionAPI,
       const snapshot=await api.localModels(false,mode as 'ocr'|'formula'),entry=snapshot.entries.find(item=>item.id===choice.local);
       const choiceDevice=snapshot.choices[mode as 'ocr'|'formula']?.device;
       const nativeReady=!entry?.backends.includes('cuda')||!!entry.runtimeReady?.cpu&&(choiceDevice?.mode==='cpu'||!snapshot.devices.gpus.some(supportsCUDAInference)||!!entry.runtimeReady?.cuda);
-      if(!entry?.ready||!nativeReady){await options.models(mode as 'ocr'|'formula');await options.refresh();await load();return false;}
+      if(!entry?.ready||!nativeReady){await configure(mode as 'ocr'|'formula',choice.local);await options.refresh();await load();return false;}
       const purpose=mode as 'ocr'|'formula',saved=snapshot.choices[purpose];
       const device=saved?.device.mode==='gpu'&&!entry.backends.some(backend=>backend==='cuda'||backend==='dml')?{mode:'auto' as const}:saved?.device||{mode:'auto' as const};
       await api.saveLocalModel(purpose,{modelId:choice.local,device},snapshot.revision);
@@ -74,9 +74,9 @@ export function mountWorkbenchServices(api:OCRAPI,formula:FormulaRecognitionAPI,
   }
   q('task-service').onchange=()=>void select();
   const selected=()=>items(options.mode()).find(item=>item.option.value===choices[options.mode()]);
-  async function configure(){
-    if(switching||options.busy())return;
-    await openWorkbenchServiceEditor(api,{mode:options.mode(),selected:selected()?.ai?.profileId||selected()?.service?.serviceId,models:()=>options.models(options.mode()==='formula'?'formula':'ocr'),migrate:selected()?.legacy?async()=>{
+  async function configure(purpose?:'ocr'|'formula',model?:string){
+    if((switching&&!purpose)||options.busy())return;
+    await openWorkbenchServiceEditor(api,{mode:purpose||options.mode(),selected:purpose?undefined:selected()?.ai?.profileId||selected()?.service?.serviceId,local:!!purpose||!!selected()?.local,model,formula,localSaved:async purpose=>{await options.refresh();choices[purpose]='local:'+(purpose==='ocr'?options.state()?.ocrChoice?.modelId:options.state()?.formulaLocal?.choice.modelId);if(purpose==='ocr')try{localStorage.setItem('recognition-ocr-service',choices.ocr!);}catch{}await load();options.changed();},migrate:selected()?.legacy?async()=>{
       const mode=options.mode();if(mode==='ocr')return;const config=configs[mode];if(!config)return;
       const ref=await (mode==='translation'?api:formula).migrateService(config.revision);await load();const key='serviceId'in ref?'service:'+ref.serviceId:aiKey(ref.profileId,ref.model),choice=items(mode).find(item=>item.option.value===key);if(!choice)throw Error('迁入的服务尚未就绪');await apply(choice,mode);await options.refresh();await load();options.changed();
     }:undefined,saved:async(kind,id)=>{

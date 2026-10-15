@@ -2,7 +2,7 @@ import { readingTokens, selectedText, textBounds, textGroup, textVertical, type 
 import { imageToTextView, textViewToImage, textViewSize, insideTextQuad, type TextRotation, type TextView } from '../../shared/recognition/text-geometry';
 import './text-selection.css';
 import { icon, registerIcons } from '../ui';
-import { Maximize, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText,Scan,Crop } from 'lucide';
+import { Expand, ZoomIn, ZoomOut, RotateCw, Copy, Languages,ScanText,Scan,Crop } from 'lucide';
 import { mountImageRaster } from './image-raster';
 import type { OCRImagePreviewRequest } from '../../shared/recognition/image-preview';
 
@@ -52,7 +52,7 @@ export function mountTextSelection(image: HTMLImageElement, options: {
   const less = button('缩小', () => setZoom(view.scale / 1.25)); less.dataset.textAction = 'zoom-out';
   const more = button('放大', () => setZoom(view.scale * 1.25)); more.dataset.textAction = 'zoom-in';
   const rotate = button('旋转', () => { rotation = ((rotation + 1) % 4) as TextRotation; layout(); }); rotate.dataset.textAction = 'rotate';
-  registerIcons({ 'image-fit': Maximize, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText,'selection-area':options.region?Crop:Scan });
+  registerIcons({ 'image-fit': Expand, 'image-zoom-out': ZoomOut, 'image-zoom-in': ZoomIn, 'image-rotate': RotateCw, 'selection-copy': Copy, 'selection-translate': Languages,'selection-recognize':ScanText,'selection-area':options.region?Crop:Scan });
   for (const [node, glyph] of [[fit, 'image-fit'], [less, 'image-zoom-out'], [more, 'image-zoom-in'], [rotate, 'image-rotate']] as const) {
     node.title = node.ariaLabel = node.textContent; node.innerHTML = icon('lucide:' + glyph); node.classList.add('icon-button');
   }

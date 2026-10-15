@@ -5,3 +5,9 @@ export interface AIResult {text:string;model:string;inputTokens?:number;outputTo
 export const MAX_TOOL_OUTPUT=1024*1024;
 export function toolText(value:unknown,limit=MAX_TOOL_OUTPUT){if(typeof value!=='string'||!value.trim()||Buffer.byteLength(value)>limit)throw Error('Codex 返回文字为空或过长');return value;}
 export function reasoningEffort(value:unknown){if(value===undefined)return '';if(typeof value!=='string'||value.length>40||value!==''&&!/^[a-z][a-z0-9_-]*$/.test(value))throw Error('推理强度无效');return value;}
+
+/** Shared account controls with a caller-scoped IPC bridge. */
+export interface CodexAccountAPI {
+ codexStatus():Promise<CodexStatus>;codexLogin():Promise<CodexStatus>;codexCancelLogin():Promise<CodexStatus>;codexLogout():Promise<CodexStatus>;
+ codexChooseExecutable():Promise<CodexStatus|null>;codexAutoExecutable():Promise<CodexStatus>;codexOpenLogin():Promise<void>;codexCopyCode():Promise<void>;
+}

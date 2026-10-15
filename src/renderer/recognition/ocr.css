@@ -40,7 +40,7 @@ body[data-view='recognition'] #translation-destination { margin: 0; padding: 0 1
 .workbench-service-label { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--text-scale, 1)); }
 .workbench-service-label > .custom-select { width: clamp(170px, 22vw, 300px); }
 .unified-recognition #formula-panel { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; padding: 12px; gap: 10px; }
-.unified-recognition #formula-text { flex: 1; min-height: 100px; padding: 0; font-family: monospace; }
+.unified-recognition #formula-text { flex: 1; min-height: 100px; padding: 0; font-family: inherit; }
 .unified-recognition #formula-preview { flex: 1; min-height: 80px; overflow: auto; border-top: 1px solid var(--line); padding: 16px 0; user-select: text; }
 .unified-recognition #formula-preview-status { margin: 0; color: var(--muted); font-size: 12px; }
 .unified-recognition #formula-preview-status:empty { display: none; }

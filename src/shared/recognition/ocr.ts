@@ -1,3 +1,4 @@
+import type {CodexAccountAPI} from '../codex-types';
 import {ocrDimensions,OCR_TEXT} from './ocr-limits';
 export {ocrDimensions,OCR_PIXELS,OCR_EDGE,OCR_TEXT} from './ocr-limits';
 export type OCRLanguage = 'eng' | 'chi_sim+eng';
@@ -73,7 +74,7 @@ export interface RecognitionModelAPI {
   deleteLocalModel(id: string): Promise<void>;
   refreshInferenceDevices(): Promise<import('../inference-devices').InferenceDevices>;
 }
-export interface OCRAPI extends RecognitionServiceAPI,RecognitionModelAPI {
+export interface OCRAPI extends RecognitionServiceAPI,RecognitionModelAPI,CodexAccountAPI {
   serviceCatalog():Promise<WorkbenchServiceCatalog>;
   saveAIService(value:import('../ai').AIProfileInput):Promise<string>;
   aiModelCatalogDraft(value:import('../ai').AIModelCatalogDraft):Promise<import('../ai').AIModel[]>;

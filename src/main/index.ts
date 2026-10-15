@@ -1,3 +1,4 @@
+import {chooseCodexExecutable,openCodexLogin,copyCodexCode} from './ai-account-controls';
 import {previewArchive} from './preview-archive';
 import {MaterialsService} from './materials/service';
 import {mediaProjectKind,mediaProjectLaunchPaths} from './media-project-launch';
@@ -830,10 +831,10 @@ function registerIPC() {
   handle('codex-login',()=>aiService.codexLogin(),['main']);
   handle('codex-cancel-login',()=>aiService.codexCancelLogin(),['main']);
   handle('codex-logout',()=>aiService.codexLogout(),['main']);
-  handle('codex-choose-executable',async event=>{const owner=BrowserWindow.fromWebContents(event.sender)||main;const result=await dialog.showOpenDialog(owner,{title:'选择本机 Codex 程序',properties:['openFile'],filters:[{name:'Codex 入口',extensions:['exe','cmd','bat','ps1','js']},{name:'所有文件',extensions:['*']}]});return result.canceled?null:aiService.codexExecutable(result.filePaths[0]);},['main']);
+  handle('codex-choose-executable',event=>chooseCodexExecutable(aiService,BrowserWindow.fromWebContents(event.sender)||main),['main']);
   handle('codex-auto-executable',()=>aiService.codexExecutable(''),['main']);
-  handle('codex-open-login',async()=>{const status=await aiService.codexStatus(),value=status.verificationUrl;if(!value)throw Error('当前没有待完成的 Codex 授权');const url=new URL(value);if(url.protocol!=='https:'||url.hostname!=='auth.openai.com')throw Error('Codex 授权地址无效');await shell.openExternal(url.href);},['main']);
-  handle('codex-copy-code',async()=>{const status=await aiService.codexStatus(),code=status.userCode;if(!code||!/^[A-Z0-9-]{4,32}$/.test(code))throw Error('当前没有 Codex 验证码');clipboard.writeText(code);},['main']);
+  handle('codex-open-login',()=>openCodexLogin(aiService),['main']);
+  handle('codex-copy-code',()=>copyCodexCode(aiService),['main']);
   handle('ai-command-save',(_event,value)=>aiService.saveCommand(value),['main']);
   handle('ai-command-remove',(_event,id:string)=>aiService.removeCommand(id),['main']);
   handle('ai-shortcut',(_event,value:string)=>{const old=aiService.state().shortcut;try{registerAIShortcut(value);aiService.setShortcut(value);}catch(error){if(aiService.state().shortcut!==old)aiService.setShortcut(old);throw error;}return aiService.state();},['main']);

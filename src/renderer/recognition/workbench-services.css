@@ -1,5 +1,5 @@
-.workbench-service-settings { width: min(900px, calc(100vw - 48px)); }
-.service-editor-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.workbench-service-settings { width: min(1040px, calc(100vw - 48px)); }
+.service-editor-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
 .service-editor-toolbar .tabs { margin-right: auto; }
 .service-editor-browser { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 360px; gap: 24px; }
 .service-editor-list { display: flex; flex-direction: column; gap: 6px; padding-right: 16px; border-right: 1px solid var(--line); overflow-y: auto; max-height: 55vh; }
@@ -20,3 +20,12 @@
 .service-editor-form input,.service-editor-form textarea,.service-editor-form .custom-select { width: 100%; }
 .service-editor-form textarea { min-height: 85px; resize: vertical; font: inherit; }
 @media(max-width:700px) { .service-editor-browser { grid-template-columns: 150px minmax(0,1fr); gap: 14px; } .service-editor-toolbar { flex-wrap: wrap; } }
+
+.workbench-service-settings .one-dialog-body{min-height:0;overflow:auto;max-height:calc(100vh - 180px)}
+.workbench-service-settings [hidden]{display:none!important}
+.service-editor-toolbar .tabs{flex-wrap:wrap}
+.service-model-panel .model-browser{grid-template-columns:190px minmax(0,1fr);height:min(540px,calc(100vh - 290px))}
+.service-editor-browser form{min-width:0;max-height:min(580px,calc(100vh - 290px));overflow-y:auto;padding-right:4px}
+.service-editor-browser .ai-profile-form .ai-profile-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+.service-editor-browser .ai-profile-form .ai-profile-tuning{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:700px){.service-model-panel .model-browser{grid-template-columns:150px minmax(0,1fr);gap:14px}.service-editor-browser .ai-profile-form .ai-profile-fields,.service-editor-browser .ai-profile-form .ai-profile-tuning{grid-template-columns:1fr}}

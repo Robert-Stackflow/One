@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { OCRAPI,FormulaRecognitionAPI } from '../shared/recognition/ocr';
 const call = (name: string, ...args: unknown[]) => ipcRenderer.invoke('one:recognition-' + name, ...args);
 const api: OCRAPI = {
+  codexStatus:()=>call('service-codex-status'),codexLogin:()=>call('service-codex-login'),codexCancelLogin:()=>call('service-codex-cancel-login'),codexLogout:()=>call('service-codex-logout'),codexChooseExecutable:()=>call('service-codex-choose-executable'),codexAutoExecutable:()=>call('service-codex-auto-executable'),codexOpenLogin:()=>call('service-codex-open-login'),codexCopyCode:()=>call('service-codex-copy-code'),
   serviceCatalog:()=>call('service-catalog'),saveAIService:value=>call('service-ai-save',value),aiModelCatalogDraft:value=>call('service-ai-models',value),saveDedicatedService:(kind,value)=>call('service-dedicated-save',kind,value),
   runAI:(token,reference,language,region)=>call('run-ai',token,reference,language,region),
   dedicatedServices:()=>call('translation-services'),

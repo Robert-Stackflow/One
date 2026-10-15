@@ -1,3 +1,4 @@
+import {chooseCodexExecutable,openCodexLogin,copyCodexCode} from '../ai-account-controls';
 import {serviceCredentialCrypto,type ServiceConnectionStorage} from '../service-connections';
 import {clipboard,session,shell,type BrowserWindow,type IpcMainInvokeEvent} from 'electron';
 import { join } from 'node:path';
@@ -258,6 +259,14 @@ export class OCRService {
     const configurable=()=>{if(!ctx.ai)throw Error('AI 服务不可用');if(this.running||this.translating||this.formulaRecognizing||this.formulaProcessing||this.serviceCheck)throw Error('请先结束当前任务');return ctx.ai;};
     handle('service-ai-save',value=>configurable().profile(value));
     handle('service-ai-models',value=>configurable().modelCatalogDraft(value));
+    handle('service-codex-status',()=>configurable().codexStatus());
+    handle('service-codex-login',()=>configurable().codexLogin());
+    handle('service-codex-cancel-login',()=>configurable().codexCancelLogin());
+    handle('service-codex-logout',()=>configurable().codexLogout());
+    handle('service-codex-choose-executable',()=>chooseCodexExecutable(configurable(),this.window!));
+    handle('service-codex-auto-executable',()=>configurable().codexExecutable(''));
+    handle('service-codex-open-login',()=>openCodexLogin(configurable()));
+    handle('service-codex-copy-code',()=>copyCodexCode(configurable()));
     handle('service-dedicated-save',(kind,value)=>{const ai=configurable();if(kind==='translation')return ai.translators.save(value);if(kind==='formula')return ai.formulators.save(value);throw Error('服务类型无效');});
     handle('run-ai',async(token,reference,value,selection)=>{
       if(token!==this.token||!this.png||!ctx.ai)throw Error('识别图片已失效');

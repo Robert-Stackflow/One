@@ -13,7 +13,7 @@ export function mountFormula(
   state: () => OCRState | undefined,
   message: (value: unknown) => void,
   changed: () => void|Promise<void>,
-  options:{rotation:()=>TextRotation;busy:(value:boolean)=>void;unified?:boolean;modelsChanged?:()=>Promise<void>}={rotation:()=>0,busy:()=>{}},
+  options:{rotation:()=>TextRotation;busy:(value:boolean)=>void;unified?:boolean;openModels?:()=>Promise<void>;modelsChanged?:()=>Promise<void>}={rotation:()=>0,busy:()=>{}},
 ) {
   let processing=false,switching=false,operation='',previewReady=false;
   let mode = false,
@@ -32,7 +32,7 @@ export function mountFormula(
   const busy = () => switching||requesting||processing || !!state()?.formulaRecognizing||!!state()?.formulaProcessing;
   const local=()=>!!state()?.formulaLocal&&state()!.formulaLocal!.choice.modelId!=='service';
   const source=q<HTMLSelectElement>('formula-source');
-  const models=mountLocalModels(api,async()=>{await changed();await options.modelsChanged?.();render();},'formula');
+  const models=options.openModels||mountLocalModels(api,async()=>{await changed();await options.modelsChanged?.();render();},'formula');
   q('formula-model-configure').onclick=()=>void models().catch(message);
   async function imageOperation(work:()=>Promise<unknown>,label:string){
     if(busy()||!state())return;processing=true;operation=label;message('');render();

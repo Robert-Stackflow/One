@@ -10,7 +10,7 @@ import { nativeRuntimeLicenses } from '../../shared/recognition/model-sources';
 import {recognitionMessage} from './notice';
 const size = (bytes:number) => bytes>=1024**3?(bytes/1024**3).toFixed(1)+' GiB':(bytes / 1024 ** 2).toFixed(1) + ' MiB';
 const resourceLink=(url:string|undefined,title:string)=>url?.startsWith('https://')?`<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(title)}</a>`:esc(title);
-export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<void>,purpose:'ocr'|'formula'='ocr') {
+export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<void>,purpose:'ocr'|'formula'='ocr',embedded?:{host:HTMLElement;actions:HTMLElement;dialog:HTMLDialogElement;selected?:string;active():boolean}) {
   registerIcons({ 'ocr-model-delete': Trash2 });
   const template = document.createElement('template');
   template.innerHTML = dialogMarkup({id:'local-model-settings',title:purpose==='formula'?'公式模型':'OCR 模型',className:'one-form-dialog local-model-settings',
@@ -19,9 +19,12 @@ export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<vo
       <label class="model-device-row" id="local-model-gpu-field">显卡<select id="local-model-gpu"></select></label><div class="model-device-hint"><span id="local-model-gpu-info"></span><button id="local-model-devices" class="quiet">刷新显卡</button></div></section>
       <section class="model-resource-settings"><h3>模型资源</h3><dl id="local-model-metadata"></dl></section></section></div><p id="local-model-error" class="model-error" role="alert" hidden></p>`,
     actions:'<button id="local-model-save" class="primary"><span class="model-action-spinner" aria-hidden="true" hidden></span><span id="local-model-action-label" aria-live="polite">使用此模型</span></button>'});
-  const dialog = template.content.firstElementChild as HTMLDialogElement; (document.getElementById('app')||document.body).append(dialog);
-  if(purpose==='formula'){dialog.id='formula-local-model-settings';dialog.innerHTML=dialog.innerHTML.replaceAll('local-model-','formula-local-model-');dialog.setAttribute('aria-labelledby','formula-local-model-settings-title');}
-  const field = <T extends HTMLElement>(id:string)=>dialog.querySelector<T>((purpose==='formula'?'#formula-local-model-':'#local-model-')+id)!;
+  const markup=template.content.firstElementChild as HTMLDialogElement;
+  if(purpose==='formula'){markup.id='formula-local-model-settings';markup.innerHTML=markup.innerHTML.replaceAll('local-model-','formula-local-model-');markup.setAttribute('aria-labelledby','formula-local-model-settings-title');}
+  const dialog:HTMLElement=embedded?.host||markup,owner=embedded?.dialog||markup;
+  if(embedded){dialog.append(...markup.querySelector('.one-dialog-body')!.childNodes);embedded.actions.append(...markup.querySelector('.one-dialog-actions')!.childNodes);}
+  else (document.getElementById('app')||document.body).append(markup);
+  const field=<T extends HTMLElement>(id:string)=>{const selector=(purpose==='formula'?'#formula-local-model-':'#local-model-')+id;return (dialog.querySelector<T>(selector)||embedded?.actions.querySelector<T>(selector))!;};
   const device = field<HTMLSelectElement>('device'), gpu = field<HTMLSelectElement>('gpu');
   field('list').setAttribute('aria-label',purpose==='formula'?'公式模型列表':'OCR 模型列表');
   let state:LocalModelManagerState|undefined,modelId='',polling=false,saving=false,disposed=false,listKey='',devicesRequested=false;
@@ -62,7 +65,7 @@ export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<vo
     if(entry()?.backends.some(backend=>backend==='dml'||backend==='cuda')&&!devicesRequested&&(purpose==='ocr'||device.value==='gpu'))loadDevices();
   }
   function render() {
-    if(!state)return;const entries=state.entries.filter(value=>value.purpose===purpose),key=entries.map(value=>value.id).join('|');
+    if(disposed||!state)return;const entries=state.entries.filter(value=>value.purpose===purpose),key=entries.map(value=>value.id).join('|');
     field('loading').hidden=true;dialog.querySelector<HTMLElement>('.model-browser')!.hidden=false;
     if(listKey!==key){listKey=key;field('list').innerHTML=entries.map(value=>`<button class="model-option" data-select-model="${esc(value.id)}" type="button"><span class="model-option-heading"><span class="model-option-name">${esc(value.title)}</span><span class="model-current" hidden>使用中</span></span><span class="model-option-meta"><span class="model-size">${esc(value.size)}</span><span>${size(value.totalBytes)}</span></span><span class="model-option-state" data-model-state></span></button>`).join('');}
     for(const value of entries){
@@ -85,11 +88,11 @@ export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<vo
     field('action-label').textContent=cancelling.has(value.id)?'正在取消…':downloading?(value.phase==='verifying'?'取消准备':`取消下载 · ${Math.round(value.progress*100)}%`):applying?'应用中…':ready()?'使用此模型':purpose==='formula'&&value.sourceReady?'准备并使用':value.downloadedBytes?'继续下载并使用':'下载并使用';
     if(value.error&&!cancelled.has(value.id))error(Error(value.error));
   }
-  async function refresh(force=false){if(polling||disposed)return;polling=true;try{state=await api.localModels(force);if(!disposed)render();}catch(value){if(!disposed){error(value);if(!state){field('loading').hidden=true;field<HTMLButtonElement>('save').disabled=false;field('action-label').textContent='重试';}}}finally{polling=false;}}
+  async function refresh(force=false){if(polling||disposed)return;polling=true;try{const next=await api.localModels(force);if(!disposed){state=next;render();}}catch(value){if(!disposed){error(value);if(!state){field('loading').hidden=true;field<HTMLButtonElement>('save').disabled=false;field('action-label').textContent='重试';}}}finally{polling=false;}}
   field('list').onclick=event=>{const card=(event.target as HTMLElement).closest<HTMLElement>('[data-select-model]');if(card&&card.dataset.selectModel!==modelId)choose(card.dataset.selectModel!);};
   device.onchange=()=>{syncDeviceOptions();render();if(purpose==='formula'&&device.value==='gpu'&&!devicesRequested)loadDevices();};
   gpu.onchange=()=>{syncDeviceOptions();render();};
-  function loadDevices(){devicesRequested=true;const button=field<HTMLButtonElement>('devices');button.disabled=true;button.textContent='刷新中…';error('');void api.refreshInferenceDevices().then(value=>{if(state)state.devices=value;syncDeviceOptions();render();}).catch(error).finally(()=>{button.disabled=false;button.textContent='刷新显卡';});}
+  function loadDevices(){devicesRequested=true;const button=field<HTMLButtonElement>('devices');button.disabled=true;button.textContent='刷新中…';error('');void api.refreshInferenceDevices().then(value=>{if(disposed)return;if(state)state.devices=value;syncDeviceOptions();render();}).catch(error).finally(()=>{button.disabled=false;button.textContent='刷新显卡';});}
   field('devices').onclick=()=>loadDevices();
   field('delete').onclick=()=>{error('');void api.deleteLocalModel(modelId).then(()=>refresh(true)).then(updated).catch(error);};
   field('save').onclick=()=>{
@@ -105,11 +108,15 @@ export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<vo
     void (async()=>{
       if(!installed||native)await api.installLocalModel(selected,preference);installing=undefined;if(cancelled.has(selected))return;
       const nextRevision=await api.saveLocalModel(feature,{modelId:selected,device:preference},revision);
-      if(state){state.choices[purpose]={modelId:selected,device:preference};if(typeof nextRevision==='string')state.revision=nextRevision;render();}
-      await closeDialog(dialog);await updated();
+      if(!disposed&&state){state.choices[purpose]={modelId:selected,device:preference};if(typeof nextRevision==='string')state.revision=nextRevision;render();}
+      if(!disposed&&(!embedded||embedded.active()))await closeDialog(owner);await updated();
     })().catch(value=>{if(!cancelled.has(selected))error(value);}).finally(async()=>{installing=undefined;saving=false;await refresh(true);render();});
   };
-  dialog.querySelector<HTMLButtonElement>('[data-dialog-dismiss]')!.onclick=()=>void closeDialog(dialog);
-  const timer=setInterval(()=>{if(dialog.open)void refresh();},800);window.addEventListener('beforeunload',()=>{disposed=true;clearInterval(timer);},{once:true});
-  return async()=>{if(disposed)return;error('');if(state)choose(savedModel(),true);else{field('loading').hidden=false;field<HTMLButtonElement>('save').disabled=true;field('action-label').textContent='读取中…';}openDialog(dialog);customControls(dialog);await refresh();if(state&&!disposed&&dialog.open&&!modelId)choose(savedModel(),true);};
+  if(!embedded)owner.querySelector<HTMLButtonElement>('[data-dialog-dismiss]')!.onclick=()=>void closeDialog(owner);
+  const timer=setInterval(()=>{if(owner.open&&(!embedded||embedded.active()))void refresh();},800);
+  const dispose=()=>{disposed=true;clearInterval(timer);window.removeEventListener('beforeunload',dispose);};
+  window.addEventListener('beforeunload',dispose,{once:true});if(embedded)owner.addEventListener('close',dispose,{once:true});
+  const initialChoice=()=>embedded&&(modelId||state?.entries.some(value=>value.id===embedded.selected&&value.purpose===purpose))?modelId||embedded.selected!:savedModel();
+  const open=async()=>{if(disposed)return;error('');if(state){const id=initialChoice();choose(id,id===savedModel());}else{field('loading').hidden=false;field<HTMLButtonElement>('save').disabled=true;field('action-label').textContent='读取中…';}if(!embedded)openDialog(owner);customControls(dialog);await refresh();if(state&&!disposed&&owner.open&&!modelId){const id=initialChoice();choose(id,id===savedModel());}};
+  return Object.assign(open,{dispose});
 }
