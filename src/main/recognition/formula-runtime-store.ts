@@ -53,7 +53,7 @@ export class FormulaRuntimeStore {
     if(this.users)throw Error('运行包正在使用');await this.archives.install(this.profile,signal,value=>progress({...value,phase:value.phase==='ready'?'verifying':value.phase}),sources);const lease=await this.archives.acquire(this.profile,signal);let temporary:string|undefined,old:string|undefined;
     try{
       await mkdir(this.parent,{recursive:true});const info=await lstat(this.parent);if(!info.isDirectory()||info.isSymbolicLink())throw Error('运行包缓存目录无效');temporary=await mkdtemp(join(this.parent,'.prepare-'));
-      for(const file of lease.files){signal.throwIfAborted();progress({phase:'verifying',received:total,total,artifact:file.name});await extractFormulaRuntime(file.path,temporary,file.role==='python'?'':'Lib/site-packages',signal);}
+      for(const file of lease.files){signal.throwIfAborted();progress({phase:'verifying',received:total,total,artifact:file.name});await extractFormulaRuntime(file.path,temporary,file.role==='python'?'':'Lib/site-packages',signal,this.profile.selection);}
       await writeFile(join(temporary,'python312._pth'),PTH);const files=await runtimeFiles(temporary,signal),encoded=JSON.stringify(files);
       if(files.length!==this.profile.files||files.reduce((sum,file)=>sum+file.bytes,0)!==this.profile.expandedBytes||digest(encoded)!==this.profile.manifestSha256)throw Error('运行包展开文件与固定版本不一致');
       await writeFile(join(temporary,'.files.json'),encoded);await writeFile(join(temporary,'.runtime.json'),JSON.stringify({app:'One',kind:'formula-runtime',schema:1,id:this.profile.id,revision:this.profile.revision,manifestSha256:this.profile.manifestSha256}));signal.throwIfAborted();if(this.closed||this.users)throw Error('运行包服务状态已改变');

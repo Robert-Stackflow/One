@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFile,lstat} from 'node:fs/promises';
 import {formulaOutput,FORMULA_IMAGE} from '../../shared/recognition/formula';
 import type {PaddleArtifact,PaddlePreferences} from './paddle-job';
-import {formulaProfiles} from './formula-model-catalog';
+import {paddleFormulaProfiles} from './formula-model-catalog';
 import {formulaPixels} from './formula-resample';
 export interface FormulaModelFiles {id:string;revision:string;engine?:'paddle'|'pix2tex';onnx:PaddleArtifact;config:PaddleArtifact;decoder?:PaddleArtifact;resizer?:PaddleArtifact}
 export interface FormulaLocalJob {id:number;png:Buffer;model:FormulaModelFiles;backend:'cpu'|'dml';deviceId:number;memoryMiB:number}
@@ -31,7 +31,7 @@ export async function formulaInput(png:Buffer,inputSize:384|768=384){
 }
 export function formulaDecoder(config:unknown){
   const value=config as any,tokenizer=value?.PostProcess?.character_dict?.fast_tokenizer_file;
-  const profile=formulaProfiles.find(profile=>profile.modelName===value?.Global?.model_name);
+  const profile=paddleFormulaProfiles.find(profile=>profile.modelName===value?.Global?.model_name);
   if(!profile||tokenizer?.decoder?.type!=='ByteLevel'||!tokenizer.model?.vocab||!Array.isArray(tokenizer.added_tokens))throw Error('公式模型配置不兼容');
   const vocabulary=new Map<number,string>();for(const [text,id] of Object.entries(tokenizer.model.vocab)){if(typeof id!=='number'||!Number.isSafeInteger(id)||id<0||id>100000||text.length>2000||vocabulary.has(id))throw Error('公式字典无效');vocabulary.set(id,text);}
   if(vocabulary.size!==50000)throw Error('公式字典不完整');
@@ -47,7 +47,7 @@ export function formulaDecoder(config:unknown){
 }
 function profileFor(model:FormulaModelFiles){
   if(model.engine!==undefined&&model.engine!=='paddle')throw Error('公式模型引擎不匹配');
-  const profile=formulaProfiles.find(profile=>profile.source.id===model.id&&profile.source.revision===model.revision&&profile.output.sha256===model.onnx.sha256);
+  const profile=paddleFormulaProfiles.find(profile=>profile.source.id===model.id&&profile.source.revision===model.revision&&profile.output.sha256===model.onnx.sha256);
   if(!profile)throw Error('公式预设尚未适配此运行器');return profile;
 }
 export function formulaInputSize(model:FormulaModelFiles){return profileFor(model).inputSize;}

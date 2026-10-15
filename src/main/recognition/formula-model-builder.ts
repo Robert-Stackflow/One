@@ -4,6 +4,7 @@ import {writeFile,rm} from 'node:fs/promises';
 import {limitChildProcess} from '../capture/native';
 import {localInference} from '../local-inference-scheduler';
 import {formulaProfiles,formulaPlusS} from './formula-model-catalog';
+import {PIX2TEX_RECIPE} from './pix2tex-recipe';
 
 /** Fixed converter and scalar contract; renderer input cannot supply Python or argv. */
 const RECIPE=String.raw`import hashlib, json, sys
@@ -53,7 +54,7 @@ export async function buildFormulaModel(input:FormulaBuildInput){
   if(!profile)throw Error('公式模型准备配方尚未适配');
   const client={owner:Symbol('formula-builder')};
   return localInference.run(client,input.signal,async()=>{
-    input.signal.throwIfAborted();const script=join(input.destination,'_convert.py');await writeFile(script,RECIPE,{flag:'wx'});
+    input.signal.throwIfAborted();const script=join(input.destination,'_convert.py');await writeFile(script,profile.engine==='pix2tex'?PIX2TEX_RECIPE:RECIPE,{flag:'wx'});
     try{
       await new Promise<void>((resolve,reject)=>{
         const child=spawn(input.executable,['-B','-I',script,input.source,input.destination,JSON.stringify({...profile.conversion,outputSha256:profile.output.sha256})],{cwd:input.destination,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONNOUSERSITE:'1',POLYGRAPHY_AUTOINSTALL_DEPS:'0'}});

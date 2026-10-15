@@ -12,6 +12,14 @@ import {createReadStream} from 'node:fs';
 import {Readable} from 'node:stream';
 import {resolve} from 'node:path';
 
+test('official CPU wheel names preserve the plus sign while retaining path, suffix and case protections',async()=>{
+  const bytes=Buffer.from('wheel'),artifact={name:'torch-2.5.1+cpu.whl',role:'torch',url:'https://fixture.invalid/torch-2.5.1%2Bcpu.whl',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')},bundle={id:'plus-wheel-fixture',revision:'v1',artifacts:[artifact]};
+  assert.ok(localModelIdentity(bundle).startsWith(bundle.id+'-'));
+  for(const name of ['../torch+cpu.whl','dir/torch+cpu.whl','torch+cpu.whl:stream','torch+cpu.whl.part','LPT1.whl'])assert.throws(()=>localModelIdentity({...bundle,artifacts:[{...artifact,name}]}),/文件描述/);
+  assert.throws(()=>localModelIdentity({...bundle,artifacts:[artifact,{...artifact,name:artifact.name.toUpperCase(),role:'other'}]}),/文件描述/);
+  const root=await mkdtemp(join(process.env.ONE_MODEL_TEST_ROOT!,'plus-wheel-')),store=new LocalModelStore(root,async()=>new Response(bytes,{headers:{'content-length':String(bytes.length)}}));await store.install(bundle,new AbortController().signal);const lease=await store.acquire(bundle);assert.equal(await readFile(lease.files[0].path,'utf8'),'wheel');assert.ok(lease.files[0].path.endsWith(artifact.name));lease.release();await store.remove(bundle);
+});
+
 test('official plus-L archive prefix matches the portion originally received from Hugging Face',{skip:process.env.ONE_MODEL_LIVE_PREFIX!=='1'},async()=>{
   const source=resolve('work/current/capture-reconstruction/formula/plus-l/inference.pdiparams'),weight=formulaPlusL.source.artifacts.find(file=>file.role==='weights')!,bytes=101711872,hash=createHash('sha256');
   assert.equal((await stat(source)).size,weight.bytes);for await(const chunk of createReadStream(source,{start:0,end:bytes-1}))hash.update(chunk);

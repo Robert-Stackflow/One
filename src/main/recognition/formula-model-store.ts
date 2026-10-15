@@ -6,44 +6,45 @@ import {LocalModelStore,localModelIdentity} from '../local-model-store';
 import type {LocalModelProgress,LocalModelState} from '../../shared/local-models';
 import type {FormulaModelFiles} from './formula-local';
 import type {FormulaRuntimeStore} from './formula-runtime-store';
-import {formulaRuntimeProfile} from './formula-runtime-catalog';
+import {formulaRuntimeProfile,type FormulaRuntimeProfile} from './formula-runtime-catalog';
 import {formulaPlusS,type FormulaPreparedProfile} from './formula-model-catalog';
 import {buildFormulaModel,type FormulaBuildInput} from './formula-model-builder';
 
 type Runtime=Pick<FormulaRuntimeStore,'state'|'install'|'acquire'>;
 interface Job {abort:AbortController;promise:Promise<void>;listeners:Map<symbol,(value:LocalModelProgress)=>void>;latest?:LocalModelProgress}
-interface Options {transport?:typeof fetch;profile?:FormulaPreparedProfile;build?:(input:FormulaBuildInput)=>Promise<void>}
+interface Options {transport?:typeof fetch;profile?:FormulaPreparedProfile;runtimeProfile?:FormulaRuntimeProfile;build?:(input:FormulaBuildInput)=>Promise<void>}
 const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 async function directory(path:string,create=false){if(create)await mkdir(path,{recursive:true});const stat=await lstat(path);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('公式模型目录无效');}
 async function hash(path:string,signal?:AbortSignal){const value=createHash('sha256');for await(const bytes of createReadStream(path)){signal?.throwIfAborted();value.update(bytes);}signal?.throwIfAborted();return value.digest('hex');}
 
 /** Owns original weights and a derived, atomically published native inference model. */
 export class FormulaModelStore {
-  private readonly profile:FormulaPreparedProfile;
+  private readonly profile:FormulaPreparedProfile;private readonly runtimeProfile:FormulaRuntimeProfile;
   private readonly sources:LocalModelStore;private readonly parent:string;private readonly installed:string;private readonly marker:object;
   private readonly builder:(input:FormulaBuildInput)=>Promise<void>;
   private job?:Job;private users=0;private closed=false;private invalid=false;
   constructor(root:string,private readonly runtime:Runtime,options:Options={}){
-    root=resolve(root);this.profile=structuredClone(options.profile||formulaPlusS);const sourceKey=localModelIdentity(this.profile.source);
-    const output=this.profile.output;
-    if(!/^[a-z0-9._-]{1,80}$/.test(this.profile.recipe)||!Number.isSafeInteger(output.bytes)||output.bytes<1||output.bytes>1024*1024*1024||!/^[a-f0-9]{64}$/.test(output.sha256)||!/^[a-z0-9][a-z0-9._-]{0,80}$/.test(output.name)||!this.profile.source.artifacts.some(file=>file.role==='config'&&file.name==='config.json'))throw Error('公式准备配方无效');
-    const key=sourceKey+'-'+digest(JSON.stringify([this.profile.recipe,output,formulaRuntimeProfile.revision,formulaRuntimeProfile.manifestSha256])).slice(0,16);
+    root=resolve(root);this.profile=structuredClone(options.profile||formulaPlusS);this.runtimeProfile=structuredClone(options.runtimeProfile||formulaRuntimeProfile);const sourceKey=localModelIdentity(this.profile.source);
+    const output=this.profile.output,outputs=this.descriptors();
+    if(!/^[a-z0-9._-]{1,80}$/.test(this.profile.recipe)||outputs.some(file=>!Number.isSafeInteger(file.bytes)||file.bytes<1||file.bytes>1024*1024*1024||!/^[a-f0-9]{64}$/.test(file.sha256)||!/^[a-z0-9][a-z0-9._-]{0,80}$/.test(file.name))||new Set(outputs.map(file=>file.name)).size!==outputs.length||this.profile.engine!=='pix2tex'&&!this.profile.source.artifacts.some(file=>file.role==='config'&&file.name==='config.json'))throw Error('公式准备配方无效');
+    const key=sourceKey+'-'+digest(JSON.stringify([this.profile.recipe,this.profile.engine==='pix2tex'?outputs:output,this.runtimeProfile.revision,this.runtimeProfile.manifestSha256])).slice(0,16);
     this.parent=join(root,'prepared');this.installed=join(this.parent,key);this.sources=new LocalModelStore(join(root,'sources'),options.transport);this.builder=options.build||buildFormulaModel;
     this.marker={app:'One',kind:'formula-model',schema:1,key,recipe:this.profile.recipe};
   }
+  private descriptors(){if(this.profile.engine==='pix2tex')return [this.profile.output,this.profile.config,this.profile.decoder,this.profile.resizer];const config=this.profile.source.artifacts.find(file=>file.role==='config');if(!config)throw Error('公式准备配方无效');return [this.profile.output,{name:'config.json',bytes:config.bytes,sha256:config.sha256}];}
   private files(directory:string):FormulaModelFiles{
-    const output=this.profile.output,config=this.profile.source.artifacts.find(file=>file.role==='config')!;
-    return {id:this.profile.source.id,revision:this.profile.source.revision,onnx:{path:join(directory,output.name),bytes:output.bytes,sha256:output.sha256},config:{path:join(directory,'config.json'),bytes:config.bytes,sha256:config.sha256}};
+    const [onnx,config,decoder,resizer]=this.descriptors().map(file=>({path:join(directory,file.name),bytes:file.bytes,sha256:file.sha256}));
+    return {id:this.profile.source.id,revision:this.profile.source.revision,onnx,config,...(this.profile.engine==='pix2tex'?{engine:'pix2tex' as const,decoder,resizer}:{})};
   }
   private async owned(path:string){
     await directory(path);const marker=join(path,'.prepared.json'),stat=await lstat(marker);
     if(!stat.isFile()||stat.isSymbolicLink()||stat.size>4096||JSON.stringify(JSON.parse(await readFile(marker,'utf8')))!==JSON.stringify(this.marker))throw Error('公式模型缓存归属不匹配');
-    const allowed=new Set(['.prepared.json',this.profile.output.name,'config.json']);
+    const allowed=new Set(['.prepared.json',...this.descriptors().map(file=>file.name)]);
     for(const item of await readdir(path,{withFileTypes:true}))if(!allowed.has(item.name)||!item.isFile()||item.isSymbolicLink())throw Error('公式缓存存在外来文件，不能替换或删除');
   }
   private async verify(path:string,signal?:AbortSignal,integrity=true){
     await this.owned(path);
-    const files=this.files(path);for(const file of [files.onnx,files.config]){signal?.throwIfAborted();const stat=await lstat(file.path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==file.bytes||integrity&&await hash(file.path,signal)!==file.sha256)throw Error('公式模型校验失败，请重新准备');}
+    const files=this.files(path);for(const file of [files.onnx,files.config,files.decoder,files.resizer].filter((value):value is NonNullable<typeof value>=>!!value)){signal?.throwIfAborted();const stat=await lstat(file.path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==file.bytes||integrity&&await hash(file.path,signal)!==file.sha256)throw Error('公式模型校验失败，请重新准备');}
   }
   private async protectSources(){
     const key=localModelIdentity(this.profile.source),names=this.profile.source.artifacts.map(file=>file.name);
@@ -55,7 +56,7 @@ export class FormulaModelStore {
   }
   async state():Promise<LocalModelState&{sourceReady:boolean}>{
     const source=await this.sources.state(this.profile.source,undefined,false);let ready=false,disk=0;
-    try{await this.verify(this.installed,undefined,false);ready=!this.invalid;disk=this.profile.output.bytes+this.files(this.installed).config.bytes;}catch{}
+    try{await this.verify(this.installed,undefined,false);ready=!this.invalid;disk=this.descriptors().reduce((sum,file)=>sum+file.bytes,0);}catch{}
     return {...source,ready,sourceReady:source.ready,diskBytes:source.diskBytes+disk,downloading:!!this.job,inUse:this.users>0};
   }
   async install(signal:AbortSignal,progress:(value:LocalModelProgress)=>void=()=>{},sources:Record<string,string>={},runtimeSources:Record<string,string>={}){
@@ -76,7 +77,7 @@ export class FormulaModelStore {
     await directory(path);if(owned)await this.owned(path);await rm(path,{recursive:true});
   }
   private async prepare(signal:AbortSignal,progress:(value:LocalModelProgress)=>void,sources:Record<string,string>,runtimeSources:Record<string,string>){
-    const weightsTotal=this.profile.source.artifacts.reduce((sum,file)=>sum+file.bytes,0),runtimeTotal=formulaRuntimeProfile.artifacts.reduce((sum,file)=>sum+file.bytes,0),total=weightsTotal+runtimeTotal;progress({phase:'checking',received:0,total});
+    const weightsTotal=this.profile.source.artifacts.reduce((sum,file)=>sum+file.bytes,0),runtimeTotal=this.runtimeProfile.artifacts.reduce((sum,file)=>sum+file.bytes,0),total=weightsTotal+runtimeTotal;progress({phase:'checking',received:0,total});
     try{await this.verify(this.installed,signal);this.invalid=false;progress({phase:'ready',received:total,total});return;}catch(error){signal.throwIfAborted();let exists=false;try{await lstat(this.installed);exists=true;}catch(check){if((check as NodeJS.ErrnoException).code!=='ENOENT')throw check;}if(exists)await this.owned(this.installed);}
     const runtimeReady=(await this.runtime.state()).ready;signal.throwIfAborted();
     await this.protectSources();await this.sources.install(this.profile.source,signal,value=>progress({...value,total,received:Math.min(total,(runtimeReady?runtimeTotal:0)+value.received),phase:value.phase==='ready'?'verifying':value.phase}),sources);
@@ -87,7 +88,7 @@ export class FormulaModelStore {
       await writeFile(join(temporary,'.prepared.json'),JSON.stringify(this.marker),{flag:'wx'});
       progress({phase:'verifying',received:total,total,artifact:'准备公式模型'});
       await this.builder({executable:runtime.executable,source:dirname(weights.files[0].path),destination:temporary,signal,recipe:this.profile.recipe});signal.throwIfAborted();
-      await copyFile(weights.files.find(file=>file.role==='config')!.path,join(temporary,'config.json'));await this.verify(temporary,signal);
+      if(this.profile.engine!=='pix2tex')await copyFile(weights.files.find(file=>file.role==='config')!.path,join(temporary,'config.json'));await this.verify(temporary,signal);
       if(this.closed||this.users)throw Error('公式模型服务状态已改变');
       let exists=false;try{await lstat(this.installed);exists=true;}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
       if(exists)await this.owned(this.installed);signal.throwIfAborted();

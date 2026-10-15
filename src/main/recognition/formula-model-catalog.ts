@@ -1,19 +1,23 @@
 import type {LocalModelDescriptor} from '../../shared/local-models';
+import {pix2texPrepared} from './pix2tex-catalog';
 
-export interface FormulaPreparedProfile {
-  source:LocalModelDescriptor;
-  recipe:string;
-  modelName:string;
-  inputSize:384|768;
-  maxTokens:number;
-  memoryMiB:number;
-  conversion:{memoryMiB:number;rawSha256:string;scalarNode:string;api?:boolean};
-  output:{name:string;bytes:number;sha256:string};
+export interface FormulaPreparedArtifact {name:string;bytes:number;sha256:string}
+interface FormulaPreparedBase {
+  source:LocalModelDescriptor;recipe:string;modelName:string;maxTokens:number;memoryMiB:number;output:FormulaPreparedArtifact;
 }
+export interface PaddleFormulaPreparedProfile extends FormulaPreparedBase {
+  engine?:'paddle';inputSize:384|768;
+  conversion:{memoryMiB:number;rawSha256:string;scalarNode:string;api?:boolean};
+}
+export interface Pix2TexPreparedProfile extends FormulaPreparedBase {
+  engine:'pix2tex';config:FormulaPreparedArtifact;decoder:FormulaPreparedArtifact;resizer:FormulaPreparedArtifact;
+  conversion:{memoryMiB:number;encoderSha256:string;decoderSha256:string;resizerSha256:string;tokenizerSha256:string};
+}
+export type FormulaPreparedProfile=PaddleFormulaPreparedProfile|Pix2TexPreparedProfile;
 const revision='3d46f557e3a1752f4bf81202395af3b5ecfadfd2';
 const url=(name:string)=>`https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-S/resolve/${revision}/${name}`;
 /** Sources are official Paddle weights; the ONNX output is produced locally. */
-export const formulaPlusS:FormulaPreparedProfile={
+export const formulaPlusS:PaddleFormulaPreparedProfile={
   source:{id:'pp-formulanet-plus-s',revision,title:'PP-FormulaNet plus',size:'S',purpose:'formula',languages:['en'],
     weightLicense:{name:'Apache-2.0',source:`https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-S/tree/${revision}`},
     backends:['cpu','dml'],precision:'fp32',runtime:'formula-paddle2onnx',artifacts:[
@@ -26,7 +30,7 @@ export const formulaPlusS:FormulaPreparedProfile={
 };
 const mediumRevision='712e6e2e4c313b1ea163be5c350127b82662c58d';
 const mediumURL=(name:string)=>`https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-M/resolve/${mediumRevision}/${name}`;
-export const formulaPlusM:FormulaPreparedProfile={
+export const formulaPlusM:PaddleFormulaPreparedProfile={
   source:{id:'pp-formulanet-plus-m',revision:mediumRevision,title:'PP-FormulaNet plus',size:'M',purpose:'formula',languages:['en','zh'],
     weightLicense:{name:'Apache-2.0',source:`https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-M/tree/${mediumRevision}`},
     backends:['cpu','dml'],precision:'fp32',runtime:'formula-paddle2onnx',measuredMemoryMiB:2778,artifacts:[
@@ -39,7 +43,7 @@ export const formulaPlusM:FormulaPreparedProfile={
 };
 const baseRevision='0572450e501be9eb1b1cdb7e00fccf4b22fab4df';
 const baseURL=(name:string)=>`https://huggingface.co/PaddlePaddle/PP-FormulaNet-S/resolve/${baseRevision}/${name}`;
-export const formulaBaseS:FormulaPreparedProfile={
+export const formulaBaseS:PaddleFormulaPreparedProfile={
   source:{id:'pp-formulanet-s',revision:baseRevision,title:'PP-FormulaNet',size:'S',purpose:'formula',languages:['en'],
     weightLicense:{name:'Apache-2.0',source:`https://huggingface.co/PaddlePaddle/PP-FormulaNet-S/tree/${baseRevision}`},
     backends:['cpu','dml'],precision:'fp32',runtime:'formula-paddle2onnx',measuredMemoryMiB:1036,artifacts:[
@@ -53,7 +57,7 @@ export const formulaBaseS:FormulaPreparedProfile={
 const largeBaseRevision='9994c2af5c2070b239f1fd2ecc2b40fbf378ea1d',largePlusRevision='0809597a77f735bfb35354edb632f2e6dff606f3';
 const largeURL=(model:string,revision:string,name:string)=>`https://huggingface.co/PaddlePaddle/${model}/resolve/${revision}/${name}`;
 const archiveURL=(model:string)=>`https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/${model}_infer.tar`;
-export const formulaBaseL:FormulaPreparedProfile={
+export const formulaBaseL:PaddleFormulaPreparedProfile={
   source:{id:'pp-formulanet-l',revision:largeBaseRevision,title:'PP-FormulaNet',size:'L',purpose:'formula',languages:['en','zh'],
     weightLicense:{name:'Apache-2.0',source:`https://huggingface.co/PaddlePaddle/PP-FormulaNet-L/tree/${largeBaseRevision}`},
     backends:['cpu','dml'],precision:'fp32',runtime:'formula-paddle2onnx',measuredMemoryMiB:3360,artifacts:[
@@ -64,7 +68,7 @@ export const formulaBaseL:FormulaPreparedProfile={
   conversion:{memoryMiB:6144,rawSha256:'d4c160e62426602d89ec50e24c8f1bed9fb017f3f8d1ffdf50f521cdf5836ce9',scalarNode:'If.9',api:true},
   output:{name:'model.onnx',bytes:828050039,sha256:'de14c75c5f552fe59149c0809667809bd19994771b9a1f7d3708d49c5481877e'},
 };
-export const formulaPlusL:FormulaPreparedProfile={
+export const formulaPlusL:PaddleFormulaPreparedProfile={
   source:{id:'pp-formulanet-plus-l',revision:largePlusRevision,title:'PP-FormulaNet plus',size:'L',purpose:'formula',languages:['en','zh'],
     weightLicense:{name:'Apache-2.0',source:`https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L/tree/${largePlusRevision}`},
     backends:['cpu','dml'],precision:'fp32',runtime:'formula-paddle2onnx',measuredMemoryMiB:3245,artifacts:[
@@ -76,4 +80,6 @@ export const formulaPlusL:FormulaPreparedProfile={
   output:{name:'model.onnx',bytes:831195767,sha256:'0abc7e35203d21ad05cd4f5353ecc10be0f18dec51a8eb391712f951482fb302'},
 };
 // Preserve the initial local selection; new candidates require explicit selection.
-export const formulaProfiles:readonly FormulaPreparedProfile[]=[formulaPlusS,formulaPlusM,formulaBaseS,formulaBaseL,formulaPlusL];
+export const paddleFormulaProfiles:readonly PaddleFormulaPreparedProfile[]=[formulaPlusS,formulaPlusM,formulaBaseS,formulaBaseL,formulaPlusL];
+
+export const formulaProfiles:readonly FormulaPreparedProfile[]=[...paddleFormulaProfiles,pix2texPrepared];

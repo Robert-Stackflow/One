@@ -1,5 +1,6 @@
 import type {LocalArtifactBundle} from '../../shared/local-models';
-export interface FormulaRuntimeProfile extends LocalArtifactBundle {manifestSha256:string;expandedBytes:number;files:number}
+import type {RuntimeSelection} from './formula-runtime-tree';
+export interface FormulaRuntimeProfile extends LocalArtifactBundle {manifestSha256:string;expandedBytes:number;files:number;selection?:RuntimeSelection}
 export const formulaRuntimeProfile:FormulaRuntimeProfile = {
   "id": "formula-builder-win-x64",
   "revision": "py3127-p311-p2o210-v1",

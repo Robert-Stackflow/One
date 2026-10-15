@@ -34,7 +34,7 @@ export function localModelIdentity(input: LocalArtifactBundle) {
       !Array.isArray(input.artifacts) || !input.artifacts.length || input.artifacts.length > 64) throw Error('模型描述无效');
   const names = new Set<string>(), roles = new Set<string>();
   for (const artifact of input.artifacts) {
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/.test(artifact.name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(artifact.name) ||
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,119}$/.test(artifact.name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(artifact.name) ||
         artifact.name.endsWith('.') || artifact.name.endsWith('.part') || names.has(artifact.name.toLowerCase()) ||
         !/^[a-zA-Z][a-zA-Z0-9-]{0,50}$/.test(artifact.role) || roles.has(artifact.role) ||
         !Number.isSafeInteger(artifact.bytes) || artifact.bytes < 1 || artifact.bytes > 8 * 1024 ** 3 || !/^[a-f0-9]{64}$/.test(artifact.sha256)) throw Error('模型文件描述无效');

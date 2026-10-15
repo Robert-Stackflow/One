@@ -13,6 +13,7 @@ import type { LlamaRuntimeStore } from './recognition/llama-runtime-store';
 import { llamaRuntimeProfiles } from './recognition/llama-runtime-catalog';
 import type {FormulaModels} from './recognition/formula-models';
 import {formulaRuntimeProfile} from './recognition/formula-runtime-catalog';
+import {formulaTorchRuntimeProfile} from './recognition/formula-torch-runtime-catalog';
 
 export interface LocalModelManagerOptions {
   runtimes?: LlamaRuntimeStore;
@@ -154,7 +155,7 @@ export class LocalModelManager {
         runtime: model.runtime, precision: model.precision, measuredMemoryMiB: model.measuredMemoryMiB, measuredVRAMMiB: model.measuredVRAMMiB,
         weightLicenseSource:model.weightLicense.source,source:native?model.artifacts[0].url.split('/resolve/')[0]:undefined,
         runtimeReady:native?runtime:undefined,
-        preparationBytes:model.purpose==='formula'?formulaRuntimeProfile.artifacts.reduce((sum,file)=>sum+file.bytes,0):undefined,
+        preparationBytes:model.purpose==='formula'?(model.runtime==='formula-pix2tex-onnx'?formulaTorchRuntimeProfile:formulaRuntimeProfile).artifacts.reduce((sum,file)=>sum+file.bytes,0):undefined,
         selection:model.purpose==='ocr'?(native?'region':'ctc'):undefined,
         orientationModel:model.purpose==='ocr'&&!native?model.artifacts.some(file=>file.role==='orientation'):undefined,
         progress: progress ? progress.received / progress.total : 0,phase:progress?.phase, downloadedBytes: downloading && progress ? Math.min(cached.totalBytes,progress.received) : cached.downloadedBytes,
