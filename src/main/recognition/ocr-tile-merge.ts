@@ -1,29 +1,32 @@
+import {acceptedOCRSeamRepairs,type OCRSeamRepair} from './ocr-seam-repair';
 import {stitchOCRRow,type StitchFragment} from './ocr-tile-stitch';
 import {orderOCRFragments,TEXT_LAYOUT_VERSION} from '../../shared/recognition/text-layout';
 import { imageDimensions } from '../../shared/capture/image-limits';
 import { OCR_TEXT,type OCRResult } from '../../shared/recognition/ocr';
 import { textBounds,textDocument,type TextToken,type TextQuad } from '../../shared/recognition/text-document';
-import type { OCRTile } from '../../shared/recognition/ocr-tiles';
+import { OCR_SEAM_VERSION,type OCRTile } from '../../shared/recognition/ocr-tiles';
 interface Candidate extends StitchFragment {margin:number;owned:boolean}
-export interface OCRTileResult { tile:OCRTile;result:OCRResult }
+export interface OCRTileResult { tile:OCRTile;result:OCRResult;repair?:OCRSeamRepair }
 const quad=(x:number,y:number,width:number,height:number):TextQuad=>[{x,y},{x:x+width,y},{x:x+width,y:y+height},{x,y:y+height}];
 /** Keep context detections until deduplication: coordinate jitter can put both copies outside their cores. */
 export function mergeOCRTiles(parts:readonly OCRTileResult[],size:{width:number;height:number},sha256:string):OCRResult{
   imageDimensions(size.width,size.height);
   const engine=parts[0]?.result.document?.engine,language=parts[0]?.result.language;
   if(!engine||!language||!parts.length)throw Error('长图识别缺少模型或坐标信息');
+  const {excluded,included}=acceptedOCRSeamRepairs(parts,size);
   const candidates:Candidate[]=[],bins=new Map<string,Candidate[]>(),devices=new Set<string>();let tokenCount=0,textSize=0;
-  for(const {tile,result} of parts){
+  for(const {tile,result,repair} of parts){
     const doc=result.document;
     if(!doc||doc.engine.id!==engine.id||doc.engine.model!==engine.model||doc.engine.version!==engine.version||result.language!==language||
       result.width!==tile.width||result.height!==tile.height)throw Error('长图识别模型或尺寸不一致');
-    devices.add(doc.engine.device);
+    devices.add(doc.engine.device);if(repair&&!included.has(tile.index))continue;
     const tokens=new Map<number,TextToken[]>();
     for(const token of doc.blocks.flatMap(block=>block.lines.flatMap(line=>line.tokens))){
       const match=/^w(\d+)(?::|$)/.exec(token.wordId);if(!match)continue;
       const index=Number(match[1]),values=tokens.get(index)||[];values.push(token);tokens.set(index,values);
     }
     result.words.forEach((source,index)=>{
+      if(repair?!included.get(tile.index)!.has(index):excluded.has(tile.index+':'+index))return;
       const x=source.x+tile.left,y=source.y+tile.top,cx=x+source.width/2,cy=y+source.height/2;
       if(!source.text.trim())return;
       const owned=cx>=tile.core.left&&cx<tile.core.left+tile.core.width&&cy>=tile.core.top&&cy<tile.core.top+tile.core.height;
@@ -67,7 +70,8 @@ export function mergeOCRTiles(parts:readonly OCRTileResult[],size:{width:number;
     starts.push(text.length);text+=ordered[index].word.text;if(text.length>OCR_TEXT)throw Error('长图文字过长，输入已保留');
   }
   const result:OCRResult={...size,language,text,words:ordered.map(item=>item.word),confidence:ordered.length?ordered.reduce((sum,item)=>sum+item.word.confidence,0)/ordered.length:0};
-  const document=textDocument(result,sha256,{...engine,version:engine.version.endsWith('+'+TEXT_LAYOUT_VERSION)?engine.version:engine.version+'+'+TEXT_LAYOUT_VERSION,device:[...devices].join(' / ')});
+  const version=[TEXT_LAYOUT_VERSION,OCR_SEAM_VERSION].reduce((version,part)=>version.split('+').includes(part)?version:version+'+'+part,engine.version);
+  const document=textDocument(result,sha256,{...engine,version,device:[...devices].join(' / ')});
   let count=0;const segmenter=new Intl.Segmenter(language==='eng'?'en':'zh',{granularity:'word'});
   for(const line of document.blocks.flatMap(block=>block.lines)){
     line.tokens=line.tokens.flatMap(base=>{

@@ -1,10 +1,10 @@
 import sharp from 'sharp';
 import { IMAGE_BYTES,IMAGE_PIXELS } from '../../shared/capture/image-limits';
 import { planOCRRegionTiles,type OCRTile } from '../../shared/recognition/ocr-tiles';
-import { needsOCRTiles } from '../../shared/recognition/ocr-tiles';
+import { needsOCRTiles,ocrRect,OCR_TILE_EDGE,OCR_SEAM_REPAIRS,OCR_SEAM_PIXELS,type OCRRect } from '../../shared/recognition/ocr-tiles';
 import { imagePreviewRequest } from '../../shared/recognition/image-preview';
 let input:Buffer|undefined,tiles:OCRTile[]=[],next=0,busy=false,peakRSS=0;
-let size={width:0,height:0},preview=false;
+let size={width:0,height:0},preview=false,edge=OCR_TILE_EDGE,repairs=0,repairPixels=0;let allowed:OCRRect;
 sharp.cache(false);sharp.concurrency(1);
 const send=(value:unknown)=>{if(process.connected)process.send?.(value);};
 function observeMemory(){peakRSS=Math.max(peakRSS,process.memoryUsage().rss);if(peakRSS>384*1024**2){send({error:'长图解码超过内存预算，输入已保留'});process.exit(70);}}
@@ -14,7 +14,7 @@ process.on('message',async(packet:any)=>{
   try{
     if(packet?.type==='open'&&!input){
       if(!Buffer.isBuffer(packet.png)||packet.png.length<33||packet.png.length>IMAGE_BYTES)throw Error('长图数据无效');
-      const source:Buffer=packet.png;input=source;tiles=planOCRRegionTiles(packet.size,packet.region,packet.tileEdge);size={...packet.size};preview=packet.mode==='preview';
+      const source:Buffer=packet.png;input=source;tiles=planOCRRegionTiles(packet.size,packet.region,packet.tileEdge);size={...packet.size};preview=packet.mode==='preview';edge=packet.tileEdge||OCR_TILE_EDGE;allowed=packet.region?ocrRect(packet.region,size):{left:0,top:0,...size};
       // Interlaced PNG cannot provide top-to-bottom bounded decoding.
       if(source[28]!==0&&(!preview&&!packet.region||needsOCRTiles(size)))throw Error('交错 PNG 长图请先转换为普通 PNG 后识别');
       const info=await sharp(source,{limitInputPixels:IMAGE_PIXELS,sequentialRead:true,failOn:'error'}).metadata();
@@ -32,6 +32,12 @@ process.on('message',async(packet:any)=>{
         .extract({left,top,width,height}).png({progressive:false}).toBuffer();
       observeMemory();
       if(process.connected)process.send?.({index:tile.index,png,peakRSSMiB:peakRSS/1024**2},()=>png.fill(0));else png.fill(0);
+    }else if(packet?.type==='crop'&&input&&!preview&&next>=tiles.length&&packet.index===next){
+      const crop=ocrRect(packet.region,size),{left,top,width,height}=crop;
+      if(repairs>=OCR_SEAM_REPAIRS||width>edge||height>edge||left<allowed.left||top<allowed.top||left+width>allowed.left+allowed.width||top+height>allowed.top+allowed.height||repairPixels+width*height>OCR_SEAM_PIXELS)throw Error('接缝裁剪区域无效');
+      repairs++;repairPixels+=width*height;next++;
+      const png=await sharp(input,{limitInputPixels:IMAGE_PIXELS,sequentialRead:true,failOn:'error'}).extract(crop).png({progressive:false}).toBuffer();observeMemory();
+      if(process.connected)process.send?.({index:packet.index,png,peakRSSMiB:peakRSS/1024**2},()=>png.fill(0));else png.fill(0);
     }else throw Error('长图解码协议无效');
   }catch(error){send({error:error instanceof Error?error.message:'长图解码失败'});}
   finally{busy=false;}
