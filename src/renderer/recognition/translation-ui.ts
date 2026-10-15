@@ -22,6 +22,7 @@ export function mountTranslation(
     notice = '',
     result: TranslationResult | undefined;
   let full: {result:TranslationResult|undefined;text:string}|undefined;
+  let generation=0;
   const restore=document.createElement('button');restore.type='button';restore.className='quiet';restore.id='translation-restore-full';restore.textContent='返回全文译文';restore.hidden=true;q('translation-source-note').after(restore);
   function restoreFull(){if(full){result=full.result;q<HTMLTextAreaElement>('translated').value=full.text;full=undefined;}selectionSource=undefined;render();changed();}
   restore.onclick=restoreFull;
@@ -85,17 +86,22 @@ export function mountTranslation(
     if (busy() || !config?.ready || !state()) return;
     if(retry&&(!valid()||!result?.id||q<HTMLTextAreaElement>('translated').value!==result.text))return;
     const token=state()!.token,revision=config.revision,input=source(),language=target(),job=result?.id;
+    const ticket=++generation,selected=selectionSource!==undefined;
+    const current=()=>ticket===generation&&state()?.token===token&&config?.revision===revision&&source()===input&&target()===language&&(selectionSource!==undefined)===selected;
     requesting = true;
     notice = '';
     render();
     changed();
     try {
-      const selected=selectionSource!==undefined;
-      result = await (retry?api.retryTranslation(token,job!,retry,revision,selected):api.translate(token,input,language,revision,selected));
+      const next = await (retry?api.retryTranslation(token,job!,retry,revision,selected):api.translate(token,input,language,revision,selected));
+      if(!current())return;
+      result=next;
       q<HTMLTextAreaElement>('translated').value = result.text;
       notice = '';
     } catch (error) {
-      const partial=await api.partialTranslation(token,revision,selectionSource!==undefined).catch(()=>undefined);
+      if(!current())return;
+      const partial=await api.partialTranslation(token,revision,selected).catch(()=>undefined);
+      if(!current())return;
       if(partial?.parts&&partial.source===input&&partial.target===language&&partial.revision===revision){result=partial;q<HTMLTextAreaElement>('translated').value=partial.text;notice='';}
       else notice = error instanceof Error ? error.message : String(error);
     } finally {
@@ -140,17 +146,20 @@ export function mountTranslation(
       language: TranslationLanguage,
       error: string,
     ) {
+      const ticket=++generation,token=state()?.token;
       selectionSource = undefined;
       full=undefined;
       q<HTMLSelectElement>('translation-language').value = language;
       result = value;
       q<HTMLTextAreaElement>('translated').value = value?.text || '';
-      config = await api.translationConfig();
-      notice = value ? '流程翻译完成，可核对、修正和复制译文' : error;
+      const nextConfig=await api.translationConfig();
+      if(ticket!==generation||state()?.token!==token)return;
+      config=nextConfig;
+      notice = error;
       render();
     },
     render,
-    sourceChanged: () => { restoreFull(); invalidate(); },
+    sourceChanged: () => { ++generation;restoreFull(); invalidate(); },
     translateSelection: (text: string) => { if (!config?.ready) { message('请先配置翻译服务'); void settings.open(); return; } if(selectionSource===undefined)full={result,text:q<HTMLTextAreaElement>('translated').value};selectionSource = text;result=undefined;q<HTMLTextAreaElement>('translated').value='';void translate(); },
     busy,
     isTranslation: () => mode,
