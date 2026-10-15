@@ -20,6 +20,7 @@ export function mountOCR() {
 const api = window.one.recognition!;
 let state: OCRState, disposed = false, requesting = false, polling = false, workflowRead = '', reportedError = '';
 let mode:WorkbenchMode='ocr',entryRevision=-1;
+let initialized=false,startedEntry=-1,entryTask=false;
 let formula:ReturnType<typeof mountFormula>|undefined,services:ReturnType<typeof mountWorkbenchServices>|undefined;
 let correction:ReturnType<typeof mountWordCorrection>|undefined;
 let picture:ReturnType<typeof mountImageTranslation>|undefined;
@@ -101,7 +102,7 @@ async function syncWorkflow() {
 async function refresh() {
   if (polling || disposed) return; polling = true;
   try { state = await api.state();if(entryRevision!==(state.entryRevision||0)){entryRevision=state.entryRevision||0;setMode(state.mode||'ocr');}await syncWorkflow(); if (!disposed) render(); } catch (error) { if (!disposed) message(error); }
-  finally { polling = false; }
+  finally { polling = false; if(initialized)void startEntry(); }
 }
 async function recognize(region?:import('../../shared/recognition/text-area').OCRLocalSelection,override?:import('../../shared/ai-task').AITaskReference){
   if (requesting || state.running || state.formulaRecognizing||workflowBusy() || translation.busy() || correction?.busy()||picture?.busy()) return false;
@@ -116,12 +117,23 @@ async function recognize(region?:import('../../shared/recognition/text-area').OC
   } catch (error) { message(error);return false; } finally { requesting = false; await refresh(); }
 }
 q('run').onclick=()=>void recognize();
-q('task-run').onclick=()=>void(async()=>{if(mode==='formula')await formula?.recognize();else if(mode==='translation'){if(!q<HTMLTextAreaElement>('result').value.trim()&&!await recognize(undefined,services?.ocrAI()||(!state.models.ready?services?.ai():undefined)))return;await translation.translateAll();}else await recognize();})().catch(message);
+async function runTask(){if(mode==='formula')await formula?.recognize();else if(mode==='translation'){if(!q<HTMLTextAreaElement>('result').value.trim()&&!await recognize(undefined,services?.ocrAI()||(!state.models.ready?services?.ai():undefined)))return;await translation.translateAll();}else await recognize();}
+async function startEntry(){
+  if(disposed||!initialized||entryTask||startedEntry===entryRevision||requesting||state.running||state.formulaRecognizing||workflowBusy()||translation.busy()||formula?.busy()||services?.busy())return;
+  // A capture workflow already owns recognition/translation. Ordinary entry
+  // revisions represent explicit user actions; polling and tab changes do not.
+  startedEntry=entryRevision;
+  if(state.runOnEntry===false||workflowBusy())return;
+  if(q<HTMLButtonElement>('task-run').disabled){message(mode==='translation'?'请先配置翻译服务':mode==='formula'?'请先选择可用的公式模型或服务':'请先选择可用的 OCR 模型或服务');return;}
+  entryTask=true;
+  try{await runTask();}catch(error){message(error);}finally{entryTask=false;}
+}
+q('task-run').onclick=()=>void runTask().catch(message);
 q('overlay-cancel').onclick = () => {if(picture?.busy()){picture.cancel();return;}void api.cancelServiceCheck().catch(message);void (formula?.busy()?formulaAPI.cancelFormula():translation.busy() ? api.cancelTranslation() : api.cancel()).catch(message);};
 q('copy').onclick = () => void api.copy(q<HTMLTextAreaElement>('result').value).then(() => message('已复制原文')).catch(message);
 q('result').oninput = () => { selection.setDocument(undefined,false); translation.sourceChanged(); if (state) render(); };
 registerIcons({ 'scan-text': ScanText }); q('brand').innerHTML = icon('lucide:scan-text'); customControls(document.body);
-void api.state().then(async value => { state = value;entryRevision=value.entryRevision||0;setMode(value.mode||'ocr');q('source-name').textContent = state.name;loadImage(needsImagePreview(value)?selection.setImagePreview(value,region=>api.imagePreview(value.token,region)):value.image);await services!.load();await syncWorkflow(); render(); }).catch(message);
+void api.state().then(async value => { state = value;entryRevision=value.entryRevision||0;setMode(value.mode||'ocr');q('source-name').textContent = state.name;loadImage(needsImagePreview(value)?selection.setImagePreview(value,region=>api.imagePreview(value.token,region)):value.image);await services!.load();await Promise.all([translation.reloadConfig(),formula!.reloadConfig()]);await syncWorkflow(); render();initialized=true;await startEntry(); }).catch(message);
 void recognitionReady(()=>api.ready()).catch(message);
 const timer = setInterval(() => void refresh(), 400);
 window.addEventListener('beforeunload', () => { disposed = true;segments.dispose();picture?.dispose(); correction?.dispose(); selection.dispose(); clearInterval(timer); }, { once: true });

@@ -7,7 +7,8 @@ import { displaySignature, type Region } from '../../shared/capture/region';
 import {
   scrollDefaults,
   scrollOptions,
-  scrollControlBounds,
+  scrollOverlayLayout,
+  scrollMaskShape,
   type ScrollCommand,
   type ScrollView,
 } from '../../shared/capture/scroll-capture';
@@ -16,14 +17,17 @@ import {ScrollMotion} from '../../shared/capture/scroll-motion';
 import {createScrollDirectory,cleanScrollDirectory,sweepScrollDirectories,type ScrollDirectory} from './scroll-storage';
 import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
 export interface ScrollContext {
+  onEscape?(callback:()=>boolean):()=>void;
+  foregroundWindow?():number;
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:IpcMainInvokeEvent,...args:any[])=>unknown):void;
   blocked():boolean;
   uiScale():100|110|125|150;
   remoteCompatible?(): boolean;
-  choose(display: number, hideMainWindow?: boolean): Promise<Region | null>;
+  choose(display: number, hideMainWindow?: boolean,retainMask?:(window:BrowserWindow,windows:BrowserWindow[])=>void): Promise<Region | null>;
   windows(hideMainWindow?: boolean): BrowserWindow[];
   edit(png: Buffer, title: string): Promise<void>;
+  output?(window:BrowserWindow,png:Buffer,action:'copy'|'save'):Promise<boolean>;
   failed(error: unknown): void;
 }
 export const SCROLL_URL = 'one://app/index.html?view=scroll-capture';
@@ -54,6 +58,14 @@ export class ScrollCaptureService {
   private busy = false;
   private motion=new ScrollMotion();
   private settingsOpen=false;
+  private interacting=false;
+  private shapeKey='';
+  private repairOpen=false;
+  private releaseEscape?:()=>void;
+  private escapeTarget=0;
+  private handoff?:BrowserWindow;
+  private painted?:{resolve():void;reject(error:Error):void;timer:NodeJS.Timeout};
+  private tooltip?:Electron.Rectangle;
   private automatic = false;
   private monitoring=false;
   private monitorSerial=0;
@@ -66,7 +78,7 @@ export class ScrollCaptureService {
     const handle = (name: string, fn: (...args: any[]) => unknown) =>
       host.register('scroll-' + name, (event, ...args) => {
         if (
-          host.blocked() || !this.window ||
+          (host.blocked()&&!['interactive','tooltip'].includes(name)) || !this.window ||
           event.sender !== this.window.webContents ||
           event.senderFrame !== event.sender.mainFrame ||
           event.senderFrame.url !== SCROLL_URL ||
@@ -78,6 +90,12 @@ export class ScrollCaptureService {
         return result;
       });
     handle('state', () => this.view);
+    handle('ready',()=>this.painted?.resolve());
+    handle('tooltip',rect=>{
+      if(rect!==null&&(!rect||typeof rect!=='object'||Object.keys(rect).sort().join(',')!=='height,width,x,y'||![rect.x,rect.y,rect.width,rect.height].every(Number.isSafeInteger)||rect.width<1||rect.height<1||rect.width>4096||rect.height>4096||Math.abs(rect.x)>32768||Math.abs(rect.y)>32768))throw Error('提示位置无效');
+      this.tooltip=rect||undefined;this.resizeControl();
+    });
+    handle('interactive', value=>{if(typeof value!=='boolean')throw Error('交互状态无效');this.interacting=value;this.resizeControl();});
     handle('command', (token, command) => this.command(token, command));
   }
   get pendingTasks(){return this.requests.size;}
@@ -99,30 +117,53 @@ export class ScrollCaptureService {
   }
   private resizeControl(){
     const region=this.region,view=this.view,window=this.window,display=screen.getAllDisplays().find(d=>d.id===region?.displayId);if(!region||!view||!window||window.isDestroyed()||!display)return;
-    const height=this.settingsOpen?600:view.pending&&view.phase!=='running'?420:268,width=this.settingsOpen?500:view.previewExpanded?460:320;
-    const bounds=scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height},height,width),current=window.getBounds();
-    if(current.width!==bounds.width||current.height!==bounds.height)window.setBounds(bounds);
+    const area={x:0,y:0,width:display.bounds.width,height:display.bounds.height};
+    const selection={x:Math.round(region.rect.x*area.width),y:Math.round(region.rect.y*area.height),width:Math.round(region.rect.width*area.width),height:Math.round(region.rect.height*area.height)};
+    const height=56;
+    view.overlay=scrollOverlayLayout(area,selection,view.count?view:view.source,height,true,view.previewExpanded);
+    const {controls,preview}=view.overlay;
+    if(this.tooltip&&this.tooltip.x<selection.x+selection.width&&this.tooltip.x+this.tooltip.width>selection.x&&this.tooltip.y<selection.y+selection.height&&this.tooltip.y+this.tooltip.height>selection.y)view.overlay.overlap=true;
+    if(this.settingsOpen||this.repairOpen){
+      const width=Math.min(420,area.width-24),height=Math.min(this.settingsOpen?540:176,area.height-92);
+      view.overlay.panel={x:Math.max(12,Math.min(controls.x+controls.width-width,area.width-width-12)),y:Math.max(12,controls.y-height-8),width,height};
+      view.overlay.overlap ||=view.overlay.panel.x<selection.x+selection.width&&view.overlay.panel.x+width>selection.x&&view.overlay.panel.y<selection.y+selection.height&&view.overlay.panel.y+height>selection.y;
+    }
+    // A native window-region hole passes input directly to the source window.
+    // Unlike hover-driven click-through, the first click never races an IPC.
+    const shape=this.interacting?[]:[
+      ...scrollMaskShape(area.width,area.height,selection),controls,...(view.previewExpanded?[preview]:[]),...(view.overlay.panel?[{x:Math.max(0,view.overlay.panel.x-32),y:Math.max(0,view.overlay.panel.y-32),width:Math.min(area.width-view.overlay.panel.x+32,view.overlay.panel.width+64),height:Math.min(area.height-view.overlay.panel.y+32,view.overlay.panel.height+64)}]:[]),...(this.tooltip?[this.tooltip]:[]),
+    ].filter(rect=>rect.width>0&&rect.height>0);
+    const shapeKey=JSON.stringify(shape);if(shapeKey!==this.shapeKey){window.setShape(shape);this.shapeKey=shapeKey;}
   }
-  async open(displayId: number, hideMainWindow = false,chosen?:Region,startManual=true,carriedWindows:BrowserWindow[]=[]) {
+  async open(displayId: number, hideMainWindow = false,chosen?:Region,startManual=true,carriedWindows:BrowserWindow[]=[],mask?:BrowserWindow) {
     if(this.host.blocked())throw Error('长截图服务已关闭');
     if (this.active) {
       this.window?.show();
       throw Error('请先完成当前长截图');
     }
     this.active = true;
+    this.handoff=mask;
+    this.hidden=[];
     const generation = ++this.generation;
     try {
-      const region = chosen||await this.host.choose(displayId, hideMainWindow);
+      const region = chosen||await this.host.choose(displayId, hideMainWindow,(window,windows)=>{this.handoff=window;this.hidden=windows;});
       if (!region || generation !== this.generation) {
         this.cancel();
         return;
       }
-      this.region = region;this.settingsOpen=false;
+      this.region = region;this.settingsOpen=false;this.repairOpen=false;this.interacting=false;this.tooltip=undefined;this.shapeKey='';
       const display = screen.getAllDisplays().find((d) => d.id === region.displayId);
       if (!display || displaySignature(display) !== region.signature)
         throw Error('显示器已改变，请重新选择');
-      this.hidden = [...new Set([...carriedWindows,...this.host.windows(hideMainWindow).filter(w=>w.isVisible())])].filter(w=>!w.isDestroyed());
+      this.hidden = [...new Set([...this.hidden,...carriedWindows,...this.host.windows(hideMainWindow).filter(w=>w.isVisible())])].filter(w=>!w.isDestroyed());
       for (const w of this.hidden) w.hide();
+      this.releaseEscape=this.host.onEscape?.(()=>{
+        if(this.interacting||this.host.blocked())return false;
+        const foreground=this.host.foregroundWindow?.();
+        const handle=(window?:BrowserWindow)=>{if(!window||window.isDestroyed())return 0;const value=window.getNativeWindowHandle();return Number(value.length>=8?value.readBigUInt64LE():value.readUInt32LE());};
+        if(foreground!==undefined&&foreground!==this.escapeTarget&&foreground!==handle(this.window)&&foreground!==handle(this.handoff))return false;
+        this.cancel();return true;
+      });
       await this.delay(150);
       if (generation !== this.generation) return;
       const physical = captureMonitorBounds(display),
@@ -177,21 +218,27 @@ export class ScrollCaptureService {
         preview: '',
       };
       await this.run('configure', { options: this.view.options, source: this.view.source });
-      const placement=scrollControlBounds(display.workArea,{x:display.bounds.x+region.rect.x*display.bounds.width,y:display.bounds.y+region.rect.y*display.bounds.height,width:region.rect.width*display.bounds.width,height:region.rect.height*display.bounds.height});
       const window = this.host.createWindow({
-        ...placement,
-        minWidth: Math.min(320,placement.width),
-        minHeight: Math.min(200,placement.height),
+        ...display.bounds,
+        minWidth:1,
+        minHeight:1,
+        roundedCorners:false,
         title: 'One · 长截图',
         show: false,
         alwaysOnTop: true,
         autoHideMenuBar: true,
-        titleBarStyle: 'hidden',
-        titleBarOverlay: false,
-        frame: true,
-        thickFrame: true,
+        frame: false,
+        thickFrame:false,
+        transparent:true,
+        backgroundColor:'#00000000',
+        hasShadow:false,
+        resizable:false,
+        movable:false,
+        skipTaskbar:true,
       });
       this.window = window;
+      window.setBounds(display.bounds);
+      this.resizeControl();
       this.remoteCompatible = this.host.remoteCompatible?.() ?? true;
       window.setContentProtection(!this.remoteCompatible);
       window.setAlwaysOnTop(true, 'screen-saver');
@@ -216,11 +263,21 @@ export class ScrollCaptureService {
       window.on('closed', () => {
         if (this.window === window) this.cancel();
       });
-      await window.loadURL(SCROLL_URL);
+      const painted=new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('长截图界面加载超时')),10000);timer.unref();this.painted={resolve,reject,timer};});
+      await Promise.all([window.loadURL(SCROLL_URL),painted]);
+      if(generation!==this.generation||window.isDestroyed())return;
+      if(this.painted){clearTimeout(this.painted.timer);this.painted=undefined;}
+      // Flush the styled toolbar into the compositor while both windows keep
+      // their current visibility. Hidden windows need not schedule animation frames.
+      if(generation===this.generation&&!window.isDestroyed())await window.webContents.capturePage(this.view.overlay!.controls,{stayHidden:true,stayAwake:true});
+      if(generation!==this.generation||window.isDestroyed())return;
       if (generation === this.generation && !window.isDestroyed()) window.showInactive();
+      if(this.handoff&&!this.handoff.isDestroyed())this.handoff.destroy();this.handoff=undefined;
       if(startManual&&generation===this.generation)try{await this.command(this.view.token,{kind:'manual'});}catch(error){if(generation===this.generation){this.view.phase='paused';this.view.message=error instanceof Error?error.message:String(error);this.publish();}}
     } catch (error) {
+      if(generation!==this.generation)return;
       this.cancel();
+      if(error instanceof ScrollStopped)return;
       this.host.failed(error);
       throw error;
     }
@@ -283,6 +340,7 @@ export class ScrollCaptureService {
     let hidden = false;
     if (
       this.remoteCompatible &&
+      this.view?.overlay?.overlap &&
       window &&
       !window.isDestroyed() &&
       window.isVisible() &&
@@ -338,7 +396,8 @@ export class ScrollCaptureService {
       try {
         check();
         if(monitored&&(!(await this.native!.available())||automatic&&!(await this.native!.focused())))throw new ScrollPaused(unavailable);
-        const observed=await this.run('stage',{frame,monitored},[frame.pixels.buffer as ArrayBuffer]);staged=observed.stable;
+        const observed=await this.run('stage',{frame,monitored,moving:monitored&&!automatic},[frame.pixels.buffer as ArrayBuffer]);staged=observed.stable;
+        if(observed.moving){check();this.accept(observed);break;}
         if (staged) {
           check();
           // A focus/cursor change during settling must not append an obscured
@@ -359,7 +418,7 @@ export class ScrollCaptureService {
           '画面持续变化，已暂停自动滚动。可等待加载结束后继续，或手动采集。已有结果已保留。',
         );
       }
-      await this.delay(140);
+      await this.delay(monitored&&!automatic?40:140);
     }
     const view = this.view!;
     const wasRecovering=view.recovering;
@@ -436,7 +495,7 @@ export class ScrollCaptureService {
     } finally {
       if (generation === this.generation) {
         this.busy = false;
-        if (this.monitoring) this.schedule(this.automatic?450:300);
+        if (this.monitoring) this.schedule(this.automatic?450:40);
       }
       if (this.stepDone === stepDone) this.stepDone = undefined;
       done();
@@ -448,7 +507,8 @@ export class ScrollCaptureService {
     const command = value as ScrollCommand;
     if(command.kind==='layout'){
       if(typeof command.preview!=='boolean'||command.settings!==undefined&&typeof command.settings!=='boolean')throw Error('预览设置无效');this.view.previewExpanded=command.preview;
-      if(command.settings!==undefined)this.settingsOpen=command.settings;return this.publish();
+      if(command.repair!==undefined&&typeof command.repair!=='boolean')throw Error('衔接设置无效');
+      if(command.settings!==undefined)this.settingsOpen=command.settings;if(command.repair!==undefined)this.repairOpen=command.repair;return this.publish();
     }
     if (command.kind === 'cancel') {
       this.cancel();
@@ -486,8 +546,13 @@ export class ScrollCaptureService {
         this.view.phase = 'paused';
         await this.sample();
       } else if (command.kind === 'auto'||command.kind==='manual') {
+        this.settingsOpen=false;this.repairOpen=false;
+        this.interacting=false;this.resizeControl();
         if(this.view.pending) {this.accept(await this.run('discard'));this.view.message='待确认帧已放弃，返回上次拼接位置后继续。';}
-        const ticket=this.monitorSerial,window=this.window;this.native!.permitActivation();try{window?.hide();await this.delay(80);if(!(await this.native!.activate(command.kind==='auto')))throw new ScrollPaused(this.native!.activationReason==='keys'?'请松开鼠标和修饰键后继续。':this.native!.activationReason==='foreground'?'目标窗口未获得焦点，请点击目标窗口后继续。':'目标窗口或滚动点被遮挡，请移开遮挡后继续。');}finally{if(generation===this.generation&&window&&!window.isDestroyed())window.showInactive();}
+        const ticket=this.monitorSerial;this.native!.permitActivation();
+        const activated=await this.native!.activate(command.kind==='auto');
+        this.escapeTarget=this.host.foregroundWindow?.()||0;
+        if(!activated)throw new ScrollPaused(this.native!.activationReason==='keys'?'请松开鼠标和修饰键后继续。':this.native!.activationReason==='foreground'?'目标窗口未获得焦点，请点击目标窗口后继续。':'目标窗口或滚动点被遮挡，请移开遮挡后继续。');
         if(generation!==this.generation||ticket!==this.monitorSerial)throw new ScrollStopped();
         this.view.mode=command.kind==='auto'?'auto':'manual';
         this.view.recovering=false;
@@ -514,7 +579,7 @@ export class ScrollCaptureService {
         this.view.recovering=false;
         this.view.phase = 'review';
         this.view.message = '检查结果后进入图片编辑，可裁剪、标注、复制或另存。';
-      } else if (command.kind === 'edit') {
+      } else if (command.kind === 'edit'||command.kind==='copy'||command.kind==='save') {
         if (!this.view.count || this.view.pending) throw Error('请先完成拼接或确认已有结果');
         const response = await this.run('output'),
           output = response.output as PixelFrame,
@@ -524,8 +589,9 @@ export class ScrollCaptureService {
           }),
           png = image.toPNG();
         try {
-          await this.host.edit(png, `长截图 ${output.width} × ${output.height}`);
-          if (generation === this.generation) this.cancel();
+          const delivered=command.kind==='edit'?(await this.host.edit(png, `长截图 ${output.width} × ${output.height}`),true):this.host.output?await this.host.output(this.window!,png,command.kind):false;
+          if(delivered&&generation === this.generation)this.cancel();
+          else if(generation===this.generation)return this.publish();
         } finally {
           png.fill(0);
           output.pixels.fill(0);
@@ -545,6 +611,9 @@ export class ScrollCaptureService {
     }
   }
   cancel() {
+    this.releaseEscape?.();this.releaseEscape=undefined;this.escapeTarget=0;
+    if(this.painted){clearTimeout(this.painted.timer);this.painted.reject(new ScrollStopped());this.painted=undefined;}
+    if(this.handoff&&!this.handoff.isDestroyed())this.handoff.destroy();this.handoff=undefined;
     this.generation++;
     this.active = false;
     this.pause();

@@ -10,7 +10,7 @@ import type {MaterialsService} from '../materials/service';
 import type {PinsHost} from '../pins/host';
 type Context=Pick<CaptureContext,'createWindow'|'register'|'fonts'|'blocked'|'failed'|'timing'|'saveWatermark'|'sensitive'|'cancelWorkflow'|'annotationStyles'|'saveAnnotationStyle'|'scroll'> & {
   settings():CapturePreferences;mainWindow():BrowserWindow|undefined;assertAvailable():void;
-  recognize?(png:Buffer):Promise<void>;
+  recognize?(png:Buffer,mode?:'ocr'|'translation'|'formula'):Promise<void>;
   translate?(window:BrowserWindow,png:Buffer,owner:string,target:string):Promise<boolean>;
 };
 export class CaptureHost {
@@ -30,7 +30,7 @@ export class CaptureHost {
         if(action==='copy')await writeClipboardPng(png);
         else if(action==='pin')await pins.image('截图',png,captured);
         else if(action==='save')return !!await saveImage(window,{payload:{png:png.toString('base64')}},protect,()=>!context.blocked()&&!window.isDestroyed(),{defaultPath:'One-capture.png'});
-        else if(action==='ocr'){if(!context.recognize)throw Error('截图文字识别服务尚未接入');await context.recognize(png);}
+        else if(action==='ocr'||action==='formula'||action==='translate'&&!workflow){if(!context.recognize)throw Error('截图识别服务尚未接入');await context.recognize(png,action==='translate'?'translation':action);}
         else if(action==='translate'){if(!context.translate)throw Error('截图翻译服务尚未接入');return context.translate(window,png,owner!,workflow!.translationTarget??'zh-Hans');}
         return true;
       },

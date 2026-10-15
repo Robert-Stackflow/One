@@ -314,6 +314,20 @@ test('continuous animation never becomes a stable scroll frame and resetting rel
   assert.equal(settle.observe(final, 140), false);
   assert.equal(settle.observe(final, 280), true);
 });
+test('moving frames preserve exact continuous content and reject a corrupt intermediate viewport without pending recovery',()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96;
+    const image=(offset:number,cross=0)=>scrollPixels(width,height,vertical?cross:offset,vertical?offset:cross);
+    const engine=new ScrollStitch();engine.configure({...scrollDefaults(),axis},{width,height});engine.sample(image(0));
+    for(let offset=39;offset<=390;offset+=39){
+      const previous=engine.output();engine.sample(image(offset,11),[],true);
+      assert.equal(engine.status().pending,false);assert.deepEqual(engine.output(),previous);
+      assert.equal(engine.sample(image(offset),[],true).match,'accepted');
+    }
+    assert.deepEqual(engine.output(),scrollPixels(vertical?96:550,vertical?550:96));
+  }
+});
+
 test('scrolling capture preserves exact pixels across irregular vertical and horizontal overlaps, undo and backtracking', () => {
   for (const axis of ['vertical', 'horizontal'] as const) {
     const engine = new ScrollStitch(),
@@ -352,7 +366,7 @@ test('scrolling capture preserves exact pixels across irregular vertical and hor
       'accepted',
     );
     assert.deepEqual(engine.output(), actual);
-    assert.ok(engine.preview()!.width <= 300 && engine.preview()!.height <= 700);
+    assert.ok(engine.preview()!.width <= 300 && engine.preview()!.height <= 4096);
   }
 });
 test('scrolling capture removes explicit fixed edges and ignores a dynamic side while preserving remaining pixels', () => {

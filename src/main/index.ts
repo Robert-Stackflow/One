@@ -8,6 +8,8 @@ import {RecordingHost} from './recording/host';
 import {recordingPreloads,recordingWindowRoles,recordingBridgeRoles,recordingResourceHosts,type RecordingWindowRole} from './recording/window-host';
 import {copyFileToClipboard} from './file-clipboard';
 import {CaptureHost} from './capture/host';
+import {writeClipboardPng} from './capture/clipboard';
+import {saveImage} from './capture/image-export';
 import {CaptureShortcutController} from './capture/shortcuts';
 import {captureAccelerator,captureShortcutDefinitions,captureSystemCommands,isCaptureSystemCommand,type CaptureSystemAction} from '../shared/capture/shortcuts';
 import {ScrollCaptureHost} from './capture/scroll-host';
@@ -358,7 +360,7 @@ function windowFor(view: string, options: Electron.BrowserWindowConstructorOptio
   const recordingRole=recordingWindowRoles.includes(view as RecordingWindowRole);
   const window = new BrowserWindow({ width: 1240, height: 840, minWidth: 840, minHeight: 620, backgroundColor: dark?a.darkBackground:a.lightBackground, title: 'One', show: false,
     ...(['main','preview','picker','search','color-editor','command-confirm','dialog-bar','archive-task','ai-chat','image-editor','recognition','formula-recognition','recording-player'].includes(view)?{titleBarStyle:'hidden' as const,titleBarOverlay:false,frame:true,thickFrame:true,hasShadow:true}:{frame:false}), roundedCorners: true, icon: applicationIcon, ...options,
-    webPreferences: { preload: recordingRole ? (recordingPreloads[view as RecordingWindowRole] ? join(__dirname,'../preload/'+recordingPreloads[view as RecordingWindowRole]+'.cjs') : undefined) : join(__dirname, view==='formula-recognition'?'../preload/formula-recognition.cjs':view==='recognition'?'../preload/recognition.cjs':view==='scroll-capture'?'../preload/scroll-capture.cjs':view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:view!=='capture'&&!recordingRole } });
+    webPreferences: { preload: recordingRole ? (recordingPreloads[view as RecordingWindowRole] ? join(__dirname,'../preload/'+recordingPreloads[view as RecordingWindowRole]+'.cjs') : undefined) : join(__dirname, view==='formula-recognition'?'../preload/formula-recognition.cjs':view==='recognition'?'../preload/recognition.cjs':view==='scroll-capture'?'../preload/scroll-capture.cjs':view==='capture'?'../preload/capture.cjs':view==='image-editor'?'../preload/image-editor.cjs':['pin','pin-controls'].includes(view)?'../preload/pin.cjs':'../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:!['capture','scroll-capture'].includes(view)&&!recordingRole } });
   const windowId = window.webContents.id; roles.set(windowId, view);
   if(popupWindowRoles.has(view))bindPopupWindowMotion(window);
   if(['main','file-action','search','color-picker'].includes(view))runtimeLog(app.getPath('userData'),'window-created',`role=${view} id=${windowId}`);
@@ -1362,22 +1364,24 @@ async function start() {
     dark:()=>{const value=themeAutomation?.appearance()||settings.appearance;return value.mode==='dark'||value.mode==='system'&&nativeTheme.shouldUseDarkColors;},
   },()=>{if(main&&!main.isDestroyed())main.webContents.send('one:pins-changed');},error=>runtimeError(app.getPath('userData'),'pins',error));
   capture=new CaptureHost(app.getPath('userData'),{
-    scroll:(region,windows)=>{if(!scrollCapture)throw Error('长截图尚未就绪');return scrollCapture.openRegion(region,windows);},
+    scroll:(region,windows,mask)=>{if(!scrollCapture)throw Error('长截图尚未就绪');return scrollCapture.openRegion(region,windows,mask);},
     ...annotationPreferences,
     createWindow:options=>windowFor('capture',{minWidth:1,minHeight:1,roundedCorners:false,...options},'',false),
     register:(name,handler)=>handle(name,(event,...args)=>{if(event.senderFrame?.url!==CAPTURE_URL)throw Error('截图窗口来源无效');return handler(event,...args);},['capture']),
     fonts:()=>installedFonts(),settings:()=>settings.capture,mainWindow:()=>main,blocked:()=>quitting,
-    sensitive:recognition.sensitive,recognize:png=>recognition!.openCapture(png),translate:(window,png,owner,target)=>recognition!.translate(window,png,owner,target),cancelWorkflow:owner=>recognition!.cancelWorkflow(owner),
+    sensitive:recognition.sensitive,recognize:(png,mode)=>recognition!.openCapture(png,mode),translate:(window,png,owner,target)=>recognition!.translate(window,png,owner,target),cancelWorkflow:owner=>recognition!.cancelWorkflow(owner),
     saveWatermark:async watermark=>{await saveSettings(current=>mergeSettings(current,{capture:{watermark}}));},
     assertAvailable:()=>{if(scrollCapture?.service.active)throw Error('请先完成当前长截图');if(rulerWindows.length)throw Error('请先关闭当前屏幕尺');if(colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前屏幕取色或条码框选');},
     failed:error=>runtimeError(app.getPath('userData'),'capture',error),timing:value=>runtimeLog(app.getPath('userData'),'capture-ready',JSON.stringify(value)),
   },materials,pins);
   scrollCapture=new ScrollCaptureHost({
+    onEscape:callback=>input.onEscape(callback),foregroundWindow:()=>foreground(true)?.hwnd||0,
+    output:async(window,png,action)=>{if(action==='copy'){await writeClipboardPng(png);return true;}return !!await saveImage(window,{payload:{png:png.toString('base64')}},file=>{materials!.library.protect(file);const local=relative(app.getPath('userData'),file);if(!local||!isAbsolute(local)&&local!=='..'&&!local.startsWith('..'+sep))throw Error('请保存到 One 数据目录之外');},()=>!quitting&&!window.isDestroyed(),{defaultPath:'One-scroll-capture.png'});},
     createWindow:options=>windowFor('scroll-capture',{roundedCorners:true,...options},'',false),
     register:(name,handler)=>handle(name,handler,['scroll-capture']),blocked:()=>quitting,
     uiScale:()=>settings.capture.uiScale,remoteCompatible:()=>settings.capture.remoteCompatible,
     preferredDisplay:()=>capture!.state().displayId,
-    choose:(id,hide)=>capture!.service.choose(id,hide&&main&&!main.isDestroyed()?[main]:[],'scroll'),
+    choose:(id,hide,retain)=>capture!.service.choose(id,hide&&main&&!main.isDestroyed()?[main]:[],'scroll',retain),
     cancelSelection:()=>capture!.service.cancel(),
     windows:hide=>hide&&main&&!main.isDestroyed()?[main]:[],
     assertAvailable:()=>{if(capture?.service.active||colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前截图、取色或条码框选');if(imageEditor?.editor.window&&!imageEditor.editor.window.isDestroyed())throw Error('请先关闭当前图片编辑，再开始长截图');},

@@ -82,6 +82,7 @@ export class OCRService {
   private opening = false;
   private mode:'ocr'|'translation'|'formula'='ocr';
   private entryRevision=0;
+  private runOnEntry=true;
   private rendererReady?: () => void;
   private settling: Promise<unknown> = Promise.resolve();
   readonly models: OCRModels;
@@ -133,7 +134,7 @@ export class OCRService {
             throw Error('请先结束当前识别或翻译');
           this.window.show();
           this.window.focus();
-        } else await this.open(png, '截图翻译');
+        } else await this.open(png, '截图翻译','translation',false);
         return this.token;
       },
       valid: (token) =>
@@ -182,14 +183,14 @@ export class OCRService {
       error: this.error,
       models: selected,
       modelTitle: selected.title,
-      mode:this.mode,entryRevision:this.entryRevision,ocrChoice:await this.localModels.selection('ocr'),
+      mode:this.mode,entryRevision:this.entryRevision,runOnEntry:this.runOnEntry,ocrChoice:await this.localModels.selection('ocr'),
       formulaLocal:{choice:await this.localModels.selection('formula'),revision:await this.localModels.settingsRevision()},
       formulaModels:formulaSelected,formulaTitle:formulaSelected.title,
       workflow: this.workflow.state,
     }); });
     handle('open-formula', async token => {
       if (token !== this.token || !this.png) throw Error('公式图片已失效');
-      this.mode='formula';this.entryRevision++;
+      this.mode='formula';this.runOnEntry=true;this.entryRevision++;
     });
     handle('run', (token, value, mode = 'text') => {
       if (this.workflow.active) throw Error('正在执行识别流程，请先取消当前任务');
@@ -574,10 +575,10 @@ export class OCRService {
     const task=Promise.resolve().then(()=>work(valid));this.formulaImageTask=task;
     return task.finally(()=>{if(this.formulaImageTask===task){this.formulaImageTask=undefined;this.formulaProcessing=false;}});
   }
-  async open(png: Buffer, name: string, mode:'ocr'|'translation'|'formula'='ocr') {
+  async open(png: Buffer, name: string, mode:'ocr'|'translation'|'formula'='ocr',runOnEntry=true) {
     if (this.ctx.blocked()) throw Error('应用正在退出');
     if(!this.opening&&this.window&&!this.window.isDestroyed()&&this.png?.equals(png)){
-      this.mode=mode;this.entryRevision++;this.window.show();this.window.focus();return;
+      this.mode=mode;this.runOnEntry=runOnEntry;this.entryRevision++;this.window.show();this.window.focus();return;
     }
     if (this.window || this.opening) {
       this.window?.show();
@@ -593,6 +594,7 @@ export class OCRService {
       if(this.kind==='formula')ocrDimensions(header.width, header.height);
       this.size = header;
       this.mode=mode;
+      this.runOnEntry=runOnEntry;
       this.entryRevision++;
       this.png = Buffer.from(png);
       this.imagePreview=new OCRImagePreview(this.png,this.size);

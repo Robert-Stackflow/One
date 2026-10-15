@@ -47,14 +47,19 @@ export function setupTooltips() {
   const opposite: Record<TooltipSide, TooltipSide> = {top: 'bottom', right: 'left', bottom: 'top', left: 'right'};
   const sides: TooltipSide[] = [preferred, opposite[preferred], ...(['top', 'right', 'bottom', 'left'] as TooltipSide[])
    .filter(side => side !== preferred && side !== opposite[preferred]).sort((a, b) => space[b] - space[a])];
-  const side = sides.find(fits) || sides.reduce((best, next) => space[next] > space[best] ? next : best);
   const clamp = (value: number, size: number, available: number) => Math.max(margin, Math.min(available - size - margin, value));
+  const place=(side:TooltipSide)=>{
   let x = r.left + (r.width - t.width) / 2, y = r.top + (r.height - t.height) / 2;
   if (side === 'right') x = r.right + gap;
   else if (side === 'left') x = r.left - t.width - gap;
   else if (side === 'top') y = r.top - t.height - gap;
   else y = r.bottom + gap;
-  x = Math.round(clamp(x, t.width, innerWidth)); y = Math.round(clamp(y, t.height, innerHeight));
+  return {x:Math.round(clamp(x,t.width,innerWidth)),y:Math.round(clamp(y,t.height,innerHeight))};
+  };
+  const avoided=document.getElementById(el.closest<HTMLElement>('[data-tooltip-avoid]')?.dataset.tooltipAvoid||'')?.getBoundingClientRect();
+  const safe=(side:TooltipSide)=>{if(!avoided)return true;const {x,y}=place(side);return x+t.width+8<=avoided.left||x-8>=avoided.right||y+t.height+8<=avoided.top||y-8>=avoided.bottom;};
+  const side = sides.find(side=>fits(side)&&safe(side))||sides.find(safe)||sides.find(fits)||sides.reduce((best,next)=>space[next]>space[best]?next:best);
+  const {x,y}=place(side);
   const vertical=side==='right'||side==='left',extent=vertical?t.height:t.width,center=vertical?r.top+r.height/2-y:r.left+r.width/2-x;
   const inset=Math.min(17,extent/2);tip.style.setProperty('--tooltip-arrow',Math.max(inset,Math.min(extent-inset,center))+'px');
   tip.dataset.side = side; tip.style.left = x + 'px'; tip.style.top = y + 'px';

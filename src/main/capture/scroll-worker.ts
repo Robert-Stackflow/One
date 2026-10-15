@@ -22,6 +22,16 @@ parentPort!.on('message', ({ id, kind, value }) => {
       clearStage();const frame=value.frame as PixelFrame;
       if(!frame||!(frame.pixels instanceof Uint8Array))throw Error('采集像素帧无效');
       const stable=!value.monitored||settling.observe(frame,performance.now());
+      if(!stable&&value.moving&&engine.status().count&&!engine.status().pending){
+        try{
+          const result=engine.sample(frame,[],true);
+          if(result.match==='accepted'){
+            const preview=engine.preview();
+            parentPort!.postMessage({id,stable:false,moving:true,result,preview},preview?[preview.pixels.buffer as ArrayBuffer]:[]);return;
+          }
+        }finally{frame.pixels.fill(0);}
+        parentPort!.postMessage({id,stable:false});return;
+      }
       if(stable){staged=frame;stagedRegions=value.monitored?settling.dynamicRegions():[];}else frame.pixels.fill(0);
       parentPort!.postMessage({id,stable});return;
     } else if(kind==='release-frame'){

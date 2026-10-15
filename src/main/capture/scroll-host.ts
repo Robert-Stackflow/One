@@ -29,9 +29,9 @@ export class ScrollCaptureHost {
     const task=this.service.open(id,captureOptions(options).hideMainWindow);this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;
   }
   get pendingTasks(){return this.tasks.size+this.service.pendingTasks;}
-  openRegion(region:Region,windows:BrowserWindow[]=[]){
+  openRegion(region:Region,windows:BrowserWindow[]=[],mask?:BrowserWindow){
     if(this.closing||this.preparing||this.context.blocked())throw Error('长截图服务已关闭');this.context.assertAvailable();
-    const task=this.service.open(region.displayId,true,region,true,windows);this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;
+    const task=this.service.open(region.displayId,true,region,true,windows,mask);this.tasks.add(task);void task.then(()=>this.tasks.delete(task),()=>this.tasks.delete(task));return task;
   }
   get needsQuitPreparation(){return !this.approved&&(this.service.active||this.pendingTasks>0);}
   resetQuitApproval(){this.approved=false;this.preparing=false;}

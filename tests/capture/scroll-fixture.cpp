@@ -76,6 +76,16 @@ int wmain(int argc,wchar_t**argv) {
             if (line == "focus") PostMessage(fixture, WM_APP + 3, 0, 0);
             else if (line == "move") PostMessage(fixture, WM_APP + 4, 0, 0);
             else if (line == "state") PostMessage(fixture, WM_APP + 5, 0, 0);
+            else if (line=="escape") {
+                INPUT input[2]{};input[0].type=input[1].type=INPUT_KEYBOARD;input[0].ki.wVk=input[1].ki.wVk=VK_ESCAPE;input[1].ki.dwFlags=KEYEVENTF_KEYUP;
+                SendInput(2,input,sizeof(INPUT));Sleep(80);PostMessage(fixture,WM_APP+5,0,0);
+            }
+            else if (line.starts_with("drag ")) {
+                std::istringstream coordinates(line.substr(5)); int x=0,y=0,right=0,bottom=0;coordinates>>x>>y>>right>>bottom;
+                SetCursorPos(x,y);Sleep(40);INPUT input{};input.type=INPUT_MOUSE;input.mi.dwFlags=MOUSEEVENTF_LEFTDOWN;SendInput(1,&input,sizeof(INPUT));
+                for(int step=1;step<=8;step++){SetCursorPos(x+(right-x)*step/8,y+(bottom-y)*step/8);Sleep(15);}
+                input.mi.dwFlags=MOUSEEVENTF_LEFTUP;SendInput(1,&input,sizeof(INPUT));Sleep(80);PostMessage(fixture,WM_APP+5,0,0);
+            }
             else if (line.starts_with("click ")) {
                 std::istringstream coordinates(line.substr(6)); int x=0,y=0; coordinates>>x>>y;
                 SetCursorPos(x,y); INPUT input[2]{}; input[0].type=input[1].type=INPUT_MOUSE;

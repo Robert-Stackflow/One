@@ -53,6 +53,7 @@ export interface OCRState {
   formulaLocal?:{choice:import('../local-models').LocalModelChoice;revision:string};
   mode?:'ocr'|'translation'|'formula';
   entryRevision?:number;
+  runOnEntry?:boolean;
   ocrChoice?:import('../local-models').LocalModelChoice;
   formulaModels?:OCRState['models'];
   formulaTitle?:string;

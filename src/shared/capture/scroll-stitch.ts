@@ -134,7 +134,7 @@ export class ScrollStitch {
     this.options={...this.options!,trimStart:this.options!.trimStart+edges.start,trimEnd:this.options!.trimEnd+edges.end};
     this.axis=fullAxis-edges.start-edges.end;this.rows=this.axis;this.strips[0].rows=this.axis;this.strips[0].rowStart=edges.start;this.previous=old.slice(start,end);
   }
-  sample(frame: PixelFrame,regions:ScrollDynamicRegion[]=[]) {
+  sample(frame: PixelFrame,regions:ScrollDynamicRegion[]=[],moving=false) {
     if (this.candidate) throw Error('请先处理上一帧的拼接位置');
     if(regions.length>1||regions.some(region=>![region.x,region.y,region.width,region.height].every(Number.isSafeInteger)||region.x<0||region.y<0||region.width<=0||region.height<=0||region.x+region.width>frame.width||region.y+region.height>frame.height||region.width*region.height>frame.width*frame.height*.08))throw Error('局部动态区域无效');
     this.regions=regions.map(region=>({...region}));
@@ -187,11 +187,15 @@ export class ScrollStitch {
       (!runner || runner.score > best.score + 2 || (best.score < 0.15 && runner.score > 0.5))&&
       scrollLocallyConsistent(this.previous,pixels,this.axis,this.cross,this.options!.ignoreStart,this.cross-this.options!.ignoreEnd,best.shift,this.omit);
     if (!confident) {
+      // While scrolling, reject uncertain intermediate frames without replacing
+      // the last accepted viewport or creating a manual recovery candidate.
+      if(moving)return {...this.status(),match:'unchanged' as const,offset:0};
       this.candidate = pixels;
       this.candidateRegions=this.regions;
       this.match = 'ambiguous';
       return this.status();
     }
+    if(moving&&best.shift<Math.max(24,Math.floor(this.axis*.12)))return {...this.status(),match:'unchanged' as const,offset:0};
     if(best.shift===0){this.match='unchanged';this.offset=0;return this.status();}
     if (best.shift < 0) {
       this.offset=best.shift;
@@ -287,7 +291,7 @@ export class ScrollStitch {
   preview(): PixelFrame | null {
     if (!this.previous) return null;
     const size = this.status(),
-      scale = Math.min(1, 300 / size.width, 700 / size.height),
+      scale = Math.min(1, 300 / size.width, 4096 / size.height),
       width = Math.max(1, Math.round(size.width * scale)),
       height = Math.max(1, Math.round(size.height * scale)),
       pixels = new Uint8Array(width * height * 4);

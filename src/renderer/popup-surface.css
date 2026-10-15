@@ -15,8 +15,8 @@
   .archive-more-menu, .breadcrumb-menu, .confirmation-popover, .lock-path-popover,
   .preview-open-popover, .menu-add-popup, .command-picker, .picker-options,
   .dialog-companion-shell, .menu-preview-surface,
-  .echo-position-panel, .toast, #tray-menu-notice),
-body[data-view=capture] .capture-panel {
+  .echo-position-panel, .toast, .scroll-floating-panel, #tray-menu-notice),
+body:is([data-view=capture],[data-view=scroll-capture]) .capture-panel {
   border: var(--popup-border);
   box-shadow: var(--popup-shadow);
 }

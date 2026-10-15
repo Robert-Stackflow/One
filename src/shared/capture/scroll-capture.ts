@@ -3,6 +3,10 @@ export type ScrollMode='manual'|'auto';
 export interface ScrollDynamicRegion {x:number;y:number;width:number;height:number}
 export class ScrollCaptureLimit extends Error {}
 interface ControlRect {x:number;y:number;width:number;height:number}
+export function scrollMaskShape(width:number,height:number,selection:ControlRect){
+  const x=Math.max(0,selection.x-1),y=Math.max(0,selection.y-1),right=Math.min(width,selection.x+selection.width+1),bottom=Math.min(height,selection.y+selection.height+1);
+  return [{x:0,y:0,width,height:y},{x:0,y:bottom,width,height:height-bottom},{x:0,y,width:x,height:bottom-y},{x:right,y,width:width-right,height:bottom-y}].filter(rect=>rect.width>0&&rect.height>0);
+}
 /** Prefer usable space outside the selection; constrained screens retain a movable control. */
 export function scrollControlBounds(area:ControlRect,selection:ControlRect,height=268,requestedWidth=460):ControlRect {
   const gap=12,left=area.x+gap,top=area.y+gap,right=area.x+area.width-gap,bottom=area.y+area.height-gap;
@@ -17,6 +21,32 @@ export function scrollControlBounds(area:ControlRect,selection:ControlRect,heigh
   const width=Math.min(requestedWidth,area.width),h=Math.min(height,area.height);
   return {x:Math.round(area.x+Math.max(0,area.width-width-gap)),y:Math.round(area.y+Math.min(gap,Math.max(0,area.height-h))),width,height:h};
 }
+/** Overlay coordinates are display-local DIPs. Fit the complete image beside
+ * the selection; the preview never grows a separate scrolling surface. */
+export function scrollOverlayLayout(area:ControlRect,selection:ControlRect,image:{width:number;height:number},height:number,compact=true,previewExpanded=true){
+  const gap=12,leftSpace=selection.x-area.x-gap*2,rightSpace=area.x+area.width-selection.x-selection.width-gap*2;
+  const left=leftSpace>=160||rightSpace<160&&(leftSpace>=80||rightSpace<80);
+  const maxWidth=Math.max(40,Math.min(320,left?leftSpace:rightSpace));
+  const fit=(top:number,available:number)=>{
+    const scale=Math.min(1,maxWidth/Math.max(1,image.width),Math.max(1,available)/Math.max(1,image.height));
+    const width=Math.max(1,Math.floor(image.width*scale)),h=Math.max(1,Math.floor(image.height*scale));
+    return {x:Math.max(area.x+gap,Math.min(left?selection.x-gap-width:selection.x+selection.width+gap,area.x+area.width-width-gap)),y:Math.max(top,Math.min(selection.y+selection.height-h,top+available-h)),width,height:h};
+  };
+  const preview=fit(area.y+gap,Math.max(1,Math.min(area.y+area.height,selection.y+selection.height)-area.y-gap));
+  const controls=scrollControlBounds(area,selection,height,500);
+  const below=area.y+area.height-selection.y-selection.height-gap*2;
+  if(below>=height||compact&&below>=160){
+    controls.height=Math.min(height,below);controls.y=selection.y+selection.height+gap;
+    controls.x=Math.max(area.x+gap,Math.min(selection.x+selection.width-controls.width,area.x+area.width-controls.width-gap));
+  }
+  const intersects=(a:ControlRect,b:ControlRect)=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
+  if(previewExpanded&&intersects(preview,controls)){
+    const beside=left?preview.x-controls.width-gap:preview.x+preview.width+gap;
+    if(beside>=area.x+gap&&beside+controls.width<=area.x+area.width-gap&&!intersects({...controls,x:beside},selection))controls.x=beside;
+    else if(selection.y-area.y>=height+gap*2)controls.y=selection.y-height-gap;
+  }
+  return {selection,controls,preview,overlap:intersects(controls,selection)||previewExpanded&&intersects(preview,selection)};
+}
 export interface ScrollOptions {
   autoFixed?:boolean;
   retainStart?:number;
@@ -29,6 +59,7 @@ export interface ScrollOptions {
 }
 export type ScrollMatch = 'first' | 'accepted' | 'unchanged' | 'ambiguous' | 'backwards';
 export interface ScrollView {
+  overlay?:{selection:ControlRect;controls:ControlRect;preview:ControlRect;panel?:ControlRect;overlap:boolean};
   fixed?:{start:number;end:number};
   recovering:boolean;
   mode:ScrollMode;
@@ -50,12 +81,15 @@ export interface ScrollView {
   preview: string;
 }
 export type ScrollCommand =
-  | {kind:'layout';preview:boolean;settings?:boolean}
+  | {kind:'layout';preview:boolean;settings?:boolean;repair?:boolean}
   | {kind:'restart';options:ScrollOptions}
   | { kind: 'configure'; options: ScrollOptions }
-  | { kind: 'sample' | 'manual' | 'auto' | 'pause' | 'undo' | 'finish' | 'edit' | 'cancel' }
+  | { kind: 'sample' | 'manual' | 'auto' | 'pause' | 'undo' | 'finish' | 'edit' | 'copy' | 'save' | 'cancel' }
   | { kind: 'join'; offset: number };
 export interface ScrollAPI {
+  tooltip(rect:{x:number;y:number;width:number;height:number}|null):Promise<void>;
+  ready():Promise<void>;
+  interactive(value:boolean):Promise<void>;
   state(): Promise<ScrollView>;
   command(token: string, command: ScrollCommand): Promise<ScrollView | null>;
   onChange(fn: (state: ScrollView) => void): () => void;

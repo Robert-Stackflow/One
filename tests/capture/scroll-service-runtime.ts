@@ -2,6 +2,7 @@
 // cursor movement or native process is created by this fixture.
 import { EventEmitter } from 'node:events';
 export const handlers = new Map<string, (...args: any[]) => any>();
+export const escapeListeners=new Set<()=>boolean>();
 export const ipcMain = {
   handle: (name: string, fn: (...args: any[]) => any) => handlers.set(name, fn),
 };
@@ -30,13 +31,16 @@ export class BrowserWindow extends EventEmitter {
   protected = false;
   destroyed = false;
   visible = true;
+  hides=0;
   webContents = Object.assign(new EventEmitter(), {
     mainFrame: { url: 'one://app/index.html?view=scroll-capture' },
     send() {},
     setWindowOpenHandler() {},
+    async capturePage(){},
   });
-  constructor(_options?: unknown) {
+  constructor(readonly options?: any) {
     super();
+    if(options?.width)this.bounds={x:options.x,y:options.y,width:options.width,height:options.height};
   }
   isDestroyed() {
     return this.destroyed;
@@ -48,6 +52,7 @@ export class BrowserWindow extends EventEmitter {
     return this.bounds;
   }
   hide() {
+    this.hides++;
     this.visible = false;
   }
   show() {
@@ -60,8 +65,10 @@ export class BrowserWindow extends EventEmitter {
     this.protected = value;
   }
   setAlwaysOnTop() {}
+  shape:any[]=[];
+  setShape(rectangles:any[]){this.shape=rectangles;}
   setBounds(bounds:typeof this.bounds){this.bounds=bounds;}
-  async loadURL() {}
+  async loadURL(){await handlers.get('one:scroll-ready')?.({sender:this.webContents,senderFrame:this.webContents.mainFrame});}
   destroy() {
     this.destroyed = true;
     this.emit('closed');

@@ -2,6 +2,7 @@ import { annotationStylePreference, type AnnotationPreferencesHost } from '../..
 import { flushDesktopComposition } from './native';
 import { type BrowserWindow, clipboard, desktopCapturer, screen } from 'electron';
 import { ScrollNative, captureMonitorBounds } from './scroll-native';
+import {scrollMaskShape} from '../../shared/capture/scroll-capture';
 import { chooseWatermarkImage } from './watermark-image';
 import { watermarkPreset, type WatermarkPreset } from '../../shared/capture/watermark';
 import { randomUUID } from 'node:crypto';
@@ -44,6 +45,7 @@ import { customCaptureSelection, type CustomCapture } from '../../shared/capture
 export const CAPTURE_URL='one://app/index.html?view=capture';
 
 interface CaptureRun {
+  selectedRegion?:Region;
   scrollTransfer?:Region;
   token: string;
   overlay: BrowserWindow;
@@ -71,7 +73,7 @@ interface CaptureRun {
   finish(value: Region | null): void;
 }
 export interface CaptureHost extends AnnotationPreferencesHost {
-  scroll?(region:Region,windows:BrowserWindow[]):Promise<void>;
+  scroll?(region:Region,windows:BrowserWindow[],mask?:BrowserWindow):Promise<void>;
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:Electron.IpcMainInvokeEvent,...args:any[])=>unknown):void;
   fonts():Promise<import('../../shared/fonts').InstalledFont[]>;
@@ -334,13 +336,14 @@ export class CaptureService {
         : undefined;
       if (
         request.actions.includes('translate') &&
+        !(request.actions.length===1&&!request.workflowId) &&
         (!workflow || JSON.stringify(workflow.actions) !== JSON.stringify(request.actions))
       )
         throw Error('翻译仅能通过已配置的动作流程执行，请重新选择流程');
       if (current.purpose === 'region') {
         this.checkDisplay(current.shot);
         const r = request.selection;
-        current.finish({
+        current.selectedRegion={
           displayId: current.shot.displayId,
           sourceId: current.shot.sourceId,
           signature: current.shot.signature,
@@ -352,7 +355,7 @@ export class CaptureService {
           },
           pixels: { width: r.width, height: r.height },
           screen: size,
-        });
+        };current.finish(current.selectedRegion);
         return { completed: true, receipts: [] };
       }
       const layout = outputLayout(
@@ -386,7 +389,7 @@ export class CaptureService {
               return Promise.resolve(false);
             return this.host.deliver(current.overlay, png.data, action, workflow, current.token,captured);
           },
-          request.actions.includes('translate')
+          request.actions.includes('translate')&&workflow
             ? JSON.stringify([workflow!.id, workflow!.translationTarget,physicalPin])
             : physicalPin?JSON.stringify(physicalPin):'',
         );
@@ -893,8 +896,9 @@ export class CaptureService {
     displayId: number,
     windows: BrowserWindow[],
     regionHint: 'recording' | 'scroll' = 'recording',
+    retainMask?:(window:BrowserWindow,windows:BrowserWindow[])=>void,
   ): Promise<Region | null> {
-    return this.start(displayId, windows, 'region', false, undefined, regionHint);
+    return this.start(displayId, windows, 'region', false, undefined, regionHint,{retainMask});
   }
   private async start(
     displayId: number,
@@ -907,6 +911,7 @@ export class CaptureService {
       custom?: CustomCapture;
       autoCopy?: boolean;
       selectionMode?: 'rectangle' | 'free' | 'polygon';
+      retainMask?:(window:BrowserWindow,windows:BrowserWindow[])=>void;
     },
   ): Promise<Region | null> {
     if(this.closing||this.host.blocked())throw Error('截图服务已关闭');
@@ -1042,6 +1047,7 @@ export class CaptureService {
     } finally {
       clearTimeout(paintTimer);
       const transfer=this.run?.overlay===overlay?this.run?.scrollTransfer:undefined;
+      const retained=options?.retainMask&&this.run?.overlay===overlay?this.run?.selectedRegion:undefined;
       native?.stop();
       if (this.captureNative === native) this.captureNative = undefined;
       if (this.run && this.run.overlay === overlay) {
@@ -1050,17 +1056,24 @@ export class CaptureService {
         void this.host.sensitive?.cancelSensitive(this.run.token).catch(() => {});
       }
       if (this.run?.overlay === overlay) this.run = undefined;
-      if (overlay && !overlay.isDestroyed()) overlay.destroy();
       this.active = false;
       if(transfer&&this.host.scroll&&!this.closing&&!this.host.blocked()){
-        try{await this.host.scroll(transfer,shown);}
+        try{if(overlay&&!overlay.isDestroyed())this.prepareScrollMask(overlay,transfer);await this.host.scroll(transfer,shown,overlay);}
         catch(error){for(const window of shown)if(!window.isDestroyed())window.show();throw error;}
-      }else for (const window of shown)
+        finally{if(overlay&&!overlay.isDestroyed())overlay.destroy();}
+      }else if(retained&&overlay&&!overlay.isDestroyed()&&!this.closing&&!this.host.blocked()){
+        this.prepareScrollMask(overlay,retained);options!.retainMask!(overlay,shown);
+      }else {if(overlay&&!overlay.isDestroyed())overlay.destroy();for (const window of shown)
         if (!window.isDestroyed()&&!this.closing&&!this.host.blocked()) {
           window.show();
           window.focus();
         }
+      }
       if (generation === this.generation) this.prepare(displayId);
     }
+  }
+  private prepareScrollMask(window:BrowserWindow,region:Region){
+    const {width,height}=window.getBounds();
+    window.setShape(scrollMaskShape(width,height,{x:Math.round(region.rect.x*width),y:Math.round(region.rect.y*height),width:Math.round(region.rect.width*width),height:Math.round(region.rect.height*height)}));
   }
 }

@@ -23,6 +23,9 @@ import {
   Ellipsis,
   Scan,
   ScanText,
+  Languages,
+  Sigma,
+  GalleryHorizontal,
   SlidersHorizontal,
   Ratio,
   SquareDashed,
@@ -937,15 +940,18 @@ for (const [name, glyph] of [
   ['capture-more', Ellipsis],
   ['capture-effects', SlidersHorizontal],
   ['run-workflow', Play],
+  ['ocr', ScanText],
+  ['translate', Languages],
+  ['start-scroll', GalleryHorizontal],
 ] as const)
   q(name).append(createElement(glyph, { class: 'icon', 'aria-hidden': 'true' }) as unknown as Node);
 q('library')
   .querySelector('[data-menu-icon]')!
   .append(createElement(Images, { class: 'icon', 'aria-hidden': 'true' }));
-q('ocr')
+q('more-ocr')
   .querySelector('[data-menu-icon]')!
   .append(createElement(ScanText, { class: 'icon', 'aria-hidden': 'true' }));
-q('start-scroll').querySelector('[data-menu-icon]')!.append(createElement(ScanText,{class:'icon','aria-hidden':'true'}));
+for(const [id,glyph] of [['more-translate',Languages],['formula',Sigma]] as const)q(id).querySelector('[data-menu-icon]')!.append(createElement(glyph,{class:'icon','aria-hidden':'true'}));
 for (const [handle, x, y] of [
   ['nw', 0, 0],
   ['n', 50, 0],
@@ -1276,8 +1282,10 @@ async function output(action?: CaptureAction) {
     draw();
   }
 }
-for (const action of ['copy', 'save', 'pin', 'library', 'ocr'] as const)
+for (const action of ['copy', 'save', 'pin', 'library', 'ocr', 'translate', 'formula'] as const)
   q(action).onclick = () => void output(action);
+q('more-ocr').onclick=()=>void output('ocr');
+q('more-translate').onclick=()=>void output('translate');
 q('start-scroll').onclick=()=>{if(busy||!scene.selection||scene.selectionMask||!data.canScroll)return;busy=true;draw();void api.startScroll(data.token,scene.selection).catch(error).finally(()=>{busy=false;draw();});};
 q('region-confirm').onclick = () => void output();
 q('run-workflow').onclick = () => void output();
@@ -1713,7 +1721,7 @@ void api
     if (initial.purpose === 'region') {
       q('annotation-tools').hidden = q('capture-properties').hidden = true;
       q('capture-effects').hidden = q('capture-workflow').hidden = q('capture-more').hidden = true;
-      for (const id of ['copy', 'save', 'pin', 'library', 'ocr']) q(id).hidden = true;
+      for (const id of ['copy', 'save', 'pin', 'library', 'ocr', 'translate', 'start-scroll','capture-recognition-tools']) q(id).hidden = true;
       q('region-confirm').hidden = false;
     }
     guide.setPurpose(

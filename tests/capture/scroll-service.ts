@@ -2,21 +2,43 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ScrollCaptureService } from '../../src/main/capture/scroll-service';
 import { displaySignature } from '../../src/shared/capture/region';
-import { handlers, display, BrowserWindow, ScrollNative, frame,nativeImage } from './scroll-service-runtime';
+import { handlers, display, BrowserWindow, ScrollNative, frame,nativeImage,escapeListeners } from './scroll-service-runtime';
 import {ScrollCaptureHost} from '../../src/main/capture/scroll-host';
-import {scrollControlBounds} from '../../src/shared/capture/scroll-capture';
+import {scrollControlBounds,scrollOverlayLayout} from '../../src/shared/capture/scroll-capture';
+
+test('preview follows the selection edge and scales the entire image within the display with controls below',()=>{
+  const area={x:0,y:0,width:2048,height:1152},selection={x:1209,y:158,width:674,height:770};
+  for(const height of [770,3065,30000]){
+    const layout=scrollOverlayLayout(area,selection,{width:839,height},210);
+    assert.equal(layout.preview.x+layout.preview.width+12,selection.x);
+    assert.equal(layout.preview.y+layout.preview.height,selection.y+selection.height);
+    assert.ok(layout.preview.height<=1128&&layout.preview.y>=12&&layout.preview.y+layout.preview.height<=1140);
+    assert.ok(Math.abs(layout.preview.width/layout.preview.height-839/height)<.003);
+    assert.equal(layout.controls.y,selection.y+selection.height+12);assert.equal(layout.overlap,false);
+    assert.ok(layout.controls.y+layout.controls.height<=1140);
+  }
+  const nearLeft={x:30,y:220,width:800,height:500},layout=scrollOverlayLayout(area,nearLeft,{width:800,height:6000},210);
+  assert.equal(layout.preview.x,nearLeft.x+nearLeft.width+12);assert.equal(layout.overlap,false);
+});
 test('scroll controls fit outside the selection across negative coordinates and constrained work areas',()=>{
   const area={x:-1920,y:0,width:1920,height:1040},selection={x:-1000,y:100,width:950,height:800};
   const bounds=scrollControlBounds(area,selection);assert.ok(bounds.x+bounds.width<selection.x);assert.ok(bounds.y>=area.y&&bounds.y+bounds.height<=area.y+area.height);
   const bottom=scrollControlBounds({x:0,y:0,width:800,height:600},{x:0,y:0,width:800,height:300},250);assert.ok(bottom.y>=312);assert.equal(bottom.height,250);
   const small=scrollControlBounds({x:0,y:0,width:300,height:200},{x:0,y:0,width:300,height:200});assert.deepEqual(small,{x:0,y:0,width:300,height:200});
 });
-test('preview layout changes size once and preserves a manually moved control during sampling',async()=>{
+test('overlay retains display bounds, a clear capture hole and separate controls through layout changes',async()=>{
   const f=await fixture();try{
     const window=f.service.window as unknown as BrowserWindow,event={sender:window.webContents,senderFrame:window.webContents.mainFrame},token=f.state().token;
-    window.bounds={x:1000,y:400,width:460,height:268};await f.command('sample');assert.equal(window.bounds.x,1000);assert.equal(window.bounds.y,400);
-    await handlers.get('one:scroll-command')!(event,token,{kind:'layout',preview:false});assert.equal(window.bounds.width,320);assert.equal(window.bounds.height,268);
-    await handlers.get('one:scroll-command')!(event,token,{kind:'layout',preview:false,settings:true});assert.equal(window.bounds.width,500);assert.equal(window.bounds.height,600);
+    assert.deepEqual(window.bounds,display.bounds);assert.equal(window.options.frame,false);assert.equal(window.options.transparent,true);assert.ok(window.shape.length);
+    await f.command('sample');assert.equal(f.state().overlay.overlap,false);
+    const before=f.state().overlay.selection;
+    await handlers.get('one:scroll-command')!(event,token,{kind:'layout',preview:false});assert.deepEqual(window.bounds,display.bounds);
+    await handlers.get('one:scroll-command')!(event,token,{kind:'layout',preview:false,settings:true});assert.equal(f.state().overlay.controls.height,56);assert.equal(f.state().overlay.panel.height,540);assert.deepEqual(f.state().overlay.selection,before);
+    await handlers.get('one:scroll-interactive')!(event,true);assert.equal(window.shape.length,0);
+    await handlers.get('one:scroll-interactive')!(event,false);assert.ok(window.shape.length);
+    const tooltip={x:200,y:120,width:100,height:40};await handlers.get('one:scroll-tooltip')!(event,tooltip);assert.ok(window.shape.some(rect=>rect.x===tooltip.x&&rect.y===tooltip.y&&rect.width===tooltip.width));
+    await handlers.get('one:scroll-tooltip')!(event,null);assert.ok(!window.shape.some(rect=>rect.x===tooltip.x&&rect.y===tooltip.y&&rect.width===tooltip.width));
+    assert.throws(()=>handlers.get('one:scroll-tooltip')!(event,{...tooltip,width:Infinity}),/提示位置/);
   }finally{f.service.cancel();}
 });
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,11 +49,12 @@ async function until(predicate: () => boolean) {
     await wait(20);
   }
 }
-async function fixture(remoteCompatible = true,startManual=false) {
+async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWindow) {
   const workbench = new BrowserWindow(),
     failures: unknown[] = [],
     outputs: Buffer[] = [];
   const service = new ScrollCaptureService({
+    onEscape:callback=>{escapeListeners.add(callback);return()=>{escapeListeners.delete(callback);};},
     createWindow:options=>new BrowserWindow(options) as any,register:(name,fn)=>{handlers.set('one:'+name,fn);},blocked:()=>false,uiScale:()=>100,
     remoteCompatible: () => remoteCompatible,
     choose: async () => ({
@@ -50,7 +73,7 @@ async function fixture(remoteCompatible = true,startManual=false) {
       failures.push(error);
     },
   });
-  await service.open(display.id,false,undefined,startManual);
+  await service.open(display.id,false,undefined,startManual,[],mask as any);
   const control = service.window!,
     native = ScrollNative.current,
     event = {
@@ -62,6 +85,39 @@ async function fixture(remoteCompatible = true,startManual=false) {
   const command = (kind: string) => handlers.get('one:scroll-command')!(event, token, { kind });
   return { service, state, command, native, workbench, failures, outputs };
 }
+test('mode switches keep the overlay visible and Escape cancels and releases its shortcut',async()=>{
+  const f=await fixture();try{
+    const window=f.service.window as unknown as BrowserWindow;
+    await f.command('manual');await f.command('auto');assert.equal(window.hides,0);assert.equal(window.visible,true);
+    assert.equal(escapeListeners.size,1);assert.equal([...escapeListeners][0](),true);
+    assert.equal(f.service.active,false);assert.equal(window.destroyed,true);assert.equal(escapeListeners.size,0);
+    await f.service.stopped();
+  }finally{f.service.cancel();}
+});
+
+test('handoff retains the previous mask until the replacement renderer reports ready',async()=>{
+  const mask=new BrowserWindow();const original=BrowserWindow.prototype.loadURL;let entered=false,release!:()=>void;
+  const held=new Promise<void>(resolve=>{release=resolve;});
+  BrowserWindow.prototype.loadURL=async function(){entered=true;await held;await original.call(this);};
+  const opening=fixture(true,false,mask);
+  try{await until(()=>entered);assert.equal(mask.destroyed,false);assert.equal(mask.visible,true);release();const f=await opening;assert.equal(mask.destroyed,true);assert.equal(f.service.window!.isVisible(),true);f.service.cancel();await f.service.stopped();}
+  finally{release();BrowserWindow.prototype.loadURL=original;}
+});
+
+test('manual sampling stitches moving intermediate frames before the quiet interval and retains every row',async()=>{
+  const f=await fixture();try{
+    await f.command('sample');let offset=0;
+    f.native.read=async()=>frame(offset+=39);
+    const started=performance.now();await f.command('manual');
+    while(f.state().count<8&&performance.now()-started<2500)await wait(20);
+    await f.command('pause');await f.service.idle();
+    assert.ok(f.state().count>=8,'continuously moving frames must not wait for settling');
+    assert.ok(performance.now()-started<2500);
+    assert.equal(f.state().pending,false);assert.equal(f.state().height,160+39*(f.state().count-1));
+    assert.equal(f.native.wheels,0,'manual mode never injects scrolling');
+  }finally{f.service.cancel();}
+});
+
 test('finishing during an in-flight automatic read stops scrolling and preserves only accepted pixels', async () => {
   const f = await fixture();
   let release!: () => void;
@@ -136,7 +192,8 @@ test('a stable bottom waits and probes once before retaining the result for revi
 test('remote-compatible long capture hides an overlapping panel only while reading and restores it on failure', async () => {
   const f = await fixture();
   const window = f.service.window as unknown as BrowserWindow;
-  window.bounds = { x: 192, y: 108, width: 96, height: 160 };
+  // Simulate constrained-screen controls overlapping the transparent hole.
+  f.state().overlay.overlap=true;
   try {
     assert.equal(window.protected, false);
     f.native.read = async () => {

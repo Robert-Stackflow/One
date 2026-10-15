@@ -69,6 +69,12 @@
           <button id="redo" type="button" title="重做 · Ctrl+Y" aria-label="重做"></button>
         </div>
         <span class="capture-divider" role="separator"></span>
+        <div class="capture-tool-row" id="capture-recognition-tools" role="group" aria-label="识别与长截图">
+          <button id="ocr" type="button" title="识别文字" aria-label="识别文字"></button>
+          <button id="translate" type="button" title="翻译" aria-label="翻译"></button>
+          <button id="start-scroll" type="button" title="长截图" aria-label="长截图" hidden></button>
+        </div>
+        <span class="capture-divider" role="separator"></span>
         <div class="capture-output-row">
           <button id="pin" type="button" title="贴图" aria-label="贴图"></button>
           <button id="save" type="button" title="保存" aria-label="保存"></button>
@@ -110,10 +116,11 @@
       <button id="library" type="button" class="capture-menu-action">
         <span data-menu-icon="library"></span><span>存入素材</span>
       </button>
-      <button id="ocr" type="button" class="capture-menu-action">
+      <button id="more-ocr" type="button" class="capture-menu-action">
         <span data-menu-icon="ocr"></span><span>识别文字</span>
       </button>
-      <button id="start-scroll" type="button" class="capture-menu-action" hidden><span data-menu-icon aria-hidden="true"></span>长截图</button>
+      <button id="more-translate" type="button" class="capture-menu-action"><span data-menu-icon></span><span>翻译</span></button>
+      <button id="formula" type="button" class="capture-menu-action"><span data-menu-icon></span><span>公式识别</span></button>
       <div id="capture-workflow">
         <label class="capture-menu-heading" for="capture-workflow-choice">捕获后流程</label>
         <div class="capture-workflow-choice">

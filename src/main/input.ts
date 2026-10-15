@@ -10,6 +10,8 @@ import {CapsDeadline} from '../shared/quick-actions';
 import type {LevelState} from '../shared/hud';
 type Callbacks = { echo(text: string,channel?:EchoChannel): void; level(value:LevelState):void;caps(active:boolean):void; show(): void; color():void; preview(hwnd: number,focus:number): Promise<void>; clicker():void };
 export class InputService {
+  private escapeListeners=new Set<()=>boolean|void>();
+  onEscape(callback:()=>boolean|void){this.escapeListeners.add(callback);this.refreshHook();return()=>{this.escapeListeners.delete(callback);this.refreshHook();};}
   private modalActive=false;
   setModalActive(active:boolean){this.modalActive=active;this.configureNative();this.checkIndicators();}
   private running = false; private error = ''; private held = new Set<number>();
@@ -27,6 +29,7 @@ export class InputService {
   private key(event: UiohookKeyboardEvent) {
     if (!this.running) return;
     if (this.held.has(event.keycode)) return; this.held.add(event.keycode);
+    if(event.keycode===UiohookKey.Escape&&!event.ctrlKey&&!event.altKey&&!event.shiftKey&&!event.metaKey){let handled=false;for(const callback of [...this.escapeListeners])handled=callback()===true||handled;if(handled)return;}
     const foregroundWindow=foreground(true);
     if(this.matchesClickerShortcut(event)&&!foregroundWindow?.password){this.callbacks.clicker();return;}
     if (this.blocked()) return;
@@ -53,12 +56,15 @@ export class InputService {
   }
   update(settings: Settings) {
     this.settings = settings;
-    const needed = settings.keyEcho || settings.explorerPreview || settings.utilities.clicker.enabled;
-    try { if (needed && !this.running) { uIOhook.start(); this.running = true; this.error = ''; } else if (!needed && this.running) { uIOhook.stop(); this.running = false; this.held.clear(); } }
-    catch (error) { this.error = String(error); }
+    this.refreshHook();
     clearInterval(this.indicatorTimer);this.indicators=undefined;if(settings.keyEcho||settings.capsLock.persistent||settings.capsLock.autoOff){this.checkIndicators();this.indicatorTimer=setInterval(()=>this.checkIndicators(),160);}else {this.capsDeadline.reset();this.showCaps(false);}
     this.configureNative();
     if(settings.edgeScroll){levels.warm();if(Object.values(settings.edges).some(edge=>edge.action==='brightness'))void brightness.status().catch(()=>{});}
+  }
+  private refreshHook(){
+    const settings=this.settings,needed=settings.keyEcho||settings.explorerPreview||settings.utilities.clicker.enabled||this.escapeListeners.size>0;
+    try { if (needed && !this.running) { uIOhook.start(); this.running = true; this.error = ''; } else if (!needed && this.running) { uIOhook.stop(); this.running = false; this.held.clear(); } }
+    catch (error) { this.error = String(error); }
   }
   private configureNative(){
     levels.corners(this.settings,this.modalActive,corner=>this.triggerCorner(corner));

@@ -1,6 +1,6 @@
 import { defaultEffects, outputEffects, type OutputEffects } from './image-output';
 import { translationLanguage, type TranslationLanguage } from '../recognition/translation';
-export const captureActions = ['copy', 'save', 'pin', 'library', 'ocr', 'translate'] as const;
+export const captureActions = ['copy', 'save', 'pin', 'library', 'ocr', 'translate', 'formula'] as const;
 export type CaptureAction = (typeof captureActions)[number];
 export const actionNames: Record<CaptureAction, string> = {
   copy: '复制',
@@ -8,6 +8,7 @@ export const actionNames: Record<CaptureAction, string> = {
   pin: '贴图',
   library: '存入素材',
   ocr: '识别文字',
+  formula: '公式识别',
   translate: '翻译文字（联网）',
 };
 export interface CaptureWorkflow {

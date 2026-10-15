@@ -1,6 +1,6 @@
 /* Screenshot and recording surfaces: a compact action strip, a separate property strip,
    and anchored menus. Icon hit targets stay square at every window size. */
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-panel {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-panel {
   position: absolute;
   z-index: 4;
   width: max-content;
@@ -11,33 +11,33 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-panel {
   border-radius: 9px;
   cursor: default;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-properties {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-properties {
   max-height: min(45vh, 360px);
   overflow-y: auto;
   overflow-x: hidden;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-main-row,
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-tool-row,
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-output-row {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-main-row,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-tool-row,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-output-row {
   display: flex;
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-main-row {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-main-row {
   gap: 4px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-output-row {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-output-row {
   flex-wrap: nowrap;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-divider {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-divider {
   flex: 0 0 1px;
   height: 24px;
   background: var(--line);
   margin: 0 4px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) button,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side > button {
   display: grid;
   place-items: center;
   flex: 0 0 36px;
@@ -52,70 +52,70 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > b
   color: var(--fg);
   box-shadow: none;
 }
-:where(body:is([data-view='capture'],[data-view='recording-toolbar'])) .capture-panel svg {
+:where(body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture'])) .capture-panel svg {
   width: 19px;
   height: 19px;
   stroke-width: 1.7;
   flex-shrink: 0;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button:hover,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) button:hover,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side > button:hover {
   background: var(--hover);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #capture-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #capture-drag {
   cursor: grab;
   touch-action: none;
   color: var(--muted);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #capture-drag:hover,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions.is-dragging #capture-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #capture-drag:hover,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls).is-dragging #capture-drag {
   color: var(--fg);
   background: var(--hover);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions.is-dragging,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions.is-dragging #capture-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls).is-dragging,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls).is-dragging #capture-drag {
   cursor: grabbing;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button[aria-pressed='true'],
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button[aria-pressed='true'],
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions button[aria-expanded='true'],
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button[aria-expanded='true'] {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) button[aria-pressed='true'],
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side > button[aria-pressed='true'],
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) button[aria-expanded='true'],
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side > button[aria-expanded='true'] {
   background: var(--selected);
   color: var(--fg);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #copy,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #region-confirm {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #copy,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #region-confirm {
   background: var(--accent);
   color: var(--on-accent);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #copy:hover,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #region-confirm:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #copy:hover,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #region-confirm:hover {
   opacity: 0.85;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-actions #cancel:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) :is(#capture-actions,#scroll-controls) #cancel:hover {
   background: #df494916;
   color: #d34545;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side > button + button {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side > button + button {
   margin-top: 0;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side #capture-side-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side #capture-side-drag {
   min-height: 20px;
   height: 20px;
   cursor: grab;
   touch-action: none;
   color: var(--muted);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side.is-dragging,
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-side.is-dragging #capture-side-drag {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side.is-dragging,
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-side.is-dragging #capture-side-drag {
   cursor: grabbing;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu[popover] {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu[popover] {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -128,12 +128,12 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu[pop
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--fg) 28%, transparent) transparent;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu::backdrop {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu::backdrop {
   background: transparent;
   pointer-events: none;
 }
 /* Shared tool-menu rows live in editor/annotation-tools.css. */
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-action {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu-action {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -147,37 +147,37 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-act
   font-size: 13px;
   text-align: left;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-action:hover {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu-action:hover {
   background: var(--hover);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-more-menu {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-more-menu {
   width: 290px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-heading {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu-heading {
   display: block;
   margin: 0 0 9px;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-more-menu #capture-workflow {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-more-menu #capture-workflow {
   margin: 6px 2px 2px;
   padding: 12px 5px 4px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-choice {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-choice {
   gap: 6px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-choice .custom-select {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-choice .custom-select {
   flex: 1;
   min-width: 0;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-choice .custom-select {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-choice .custom-select {
   width: 100%;
   height: 34px;
   min-height: 34px;
   border-radius: 5px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #run-workflow {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #run-workflow {
   flex: 0 0 34px;
   width: 34px;
   height: 34px;
@@ -185,36 +185,36 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) #run-workflow {
   padding: 0;
   border-radius: 5px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-order {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-order {
   margin: 8px 0 0;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-receipts-title {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-receipts-title {
   margin-top: 14px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-receipts li {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-receipts li {
   min-height: 27px;
   align-items: center;
   border-bottom: 1px solid var(--line);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-receipts li:last-child {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-receipts li:last-child {
   border: 0;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-workflow-receipts li > :last-child {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-workflow-receipts li > :last-child {
   color: var(--muted);
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu {
   width: 310px;
   padding: 14px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu #capture-output-effects {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu #capture-output-effects {
   display: block;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-preview {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu .output-effect-preview {
   margin-top: 12px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-reset {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu .output-effect-reset {
   margin: 0;
   width: 30px;
   height: 30px;
@@ -222,21 +222,21 @@ body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-
   padding: 6px;
   border-radius: 5px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-header {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: -4px -3px 8px 0;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) .capture-menu-header .capture-menu-heading {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) .capture-menu-header .capture-menu-heading {
   margin: 0;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-fields {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu .output-effect-fields {
   grid-template-columns: 1fr;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-fields > label {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu .output-effect-fields > label {
   min-height: 32px;
 }
-body:is([data-view='capture'],[data-view='recording-toolbar']) #capture-effects-menu .output-effect-fields input[type='number'] {
+body:is([data-view='capture'],[data-view='recording-toolbar'],[data-view='scroll-capture']) #capture-effects-menu .output-effect-fields input[type='number'] {
   width: 42px;
 }

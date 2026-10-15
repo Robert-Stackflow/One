@@ -36,7 +36,7 @@ export class RecognitionHost {
     const item=await this.materials.library.images.detail(id);if(!item.payload.png)throw Error('图片素材不可用');
     const png=Buffer.from(item.payload.png,'base64');try{await this.service.open(png,item.title);}finally{png.fill(0);}
   });}
-  openCapture(png:Buffer){return this.run(()=>this.service.openCapture(png));}
+  openCapture(png:Buffer,mode:'ocr'|'translation'|'formula'='ocr'){return this.run(()=>this.service.open(png,'截图',mode));}
   openFormulaMaterial(id:string){return this.run(async()=>{
     await this.materials.initialized();if(this.closing||this.context.blocked())throw Error('识别服务已关闭');
     const item=await this.materials.library.images.detail(id);if(!item.payload.png)throw Error('图片素材不可用');
