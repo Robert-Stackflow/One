@@ -12,11 +12,11 @@ export class TranslationServices {
       if(!record||typeof record!=='object'||Array.isArray(record)||typeof record.encrypted!=='string'||!record.encrypted||record.encrypted.length>24000||!/^[\da-z+/]+=*$/i.test(record.encrypted))throw Error('翻译服务配置无法读取');
       const {encrypted,...fields}=record;let checked:TranslationServiceInput;try{checked=translationServiceInput(fields);}catch{throw Error('翻译服务配置无法读取');}
       if(!checked.id||checked.apiKey!==undefined||checked.revision!==undefined||ids.has(checked.id))throw Error('翻译服务配置无法读取');ids.add(checked.id);
-      return {id:checked.id,name:checked.name,provider:checked.provider,plan:checked.plan,region:checked.region,timeoutSeconds:checked.timeoutSeconds,encrypted};
+      return {id:checked.id,name:checked.name,provider:checked.provider,plan:checked.plan,region:checked.region,timeoutSeconds:checked.timeoutSeconds,encrypted,...(checked.provider==='baidu'?{appId:checked.appId}:{})};
     });
   }
   private revision(record:Stored){return createHash('sha256').update(JSON.stringify(record)).digest('hex');}
-  private public(record:Stored):TranslationServiceProfile{const {encrypted,...fields}=record;return {...fields,revision:this.revision(record),hasKey:!!encrypted&&this.crypto.available(),endpoint:translationServiceEndpoint(record.provider,record.plan),...translationServiceLimits(record.provider),languages:translationServiceLanguages(),capabilities:{batch:true,detectLanguage:true,glossary:false,images:false,quota:'unknown'}};}
+  private public(record:Stored):TranslationServiceProfile{const {encrypted,...fields}=record;return {...fields,revision:this.revision(record),hasKey:!!encrypted&&this.crypto.available(),endpoint:translationServiceEndpoint(record.provider,record.plan),...translationServiceLimits(record.provider),languages:translationServiceLanguages(),capabilities:{batch:record.provider!=='baidu',detectLanguage:true,glossary:false,images:false,quota:'unknown'}};}
   list(){return this.records().map(record=>this.public(record));}
   reference(id:string){const profile=this.list().find(profile=>profile.id===id);if(!profile)throw Error('翻译服务已删除，请重新选择');return {serviceId:id,revision:profile.revision};}
   assertReference(value:unknown){const ref=translationServiceReference(value),profile=this.list().find(profile=>profile.id===ref.serviceId);if(!profile||profile.revision!==ref.revision)throw Error('翻译服务配置已改变，请重新选择');if(!profile.hasKey)throw Error('系统加密不可用，无法读取翻译密钥');return profile;}
@@ -27,10 +27,10 @@ export class TranslationServices {
     const input=translationServiceInput(value),records=this.records(),previous=input.id?records.find(record=>record.id===input.id):undefined;
     if(input.id&&(!previous||input.revision!==this.revision(previous)))throw Error('翻译服务已改变，请重新打开配置');
     if(!previous&&records.length>=32)throw Error('翻译服务数量已满');if(!this.crypto.available())throw Error('系统加密不可用，无法保存翻译密钥');
-    const same=previous&&translationServiceEndpoint(previous.provider,previous.plan)===translationServiceEndpoint(input.provider,input.plan);
+    const same=previous&&translationServiceEndpoint(previous.provider,previous.plan)===translationServiceEndpoint(input.provider,input.plan)&&previous.appId===input.appId;
     if(!input.apiKey&&!same)throw Error('首次配置或更换服务接口后，请重新填写密钥');
     let bytes:Buffer;try{bytes=input.apiKey?this.crypto.encrypt(input.apiKey):Buffer.from(previous!.encrypted,'base64');}catch{throw Error('翻译密钥无法加密');}
-    try{if(!bytes.length||bytes.length>16000)throw Error('翻译密钥无法加密');const id=previous?.id||randomUUID(),record:Stored={id,name:input.name,provider:input.provider,plan:input.plan,region:input.region,timeoutSeconds:input.timeoutSeconds,encrypted:bytes.toString('base64')};
+    try{if(!bytes.length||bytes.length>16000)throw Error('翻译密钥无法加密');const id=previous?.id||randomUUID(),record:Stored={id,name:input.name,provider:input.provider,plan:input.plan,region:input.region,timeoutSeconds:input.timeoutSeconds,encrypted:bytes.toString('base64'),...(input.provider==='baidu'?{appId:input.appId}:{})};
       this.write(previous?records.map(item=>item.id===id?record:item):[...records,record]);return this.public(record);
     }finally{bytes.fill(0);}
   }

@@ -9,15 +9,57 @@ import {RecognitionConnectionStore} from '../../src/main/recognition/connections
 import {TranslationClient} from '../../src/main/recognition/translation-client';
 import {RecognitionTaskProvider} from '../../src/main/recognition/task-provider';
 import {formulaSettings} from '../../src/shared/recognition/formula';
+import {createHash} from 'node:crypto';
+import {baiduSignature,baiduRequest,baiduResponse,baiduLanguages} from '../../src/main/recognition/baidu-translation';
 import {translationServiceEndpoint,translationServiceInput,type DedicatedTranslationKind,type TranslationServiceInput,type TranslationServiceReference} from '../../src/shared/recognition/translation-services';
 const root=resolve(process.env.ONE_RECOGNITION_TEST_ROOT!),secret='dedicated-fixture-key';
 const input=(provider:DedicatedTranslationKind='azure',plan:'free'|'pro'='pro'):TranslationServiceInput=>({name:'Dedicated fixture',provider,plan,region:provider==='azure'?'eastasia':'',timeoutSeconds:5,apiKey:secret});
 const reference=(ai:OneAIService,id:string)=>ai.translators.reference(id);
+let baiduAccount=2026101500000000;
+const baiduInput=():TranslationServiceInput=>({...input(),provider:'baidu',region:'',appId:String(++baiduAccount)});
 const response=(value:unknown,headers?:Record<string,string>)=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json',...headers}});
 async function fixture(action:(ai:OneAIService,directory:string)=>Promise<void>,transport?:typeof fetch,aiTransport?:typeof fetch){
   const directory=await mkdtemp(join(root,'translation-services-')),ai=new OneAIService(directory,()=>{},{translationTransport:transport,transport:aiTransport});try{await action(ai,directory);}finally{ai.dispose();const actual=await realpath(directory);assert.equal(dirname(actual),await realpath(root));await rm(actual,{recursive:true,force:true});}
 }
 async function until(check:()=>boolean){const end=Date.now()+3000;while(!check()){if(Date.now()>end)throw Error('Fixture not started');await new Promise(resolve=>setTimeout(resolve,5));}}
+test('Baidu matches the official signature fixture, signs unencoded UTF-8 and maps all visible languages',()=>{
+  assert.equal(baiduSignature('2015063000000001','apple','1435660288','12345678'),'f89f9594663708c1605f3d736d01d2d4');
+  for(const [target,code] of Object.entries(baiduLanguages)){
+    const text='中文 + & 😀',body=new URLSearchParams(baiduRequest('2015063000000001',secret,text,target as keyof typeof baiduLanguages));
+    assert.equal(body.get('q'),text);assert.equal(body.get('to'),code);assert.equal(body.get('from'),'auto');
+    assert.equal(body.get('sign'),createHash('md5').update('2015063000000001'+text+body.get('salt')+secret).digest('hex'));assert.equal(body.has('key'),false);
+  }
+  assert.throws(()=>baiduRequest('2015063000000001',secret,'中'.repeat(2001),'en'),/容量/);assert.throws(()=>baiduRequest('2015063000000001',secret,'\ud800','en'),/编码/);
+});
+test('Baidu validates APPID, protects account changes and keeps encrypted keys across edits and reopen',()=>fixture(async(ai,directory)=>{
+  assert.throws(()=>translationServiceInput({...baiduInput(),appId:undefined}),/APPID/);assert.throws(()=>translationServiceInput({...input(),appId:'2015063000000001'}),/APPID/);
+  const initial=baiduInput(),profile=ai.translators.save(initial);assert.equal(profile.capabilities.batch,false);assert.equal(profile.maxItems,1);assert.equal(profile.maxCharacters,1800);
+  const edited=ai.translators.save({...initial,id:profile.id,revision:profile.revision,name:'renamed',apiKey:''});assert.equal(ai.translators.connection(reference(ai,profile.id)).key,secret);
+  assert.throws(()=>ai.translators.save({...initial,id:profile.id,revision:edited.revision,appId:'2015063000000001',apiKey:''}),/重新填写密钥/);
+  assert.equal(JSON.stringify(ai.translators.list()).includes(secret),false);assert.equal((await readFile(join(directory,'ai-data.json'),'utf8')).includes(secret),false);
+  const reopened=new OneAIService(directory,()=>{});try{assert.equal(reopened.translators.connection(reference(reopened,profile.id)).appId,initial.appId);assert.equal(reopened.translators.connection(reference(reopened,profile.id)).key,secret);}finally{reopened.dispose();}
+}));
+test('Baidu uses signed form POST, literal Unicode and source-checked multiline results without leaking provider errors',async()=>{
+  const source='  apple \r\n\r\nbanana\n',result=baiduResponse({from:'en',to:'zh',trans_result:[{src:'apple',dst:'甲 & <tag>'},{src:'banana',dst:'乙😀'}]},source,'zh-Hans');assert.equal(result.text,'  甲 & <tag> \r\n\r\n乙😀\n');assert.equal(result.sourceLanguage,'en');
+  for(const value of [{from:'en',to:'en',trans_result:[{src:'apple',dst:'wrong target'}]},{from:'en',to:'zh',trans_result:[{src:'wrong source',dst:'wrong'}]},{error_code:54001,error_msg:secret},{error_code:99999,error_msg:secret}])assert.throws(()=>baiduResponse(value,'apple','zh-Hans'),error=>!String(error).includes(secret));
+  let calls=0;await fixture(async(ai)=>{const profile=ai.translators.save(baiduInput()),translated=await ai.translateBatch(reference(ai,profile.id),1,[{id:'a',text:'中文 & 😀'}],'zh-Hant');assert.equal(translated.paragraphs[0].text,'譯 &amp; 😀');assert.equal(translated.paragraphs[0].sourceLanguage,'ja');assert.equal(translated.model,undefined);assert.equal(calls,1);},async(url,init)=>{
+    calls++;assert.equal(String(url),'https://fanyi-api.baidu.com/api/trans/vip/translate');assert.equal(init?.method,'POST');assert.equal(init?.redirect,'error');const headers=new Headers(init?.headers),body=new URLSearchParams(String(init?.body));assert.match(headers.get('content-type')!,/^application\/x-www-form-urlencoded/);assert.equal(headers.has('authorization'),false);assert.equal(String(init?.body).includes(secret),false);assert.equal(body.get('q'),'中文 & 😀');assert.equal(body.get('to'),'cht');return response({from:'jp',to:'cht',trans_result:[{src:body.get('q'),dst:'譯 &amp; 😀'}]});
+  });
+  await fixture(async ai=>{const profile=ai.translators.save(baiduInput());await assert.rejects(ai.translateBatch(reference(ai,profile.id),1,[{id:'a',text:'text'}],'en'),error=>!String(error).includes(secret)&&/无法连接/.test(String(error)));},async()=>{throw Error('配置已改变 '+secret);});
+});
+test('Baidu throttles duplicate APPID records, cancels waiting owners and rejects changed config before sending',async()=>{
+  const times:number[]=[];await fixture(async(ai)=>{
+  const initial=baiduInput(),first=ai.translators.save(initial),second=ai.translators.save({...initial,name:'same account'});
+  await ai.translateBatch(reference(ai,first.id),1,[{id:'a',text:'first'}],'en');
+  const pending=ai.translateBatch(reference(ai,second.id),2,[{id:'a',text:'second'}],'en'),cancelled=ai.translateBatch(reference(ai,first.id),3,[{id:'a',text:'cancelled'}],'en');void cancelled.catch(()=>{});ai.cancelTaskOwner(3);await assert.rejects(cancelled,/取消/);await pending;assert.equal(times.length,2);assert.ok(times[1]-times[0]>=1000);
+  const stale=ai.translateBatch(reference(ai,first.id),4,[{id:'a',text:'stale'}],'en');void stale.catch(()=>{});await new Promise(resolve=>setTimeout(resolve,10));ai.translators.save({...initial,id:first.id,revision:reference(ai,first.id).revision,name:'changed'});await assert.rejects(stale,/配置已改变/);assert.equal(times.length,2);
+},async(_url,init)=>{times.push(Date.now());const body=new URLSearchParams(String(init?.body));return response({from:'en',to:'en',trans_result:[{src:body.get('q'),dst:'translated'}]});});});
+test('Baidu document translation splits UTF-8 text into single-item requests and reconstructs Unicode without loss',async()=>{
+  const sizes:{characters:number;bytes:number}[]=[];await fixture(async ai=>{
+    const profile=ai.translators.save(baiduInput()),store=new RecognitionConnectionStore(ai.serviceConnections(),serviceCredentialCrypto,'translation',ai),saved=await store.save({revision:(await store.state()).revision,provider:'service',endpoint:'',model:'',region:'',serviceReference:reference(ai,profile.id)});
+    const client=new TranslationClient(undefined,undefined,new RecognitionTaskProvider(ai,()=>71)),source='中文😀'.repeat(800),result=await client.run(await store.connection(saved.revision),source,'en');assert.equal(result.text,source);assert.equal(sizes.length,2);assert.ok(sizes.every(size=>size.characters<=1800&&size.bytes<=6000));assert.ok(result.parts?.every(part=>part.status==='translated'));
+  },async(_url,init)=>{const body=new URLSearchParams(String(init?.body)),text=body.get('q')!;sizes.push({characters:text.length,bytes:Buffer.byteLength(text)});return response({from:'zh',to:'en',trans_result:[{src:text,dst:text}]});});
+});
 test('Azure, DeepL Free/Pro and Google Basic use native protocols, script targets, header credentials and ordered IDs',async()=>{
   for(const [provider,plan] of [['azure','pro'],['deepl','free'],['deepl','pro'],['google','pro']] as const){const calls:{url:URL;body:any;headers:Headers}[]=[];
     await fixture(async(ai,directory)=>{

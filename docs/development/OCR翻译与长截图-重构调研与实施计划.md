@@ -163,13 +163,15 @@ OCR/公式与内嵌选字服务弹窗已移除独立地址、模型名及密钥�
 
 旧 Chat Completions 连接仅在用户点击迁入时转换标准 `/chat/completions` 地址，按协议/地址/模型及主进程解密凭据去重，不改变聊天默认服务。迁入后仍使用原连接，显式保存才切换；新版绑定保留加密旧记录，可恢复原接口。非标准完整 endpoint 与无法解密的配置保留并提示；Azure 可迁入专用连接，旧客户端继续兼容未切换的配置。首批专用服务及新配置入口已统一；旧接口仅保留只读兼容与显式迁入/恢复。腾讯、百度、有道等后续适配器按可用账号继续验收。配置修订覆盖所选 Profile/密钥/模型与图片能力过期，拒绝旧请求与迟到结果。96 项业务测试通过；`tests/recognition-task-window.cjs` 检查真实窗口共享选择、故意延迟元数据仍先显示弹窗、翻译/迁入/恢复、管理跳转、公式验证失败与关闭取消；`tests/recognition-window-smoke.cjs` 和 `tests/inline-ocr-window.cjs` 验证旧接口、公式预览、编辑器/预览共享服务、实际 OCR 取消与返回。证据 `work/current/capture-reconstruction/ai-binding-*.log`。接口响应和图片验证使用本机协议桩，不能作为真实供应商视觉验收；本轮 JavaScript 构建通过，完整构建受运行中的 dev 占用本机辅助程序影响，未打包/安装。
 
+百度通用文本翻译已加入同一“翻译服务”管理及 OCR/内嵌 OCR 服务选择。APPID 是公开账号标识，密钥继续系统加密，编辑留空保留；更换 APPID 必须重填密钥。按[官方通用文本协议](https://fanyi-api.baidu.com/doc_bd/21)使用固定 HTTPS 端点、表单 POST 与原始 UTF-8 文本签名，密钥不进入 URL/请求正文；每批一个片段，保守按 1800 个 UTF-16 码元及 6000 UTF-8 字节限制，接入现有自动分段和手动失败重试。进程内同一 APPID 跨窗口/重复配置共享至少 1050ms 请求间隔，等待计入请求超时且可取消；排队后配置变更会在发送前拒绝旧请求。多行返回必须对应原文且保持原换行，HTML 字符作为普通文字保留，错误码映射为固定提示，不显示供应商原始错误内容或自动重试。官方 apple 签名示例、密钥保存/编辑/账号变更、Unicode 长文分段、限速/取消及旧配置拒绝已通过业务测试；真实 One 窗口/本机协议桩验证服务管理、选用、翻译、错误与手动重试，并回归其他三类服务和 Azure 迁移。APPID 表单布局已检查。证据 `work/current/capture-reconstruction/baidu-*.log`；没有真实百度账号验证，不宣称实际翻译质量或免费额度。
+
 提供统一 `TranslationProvider`：输入为带 ID 的段落、源语言/自动检测、目标语言、可选术语；输出逐段译文、实际服务/模型、状态。每个服务声明批量、语言检测、术语、图片翻译及额度限制，超长文本按服务规则切分。
 
 | 来源 | 计划 |
 | --- | --- |
 | 现有 AI 服务 | 直接选已配置的 Profile/模型；文本模型可翻译 OCR 文字，公式识别必须选择经确认可收图的模型。OpenAI 兼容接口、Ollama、LM Studio、Codex 均走当前适配层；每个服务能否收图分别验证。 |
 | Azure / DeepL / Google Cloud | 首批专用文本翻译适配器。协议和认证不同，不能把所有接口伪装成 Chat Completions。[Azure](https://learn.microsoft.com/en-us/rest/api/translator/translator/translate?view=rest-translator-v3.0)、[DeepL 官方 API](https://github.com/DeepL/openapi)、[Google Cloud](https://docs.cloud.google.com/translate/docs/basic/translating-text) |
-| 腾讯 / 百度 / 有道 | 同一套适配器接口下的后续接入，按可用账号逐项验证；不使用网页抓取或不稳定的免密接口。[腾讯图片翻译](https://cloud.tencent.com/document/product/551/118482)、[百度文本翻译](https://fanyi-api.baidu.com/doc_bd/21)、[有道批量文本翻译](https://ai.youdao.com/DOCSIRMA/html/trans/api/plwbfy/index.html) |
+| 百度 / 腾讯 / 有道 | 百度文本协议已接入，真实账号质量待验。腾讯[快速入门](https://cloud.tencent.com/document/product/551/104415)已公告传统文本翻译停止新用户接入，新增服务须按当前接口另行核对；有道后续按可用账号验证。不使用网页抓取或免密接口。[腾讯图片翻译](https://cloud.tencent.com/document/product/551/118482)、[百度文本翻译](https://fanyi-api.baidu.com/doc_bd/21)、[有道批量文本翻译](https://ai.youdao.com/DOCSIRMA/html/trans/api/plwbfy/index.html) |
 
 专用服务的认证保存在同一设置体系的服务连接中；它们不是另一套 AI 聊天服务。识别窗口只展示服务选择和“管理服务”入口。禁止在 renderer 读取明文密钥。AI 任务不写入普通聊天历史，沿用当前并发上限和取消/超时机制；配置修改不能让旧任务结果覆盖新选项。
 
