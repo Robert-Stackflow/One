@@ -1372,10 +1372,6 @@ async function start() {
     assertAvailable:()=>{if(scrollCapture?.service.active)throw Error('请先完成当前长截图');if(rulerWindows.length)throw Error('请先关闭当前屏幕尺');if(colorWindow&&!colorWindow.isDestroyed()||BrowserWindow.getAllWindows().some(window=>roles.get(window.webContents.id)==='barcode-capture'))throw Error('请先完成当前屏幕取色或条码框选');},
     failed:error=>runtimeError(app.getPath('userData'),'capture',error),timing:value=>runtimeLog(app.getPath('userData'),'capture-ready',JSON.stringify(value)),
   },materials,pins);
-  // Warm a hidden capture surface after startup; do not read desktop pixels.
-  if(!testMode)setImmediate(()=>{
-    if(!quitting&&!capture!.service.active)capture!.service.prepare(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id);
-  });
   scrollCapture=new ScrollCaptureHost({
     createWindow:options=>windowFor('scroll-capture',{roundedCorners:true,...options},'',false),
     register:(name,handler)=>handle(name,handler,['scroll-capture']),blocked:()=>quitting,
@@ -1435,6 +1431,11 @@ async function start() {
     if(permission!=='fullscreen'||!contents||contents.isDestroyed()||roles.get(contents.id)!=='preview'||!details.isMainFrame)return false;
     return contents.getURL()==='one://app/index.html?view=preview'&&details.requestingUrl===contents.getURL();
   };
+  // Internal protocols must be registered before warming a renderer. Startup
+  // awaits above can otherwise send one: to the Windows external URL handler.
+  if(!testMode)setImmediate(()=>{
+    if(!quitting&&!capture!.service.active)capture!.service.prepare(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id);
+  });
   session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>{if(canFullscreen(contents,permission,details))callback(true);else if(recording)recording.service.permissionRequest(contents,permission,callback,details);else callback(false);});
   session.defaultSession.setPermissionCheckHandler((contents,permission,origin,details)=>canFullscreen(contents,permission,details)||!!recording?.service.permissionCheck(contents,permission,origin,details));
   session.defaultSession.setDisplayMediaRequestHandler((request,callback)=>{if(recording)recording.service.displayMediaRequest(request,callback);else callback({});});
