@@ -1,3 +1,4 @@
+import {searchUrl} from '../shared/search-url';
 import {chooseCodexExecutable,openCodexLogin,copyCodexCode} from './ai-account-controls';
 import {previewArchive} from './preview-archive';
 import {MaterialsService} from './materials/service';
@@ -923,7 +924,7 @@ function registerIPC() {
   handle('menu-size',(event,value)=>{const p=menuFor(event.sender.id);if(p&&value&&[value.width,value.height].every(n=>Number.isFinite(n)&&n>0))positionMenu(p,value.width,value.height);},['search-menu']);
   handle('menu-favorite',async()=>{await favoriteCurrentFolder();hideMenus(1);menuNodes=await menuService.open(searchContext);const p=menuPanel(0);p.items=menuNodes;p.bar=menuService.toolbar();sendMenu(p);return menuNodes;},['search-menu']);
   handle('menu-settings',()=>{hideMenus();showMain();main.webContents.send('one:search-settings');},['search-menu']);
-  handle('search-context-menu',(event,value,point,directory)=>{const owner=BrowserWindow.fromWebContents(event.sender);if(!owner||!point||![point.x,point.y].every(Number.isFinite))throw new Error('右键菜单位置无效');const item=typeof value==='string'?launcher.get(value):undefined,path=item?item.path:filePath(value),b=owner.getContentBounds();fileMenu.show(owner,path,{x:Math.max(0,Math.min(b.width,point.x)),y:Math.max(0,Math.min(b.height,point.y))},directory===true,item?.launchKind==='action'?undefined:item?.launchKind,item?launcher.enrich(item).name:undefined);},['search']);
+  handle('search-context-menu',(event,value,point,directory)=>{const owner=BrowserWindow.fromWebContents(event.sender);if(!owner||!point||![point.x,point.y].every(Number.isFinite))throw new Error('右键菜单位置无效');const item=typeof value==='string'?launcher.get(value):undefined,path=item?item.path:filePath(value),b=owner.getContentBounds();fileMenu.show(owner,path,{x:Math.max(0,Math.min(b.width,point.x)),y:Math.max(0,Math.min(b.height,point.y))},directory===true,item?.launchKind==='app'||item?.launchKind==='setting'?item.launchKind:undefined,item?launcher.enrich(item).name:undefined);},['search']);
   handle('file-menu-data',event=>fileMenu.data(event.sender.id),['file-context']);
   handle('file-menu-submenu',(_e,session,top,focus,kind)=>fileMenu.submenu(textValue(session,100),top,focus===true,kind),['file-context']);
   handle('file-menu-apps',(_e,session)=>fileMenu.apps(textValue(session,100)),['file-context']);
@@ -973,6 +974,7 @@ function registerIPC() {
   handle('dialog-bar-settings',()=>{showMain();main.webContents.send('one:search-settings','entry');},['dialog-bar']);
   handle('search-context',()=>searchContext,['search']);handle('search-ready',(event)=>{const window=BrowserWindow.fromWebContents(event.sender);if(window){searchReadyWindows.add(event.sender.id);if(window===searchWindow)replaySearchInput(window,searchRevision);}},['search']);
   handle('search-choose',(_e,value)=>chooseSearch(value),['search']);
+  handle('search-open-url',async(_event,value)=>{const url=searchUrl(value);if(!url)throw Error('请输入有效的网页地址');await shell.openExternal(url);searchWindow?.hide();},['search']);
   handle('search-web',async(_event,id,query)=>{
     if(typeof id!=='string'||typeof query!=='string'||!query.trim()||query.length>2000)throw Error('请输入搜索内容');
     const engine=[...builtinSearchEngines,...settings.search.webEngines].find(item=>item.id===id);

@@ -1,8 +1,10 @@
 import type {SearchEntry} from '../shared/search';
-import {esc,icon} from './ui';
+import {esc,icon,registerIcons} from './ui';
+import {Globe} from 'lucide';
+registerIcons({'search-url':Globe});
 import {hydrateIconRows} from './shell-icons';
 
-const identity=(item:SearchEntry)=>(item.launchKind||'file')+':'+item.path.toLowerCase();
+const identity=(item:SearchEntry)=>(item.launchKind||'file')+':'+(item.launchKind==='url'?item.path:item.path.toLowerCase());
 type Row={element:HTMLElement;symbol:HTMLElement;name:HTMLElement;path:HTMLElement;shortcut:HTMLElement|null;markup:string;preview:HTMLButtonElement|null;reveal:HTMLButtonElement|null};
 
 /** Keep row, icon and tooltip targets alive across updates to the same search. */
@@ -61,7 +63,7 @@ export class SearchResults {
    if(!row){
     const element=document.createElement('div');element.className='search-result';element.role='option';element.setAttribute('aria-selected','false');element.id='search-result-'+ ++this.serial;element.draggable=!item.launchKind;
     if(!item.launchKind)element.dataset.dragPath=item.path;
-    element.innerHTML=`<span class="result-icon" ${item.launchKind&&item.launchKind!=='app'?'':`data-file-icon="${esc(item.path)}"`}>${icon(item.launchKind==='action'?'arrow':item.launchKind==='setting'?'settings':item.launchKind==='app'?'window':item.directory?'folder':'file')}</span><div class="result-name"><strong></strong><span></span></div>${this.embedded?'<kbd class="result-shortcut"></kbd>':''}${!item.launchKind?`<div class="search-row-actions"><button class="icon-button quiet" data-preview data-tooltip="预览">${icon('preview')}</button><button class="icon-button quiet" data-reveal data-tooltip="在资源管理器中显示">${icon('folder')}</button></div>`:''}`;
+    element.innerHTML=`<span class="result-icon" ${item.launchKind&&item.launchKind!=='app'?'':`data-file-icon="${esc(item.path)}"`}>${icon(item.launchKind==='url'?'search-url':item.launchKind==='action'?'arrow':item.launchKind==='setting'?'settings':item.launchKind==='app'?'window':item.directory?'folder':'file')}</span><div class="result-name"><strong></strong><span></span></div>${this.embedded?'<kbd class="result-shortcut"></kbd>':''}${!item.launchKind?`<div class="search-row-actions"><button class="icon-button quiet" data-preview data-tooltip="预览">${icon('preview')}</button><button class="icon-button quiet" data-reveal data-tooltip="在资源管理器中显示">${icon('folder')}</button></div>`:''}`;
     row={element,symbol:element.querySelector('.result-icon')!,name:element.querySelector('strong')!,path:element.querySelector('.result-name>span')!,shortcut:element.querySelector('kbd'),markup:'',preview:element.querySelector('[data-preview]'),reveal:element.querySelector('[data-reveal]')};
     this.rows.set(key,row);newIcons.push(row.symbol);
    }

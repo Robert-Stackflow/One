@@ -1,0 +1,11 @@
+import {writeFile} from 'node:fs/promises';
+const source='https://data.iana.org/TLD/tlds-alpha-by-domain.txt';
+const response=await fetch(source,{signal:AbortSignal.timeout(15000),redirect:'error'});
+if(!response.ok)throw Error('IANA TLD download failed: '+response.status);
+const body=await response.text(),version=body.match(/^# Version (\d{10}),/);
+if(!version||body.length>128*1024)throw Error('Unexpected IANA root-zone data');
+const names=body.split(/\r?\n/).filter(line=>line&&!line.startsWith('#'));
+if(names.length<1000||names.length>5000||new Set(names).size!==names.length||names.some(name=>!/^[A-Z][A-Z0-9-]{0,62}$/.test(name)))throw Error('Invalid IANA root-zone labels');
+const rows=[];for(let at=0;at<names.length;at+=8)rows.push('  '+names.slice(at,at+8).map(name=>JSON.stringify(name.toLowerCase())).join(',')+',');
+await writeFile(new URL('../src/shared/url-tlds.ts',import.meta.url),'// IANA root-zone TLDs, version '+version[1]+'.\n// Source: '+source+'\n// Update explicitly: node scripts/update-url-tlds.mjs (no runtime network lookup).\nexport const webTopLevelDomains=new Set([\n'+rows.join('\n')+'\n]);\n');
+console.log('Updated '+names.length+' root-zone TLDs; version '+version[1]+'.');

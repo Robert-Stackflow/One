@@ -12,7 +12,7 @@ export interface MenuBarSettings {top:MenuBarSection;bottom:MenuBarSection}
 export interface MenuBar {top:MenuNode[];bottom:MenuNode[]}
 export interface SavedSearch {id:string;name:string;query:string;filter:string;folder:string;command?:string;result?:string}
 export interface SearchSettings {maxEntries:number;roots:string[];excluded:string[];priorities:IndexPriorityRule[];priorityDefaultsVersion:number;shortcut:string;programShortcut:string;doubleCtrl:boolean;explorerTyping:boolean;explorerMenu:boolean;dialogSwitch:boolean;bookmarks:string[];savedQueries:SavedSearch[];webEngines:SearchWebEngine[];shortcutDisabled:string[];fuzzy:boolean;pinyin:boolean;menu:SearchMenuItem[];menuVersion:number;menuBar:MenuBarSettings}
-export interface SearchEntry {path:string;name:string;directory:boolean;modified:number;size:number;matchKind?:'exact'|'pinyin'|'fuzzy'|'typo';launchKind?:'app'|'setting'|'action';icon?:string;subtitle?:string}
+export interface SearchEntry {path:string;name:string;directory:boolean;modified:number;size:number;matchKind?:'exact'|'pinyin'|'fuzzy'|'typo';launchKind?:'app'|'setting'|'action'|'url';icon?:string;subtitle?:string}
 export interface SearchState {running:boolean;count:number;scanned:number;issues:number;root:string;updated:number;error:string;watching:boolean}
 export interface SearchResult {items:SearchEntry[];total:number;elapsed:number;cancelled?:boolean;partial?:boolean;partialScope?:'global';localTotal?:number}
 export interface SearchProgress {token:string;result:SearchResult}
