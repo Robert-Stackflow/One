@@ -18,7 +18,7 @@ import { TranslationClient } from './translation-client';
 import type { TranslationResult } from '../../shared/recognition/translation';
 import { FormulaClient } from './formula-client';
 import {FormulaLocalRunner} from './formula-local-runner';
-import {FormulaModelStore} from './formula-model-store';
+import {FormulaModels} from './formula-models';
 import {FormulaRuntimeStore} from './formula-runtime-store';
 import {FormulaImageRunner} from './formula-image-runner';
 import {saveFormulaImage} from './formula-image-export';
@@ -93,7 +93,7 @@ export class OCRService {
   readonly translationClient: TranslationClient;
   readonly formulaStore: RecognitionConnectionStore;
   readonly formulaClient: FormulaClient;
-  readonly formulaModels:FormulaModelStore;
+  readonly formulaModels:FormulaModels;
   private formulaNative=new FormulaLocalRunner();
   private formulaRuntime?:FormulaRuntimeStore;
   private ownsFormulaModels:boolean;
@@ -108,14 +108,14 @@ export class OCRService {
     private ctx: RecognitionContext,
     private kind: 'ocr' | 'formula' = 'ocr',
     runtimes?:LlamaRuntimeStore,
-    formulaModels?:FormulaModelStore,
+    formulaModels?:FormulaModels,
   ) {
     this.models = new OCRModels(join(directory, 'models'));
     this.runner = new OCRRunner(this.models);
     const transport:typeof fetch=(input,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(String(input),options);
     this.ownsFormulaModels=!formulaModels;
     if(!formulaModels)this.formulaRuntime=new FormulaRuntimeStore(join(directory,'..','models','runtimes','formula'),transport);
-    this.formulaModels=formulaModels||new FormulaModelStore(join(directory,'..','models','formula'),this.formulaRuntime!,{transport});
+    this.formulaModels=formulaModels||new FormulaModels(join(directory,'..','models','formula'),this.formulaRuntime!,transport);
     this.ownsRuntimes=!runtimes;this.runtimes=runtimes||new LlamaRuntimeStore(join(directory,'..','models','runtimes','llama'),transport);
     const helper=process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined;
     this.localModels = new LocalModelManager(join(directory, '..'), this.models,transport,
@@ -337,9 +337,9 @@ export class OCRService {
           if(selected.modelId!=='service'){
             if(revision!==await this.localModels.settingsRevision())throw Error('公式模型设置已改变，请重新识别');
             const device=selected.device.mode==='gpu'?resolveInferenceDevice(selected.device,await readInferenceDevices(abort.signal,process.env.ONE_TEST_MODE==='1'?process.env.ONE_INFERENCE_MONITOR:undefined),384*384):{backend:'cpu' as const};
-            const release=this.localModels.use(selected.modelId);let lease:Awaited<ReturnType<FormulaModelStore['acquire']>>|undefined;
+            const release=this.localModels.use(selected.modelId);let lease:Awaited<ReturnType<FormulaModels['acquire']>>|undefined;
             try{
-              lease=await this.formulaModels.acquire(abort.signal);abort.signal.throwIfAborted();
+              lease=await this.formulaModels.acquire(selected.modelId,abort.signal);abort.signal.throwIfAborted();
               if(lease.model.id!==selected.modelId)throw Error('公式模型与准备缓存不匹配');
               if(generation!==this.token||serial!==this.formulaSerial||ctx.blocked())throw Error('公式识别已取消');
               const result=await this.formulaNative.run(source,lease.model,{device:selected.device.mode,deviceId:'gpu' in device?device.gpu!.deviceId:0,automaticBackend:device.backend},progress=>{if(generation===this.token&&serial===this.formulaSerial)this.progress=progress;});

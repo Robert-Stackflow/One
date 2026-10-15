@@ -26,6 +26,11 @@ PRESETS = {
         256845006,
         "e464f94412feaa98f8791eacc84684f887b3569e30e80c52b8112e9cf7d4069b",
     ),
+    "PP-FormulaNet_plus-M": (
+        "712e6e2e4c313b1ea163be5c350127b82662c58d",
+        617064962,
+        "f16ef9b5c8227da70d3ec969a5195f4d62c1154427b883f4d6cff07633654041",
+    ),
 }
 
 
@@ -62,9 +67,11 @@ def main():
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--onnx", type=Path)
     args = parser.parse_args()
-    config = yaml.safe_load((args.model_root / "inference.yml").read_text(encoding="utf8"))
+    yaml_file = args.model_root / "inference.yml"
+    config = yaml.safe_load(yaml_file.read_text(encoding="utf8")) if yaml_file.exists() else json.loads((args.model_root / "config.json").read_text(encoding="utf8"))
     name = config["Global"]["model_name"]
     revision, size, sha = PRESETS[name]
+    max_tokens = 2560 if name == "PP-FormulaNet_plus-M" else 1024
     weights = args.model_root / "inference.pdiparams"
     if weights.stat().st_size != size or digest(weights) != sha:
         raise ValueError("Official model weights failed size/SHA-256 validation")
@@ -111,7 +118,7 @@ def main():
         start = time.perf_counter()
         tokens = np.asarray(run()).reshape(-1)
         elapsed = round((time.perf_counter() - start) * 1000)
-        if not np.issubdtype(tokens.dtype, np.integer) or len(tokens) > 1024:
+        if not np.issubdtype(tokens.dtype, np.integer) or len(tokens) > max_tokens:
             raise ValueError("Unexpected output token contract")
         eos = np.flatnonzero(tokens == 2)
         visible = tokens[: int(eos[0]) + 1] if len(eos) else tokens
@@ -122,7 +129,7 @@ def main():
         results.append({"iteration": index, "inferenceMs": elapsed, "tokens": len(tokens), "latex": text,
                         "tokenSha256": hashlib.sha256(tokens.astype("<i8").tobytes()).hexdigest(),
                         "rssMiB": round(memory.rss / 1048576), "peakRssMiB": round(getattr(memory, "peak_wset", memory.rss) / 1048576)})
-    report = {"model": name, "revision": revision, "weightsSha256": sha, "runtime": runtime,
+    report = {"model": name, "revision": revision, "weightsSha256": sha, "maxTokens": max_tokens, "runtime": runtime,
               "inputSha256": digest(args.image), "inputShape": list(pixels.shape), "inputs": inputs,
               "outputs": outputs, "loadMs": loaded_ms, "results": results}
     args.report.parent.mkdir(parents=True, exist_ok=True)

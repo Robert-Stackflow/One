@@ -11,12 +11,12 @@ import { aiModelPath, repairModel, validAiModel } from './image-ai-model';
 import { resolveCUDAInferenceDevice } from './inference-devices';
 import type { LlamaRuntimeStore } from './recognition/llama-runtime-store';
 import { llamaRuntimeProfiles } from './recognition/llama-runtime-catalog';
-import type {FormulaModelStore} from './recognition/formula-model-store';
+import type {FormulaModels} from './recognition/formula-models';
 import {formulaRuntimeProfile} from './recognition/formula-runtime-catalog';
 
 export interface LocalModelManagerOptions {
   runtimes?: LlamaRuntimeStore;
-  formulas?:FormulaModelStore;
+  formulas?:FormulaModels;
   unloadNative?:(id?:string)=>Promise<void>;
 }
 
@@ -107,7 +107,7 @@ export class LocalModelManager {
   }
   private async modelState(id: string, refresh = false, runtimesReady?: Promise<{cpu:boolean;cuda:boolean}>) {
     const model = this.preset(id);
-    if(model.purpose==='formula')return this.options.formulas?this.options.formulas.state():{ready:false,downloadedBytes:0,diskBytes:0,totalBytes:model.artifacts.reduce((sum,file)=>sum+file.bytes,0),downloading:false,inUse:false};
+    if(model.purpose==='formula')return this.options.formulas?this.options.formulas.state(model.id):{ready:false,downloadedBytes:0,diskBytes:0,totalBytes:model.artifacts.reduce((sum,file)=>sum+file.bytes,0),downloading:false,inUse:false};
     // UI reads installed-file metadata only. Download publication and acquire()
     // verify SHA-256; opening/polling a dialog must never stream model weights.
     if (model.purpose === 'ocr') {
@@ -179,7 +179,7 @@ export class LocalModelManager {
     const abort = new AbortController(); this.errors.delete(model.id);this.progress.delete(model.id);
     // The legacy MI-GAN file can migrate without another download.
     const sources: Record<string, string> = model.purpose === 'repair' ? { repair: aiModelPath(this.dataDirectory, repairModel) } : {};
-    const task = (model.purpose==='formula'?(this.options.formulas?this.options.formulas.install(abort.signal,value=>this.progress.set(model.id,value)):Promise.reject(Error('公式模型服务未初始化'))):model.backends.includes('cuda')?this.installNative(model.id,preference,abort.signal):this.store.install(model, abort.signal, value => this.progress.set(model.id, value), sources)).catch(error => {
+    const task = (model.purpose==='formula'?(this.options.formulas?this.options.formulas.install(model.id,abort.signal,value=>this.progress.set(model.id,value)):Promise.reject(Error('公式模型服务未初始化'))):model.backends.includes('cuda')?this.installNative(model.id,preference,abort.signal):this.store.install(model, abort.signal, value => this.progress.set(model.id, value), sources)).catch(error => {
       if (!abort.signal.aborted) this.errors.set(model.id, error instanceof Error ? error.message : '模型下载失败'); throw error;
     }).finally(async () => { this.tasks.delete(model.id); this.states.delete(model.id); await this.modelState(model.id).catch(() => {}); });
     this.tasks.set(model.id, { abort, promise: task });
@@ -220,7 +220,7 @@ export class LocalModelManager {
         await this.options.unloadNative?.(preset.id);
         if(this.usage.get(id))throw Error('模型正在使用，请结束当前任务后删除');
       }
-      if(preset.purpose==='formula'){if(!this.options.formulas)throw Error('公式模型服务未初始化');await this.options.formulas.remove();}else await this.store.remove(preset);
+      if(preset.purpose==='formula'){if(!this.options.formulas)throw Error('公式模型服务未初始化');await this.options.formulas.remove(preset.id);}else await this.store.remove(preset);
       if (preset.purpose === 'repair') {
         const root = await lstat(join(this.dataDirectory, 'models')).catch(error => { if (error.code !== 'ENOENT') throw error; });
         if (root && (!root.isDirectory() || root.isSymbolicLink())) throw Error('旧模型缓存目录无效');

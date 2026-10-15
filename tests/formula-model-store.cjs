@@ -32,6 +32,24 @@ async function main(){
     console.log('Formula model store: shared preparation, scoped cancellation/cleanup, leases, bounded metadata, integrity repair, foreign-file protection, verified publication and offline reuse passed.');
     const combined=[];const missingRuntime={...runtime,state:async()=>({ready:false}),install:async(_signal,report)=>{const total=combined[0].total-artifacts.reduce((sum,file)=>sum+file.bytes,0);for(const received of [0,Math.floor(total/2),total])report({phase:'downloading',received,total});}};
     const combinedStore=new FormulaModelStore(path.join(testRoot,'combined'),missingRuntime,{transport:offline,profile,build:builder});stores.push(combinedStore);await combinedStore.install(new AbortController().signal,value=>combined.push({...value}),sources);assert.ok(combined.every((item,index)=>item.total===combined[0].total&&(!index||item.received>=combined[index-1].received)));assert.equal(combined.at(-1).received,combined.at(-1).total);
+    if(process.argv.includes('--medium')){
+      await Promise.all(['formula-runtime-store','formula-models','formula-model-catalog','formula-local-runner','formula-local-worker'].map(name=>build({...options,entryPoints:['src/main/recognition/'+name+'.ts'],outfile:path.join(testRoot,name+'.cjs')})));
+      const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{FormulaModels}=require(path.join(testRoot,'formula-models.cjs')),{formulaPlusM,formulaPlusS}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));
+      const runtime=new FormulaRuntimeStore(path.join(root,'managed-runtime'),offline),registry=new FormulaModels(path.join(root,'managed-models'),runtime,offline);stores.push(registry,runtime);
+      const smallBefore=await registry.state(formulaPlusS.source.id),localSources=Object.fromEntries(formulaPlusM.source.artifacts.map(file=>[file.role,path.join(root,'plus-m',file.name)]));
+      assert.throws(()=>registry.acquire('unknown'),/未适配/);
+      const started=Date.now();await registry.install(formulaPlusM.source.id,new AbortController().signal,undefined,localSources);const lease=await registry.acquire(formulaPlusM.source.id);
+      const runner=new FormulaLocalRunner(path.join(testRoot,'formula-local-worker.cjs'));
+      try{
+        assert.equal(lease.model.id,formulaPlusM.source.id);assert.equal(lease.model.onnx.sha256,formulaPlusM.output.sha256);assert.equal((await registry.state(formulaPlusS.source.id)).ready,smallBefore.ready);
+        const png=await fs.readFile(path.join(root,'official-sample.png')),reference=JSON.parse(await fs.readFile(path.join(root,'plus-m/paddle-cpu.json'),'utf8')),results=[];
+        for(const [device,deviceId] of [['cpu',0],['gpu',0],['gpu',1],['cpu',0]]){
+          const start=Date.now(),result=await runner.run(png,lease.model,{device,deviceId});assert.equal(result.text,reference.results[0].latex);assert.equal(result.actualBackend,device==='cpu'?'cpu':'dml');results.push({device,deviceId,elapsedMs:Date.now()-start,peakRSSMiB:result.peakRSSMiB});
+        }
+        await fs.writeFile(path.join(root,'plus-m/managed-runtime.json'),JSON.stringify({elapsedMs:Date.now()-started,results},null,2));
+        console.log('Actual plus-M registry: fixed conversion/hash/checker, independent S/M ownership, CPU → NVIDIA → AMD → CPU with official Paddle text parity passed.');
+      }finally{await runner.close();lease.release();}
+    }
     if(process.argv.includes('--runtime')){
       await Promise.all(['formula-runtime-store','formula-model-catalog','formula-model-builder','formula-local-runner','formula-local-worker'].map(name=>build({...options,entryPoints:['src/main/recognition/'+name+'.ts'],outfile:path.join(testRoot,name+'.cjs')})));
       const {FormulaRuntimeStore}=require(path.join(testRoot,'formula-runtime-store.cjs')),{formulaPlusS}=require(path.join(testRoot,'formula-model-catalog.cjs')),{FormulaLocalRunner}=require(path.join(testRoot,'formula-local-runner.cjs'));

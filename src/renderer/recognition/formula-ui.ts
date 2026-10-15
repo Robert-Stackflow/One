@@ -15,7 +15,7 @@ export function mountFormula(
   changed: () => void|Promise<void>,
   options:{rotation:()=>TextRotation;busy:(value:boolean)=>void}={rotation:()=>0,busy:()=>{}},
 ) {
-  let processing=false,operation='',previewReady=false;
+  let processing=false,switching=false,operation='',previewReady=false;
   let mode = false,
     requesting = false,
     config: TranslationConfig | undefined,
@@ -29,7 +29,7 @@ export function mountFormula(
     previewState = q('formula-preview-status');
   let confidence:{token:string;text:string;revision:string;native:boolean;value:number}|undefined;
   editor.maxLength = FORMULA_TEXT;
-  const busy = () => requesting||processing || !!state()?.formulaRecognizing||!!state()?.formulaProcessing;
+  const busy = () => switching||requesting||processing || !!state()?.formulaRecognizing||!!state()?.formulaProcessing;
   const local=()=>!!state()?.formulaLocal&&state()!.formulaLocal!.choice.modelId!=='service';
   const source=q<HTMLSelectElement>('formula-source');
   const models=mountLocalModels(api,async()=>{await changed();render();},'formula');
@@ -49,13 +49,13 @@ export function mountFormula(
   document.addEventListener('pointerdown',event=>{if(menuOpen&&!menu.contains(event.target as Node)&&!exportButton.contains(event.target as Node))closeMenu();});
   menu.onkeydown=event=>{const buttons=[...menu.querySelectorAll('button')];if(event.key==='Escape'){event.preventDefault();closeMenu(true);}else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(buttons.indexOf(document.activeElement as HTMLButtonElement)+(event.key==='ArrowDown'?1:buttons.length-1))%buttons.length].focus();}else if(event.key==='Tab')closeMenu();};
   source.onchange=async()=>{
-    if(busy())return;try{
-      if(source.value==='local'&&!local()){
+    if(busy()){render();return;}const requested=source.value;switching=true;render();try{
+      if(requested==='local'&&!local()){
         const snapshot=await api.localModels(),previous=snapshot.choices.formulaPrevious;
         if(previous&&snapshot.entries.find(entry=>entry.id===previous.modelId)?.ready){await api.saveLocalModel('formula',previous,snapshot.revision);await changed();}else await models();
       }
-      else if(source.value==='service'&&local()){await api.saveLocalModel('formula',{modelId:'service',device:{mode:'auto'}},state()!.formulaLocal!.revision);await changed();}
-    }catch(error){message(error);}finally{render();}
+      else if(requested==='service'&&local()){await api.saveLocalModel('formula',{modelId:'service',device:{mode:'auto'}},state()!.formulaLocal!.revision);await changed();}
+    }catch(error){message(error);}finally{switching=false;render();}
   };
   function render() {
     const active = busy(),
@@ -83,7 +83,7 @@ export function mountFormula(
     if(!native)source.title=q('formula-configure').title;
     q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : native?(state()?.models.ready?'在本机识别当前图片':'请先在“公式模型”中下载并使用模型'):'发送当前图片并识别公式';
     q('formula-configure').hidden=native;
-    q('image-loading').hidden = !active;
+    q('image-loading').hidden = !active||switching;
     q('formula-loading-label').textContent=state()?.waitingForInference?'等待本地任务':operation||'识别中';
     q('source').parentElement!.ariaBusy = String(active);
     if (notice) { message(notice); notice = ''; }

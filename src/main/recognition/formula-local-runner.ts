@@ -5,6 +5,7 @@ import {formulaOutput,FORMULA_IMAGE} from '../../shared/recognition/formula';
 import {localInference,type LocalInferenceScheduler,type LocalInferenceClient} from '../local-inference-scheduler';
 import {limitChildProcess} from '../capture/native';
 import type {FormulaLocalJob,FormulaLocalPreferences,FormulaLocalResult,FormulaModelFiles} from './formula-local';
+import {formulaProfiles} from './formula-model-catalog';
 class FormulaProcessError extends Error {constructor(message:string,readonly kind:string){super(message);}}
 /** An owner-bound cache. Cancellation waits for process exit before scheduler admission changes. */
 export class FormulaLocalRunner {
@@ -40,7 +41,7 @@ export class FormulaLocalRunner {
     return task.finally(()=>{input.fill(0);if(this.active===task){this.active=undefined;this.abort=undefined;if(!this.closed){this.idle=setTimeout(()=>void this.terminate(),this.idleMs);this.idle.unref();}}});
   }
   private async execute(png:Buffer,model:FormulaModelFiles,prefs:FormulaLocalPreferences,backend:'cpu'|'dml',signal:AbortSignal,progress:(value:number,phase:string)=>void){
-    await this.terminating;signal.throwIfAborted();const memoryMiB=prefs.memoryMiB??2048,identity=JSON.stringify([model,backend,prefs.deviceId,memoryMiB]);
+    await this.terminating;signal.throwIfAborted();const memoryMiB=prefs.memoryMiB??formulaProfiles.find(profile=>profile.source.id===model.id)?.memoryMiB??2048,identity=JSON.stringify([model,backend,prefs.deviceId,memoryMiB]);
     if(this.child&&this.identity!==identity)await this.terminate();signal.throwIfAborted();
     if(!this.child){
       const child=this.child=fork(this.worker,[],{execArgv:['--max-old-space-size=256'],serialization:'advanced',windowsHide:true,stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});

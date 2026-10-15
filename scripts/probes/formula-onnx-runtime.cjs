@@ -30,7 +30,7 @@ async function main(){
     const loaded=Math.round(performance.now()-started),tensor=new ort.Tensor('float32',new Float32Array(pixels.buffer,pixels.byteOffset,pixels.length/4),[1,1,384,384]),results=[];
     for(let index=0;index<2;index++){
       const start=performance.now(),values=await session.run({[session.inputNames[0]]:tensor}),output=values[session.outputNames[0]];
-      assert.equal(output.type,'int64');assert.ok(output.data.length>0&&output.data.length<=1024);
+      assert.equal(output.type,'int64');assert.ok(output.data.length>0&&output.data.length<=(config.Global.model_name==='PP-FormulaNet_plus-M'?2560:1024));
       const tokenSha256=createHash('sha256').update(Buffer.from(output.data.buffer,output.data.byteOffset,output.data.byteLength)).digest('hex');assert.equal(tokenSha256,reference.results[0].tokenSha256);
       const text=decode(output.data,config);assert.equal(text,reference.results[0].latex);
       katex.renderToString(text,{throwOnError:true,trust:false});

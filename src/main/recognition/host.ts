@@ -7,7 +7,7 @@ import type {SensitiveAPI} from '../../shared/recognition/sensitive-api';
 import type {MaterialsService} from '../materials/service';
 import {LlamaRuntimeStore} from './llama-runtime-store';
 import {FormulaRuntimeStore} from './formula-runtime-store';
-import {FormulaModelStore} from './formula-model-store';
+import {FormulaModels} from './formula-models';
 
 /** One owns the profile, window, requests and cancellation across feature entry points. */
 export class RecognitionHost {
@@ -19,12 +19,12 @@ export class RecognitionHost {
   private stopping?:Promise<void>;
   private runtimes:LlamaRuntimeStore;
   private formulaRuntime:FormulaRuntimeStore;
-  private formulaModels:FormulaModelStore;
+  private formulaModels:FormulaModels;
   constructor(directory:string,private materials:MaterialsService,private context:Omit<RecognitionContext,'protect'|'background'> & {createFormulaWindow():BrowserWindow}){
     const protect=(file:string)=>{materials.library.protect(file);const local=relative(resolve(directory),resolve(file));if(!local||!isAbsolute(local)&&local!=='..'&&!local.startsWith('..'+sep))throw Error('请保存到 One 数据目录之外');};
     this.runtimes=new LlamaRuntimeStore(join(directory,'models','runtimes','llama'),(input,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(String(input),options));
     const transport:typeof fetch=(input,options)=>session.fromPartition('one-model-download',{cache:false}).fetch(String(input),options);
-    this.formulaRuntime=new FormulaRuntimeStore(join(directory,'models','runtimes','formula'),transport);this.formulaModels=new FormulaModelStore(join(directory,'models','formula'),this.formulaRuntime,{transport});
+    this.formulaRuntime=new FormulaRuntimeStore(join(directory,'models','runtimes','formula'),transport);this.formulaModels=new FormulaModels(join(directory,'models','formula'),this.formulaRuntime,transport);
     this.formula=new OCRService(join(directory,'recognition'),{...context,protect,createWindow:()=>context.createFormulaWindow(),blocked:()=>this.closing||context.blocked(),background:task=>this.track(task)},'formula',this.runtimes,this.formulaModels);
     this.service=new OCRService(join(directory,'recognition'),{...context,protect,openFormula:(png,title)=>this.run(()=>this.formula.openCapture(png,title)),blocked:()=>this.closing||context.blocked(),background:task=>this.track(task)},'ocr',this.runtimes,this.formulaModels);
     this.sensitive={scanSensitive:(owner,png)=>this.run(()=>this.service.sensitive.run(owner,png)),cancelSensitive:owner=>this.service.sensitive.cancel(owner)};

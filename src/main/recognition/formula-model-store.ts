@@ -26,7 +26,7 @@ export class FormulaModelStore {
   constructor(root:string,private readonly runtime:Runtime,options:Options={}){
     root=resolve(root);this.profile=structuredClone(options.profile||formulaPlusS);const sourceKey=localModelIdentity(this.profile.source);
     const output=this.profile.output;
-    if(!/^[a-z0-9._-]{1,80}$/.test(this.profile.recipe)||!Number.isSafeInteger(output.bytes)||output.bytes<1||output.bytes>512*1024*1024||!/^[a-f0-9]{64}$/.test(output.sha256)||!/^[a-z0-9][a-z0-9._-]{0,80}$/.test(output.name)||!this.profile.source.artifacts.some(file=>file.role==='config'&&file.name==='config.json'))throw Error('公式准备配方无效');
+    if(!/^[a-z0-9._-]{1,80}$/.test(this.profile.recipe)||!Number.isSafeInteger(output.bytes)||output.bytes<1||output.bytes>1024*1024*1024||!/^[a-f0-9]{64}$/.test(output.sha256)||!/^[a-z0-9][a-z0-9._-]{0,80}$/.test(output.name)||!this.profile.source.artifacts.some(file=>file.role==='config'&&file.name==='config.json'))throw Error('公式准备配方无效');
     const key=sourceKey+'-'+digest(JSON.stringify([this.profile.recipe,output,formulaRuntimeProfile.revision,formulaRuntimeProfile.manifestSha256])).slice(0,16);
     this.parent=join(root,'prepared');this.installed=join(this.parent,key);this.sources=new LocalModelStore(join(root,'sources'),options.transport);this.builder=options.build||buildFormulaModel;
     this.marker={app:'One',kind:'formula-model',schema:1,key,recipe:this.profile.recipe};
@@ -86,7 +86,7 @@ export class FormulaModelStore {
       await directory(dirname(this.parent),true);await directory(this.parent,true);temporary=await mkdtemp(join(this.parent,'.preparing-'));
       await writeFile(join(temporary,'.prepared.json'),JSON.stringify(this.marker),{flag:'wx'});
       progress({phase:'verifying',received:total,total,artifact:'准备公式模型'});
-      await this.builder({executable:runtime.executable,source:dirname(weights.files[0].path),destination:temporary,signal});signal.throwIfAborted();
+      await this.builder({executable:runtime.executable,source:dirname(weights.files[0].path),destination:temporary,signal,recipe:this.profile.recipe});signal.throwIfAborted();
       await copyFile(weights.files.find(file=>file.role==='config')!.path,join(temporary,'config.json'));await this.verify(temporary,signal);
       if(this.closed||this.users)throw Error('公式模型服务状态已改变');
       let exists=false;try{await lstat(this.installed);exists=true;}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
