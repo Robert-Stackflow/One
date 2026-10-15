@@ -56,7 +56,7 @@ export class ScrollSettle {
     if((right-left)*(bottom-top)>16*24*.06||right-left>8||bottom-top>12)return;
     return {left,right,top,bottom};
   }
-  observe(frame: PixelFrame, now: number): boolean {
+  observe(frame: PixelFrame, now: number,quietMs=280): boolean {
     if (
       frame.width !== this.width ||
       frame.height !== this.height ||
@@ -129,6 +129,6 @@ export class ScrollSettle {
     // behind a series of individually small changes.
     this.samples++;
     if(learning&&changed)return false;
-    return this.samples >= (local?4:3) && now - this.since >= (local?420:280);
+    return this.samples >= (local?4:3) && now - this.since >= (local?420:quietMs);
   }
 }

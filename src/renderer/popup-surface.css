@@ -15,7 +15,7 @@
   .archive-more-menu, .breadcrumb-menu, .confirmation-popover, .lock-path-popover,
   .preview-open-popover, .menu-add-popup, .command-picker, .picker-options,
   .dialog-companion-shell, .menu-preview-surface,
-  .echo-position-panel, .toast, .scroll-floating-panel, #tray-menu-notice),
+  .echo-position-panel, .toast, .scroll-floating-panel, .scroll-inspection, #tray-menu-notice),
 body:is([data-view=capture],[data-view=scroll-capture]) .capture-panel {
   border: var(--popup-border);
   box-shadow: var(--popup-shadow);
@@ -30,6 +30,7 @@ body:is([data-view=capture],[data-view=scroll-capture]) .capture-panel {
    Release it after entry so fixed descendants keep their viewport coordinates.
    Anchored popovers and feedback use these same tokens through Web Animations. */
 dialog[open]:not(.closing),
+details.scroll-floating-panel[open],
 [popover]:popover-open:not(.anchored-popover):not(.feedback-motion),
 :where(.map-tooltip, .disk-context, .color-ruler-menu, .archive-more-menu,
   .breadcrumb-menu, .lock-path-popover, .preview-open-popover, .menu-add-popup,

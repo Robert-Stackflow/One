@@ -1364,6 +1364,7 @@ async function start() {
     dark:()=>{const value=themeAutomation?.appearance()||settings.appearance;return value.mode==='dark'||value.mode==='system'&&nativeTheme.shouldUseDarkColors;},
   },()=>{if(main&&!main.isDestroyed())main.webContents.send('one:pins-changed');},error=>runtimeError(app.getPath('userData'),'pins',error));
   capture=new CaptureHost(app.getPath('userData'),{
+    prepareScroll:id=>scrollCapture?.service.prepare(id),releaseScroll:()=>scrollCapture?.service.releasePrepared(),
     scroll:(region,windows,mask)=>{if(!scrollCapture)throw Error('长截图尚未就绪');return scrollCapture.openRegion(region,windows,mask);},
     ...annotationPreferences,
     createWindow:options=>windowFor('capture',{minWidth:1,minHeight:1,roundedCorners:false,...options},'',false),

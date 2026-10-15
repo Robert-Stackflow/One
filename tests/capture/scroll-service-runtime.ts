@@ -34,13 +34,14 @@ export class BrowserWindow extends EventEmitter {
   hides=0;
   webContents = Object.assign(new EventEmitter(), {
     mainFrame: { url: 'one://app/index.html?view=scroll-capture' },
-    send() {},
+    send:(channel:string)=>{if(channel==='one:scroll-view')queueMicrotask(()=>handlers.get('one:scroll-ready')?.({sender:this.webContents,senderFrame:this.webContents.mainFrame}));},
     setWindowOpenHandler() {},
     async capturePage(){},
   });
   constructor(readonly options?: any) {
     super();
     if(options?.width)this.bounds={x:options.x,y:options.y,width:options.width,height:options.height};
+    if(options?.show===false)this.visible=false;
   }
   isDestroyed() {
     return this.destroyed;
@@ -90,7 +91,7 @@ class Image {
     return Buffer.from(this.pixels);
   }
   toDataURL() {
-    return 'data:image/png;base64,fixture';
+    return 'data:image/png;base64,'+this.toPNG().toString('base64');
   }
   toPNG() {
     const header = Buffer.alloc(8);

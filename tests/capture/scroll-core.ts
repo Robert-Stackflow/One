@@ -6,6 +6,7 @@ import {scrollDefaults} from '../../src/shared/capture/scroll-capture';
 import {NativePixelReader,FRAME_PIXEL_LIMIT} from '../../src/shared/capture/native-pixels';
 import {Worker} from 'node:worker_threads';
 import {join} from 'node:path';
+import {ScrollFramePump} from '../../src/main/capture/scroll-frame-pump';
 import {ScrollMotion} from '../../src/shared/capture/scroll-motion';
 import {scrollSearchCandidates} from '../../src/shared/capture/scroll-search';
 import sharp from 'sharp';
@@ -204,16 +205,36 @@ test('native packed pixels survive arbitrary pipe splits and reject invalid layo
 
 test('worker owns transferred raw frames, commits only staged frames and skips unchanged previews',async()=>{
   const worker=new Worker(join(__dirname,'capture/scroll-worker.cjs'));let serial=0;
-  const command=(kind:string,value?:unknown,transfer:ArrayBuffer[]=[])=>new Promise<any>((resolve,reject)=>{const id=++serial;worker.once('message',message=>{assert.equal(message.id,id);message.error?reject(Error(message.error)):resolve(message);});worker.postMessage({id,kind,value},transfer);});
+  const command=(kind:string,value?:unknown,transfer:ArrayBuffer[]=[],encodePreview=false)=>new Promise<any>((resolve,reject)=>{const id=++serial;worker.once('message',message=>{assert.equal(message.id,id);message.error?reject(Error(message.error)):resolve(message);});worker.postMessage({id,kind,value,encodePreview},transfer);});
   try{
     await command('configure',{options:scrollDefaults(),source:{width:96,height:160}});
     const frame=scrollPixels(96,160),original=frame.pixels.slice(),staging=command('stage',{frame,monitored:false},[frame.pixels.buffer as ArrayBuffer]);assert.equal(frame.pixels.byteLength,0);assert.equal((await staging).stable,true);
     const first=await command('commit');assert.equal(first.result.count,1);assert.ok(first.preview);
     const same=scrollPixels(96,160);await command('stage',{frame:same,monitored:false},[same.pixels.buffer as ArrayBuffer]);const unchanged=await command('commit');assert.equal(unchanged.result.match,'unchanged');assert.equal(unchanged.preview,null);
     const next=scrollPixels(96,160,0,39);await command('stage',{frame:next,monitored:false},[next.pixels.buffer as ArrayBuffer]);await command('release-frame');await assert.rejects(command('commit'),/已失效/);
+    const encoded=await command('preview',undefined,[],true);assert.equal(encoded.preview,undefined);
+    const decoded=await sharp(Buffer.from(encoded.previewImage.split(',')[1],'base64')).ensureAlpha().raw().toBuffer(),rgba=original.slice();
+    for(let i=0;i<rgba.length;i+=4){const blue=rgba[i];rgba[i]=rgba[i+2];rgba[i+2]=blue;}
+    assert.deepEqual(new Uint8Array(decoded),rgba);
     const output=await command('output');assert.deepEqual(output.output.pixels,original);assert.equal(output.output.height,160);
   }finally{await worker.terminate();}
 });
+test('encoded previews reply independently while chronological batches retain the forward peak before reversal',async()=>{
+  const worker=new Worker(join(__dirname,'capture/scroll-worker.cjs')),pending=new Map<number,{resolve:(value:any)=>void;reject:(error:Error)=>void}>();let serial=0;
+  const previews:any[]=[];
+  worker.on('message',message=>{if(message.event){assert.equal(message.event,'preview');previews.push(message);return;}const job=pending.get(message.id)!;pending.delete(message.id);message.error?job.reject(Error(message.error)):job.resolve(message);});
+  const command=(kind:string,value?:unknown)=>new Promise<any>((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});worker.postMessage({id,kind,value,encodePreview:true});});
+  try{
+    await command('configure',{options:{...scrollDefaults(),autoFixed:false},source:{width:500,height:800}});
+    const first=await command('sample',scrollPixels(500,800));assert.equal(first.previewQueued,true);assert.equal(first.previewImage,undefined);
+    const batch=await command('track-batch',{frames:[100,200,120].map(offset=>scrollPixels(500,800,0,offset)),preview:false});
+    assert.equal(batch.result.height,1000);assert.equal(batch.result.match,'backwards');assert.equal(batch.result.count,3);
+    const flush=await command('preview');assert.ok(flush.previewImage.startsWith('data:image/png;base64,'));assert.ok(previews.length>0);
+    const output=await command('output');assert.deepEqual(output.output,scrollPixels(500,1000));
+    const undone=await command('undo');assert.equal((await sharp(Buffer.from(undone.previewImage.split(',')[1],'base64')).metadata()).height,540);assert.deepEqual((await command('output')).output,scrollPixels(500,900));
+  }finally{await worker.terminate();}
+});
+
 function scrollPixels(width: number, height: number, x = 0, y = 0) {
   const pixels = new Uint8Array(width * height * 4);
   for (let row = 0; row < height; row++)
@@ -326,6 +347,52 @@ test('moving frames preserve exact continuous content and reject a corrupt inter
     }
     assert.deepEqual(engine.output(),scrollPixels(vertical?96:550,vertical?550:96));
   }
+});
+
+test('large viewports keep the furthest content through reverse travel and resume without a pending candidate',()=>{
+  const width=800,height=900,engine=new ScrollStitch();engine.configure({...scrollDefaults(),autoFixed:false},{width,height});engine.sample(scrollPixels(width,height));
+  for(const offset of [120,360,700,1100,1700])assert.equal(engine.sample(scrollPixels(width,height,0,offset),[],true).match,'accepted');
+  const before=engine.output();
+  for(const offset of [1550,1000,400,0,400,1000,1600,1700]){engine.sample(scrollPixels(width,height,0,offset),[],true);assert.equal(engine.status().pending,false);assert.deepEqual(engine.output(),before);}
+  assert.equal(engine.sample(scrollPixels(width,height,0,2200),[],true).match,'accepted');assert.deepEqual(engine.output(),scrollPixels(width,height+2200));
+});
+
+test('hover bands return the full original width around the requested rows without changing the stitched result',()=>{
+  for(const axis of ['vertical','horizontal'] as const){
+    const vertical=axis==='vertical',width=vertical?96:160,height=vertical?160:96,engine=new ScrollStitch();engine.configure({...scrollDefaults(),axis,autoFixed:false},{width,height});engine.sample(scrollPixels(width,height));engine.sample(scrollPixels(width,height,vertical?0:39,vertical?39:0));
+    const before=engine.output(),band=engine.preview({y:15,height:60})!;assert.equal(band.width,before.width);assert.equal(band.height,60);assert.deepEqual(band.pixels,before.pixels.slice(15*before.width*4,75*before.width*4));assert.deepEqual(engine.output(),before);
+  }
+});
+
+test('cached whole previews avoid disk row reads while hover bands retain original pixels',async()=>{
+  const lease=await createScrollDirectory(process.env.ONE_SCROLL_TEST_ROOT!),disk=new ScrollDiskStorage(lease.directory,lease.token);
+  try{
+    let reads=0;const rows=disk.rows.bind(disk);disk.rows=(...args)=>{reads++;return rows(...args);};
+    const engine=new ScrollStitch(disk);engine.configure({...scrollDefaults(),autoFixed:false},{width:500,height:160});
+    engine.sample(scrollPixels(500,160));engine.sample(scrollPixels(500,160,0,80));
+    assert.equal(engine.preview()!.width,300);assert.equal(reads,0);assert.ok(engine.storageStats().thumbnailBytes>0);
+    const band=engine.preview({y:100,height:60})!;assert.ok(reads>0);
+    assert.deepEqual(band,scrollPixels(500,60,0,100));assert.deepEqual(engine.output(),scrollPixels(500,240));
+  }finally{disk.reset();await cleanScrollDirectory(lease);}
+});
+
+test('complete pixel overlaps distinguish repeated paragraphs when robust sampled scores hide their identifiers',()=>{
+  const width=320,height=600;
+  const frame=(offset:number,rows=height)=>{const pixels=new Uint8Array(width*rows*4);pixels.fill(255);for(let y=0;y<rows;y++){const global=y+offset,phase=global%90;for(let x=20;x<280;x++)if(phase>=16&&phase<34&&phase%3!==2&&Math.floor(x/5)%2===0){const i=(y*width+x)*4;pixels[i]=pixels[i+1]=pixels[i+2]=30;}const i=(y*width+318)*4;pixels[i]=pixels[i+1]=pixels[i+2]=40+Math.floor(global/90)*13;}return {width,height:rows,pixels};};
+  const engine=new ScrollStitch();engine.configure({...scrollDefaults(),autoFixed:false},{width,height});const first=frame(0),next=frame(135);engine.sample(first);
+  assert.equal((engine as any).score(first.pixels,next.pixels,135,true),0);assert.equal((engine as any).score(first.pixels,next.pixels,45,true),0);
+  assert.equal(engine.sample(next,[],true).match,'accepted');assert.deepEqual(engine.output(),frame(0,735));
+  const before=engine.output();assert.equal(engine.sample(frame(45),[],true).match,'backwards');assert.deepEqual(engine.output(),before);assert.equal(engine.sample(frame(225),[],true).match,'accepted');assert.deepEqual(engine.output(),frame(0,825));
+});
+
+test('frame producer captures bridges while matching is busy and releases bounded queued pixels',async()=>{
+  const frames:ReturnType<typeof scrollPixels>[]=[],pump=new ScrollFramePump(32*1024*1024,async()=>{const frame=scrollPixels(8,8,0,frames.length);frames.push(frame);return frame;},()=>true);
+  try{
+    await new Promise(resolve=>setTimeout(resolve,110));assert.equal(frames.length,pump.capacity);assert.equal(pump.capacity,3);
+    const first=await pump.next();assert.equal(first,frames[0]);first!.pixels.fill(0);
+    await new Promise(resolve=>setTimeout(resolve,35));assert.equal(frames.length,4);
+  }finally{await pump.close();}
+  assert.ok(frames.every(frame=>frame.pixels.every(value=>value===0)));
 });
 
 test('scrolling capture preserves exact pixels across irregular vertical and horizontal overlaps, undo and backtracking', () => {

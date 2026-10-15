@@ -10,11 +10,10 @@ body[data-view='scroll-capture'] .scroll-icon{width:32px;min-height:32px;padding
 body[data-view='scroll-capture'] #message{font-size:12px;line-height:1.5;margin:0 0 6px;overflow-wrap:anywhere}
 body[data-view='scroll-capture'] .scroll-settings>*,body[data-view='scroll-capture'] .scroll-settings details>*{margin-bottom:10px}
 body[data-view='scroll-capture'] .scroll-settings summary{font-size:12px;cursor:pointer;color:var(--muted)}
-body[data-view='scroll-capture'] .scroll-settings label,body[data-view='scroll-capture'] .scroll-pending label{display:grid;gap:6px;font-size:13px;font-weight:400;min-width:0}
+body[data-view='scroll-capture'] .scroll-settings label{display:grid;gap:6px;font-size:13px;font-weight:400;min-width:0}
 body[data-view='scroll-capture'] .field-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 body[data-view='scroll-capture'] .help{font-size:12px;line-height:1.5;color:var(--muted)}
-body[data-view='scroll-capture'] .scroll-pending{border-top:1px solid var(--line);padding-top:12px}
-body[data-view='scroll-capture'] .scroll-preview{position:absolute;display:flex;min-width:0;overflow:hidden;background:transparent;padding:0;border:0;border-radius:0;box-shadow:none;pointer-events:none}
+body[data-view='scroll-capture'] .scroll-preview{position:absolute;display:flex;min-width:0;overflow:hidden;background:transparent;padding:0;border:0;border-radius:0;box-shadow:none;pointer-events:auto}
 body[data-view='scroll-capture'] #preview-paper{position:relative;display:block;width:100%;height:100%}
 body[data-view='scroll-capture'] #preview{display:block;width:100%;height:100%;object-fit:contain}
 body[data-view='scroll-capture'] #empty{margin:auto;text-align:center}
@@ -26,8 +25,8 @@ body[data-view='scroll-capture'] .scroll-divider{width:1px;height:24px;backgroun
 body[data-view='scroll-capture'] .scroll-floating-panel{position:absolute;z-index:2;overflow:auto;scrollbar-width:thin;padding:16px;background:var(--surface);border-radius:var(--panel-radius);}
 body[data-view='scroll-capture'] .scroll-floating-panel:not([open]){display:none}
 body[data-view='scroll-capture'] .scroll-floating-panel>summary{font-size:14px;font-weight:600;color:var(--fg);cursor:pointer;margin-bottom:16px}
-body[data-view='scroll-capture'] #repair-toggle{color:var(--danger,#b42318)}
-body[data-view='scroll-capture'] .scroll-pending{border:0;padding:0}
 body[data-view='scroll-capture'] #empty{color:white;text-shadow:0 1px 3px #0009}
 body[data-view='scroll-capture'] .scroll-modes{display:flex;background:transparent;padding:0;gap:3px}
 body[data-view='scroll-capture'] #scroll-controls .scroll-modes button{width:auto;min-width:40px;flex-basis:auto;padding:0 7px}
+body[data-view='scroll-capture'] .scroll-inspection{position:absolute;z-index:6;padding:4px;overflow:hidden;pointer-events:none;background:var(--surface);border-radius:var(--panel-radius)}
+body[data-view='scroll-capture'] .scroll-inspection img{display:block;width:100%;height:100%;object-fit:contain}

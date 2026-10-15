@@ -59,6 +59,7 @@ export interface ScrollOptions {
 }
 export type ScrollMatch = 'first' | 'accepted' | 'unchanged' | 'ambiguous' | 'backwards';
 export interface ScrollView {
+  metrics?:{captured:number;processed:number;rejected:number;maxMatchMs:number;started:number};
   overlay?:{selection:ControlRect;controls:ControlRect;preview:ControlRect;panel?:ControlRect;overlap:boolean};
   fixed?:{start:number;end:number};
   recovering:boolean;
@@ -80,19 +81,22 @@ export interface ScrollView {
   message: string;
   preview: string;
 }
+export type ScrollUpdate = Omit<ScrollView,'preview'>&{preview?:string};
 export type ScrollCommand =
-  | {kind:'layout';preview:boolean;settings?:boolean;repair?:boolean}
+  | {kind:'layout';preview:boolean;settings?:boolean}
   | {kind:'restart';options:ScrollOptions}
   | { kind: 'configure'; options: ScrollOptions }
   | { kind: 'sample' | 'manual' | 'auto' | 'pause' | 'undo' | 'finish' | 'edit' | 'copy' | 'save' | 'cancel' }
   | { kind: 'join'; offset: number };
 export interface ScrollAPI {
+  inspect(token:string,position:number|null,bounds?:ControlRect):Promise<void>;
+  onInspection(fn:(value:{image:string})=>void):()=>void;
   tooltip(rect:{x:number;y:number;width:number;height:number}|null):Promise<void>;
   ready():Promise<void>;
   interactive(value:boolean):Promise<void>;
-  state(): Promise<ScrollView>;
+  state(): Promise<ScrollView|null>;
   command(token: string, command: ScrollCommand): Promise<ScrollView | null>;
-  onChange(fn: (state: ScrollView) => void): () => void;
+  onChange(fn: (state: ScrollUpdate) => void): () => void;
   onCloseRequest(fn:(token:string)=>void):()=>void;
   answerClose(token:string,accepted:boolean):Promise<void>;
 }

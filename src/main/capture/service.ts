@@ -73,6 +73,8 @@ interface CaptureRun {
   finish(value: Region | null): void;
 }
 export interface CaptureHost extends AnnotationPreferencesHost {
+  prepareScroll?(displayId:number):void;
+  releaseScroll?():void;
   scroll?(region:Region,windows:BrowserWindow[],mask?:BrowserWindow):Promise<void>;
   createWindow(options:Electron.BrowserWindowConstructorOptions):BrowserWindow;
   register(name:string,handler:(event:Electron.IpcMainInvokeEvent,...args:any[])=>unknown):void;
@@ -1035,6 +1037,7 @@ export class CaptureService {
       if (this.run?.ended) return await result;
       if (this.run?.startupError) throw Error(this.run.startupError);
       overlay.show();
+      if(this.host.scroll&&shot.physical&&!shot.composition)this.host.prepareScroll?.(displayId);
       overlay.focus();
       const displayed = performance.now();
       this.host.timing?.({
@@ -1070,6 +1073,7 @@ export class CaptureService {
         }
       }
       if (generation === this.generation) this.prepare(displayId);
+      if(!transfer&&!retained)this.host.releaseScroll?.();
     }
   }
   private prepareScrollMask(window:BrowserWindow,region:Region){

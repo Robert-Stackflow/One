@@ -8,7 +8,6 @@
     <button id="undo" type="button" class="quiet scroll-icon" title="撤销拼接" aria-label="撤销拼接" disabled></button>
     <button id="preview-toggle" type="button" class="quiet scroll-icon" title="收起预览" aria-label="收起预览"></button>
     <button id="setup-toggle" type="button" class="quiet scroll-icon" title="采集设置" aria-label="采集设置" aria-expanded="false" aria-controls="setup"></button>
-    <button id="repair-toggle" type="button" class="quiet scroll-icon" title="修正衔接" aria-label="修正衔接" aria-expanded="false" aria-controls="repair" hidden></button>
     <span class="scroll-divider capture-divider" role="separator"></span>
     <button id="finish" type="button" hidden disabled>确认已有结果</button>
     <button id="edit" type="button" class="quiet scroll-icon" title="编辑长截图" aria-label="编辑长截图" disabled></button>
@@ -59,19 +58,8 @@
         </details>
         <button id="apply-settings" type="button" class="quiet">应用并重新开始</button>
       </details>
-<details id="repair" data-tooltip-avoid="scroll-region" class="scroll-floating-panel"><summary>修正衔接</summary>      <div id="pending" class="scroll-pending" hidden>
-        <label
-          >本次向前移动距离（像素）<input
-            id="offset"
-            type="number"
-            min="1"
-            step="1"
-            value="1" /></label
-        ><button id="join" type="button" class="quiet">按此距离拼接</button>
-        <p class="help">仅在你确定移动距离时使用。错误距离会产生重复或缺失内容。</p>
-      </div>
-</details>
     <aside class="scroll-preview" data-scroll-interactive aria-label="长截图预览">
       <div id="preview-paper" hidden><img id="preview" alt="拼接结果预览" hidden /><span id="preview-viewport" aria-label="最后采集视口"></span><span id="preview-addition" aria-label="本次新增区域" hidden></span><span id="preview-fixed-start" aria-label="固定开头" hidden></span><span id="preview-fixed-end" aria-label="固定末尾" hidden></span></div>
       <p id="empty" class="help">等待首帧</p>
     </aside>
+    <div id="scroll-inspection" class="scroll-inspection" hidden aria-label="预览区域放大"><img id="inspection-image" alt="预览局部内容" /></div>

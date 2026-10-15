@@ -8,7 +8,7 @@ import {customCaptureFrom,type CustomCapture} from '../../shared/capture/custom-
 import type {CapturePreferences} from '../../shared/capture/settings';
 import type {MaterialsService} from '../materials/service';
 import type {PinsHost} from '../pins/host';
-type Context=Pick<CaptureContext,'createWindow'|'register'|'fonts'|'blocked'|'failed'|'timing'|'saveWatermark'|'sensitive'|'cancelWorkflow'|'annotationStyles'|'saveAnnotationStyle'|'scroll'> & {
+type Context=Pick<CaptureContext,'createWindow'|'register'|'fonts'|'blocked'|'failed'|'timing'|'saveWatermark'|'sensitive'|'cancelWorkflow'|'annotationStyles'|'saveAnnotationStyle'|'scroll'|'prepareScroll'|'releaseScroll'> & {
   settings():CapturePreferences;mainWindow():BrowserWindow|undefined;assertAvailable():void;
   recognize?(png:Buffer,mode?:'ocr'|'translation'|'formula'):Promise<void>;
   translate?(window:BrowserWindow,png:Buffer,owner:string,target:string):Promise<boolean>;

@@ -63,12 +63,14 @@ int wmain(int argc,wchar_t**argv) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASS cls{}; cls.lpfnWndProc = procedure; cls.hInstance = GetModuleHandle(nullptr);
     cls.lpszClassName = L"OneScrollFixture"; cls.hCursor = LoadCursor(nullptr, IDC_ARROW); RegisterClass(&cls);
-    RECT r{0, 0, 480, argc>1&&std::wstring(argv[1])==L"--tall"?640:360}; AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    const bool large=argc>1&&std::wstring(argv[1])==L"--large";
+    RECT r{0, 0, large?1080:480, large?800:argc>1&&std::wstring(argv[1])==L"--tall"?640:360}; AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
     fixture = CreateWindow(cls.lpszClassName, L"One scroll pixel fixture", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
       140, 120, r.right - r.left, r.bottom - r.top, nullptr, nullptr, cls.hInstance, nullptr);
     ShowWindow(fixture, SW_SHOWNORMAL);
-    SetWindowPos(fixture, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-    SetForegroundWindow(fixture); UpdateWindow(fixture); report();
+    if(argc>1&&std::wstring(argv[1])==L"--input")ShowWindow(fixture,SW_HIDE);
+    else {SetWindowPos(fixture, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);SetForegroundWindow(fixture);}
+    UpdateWindow(fixture); report();
     std::thread([] {
         std::string line;
         while (std::getline(std::cin, line)) {
@@ -91,6 +93,9 @@ int wmain(int argc,wchar_t**argv) {
                 SetCursorPos(x,y); INPUT input[2]{}; input[0].type=input[1].type=INPUT_MOUSE;
                 input[0].mi.dwFlags=MOUSEEVENTF_LEFTDOWN; input[1].mi.dwFlags=MOUSEEVENTF_LEFTUP;
                 SendInput(2,input,sizeof(INPUT)); Sleep(80); PostMessage(fixture,WM_APP+5,0,0);
+            }
+            else if(line.starts_with("wheel ")){
+                INPUT input{};input.type=INPUT_MOUSE;input.mi.dwFlags=MOUSEEVENTF_WHEEL;input.mi.mouseData=DWORD(std::stoi(line.substr(6)));SendInput(1,&input,sizeof(INPUT));Sleep(5);PostMessage(fixture,WM_APP+5,0,0);
             }
             else if (line.starts_with("step ")) PostMessage(fixture, WM_APP + 1, std::stoi(line.substr(5)), 0);
             else if (line.starts_with("delay ")) PostMessage(fixture,WM_APP+6,std::stoi(line.substr(6)),0);

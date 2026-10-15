@@ -49,7 +49,7 @@ async function until(predicate: () => boolean) {
     await wait(20);
   }
 }
-async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWindow) {
+async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWindow,warm=false) {
   const workbench = new BrowserWindow(),
     failures: unknown[] = [],
     outputs: Buffer[] = [];
@@ -73,7 +73,16 @@ async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWi
       failures.push(error);
     },
   });
+  let warmed:unknown;
+  if(warm){
+    service.prepare(display.id);warmed=service.window;assert.equal(service.active,false);assert.equal(service.window!.isVisible(),false);
+    const event={sender:service.window!.webContents,senderFrame:service.window!.webContents.mainFrame};
+    assert.equal(await handlers.get('one:scroll-state')!(event),null);
+    await handlers.get('one:scroll-ready')!(event);
+    assert.throws(()=>handlers.get('one:scroll-command')!(event,'invalid',{kind:'sample'}),/拒绝/);
+  }
   await service.open(display.id,false,undefined,startManual,[],mask as any);
+  if(warm)assert.equal(service.window,warmed);
   const control = service.window!,
     native = ScrollNative.current,
     event = {
@@ -85,6 +94,10 @@ async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWi
   const command = (kind: string) => handlers.get('one:scroll-command')!(event, token, { kind });
   return { service, state, command, native, workbench, failures, outputs };
 }
+test('hidden screenshot prewarming permits only readiness and state, then reuses the same surface',async()=>{
+  const f=await fixture(true,false,undefined,true);try{assert.equal(f.service.window!.isVisible(),true);assert.deepEqual(f.failures,[]);}finally{f.service.cancel();await f.service.stopped();}
+});
+
 test('mode switches keep the overlay visible and Escape cancels and releases its shortcut',async()=>{
   const f=await fixture();try{
     const window=f.service.window as unknown as BrowserWindow;
@@ -115,6 +128,16 @@ test('manual sampling stitches moving intermediate frames before the quiet inter
     assert.ok(performance.now()-started<2500);
     assert.equal(f.state().pending,false);assert.equal(f.state().height,160+39*(f.state().count-1));
     assert.equal(f.native.wheels,0,'manual mode never injects scrolling');
+  }finally{f.service.cancel();}
+});
+
+test('hover inspection rejects stale/malformed requests and reads original pixels without editing the result',async()=>{
+  const f=await fixture();try{
+    await f.command('sample');f.native.offset=39;await f.command('sample');const before=f.state().height,window=f.service.window!,event={sender:window.webContents,senderFrame:window.webContents.mainFrame},bounds={x:800,y:200,width:500,height:220};
+    let image='';window.webContents.send=(channel:string,value:any)=>{if(channel==='one:scroll-inspection')image=value.image;};
+    assert.throws(()=>handlers.get('one:scroll-inspect')!(event,'stale',.5,bounds),/失效/);assert.throws(()=>handlers.get('one:scroll-inspect')!(event,f.state().token,NaN,bounds),/位置/);
+    handlers.get('one:scroll-inspect')!(event,f.state().token,.5,bounds);await until(()=>!!image);assert.deepEqual(nativeImage.createFromBuffer(Buffer.from(image.split(',')[1],'base64')).getSize(),{width:96,height:96});assert.equal(f.state().height,before);
+    handlers.get('one:scroll-inspect')!(event,f.state().token,null);assert.equal((f.service as any).inspectBounds,undefined);
   }finally{f.service.cancel();}
 });
 
@@ -165,9 +188,9 @@ test('restarting matching parameters is explicit and clears only the current sti
 test('manual monitoring recovers a large gap and reverse scroll without duplicate pixels or repeated mode clicks',async()=>{
   const f=await fixture(true,true);try{
     await until(()=>f.state().count===1);f.native.offset=39;await until(()=>f.state().count===2);
-    f.native.offset=1000;await until(()=>f.state().recovering&&f.state().pending);const reads=f.native.reads;await until(()=>f.native.reads>reads+3);assert.equal(f.state().phase,'running');assert.equal(f.state().count,2);
+    f.native.offset=1000;await until(()=>f.state().recovering);assert.equal(f.state().pending,false);const reads=f.native.reads;await until(()=>f.native.reads>reads+3);assert.equal(f.state().phase,'running');assert.equal(f.state().count,2);
     f.native.offset=10;await until(()=>f.state().match==='backwards');assert.equal(f.state().offset,-29);assert.equal(f.state().recovering,true);assert.equal(f.state().pending,false);assert.equal(f.state().count,2);
-    f.native.offset=39;await until(()=>f.state().match==='unchanged');assert.equal(f.state().recovering,false);assert.match(f.state().message,/找回/);
+    f.native.offset=39;await until(()=>f.state().match==='unchanged');assert.equal(f.state().recovering,false);
     f.native.offset=59;await until(()=>f.state().count===3);await f.command('pause');await f.command('edit');
     const bytes=Buffer.concat([nativeImage.createFromBuffer(frame(0)).toBitmap(),nativeImage.createFromBuffer(frame(39)).toBitmap().subarray(121*96*4),nativeImage.createFromBuffer(frame(59)).toBitmap().subarray(140*96*4)]);
     assert.deepEqual(f.outputs,[nativeImage.createFromBitmap(bytes,{width:96,height:219}).toPNG()]);assert.equal(f.native.wheels,0);assert.deepEqual(f.failures,[]);
