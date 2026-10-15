@@ -14,6 +14,7 @@ export function mountTranslation(
   state: () => OCRState | undefined,
   message: (value: unknown) => void,
   changed: () => void,
+  options:{configure?:()=>void}={},
 ) {
   let mode = true,
     selectionSource: string | undefined,
@@ -45,7 +46,6 @@ export function mountTranslation(
     q('translation-destination').hidden = true;
     q('translation-result').hidden = !mode;
     q('translation-copy').hidden = !mode;
-    q('ocr-tools').hidden = false;
     q('translation-source-note').textContent = selectionSource === undefined ? '' : '选中文字';
     restore.hidden=selectionSource===undefined||!full;restore.disabled=active||ocr;
     q<HTMLTextAreaElement>('result').readOnly = active || ocr;
@@ -79,7 +79,8 @@ export function mountTranslation(
     },
     error: message,
   });
-  q('translation-configure').onclick = () => void settings.open();
+  const openSettings=()=>options.configure?options.configure():void settings.open();
+  q('translation-configure').onclick = openSettings;
   q('translation-language').onchange = invalidate;
   q('translated').oninput = render;
   async function translate(retry?:string[]) {
@@ -130,6 +131,10 @@ export function mountTranslation(
       });
   };
   return {
+    ready:()=>!!config?.ready,
+    config:()=>config,
+    reloadConfig:async()=>{config=await api.translationConfig();invalidate();},
+    translateAll:async()=>{restoreFull();await translate();},
     imageReady:()=>!!config?.ready,
     imageValid:(id?:string)=>valid()&&(!id||result?.id===id)&&q<HTMLTextAreaElement>('translated').value===result?.text,
     imageResult:async(force=false)=>{
@@ -160,7 +165,7 @@ export function mountTranslation(
     },
     render,
     sourceChanged: () => { ++generation;restoreFull(); invalidate(); },
-    translateSelection: (text: string) => { if (!config?.ready) { message('请先配置翻译服务'); void settings.open(); return; } if(selectionSource===undefined)full={result,text:q<HTMLTextAreaElement>('translated').value};selectionSource = text;result=undefined;q<HTMLTextAreaElement>('translated').value='';void translate(); },
+    translateSelection: (text: string) => { if (!config?.ready) { message('请先配置翻译服务'); openSettings(); return; } if(selectionSource===undefined)full={result,text:q<HTMLTextAreaElement>('translated').value};selectionSource = text;result=undefined;q<HTMLTextAreaElement>('translated').value='';void translate(); },
     busy,
     isTranslation: () => mode,
     setMode: (value: boolean) => {

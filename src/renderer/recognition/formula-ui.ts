@@ -13,7 +13,7 @@ export function mountFormula(
   state: () => OCRState | undefined,
   message: (value: unknown) => void,
   changed: () => void|Promise<void>,
-  options:{rotation:()=>TextRotation;busy:(value:boolean)=>void}={rotation:()=>0,busy:()=>{}},
+  options:{rotation:()=>TextRotation;busy:(value:boolean)=>void;unified?:boolean;modelsChanged?:()=>Promise<void>}={rotation:()=>0,busy:()=>{}},
 ) {
   let processing=false,switching=false,operation='',previewReady=false;
   let mode = false,
@@ -32,7 +32,7 @@ export function mountFormula(
   const busy = () => switching||requesting||processing || !!state()?.formulaRecognizing||!!state()?.formulaProcessing;
   const local=()=>!!state()?.formulaLocal&&state()!.formulaLocal!.choice.modelId!=='service';
   const source=q<HTMLSelectElement>('formula-source');
-  const models=mountLocalModels(api,async()=>{await changed();render();},'formula');
+  const models=mountLocalModels(api,async()=>{await changed();await options.modelsChanged?.();render();},'formula');
   q('formula-model-configure').onclick=()=>void models().catch(message);
   async function imageOperation(work:()=>Promise<unknown>,label:string){
     if(busy()||!state())return;processing=true;operation=label;message('');render();
@@ -83,9 +83,9 @@ export function mountFormula(
     if(!native)source.title=q('formula-configure').title;
     q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : native?(state()?.models.ready?'在本机识别当前图片':'请先在“公式模型”中下载并使用模型'):'发送当前图片并识别公式';
     q('formula-configure').hidden=native;
-    q('image-loading').hidden = !active||switching;
+    if(!options.unified)q('image-loading').hidden = !active||switching;
     q('formula-loading-label').textContent=state()?.waitingForInference?'等待本地任务':operation||'识别中';
-    q('source').parentElement!.ariaBusy = String(active);
+    if(!options.unified)q('source').parentElement!.ariaBusy = String(active);
     if (notice) { message(notice); notice = ''; }
   }
   const settings = mountServiceSettings('formula', {
@@ -163,7 +163,7 @@ export function mountFormula(
     updatePreview();
     render();
   };
-  q('formula-recognize').onclick = async () => {
+  async function recognize(region?:import('../../shared/recognition/ocr-tiles').OCRRect) {
     if (busy() || !(local()?state()?.models.ready:config?.ready) || !state()) return;
     requesting = true;
     notice = '';
@@ -171,7 +171,7 @@ export function mountFormula(
     render();
     changed();
     try {
-      const result = await api.recognizeFormula(state()!.token, local()?state()!.formulaLocal!.revision:config!.revision,options.rotation());
+      const result = await api.recognizeFormula(state()!.token, local()?state()!.formulaLocal!.revision:config!.revision,options.rotation(),region);
       editor.value = result.text;
       confidence=result.confidence!==undefined?{token:state()!.token,text:result.text,revision:result.revision,native:local(),value:result.confidence}:undefined;
       updatePreview();
@@ -184,8 +184,9 @@ export function mountFormula(
       render();
       changed();
     }
-  };
-  q('overlay-cancel').onclick = () => void api.cancelFormula().catch(message);
+  }
+  q('formula-recognize').onclick=()=>void recognize();
+  if(!options.unified)q('overlay-cancel').onclick = () => void api.cancelFormula().catch(message);
   q('formula-copy').onclick = () =>
     void api
       .copyFormula(editor.value)
@@ -196,6 +197,10 @@ export function mountFormula(
       .catch(message);
   window.addEventListener('beforeunload', stopPreview);
   return {
+    openModels:models,
+    recognize,
+    config:()=>config,
+    reloadConfig:async()=>{config=await api.formulaConfig();render();},
     crop,
     render,
     busy,

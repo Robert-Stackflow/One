@@ -50,6 +50,11 @@ export interface OCRState {
   models: { ready: boolean; downloading: boolean; progress: number; error: string };
   modelTitle?: string;
   formulaLocal?:{choice:import('../local-models').LocalModelChoice;revision:string};
+  mode?:'ocr'|'translation'|'formula';
+  entryRevision?:number;
+  ocrChoice?:import('../local-models').LocalModelChoice;
+  formulaModels?:OCRState['models'];
+  formulaTitle?:string;
 }
 export interface RecognitionServiceAPI {
   dedicatedServices():Promise<import('./formula-services').RecognitionServiceProfile[]>;
@@ -61,7 +66,7 @@ export interface RecognitionServiceAPI {
   manageServices():Promise<void>;
 }
 export interface RecognitionModelAPI {
-  localModels(refresh?: boolean): Promise<import('../local-models').LocalModelManagerState>;
+  localModels(refresh?: boolean,purpose?:'ocr'|'formula'): Promise<import('../local-models').LocalModelManagerState>;
   saveLocalModel(purpose: import('../local-models').LocalModelPurpose, choice: import('../local-models').LocalModelChoice, revision: string): Promise<string>;
   installLocalModel(id: string,preference?:import('../inference-devices').InferencePreference): Promise<void>;
   cancelLocalModelInstall(id: string): Promise<void>;
@@ -69,6 +74,11 @@ export interface RecognitionModelAPI {
   refreshInferenceDevices(): Promise<import('../inference-devices').InferenceDevices>;
 }
 export interface OCRAPI extends RecognitionServiceAPI,RecognitionModelAPI {
+  serviceCatalog():Promise<WorkbenchServiceCatalog>;
+  saveAIService(value:import('../ai').AIProfileInput):Promise<string>;
+  aiModelCatalogDraft(value:import('../ai').AIModelCatalogDraft):Promise<import('../ai').AIModel[]>;
+  saveDedicatedService(kind:'translation'|'formula',value:import('./translation-services').TranslationServiceInput|import('./formula-services').FormulaServiceInput):Promise<unknown>;
+  runAI(token:string,reference:import('../ai-task').AITaskReference,language:OCRLanguage,region?:import('./text-area').OCRLocalSelection):Promise<OCRResult>;
   correct(token:string,selection:import('./text-region').OCRRegionSelection,text:string):Promise<OCRResult>;
   region(token:string,language:OCRLanguage,selection:import('./text-area').OCRLocalSelection):Promise<OCRResult>;
   ready(): Promise<void>;
@@ -99,6 +109,11 @@ export interface OCRAPI extends RecognitionServiceAPI,RecognitionModelAPI {
   outputImageTranslation(token:string,id:string,mode:'copy'|'export',png:string):Promise<string|null>;
   editImageTranslation(token:string,id:string,document:import('./image-translation').ImageTranslationDocument,past:import('./image-translation').ImageTranslationDocument[]):Promise<void>;
 }
+export interface WorkbenchServiceCatalog {
+  ai:import('../ai').AIProfile[];
+  translation:import('./translation-services').TranslationServiceProfile[];
+  formula:import('./formula-services').FormulaServiceProfile[];
+}
 export interface FormulaRecognitionAPI extends RecognitionServiceAPI,RecognitionModelAPI {
   ready(): Promise<void>;
   state():Promise<OCRState>;
@@ -106,7 +121,7 @@ export interface FormulaRecognitionAPI extends RecognitionServiceAPI,Recognition
   formulaConfig(): Promise<TranslationConfig>;
   saveFormula(value: TranslationSettings): Promise<TranslationConfig>;
   clearFormula(revision: string): Promise<TranslationConfig>;
-  recognizeFormula(token: string, revision: string,rotation?:import('./text-geometry').TextRotation): Promise<FormulaResult>;
+  recognizeFormula(token: string, revision: string,rotation?:import('./text-geometry').TextRotation,region?:import('./ocr-tiles').OCRRect): Promise<FormulaResult>;
   cropFormula(token:string,crop?:import('./formula-image').FormulaCrop):Promise<void>;
   outputFormula(token:string,text:string,mode:import('./formula-image').FormulaImageOutput):Promise<string|null>;
   cancelFormula(): Promise<void>;

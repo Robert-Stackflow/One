@@ -92,11 +92,13 @@ export class OneAIService{
  cancelTaskOwner(owner:number){for(const [id,record] of this.taskOwners)if(record.owner===owner){record.abort.abort('cancelled');this.cancel(id);}}
  async runTask(value:unknown,signal?:AbortSignal):Promise<AITaskResult>{
   const {request,messages}=prepareAITask(value),{reference,profile}=this.taskProfile(request.reference);
-  if(request.purpose==='formula'&&!this.verifiedImages(profile).includes(reference.model))throw Error('请先验证该模型的图片输入能力');
+  if(request.purpose!=='translation'&&!this.verifiedImages(profile).includes(reference.model))throw Error('请先验证该模型的图片输入能力');
   return this.taskScope(request.owner,signal,async(id,signal)=>{
    const result=await this.generate(reference.profileId,messages,id,()=>{},reference.model,undefined,signal,true);
    signal.throwIfAborted();this.taskProfile(reference);
-   return request.purpose==='translation'?{reference,model:result.model,purpose:'translation',result:taskTranslation(result.text,request.paragraphs)}:{reference,model:result.model,purpose:'formula',text:taskFormula(result.text)};
+   if(request.purpose==='translation')return {reference,model:result.model,purpose:'translation',result:taskTranslation(result.text,request.paragraphs)};
+   if(request.purpose==='ocr'&&(result.text.length>500000||result.text.includes('\0')))throw Error('OCR 服务返回的文字无效或过长');
+   return {reference,model:result.model,purpose:request.purpose,text:request.purpose==='formula'?taskFormula(result.text):result.text.trim()};
   });
  }
  async verifyTaskImageInput(value:unknown,owner:number,signal?:AbortSignal){

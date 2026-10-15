@@ -79,6 +79,8 @@ export class OCRService {
   private configuring = false;
   private error = '';
   private opening = false;
+  private mode:'ocr'|'translation'|'formula'='ocr';
+  private entryRevision=0;
   private rendererReady?: () => void;
   private settling: Promise<unknown> = Promise.resolve();
   readonly models: OCRModels;
@@ -156,14 +158,14 @@ export class OCRService {
     this.formulaClient = new FormulaClient(undefined,undefined,tasks);
     this.inline = new InlineOCRSessions(()=>new InlineOCREngine(this.localModels,this.models,this.runtimes,directory),async()=>this.translationStore.connection((await this.translationStore.state()).revision),owner=>new TranslationClient(undefined,undefined,ctx.ai?new RecognitionTaskProvider(ctx.ai,()=>owner):undefined));
     const handle=(name:string,fn:(...args:any[])=>unknown)=>{
-      if(this.kind==='formula' ? !['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-')&&!name.startsWith('local-model') : name.startsWith('formula-'))return;
+      if(this.kind==='formula'&&!['state','ready','image-preview'].includes(name)&&!name.startsWith('formula-')&&!name.startsWith('local-model'))return;
       ctx.register(this.scope+'-'+name,(event,...args)=>{
       if(ctx.blocked()||!this.window||event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||event.sender.mainFrame.frames.length||event.senderFrame.url!==this.url)throw Error('拒绝访问识别窗口');
       return ctx.background(Promise.resolve().then(()=>fn(...args)));
     }); };
     handle('ready', () => { this.rendererReady?.(); });
     handle('image-preview',(token,region)=>{if(token!==this.token||!this.imagePreview)throw Error('识别图片已失效');return this.imagePreview.request(region);});
-    handle('state', async () => { const selected = await this.localModels.selectedState(this.kind); return ({
+    handle('state', async () => { const [selected,formulaSelected]=await Promise.all([this.localModels.selectedState(this.kind),this.localModels.selectedState('formula')]); return ({
       token: this.token,
       name: this.name,
       image: 'one-file://' + this.scope + '/' + this.token,
@@ -179,12 +181,14 @@ export class OCRService {
       error: this.error,
       models: selected,
       modelTitle: selected.title,
-      formulaLocal:this.kind==='formula'?{choice:await this.localModels.selection('formula'),revision:await this.localModels.settingsRevision()}:undefined,
+      mode:this.mode,entryRevision:this.entryRevision,ocrChoice:await this.localModels.selection('ocr'),
+      formulaLocal:{choice:await this.localModels.selection('formula'),revision:await this.localModels.settingsRevision()},
+      formulaModels:formulaSelected,formulaTitle:formulaSelected.title,
       workflow: this.workflow.state,
     }); });
     handle('open-formula', async token => {
-      if (this.kind !== 'ocr' || token !== this.token || !this.png || !ctx.openFormula) throw Error('公式图片已失效');
-      const snapshot = Buffer.from(this.png); try { await ctx.openFormula(snapshot, this.name); } finally { snapshot.fill(0); }
+      if (token !== this.token || !this.png) throw Error('公式图片已失效');
+      this.mode='formula';this.entryRevision++;
     });
     handle('run', (token, value, mode = 'text') => {
       if (this.workflow.active) throw Error('正在执行识别流程，请先取消当前任务');
@@ -222,9 +226,9 @@ export class OCRService {
       if (generation === this.token) this.error = '';
     });
     handle('cancel-install', async () => this.localModels.cancel((await this.localModels.selection('ocr')).modelId));
-    const modelAllowed=(id:unknown)=>{if(id==='tesseract'&&this.kind==='ocr')return;if(localModelCatalog.find(model=>model.id===id)?.purpose!==this.kind)throw Error('模型与当前窗口不匹配');};
-    handle('local-models', refresh => { if (refresh !== undefined && typeof refresh !== 'boolean') throw Error('模型刷新参数无效'); return this.localModels.state(refresh,this.kind); });
-    handle('local-model-save', (purpose, choice, revision) => {if(purpose!==this.kind)throw Error('模型与当前窗口不匹配');if(this.running||this.formulaRecognizing||this.formulaProcessing)throw Error('请先结束当前识别');return this.localModels.save(purpose, choice, revision);});
+    const modelAllowed=(id:unknown)=>{if(id==='tesseract')return;if(!['ocr','formula'].includes(localModelCatalog.find(model=>model.id===id)?.purpose||''))throw Error('模型与当前窗口不匹配');};
+    handle('local-models', (refresh,purpose=this.kind) => { if (refresh !== undefined && typeof refresh !== 'boolean'||!['ocr','formula'].includes(purpose)) throw Error('模型刷新参数无效'); return this.localModels.state(refresh,purpose); });
+    handle('local-model-save', (purpose, choice, revision) => {if(!['ocr','formula'].includes(purpose))throw Error('模型与当前窗口不匹配');if(this.running||this.translating||this.formulaRecognizing||this.formulaProcessing)throw Error('请先结束当前识别');return this.localModels.save(purpose, choice, revision);});
     handle('local-model-install', (id,preference) => {modelAllowed(id);return this.localModels.install(id,preference);});
     handle('local-model-cancel', id => {modelAllowed(id);return this.localModels.cancel(id);});
     handle('local-model-delete', id => {modelAllowed(id);return this.localModels.remove(id);});
@@ -235,18 +239,43 @@ export class OCRService {
       await clipboard.writeText(text);
     });
     handle('translation-config', () => this.translationStore.state());
-    const servicePrefix=this.kind==='formula'?'formula':'translation',serviceStore=this.kind==='formula'?this.formulaStore:this.translationStore;
+    for(const servicePrefix of ['translation','formula'] as const){
+    const serviceStore=servicePrefix==='formula'?this.formulaStore:this.translationStore;
     handle(servicePrefix+'-profiles',()=>ctx.ai?.taskProfiles()||[]);
-    handle(servicePrefix+'-services',()=>this.kind==='ocr'?ctx.ai?.translators.list()||[]:ctx.ai?.formulators.list()||[]);
+    handle(servicePrefix+'-services',()=>servicePrefix==='translation'?ctx.ai?.translators.list()||[]:ctx.ai?.formulators.list()||[]);
     handle(servicePrefix+'-manage',()=>ctx.manageServices?.());
     handle(servicePrefix+'-check-cancel',()=>{this.serviceCheck?.abort();});
     handle(servicePrefix+'-verify',async reference=>{
-      if(this.kind!=='formula'||!ctx.ai)throw Error('图片验证不可用');
+      if(!ctx.ai)throw Error('图片验证不可用');
+      if(this.running||this.translating||this.formulaRecognizing||this.formulaProcessing)throw Error('请先结束当前任务');
       this.serviceCheck?.abort();const abort=new AbortController();this.serviceCheck=abort;
       try{await ctx.ai.verifyTaskImageInput(reference,this.window!.webContents.id,abort.signal);}finally{if(this.serviceCheck===abort)this.serviceCheck=undefined;}
     });
     handle(servicePrefix+'-migrate',revision=>serviceStore.migrateLegacy(revision));
-    handle(servicePrefix+'-restore',revision=>this.kind==='ocr'?this.configureTranslation(()=>serviceStore.restoreLegacy(revision)):configureFormula(()=>serviceStore.restoreLegacy(revision)));
+    handle(servicePrefix+'-restore',revision=>servicePrefix==='translation'?this.configureTranslation(()=>serviceStore.restoreLegacy(revision)):configureFormula(()=>serviceStore.restoreLegacy(revision)));
+    }
+    handle('service-catalog',()=>({ai:ctx.ai?.state().profiles||[],translation:ctx.ai?.translators.list()||[],formula:ctx.ai?.formulators.list()||[]}));
+    const configurable=()=>{if(!ctx.ai)throw Error('AI 服务不可用');if(this.running||this.translating||this.formulaRecognizing||this.formulaProcessing||this.serviceCheck)throw Error('请先结束当前任务');return ctx.ai;};
+    handle('service-ai-save',value=>configurable().profile(value));
+    handle('service-ai-models',value=>configurable().modelCatalogDraft(value));
+    handle('service-dedicated-save',(kind,value)=>{const ai=configurable();if(kind==='translation')return ai.translators.save(value);if(kind==='formula')return ai.formulators.save(value);throw Error('服务类型无效');});
+    handle('run-ai',async(token,reference,value,selection)=>{
+      if(token!==this.token||!this.png||!ctx.ai)throw Error('识别图片已失效');
+      if(this.running||this.translating||this.formulaRecognizing||this.formulaProcessing||this.workflow.active)throw Error('请先结束当前任务');
+      const language=ocrLanguage(value),generation=this.token,abort=this.recognitionAbort=new AbortController();
+      const rectangle=selection===undefined?undefined:prepareOCRRectangle(this.result?.document?this.result:undefined,this.size,selection);
+      this.running=true;this.error='';
+      const task=(async()=>{let crop:Buffer|undefined;try{
+        const png=rectangle?(crop=(await this.formulaImages.crop(this.png!,this.size,{region:rectangle.selection.region,rotation:0})).png):this.png!;
+        abort.signal.throwIfAborted();
+        const response=await ctx.ai!.runTask({owner:this.window!.webContents.id,reference,purpose:'ocr',image:{name:'ocr.png',png:png.toString('base64')}},abort.signal);
+        if(response.purpose!=='ocr')throw Error('OCR 服务返回无效');
+        abort.signal.throwIfAborted();if(generation!==this.token||ctx.blocked())throw Error('文字识别已取消');
+        const result:OCRResult={text:ocrText(response.text),confidence:0,...this.size,words:[],language};
+        this.result=result;return result;
+      }finally{crop?.fill(0);if(generation===this.token)this.running=false;}})();
+      this.recognitionTask=task;try{return await task;}finally{if(this.recognitionTask===task){this.recognitionTask=undefined;this.recognitionAbort=undefined;}}
+    });
     handle('translation-save', (value) => {
       return this.configureTranslation(() => this.translationStore.save(value));
     });
@@ -304,7 +333,7 @@ export class OCRService {
     );
     handle('formula-config', () => this.formulaStore.state());
     const configureFormula = async <T>(operation: () => Promise<T>) => {
-      if (this.formulaRecognizing || this.formulaProcessing||this.formulaConfiguring || this.workflow.active)
+      if (this.running||this.translating||this.formulaRecognizing || this.formulaProcessing||this.formulaConfiguring || this.workflow.active)
         throw Error('请先结束公式识别或配置操作');
       this.formulaConfiguring = true;
       try {
@@ -317,7 +346,7 @@ export class OCRService {
     handle('formula-clear', (revision) =>
       configureFormula(() => this.formulaStore.clear(revision)),
     );
-    handle('formula-recognize', (token, revision,rotation=0) => {
+    handle('formula-recognize', (token, revision,rotation=0,region) => {
       if (this.workflow.active) throw Error('请先取消识别流程');
       if (token !== this.token || !this.png) throw Error('识别图片已失效');
       if (this.running || this.translating || this.formulaRecognizing||this.formulaProcessing)
@@ -332,7 +361,7 @@ export class OCRService {
       const task = (async () => {
         let oriented:Buffer|undefined;
         try {
-          const source=rotation?(oriented=(await this.formulaImages.crop(this.png!,this.size,{region:{left:0,top:0,...this.size},rotation})).png):this.png!;
+          const source=rotation||region?(oriented=(await this.formulaImages.crop(this.png!,this.size,{region:region||{left:0,top:0,...this.size},rotation})).png):this.png!;
           abort.signal.throwIfAborted();
           const selected=await this.localModels.selection('formula');abort.signal.throwIfAborted();
           if(selected.modelId!=='service'){
@@ -503,11 +532,6 @@ export class OCRService {
   }
   async openCapture(png: Buffer, name = '截图') {
     if (this.ctx.blocked()) throw Error('应用正在退出');
-    if (this.window && !this.window.isDestroyed() && this.png?.equals(png)) {
-      this.window.show();
-      this.window.focus();
-      return;
-    }
     await this.open(png, name);
   }
   async endCaptureWorkflow(owner: string) {
@@ -535,14 +559,17 @@ export class OCRService {
   }
   private formulaImageOperation<T>(token:unknown,work:(valid:()=>boolean)=>Promise<T>){
     if(token!==this.token||!this.png)throw Error('公式图片已失效');
-    if(this.formulaRecognizing||this.formulaProcessing||this.formulaConfiguring||this.workflow.active)throw Error('请先结束当前公式任务');
+    if(this.running||this.translating||this.formulaRecognizing||this.formulaProcessing||this.formulaConfiguring||this.workflow.active)throw Error('请先结束当前公式任务');
     this.formulaProcessing=true;const serial=++this.formulaSerial;
     const valid=()=>token===this.token&&serial===this.formulaSerial&&!this.ctx.blocked()&&!!this.window&&!this.window.isDestroyed();
     const task=Promise.resolve().then(()=>work(valid));this.formulaImageTask=task;
     return task.finally(()=>{if(this.formulaImageTask===task){this.formulaImageTask=undefined;this.formulaProcessing=false;}});
   }
-  async open(png: Buffer, name: string) {
+  async open(png: Buffer, name: string, mode:'ocr'|'translation'|'formula'='ocr') {
     if (this.ctx.blocked()) throw Error('应用正在退出');
+    if(!this.opening&&this.window&&!this.window.isDestroyed()&&this.png?.equals(png)){
+      this.mode=mode;this.entryRevision++;this.window.show();this.window.focus();return;
+    }
     if (this.window || this.opening) {
       this.window?.show();
       this.window?.focus();
@@ -556,6 +583,8 @@ export class OCRService {
         header = pngDimensions(base64);
       if(this.kind==='formula')ocrDimensions(header.width, header.height);
       this.size = header;
+      this.mode=mode;
+      this.entryRevision++;
       this.png = Buffer.from(png);
       this.imagePreview=new OCRImagePreview(this.png,this.size);
       this.token = randomUUID();
@@ -607,6 +636,7 @@ export class OCRService {
     }
   }
   private clear(cancelWorkflow = true) {
+    this.serviceCheck?.abort();
     this.workflow.closed(cancelWorkflow);
     this.token = '';
     this.translationSnapshotToken='';

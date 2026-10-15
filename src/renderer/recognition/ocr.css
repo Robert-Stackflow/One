@@ -25,7 +25,7 @@ body[data-view='recognition'] .source-preview img { max-width: 100%; object-fit:
 .ocr-result-heading span { font-size: calc(11px * var(--text-scale, 1)); color: var(--muted); }
 .ocr-result-heading #translation-source-note { margin-left: auto; }
 .ocr-result-heading #translation-restore-full { font: inherit; padding: 4px 8px; min-height: 28px; }
-body[data-view='recognition'] textarea { min-height: 50px; flex: 1; width: 100%; resize: none; border: 0; border-radius: 0; padding: 10px 12px; background: transparent; line-height: 1.65; font: inherit; font-size: calc(13px * var(--text-scale, 1)); user-select: text; }
+body[data-view='recognition'] .ocr-workbench textarea { min-height: 50px; flex: 1; width: 100%; resize: none; border: 0; border-radius: 0; padding: 10px 12px; background: transparent; line-height: 1.65; font: inherit; font-size: calc(13px * var(--text-scale, 1)); user-select: text; }
 .ocr-translation-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 0 12px 6px; }
 .ocr-translation-tools button { font-size: calc(11px * var(--text-scale, 1)); padding: 5px 7px; }
 .ocr-translation-tools .custom-select { max-width: 140px; }
@@ -33,3 +33,18 @@ body[data-view='recognition'] #translation-destination { margin: 0; padding: 0 1
 .ocr-footer { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--line); flex-shrink: 0; }
 .ocr-footer .result-actions { margin-left: auto; display: flex; gap: 6px; }
 @media (max-width: 850px) { .ocr-commandbar { gap: 6px; padding: 8px 10px; } .ocr-tool-group { gap: 5px; } .ocr-tool-group > button { padding: 6px 7px; font-size: calc(11px * var(--text-scale, 1)); } }
+/* Shared workbench: one task at a time, results retain their contents across tabs. */
+.unified-recognition .workbench-result-tabs { padding: 12px; flex: none; border-bottom: 1px solid var(--line); }
+.unified-recognition .workbench-result-tabs .tabs { display: flex; width: 100%; }
+.unified-recognition .workbench-result-tabs .tabs > button { flex: 1; white-space: nowrap; }
+.workbench-service-label { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--text-scale, 1)); }
+.workbench-service-label > .custom-select { width: clamp(170px, 22vw, 300px); }
+.unified-recognition #formula-panel { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; padding: 12px; gap: 10px; }
+.unified-recognition #formula-text { flex: 1; min-height: 100px; padding: 0; font-family: monospace; }
+.unified-recognition #formula-preview { flex: 1; min-height: 80px; overflow: auto; border-top: 1px solid var(--line); padding: 16px 0; user-select: text; }
+.unified-recognition #formula-preview-status { margin: 0; color: var(--muted); font-size: 12px; }
+.unified-recognition #formula-preview-status:empty { display: none; }
+.unified-recognition #formula-confidence { color: var(--muted); font-size: 11px; }
+.unified-recognition [role='tabpanel'][hidden],.unified-recognition .ocr-tool-group[hidden],.unified-recognition .result-actions button[hidden],.workbench-legacy-tools { display: none !important; }
+.unified-recognition #run,.unified-recognition #translate,.unified-recognition #translation-configure,.unified-recognition #translation-cancel { display: none; }
+.unified-recognition .ocr-result-section { border-top: 0; }

@@ -104,6 +104,11 @@ const assert = require('node:assert/strict');
     await page.evaluate(() => window.requests[6].resolve([{value:'late',label:'Late device'}]));
     await expect(page.locator('.select-popup')).toHaveCount(0);
     assert.equal(await page.evaluate(() => Object.hasOwn(window.original,'value')),false,'Removal restores the native property descriptors');
+    await page.evaluate(()=>{const source=document.createElement('select');source.id='grouped';source.dataset.searchable='true';document.querySelector('#app').append(source);controls.customControls(document.querySelector('#app'));controls.updateSelectOptions(document.querySelector('#grouped'),[{value:'a',label:'Vision model',group:'AI 服务'},{value:'b',label:'Azure',group:'专用服务'}]);});
+    await page.locator('#grouped').click();await expect(page.locator('.select-option-group')).toHaveCount(2);
+    await page.locator('.select-popup-search').fill('Azure');await expect(page.getByRole('option')).toHaveCount(1);await expect(page.locator('.select-option-group').filter({hasText:'AI 服务'})).toBeHidden();
+    await page.keyboard.press('Enter');await expect(page.locator('#grouped')).toHaveJSProperty('value','b');
+    await page.locator('#grouped').click();await page.keyboard.press('Home');await page.keyboard.press('Enter');await expect(page.locator('#grouped')).toHaveJSProperty('value','a');
     assert.deepEqual(errors,[]);
     console.log('Controls checks passed: native synchronization, keyboard/filtering, stale/cancelled loading, retry, removal, icons and numeric events.');
   } finally {

@@ -20,7 +20,8 @@ export function mountLocalModels(api:RecognitionModelAPI, updated:()=>Promise<vo
       <section class="model-resource-settings"><h3>模型资源</h3><dl id="local-model-metadata"></dl></section></section></div><p id="local-model-error" class="model-error" role="alert" hidden></p>`,
     actions:'<button id="local-model-save" class="primary"><span class="model-action-spinner" aria-hidden="true" hidden></span><span id="local-model-action-label" aria-live="polite">使用此模型</span></button>'});
   const dialog = template.content.firstElementChild as HTMLDialogElement; (document.getElementById('app')||document.body).append(dialog);
-  const field = <T extends HTMLElement>(id:string)=>dialog.querySelector<T>('#local-model-'+id)!;
+  if(purpose==='formula'){dialog.id='formula-local-model-settings';dialog.innerHTML=dialog.innerHTML.replaceAll('local-model-','formula-local-model-');dialog.setAttribute('aria-labelledby','formula-local-model-settings-title');}
+  const field = <T extends HTMLElement>(id:string)=>dialog.querySelector<T>((purpose==='formula'?'#formula-local-model-':'#local-model-')+id)!;
   const device = field<HTMLSelectElement>('device'), gpu = field<HTMLSelectElement>('gpu');
   field('list').setAttribute('aria-label',purpose==='formula'?'公式模型列表':'OCR 模型列表');
   let state:LocalModelManagerState|undefined,modelId='',polling=false,saving=false,disposed=false,listKey='',devicesRequested=false;

@@ -2,7 +2,7 @@ import {icon} from './ui';
 import {enabledOption, focusOption, revealOption} from './option-list';
 import {onRemoval} from './dom-lifecycle';
 
-export interface SelectOption {label:string;value:string;disabled?:boolean;icon?:string;iconSrc?:string}
+export interface SelectOption {label:string;value:string;disabled?:boolean;icon?:string;iconSrc?:string;group?:string}
 /** Return a fresh option list; it is applied only while this open request remains current. */
 export type SelectLoader = (signal:AbortSignal) => Promise<readonly SelectOption[]>;
 const loaders = new WeakMap<HTMLElement, SelectLoader>();
@@ -21,6 +21,7 @@ function replaceOptions(select:HTMLSelectElement, options:readonly SelectOption[
   select.replaceChildren(...options.map(option => {
     const node = new Option(option.label, option.value);
     node.disabled = !!option.disabled;
+    if(option.group)node.dataset.group=option.group;
     if (option.icon) node.dataset.icon = option.icon;
     if (option.iconSrc) node.dataset.iconSrc = option.iconSrc;
     return node;
@@ -45,7 +46,7 @@ function enhanceSelect(select:HTMLSelectElement) {
   if (controls.has(select)) return;
   const readOptions = ():SelectOption[] => [...select.options].map(option => ({
     label:option.text, value:option.value, disabled:option.disabled,
-    icon:option.dataset.icon, iconSrc:option.dataset.iconSrc,
+    icon:option.dataset.icon, iconSrc:option.dataset.iconSrc,group:option.dataset.group||(option.parentElement instanceof HTMLOptGroupElement?option.parentElement.label:undefined),
   }));
   let options = readOptions();
   let loader = loaders.get(select);loaders.delete(select);
@@ -64,6 +65,7 @@ function enhanceSelect(select:HTMLSelectElement) {
   const label = document.createElement('span');button.append(label);button.insertAdjacentHTML('beforeend', icon('chevron-down'));
   let value = select.value, active = -1, prefix = '', typedAt = 0;
   let popup:HTMLDivElement|null = null, menu:HTMLDivElement|null = null, search:HTMLInputElement|null = null;
+  let optionNodes:HTMLElement[]=[],groupNodes:{node:HTMLElement;indices:number[]}[]=[];
   let modal:HTMLDialogElement|null = null, focused:HTMLElement|null = null, selected:HTMLElement|null = null;
   let visible:number[] = [], disposed = false, opening = 0, abort:AbortController|undefined;
   let pendingInitial = '', pendingKey = '', pendingPrefix = '';
@@ -73,13 +75,13 @@ function enhanceSelect(select:HTMLSelectElement) {
     const option = options.find(option => option.value === value);
     optionContent(label, {...option, value, label:button.dataset.displayLabel || option?.label || '没有可选项'});
     if (menu) {
-      const node = menu.children[options.findIndex(option => option.value === value)] as HTMLElement|undefined;
+      const node = optionNodes[options.findIndex(option => option.value === value)];
       if (selected !== node) {selected?.setAttribute('aria-selected','false');node?.setAttribute('aria-selected','true');selected = node || null;}
     }
   };
   const close = () => {
     opening++;abort?.abort();abort = undefined;button.removeAttribute('aria-busy');
-    popup?.remove();popup = menu = search = null;visible = [];focused = selected = null;active = -1;
+    popup?.remove();popup = menu = search = null;visible = [];optionNodes=[];groupNodes=[];focused = selected = null;active = -1;
     modal?.removeEventListener('close',close);modal = null;
     button.setAttribute('aria-expanded','false');button.removeAttribute('aria-controls');button.removeAttribute('aria-activedescendant');
     document.removeEventListener('pointerdown',outside,true);window.removeEventListener('resize',close);
@@ -104,7 +106,7 @@ function enhanceSelect(select:HTMLSelectElement) {
   }
   const outside = (event:PointerEvent) => {if (!button.contains(event.target as Node) && !popup?.contains(event.target as Node)) close();};
   const activate = (index:number) => {
-    active = index;const option = menu?.children[index] as HTMLElement|undefined;
+    active = index;const option = menu?optionNodes[index]:undefined;
     if (focused === option) return;focused = focusOption(focused,option || null);
     if (option && !option.hidden) {
       button.setAttribute('aria-activedescendant',option.id);search?.setAttribute('aria-activedescendant',option.id);
@@ -131,8 +133,9 @@ function enhanceSelect(select:HTMLSelectElement) {
   };
   const filter = (query:string) => {
     if (!menu) return;const needle = query.trim().toLocaleLowerCase();visible = [];
-    options.forEach((option,index) => {const node = menu!.children[index] as HTMLElement;
+    options.forEach((option,index) => {const node = optionNodes[index];
       node.hidden = !!needle && !option.label.toLocaleLowerCase().includes(needle);if (!node.hidden) visible.push(index);});
+    for(const group of groupNodes)group.node.hidden=!group.indices.some(index=>!optionNodes[index].hidden);
     (menu.lastElementChild as HTMLElement).hidden = visible.length > 0;
     activate(visible.find(index => !options[index].disabled) ?? -1);position();
   };
@@ -163,8 +166,10 @@ function enhanceSelect(select:HTMLSelectElement) {
       search.addEventListener('input',() => filter(search!.value));search.addEventListener('keydown',onKey);popup.append(search);
     }
     options.forEach((option,index) => {
+      if(option.group){let group=groupNodes[groupNodes.length-1];if(!group||group.node.textContent!==option.group){const header=document.createElement('div');header.className='select-option-group';header.textContent=option.group;header.role='presentation';menu!.append(header);group={node:header,indices:[]};groupNodes.push(group);}group.indices.push(index);}
       const node = document.createElement('div');node.setAttribute('role','option');node.setAttribute('aria-label',option.label);node.id = menu!.id+'-'+index;
       optionContent(node,option);node.insertAdjacentHTML('beforeend',icon('check'));
+      optionNodes.push(node);
       node.setAttribute('aria-disabled',String(!!option.disabled));node.setAttribute('aria-selected',String(option.value === value));
       if (option.value === value) selected = node;
       node.addEventListener('pointerdown',event => event.preventDefault());

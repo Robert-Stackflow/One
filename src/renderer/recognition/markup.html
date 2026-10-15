@@ -1,8 +1,10 @@
 <header class="media-header"><span id="brand"></span><strong>识别与翻译</strong><span id="source-name"></span></header>
-<main class="ocr-workbench">
+<main class="ocr-workbench unified-recognition">
   <div class="ocr-commandbar" role="toolbar" aria-label="识别与翻译操作">
-    <div id="ocr-tools" class="ocr-tool-group"><label>语言<select id="language"><option value="chi_sim+eng">中文与英文</option><option value="eng">英文</option></select></label><button id="run" class="primary" disabled>识别文字</button></div>
-    <div class="ocr-tool-group"><button id="local-model-configure" class="quiet">OCR 模型</button><button id="open-formula" class="quiet">公式识别 ↗</button></div>
+    <div id="ocr-tools" class="ocr-tool-group"><label>语言<select id="language"><option value="chi_sim+eng">中文与英文</option><option value="eng">英文</option></select></label><button id="run" class="primary" hidden disabled>识别文字</button></div>
+    <div id="translation-tools" class="ocr-tool-group" hidden><label>译为<select id="translation-language"></select></label><button id="translate" hidden disabled>翻译全文</button><button id="translation-cancel" hidden>取消翻译</button><button id="translation-configure" hidden>服务</button></div>
+    <label class="workbench-service-label">服务<select id="task-service" aria-label="选择模型或服务"><option value="">读取服务…</option></select></label>
+    <button id="task-run" class="primary" disabled>识别文字</button><button id="task-configure" class="quiet">服务配置</button>
     <div id="ocr-image-tools" class="image-header-tools"></div><button id="workflow-back" class="quiet" hidden>返回截图</button>
     <button id="result-panel-toggle" class="quiet ocr-panel-toggle" aria-label="收起结果栏" aria-controls="ocr-results" aria-expanded="true" title="收起结果栏"></button>
   </div>
@@ -10,12 +12,13 @@
     <section class="source-preview" aria-label="识别图片"><img id="source" alt="待识别图片"><div id="image-loading" class="image-loading" role="status" aria-live="polite" hidden><div class="image-loading-card"><span class="recognition-spinner" aria-hidden="true"></span><span id="image-loading-label">识别中</span><button id="overlay-cancel" class="quiet">取消</button></div></div></section>
     <div id="ocr-divider" class="ocr-divider" role="separator" tabindex="0" aria-label="调整图片与结果栏宽度" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="80" aria-valuenow="67"></div>
     <aside id="ocr-results" class="ocr-results" aria-label="识别与翻译结果">
-      <section id="text-result" class="ocr-result-section"><div class="ocr-result-heading"><label id="result-label" for="result">识别原文</label></div><textarea id="result" dir="auto" spellcheck="false" placeholder="识别文字或粘贴原文"></textarea></section>
-      <section id="translation-result" class="ocr-result-section"><div class="ocr-result-heading"><label for="translated">译文</label><span id="translation-source-note"></span></div>
-        <div id="translation-tools" class="ocr-translation-tools"><label>译为<select id="translation-language"></select></label><button id="translate" class="quiet" disabled>翻译全文</button><button id="translation-cancel" class="quiet" hidden>取消翻译</button><button id="translation-configure" class="quiet" aria-label="翻译服务" title="翻译服务">服务</button></div>
-        <p id="translation-destination" hidden></p><textarea id="translated" dir="auto" spellcheck="false" placeholder="译文"></textarea></section>
+      <div class="workbench-result-tabs"><div class="tabs" role="tablist" aria-label="结果类型"><button id="tab-ocr" role="tab" aria-controls="text-result" aria-selected="true" class="selected" data-mode="ocr">OCR</button><button id="tab-translation" role="tab" aria-controls="translation-result" aria-selected="false" data-mode="translation">翻译</button><button id="tab-formula" role="tab" aria-controls="formula-panel" aria-selected="false" data-mode="formula">公式识别</button></div></div>
+      <section id="text-result" class="ocr-result-section" role="tabpanel" aria-labelledby="tab-ocr"><div class="ocr-result-heading"><label id="result-label" for="result">识别原文</label></div><textarea id="result" dir="auto" spellcheck="false" placeholder="识别文字或粘贴原文"></textarea></section>
+      <section id="translation-result" class="ocr-result-section" role="tabpanel" aria-labelledby="tab-translation" hidden><div class="ocr-result-heading"><label for="translated">译文</label><span id="translation-source-note"></span></div><p id="translation-destination" hidden></p><textarea id="translated" dir="auto" spellcheck="false" placeholder="译文"></textarea></section>
+      <section id="formula-panel" role="tabpanel" aria-labelledby="tab-formula" hidden><label for="formula-text">LaTeX <small id="formula-confidence" hidden></small></label><textarea id="formula-text" spellcheck="false" placeholder="输入 LaTeX"></textarea><p id="formula-preview-status" role="status"></p><div id="formula-preview"></div></section>
     </aside>
   </div>
-  <footer class="ocr-footer"><span id="message" role="status" aria-live="polite" hidden></span><div class="result-actions"><button id="copy" class="quiet" disabled>复制原文</button><button id="translation-copy" class="primary" disabled>复制译文</button></div></footer>
+  <footer class="ocr-footer"><span id="message" role="status" aria-live="polite" hidden></span><div class="result-actions"><button id="copy" class="quiet" disabled>复制原文</button><button id="translation-copy" class="primary" hidden disabled>复制译文</button><button id="formula-copy" class="quiet" hidden disabled>复制 LaTeX</button><button id="formula-copy-image" class="quiet" hidden disabled>复制图片</button><button id="formula-export" class="primary" hidden aria-haspopup="menu" aria-expanded="false" disabled>导出</button></div></footer>
 </main>
-<dialog id="translation-settings" class="one-dialog one-form-dialog" aria-labelledby="modal-title"></dialog>
+<div class="workbench-legacy-tools" hidden><button id="local-model-configure">OCR 模型</button><button id="open-formula">公式识别</button><div id="formula-tools"><select id="formula-source"><option value="service">公式服务</option><option value="local">本地模型</option></select><button id="formula-recognize" disabled>识别公式</button><button id="formula-model-configure">公式模型</button><button id="formula-configure">公式服务</button><button id="formula-image-reset" hidden>恢复原图</button></div><p id="formula-destination" hidden></p><span id="formula-loading-label"></span></div>
+<dialog id="translation-settings" class="one-dialog one-form-dialog" aria-labelledby="modal-title"></dialog><dialog id="formula-settings" class="one-dialog one-form-dialog"></dialog>

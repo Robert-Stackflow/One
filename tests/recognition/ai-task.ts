@@ -82,6 +82,24 @@ test('incorrect image responses never mark a text-only model as image-capable',a
     await service.profile(config());await assert.rejects(service.verifyTaskImageInput(reference(service),1),/未正确读取/);assert.deepEqual(service.taskProfiles()[0].imageModels,[]);
   });
 });
+
+test('AI OCR requires verified images, uses a fixed transcription task and preserves plain text without formula parsing',async()=>{
+  const png=await image(),calls:any[]=[];
+  await fixture({imageProbe:async()=>({image:png,expected:'123456'}),transport:async(_url,init)=>{
+    const body=JSON.parse(String(init?.body));calls.push(body);
+    return response(body.messages[0].content.includes('six digits')?'123456':'第一行\n$x+y$ and ordinary text');
+  }},async service=>{
+    await service.profile(config());const ref=reference(service);
+    await assert.rejects(service.runTask({owner:7,reference:ref,purpose:'ocr',image:png}),/验证/);assert.equal(calls.length,0);
+    await service.verifyTaskImageInput(ref,7);
+    const result=await service.runTask({owner:7,reference:ref,purpose:'ocr',image:png});
+    assert.equal(result.purpose,'ocr');assert.equal('text'in result&&result.text,'第一行\n$x+y$ and ordinary text');
+    assert.match(calls[1].messages[0].content,/Transcribe all visible text/);
+    assert.equal(calls[1].messages[1].content[1].image_url.url,'data:image/png;base64,'+png.png);
+    assert.deepEqual(service.state().conversations,[]);assert.deepEqual(service.state().history,[]);
+    assert.throws(()=>prepareAITask({owner:7,reference:ref,purpose:'ocr',image:png,prompt:'custom prompt'}));
+  });
+});
 test('feature tasks share the three-request limit and owner cancellation leaves other windows running',async()=>{
   const pending:{signal:AbortSignal;resolve:(response:Response)=>void}[]=[];
   await fixture({transport:async(_input,init)=>new Promise<Response>((resolve,reject)=>{const signal=init!.signal!;pending.push({signal,resolve});signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true});})},async service=>{

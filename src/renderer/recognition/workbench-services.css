@@ -1,0 +1,22 @@
+.workbench-service-settings { width: min(900px, calc(100vw - 48px)); }
+.service-editor-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.service-editor-toolbar .tabs { margin-right: auto; }
+.service-editor-browser { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 360px; gap: 24px; }
+.service-editor-list { display: flex; flex-direction: column; gap: 6px; padding-right: 16px; border-right: 1px solid var(--line); overflow-y: auto; max-height: 55vh; }
+.service-editor-item { display: flex; flex-direction: column; align-items: stretch; text-align: left; gap: 6px; padding: 12px; background: var(--surface); border: 1px solid transparent; border-radius: var(--field-radius); }
+.service-editor-item.selected { background: var(--soft); border-color: var(--line); }
+.service-editor-item strong { font-weight: 500; overflow-wrap: anywhere; }
+.service-editor-item span { color: var(--muted); font-size: 12px; }
+.service-editor-browser:has(.service-editor-list:empty) { grid-template-columns: minmax(0,1fr); }
+.service-editor-list:empty { display: none; }
+.service-editor-form { display: grid; grid-template-columns: repeat(2,minmax(0, 1fr)); gap: 16px; align-content: start; }
+.service-editor-form .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.service-editor-form .field[hidden],.service-editor-toolbar [hidden] { display: none; }
+.service-editor-form [data-field='base'] { grid-column: 1 / -1; order: 1; }
+.service-editor-form [data-field='model'],.service-editor-form [data-field='timeout'] { order: 2; }
+.service-editor-form [data-field='models'] { grid-column: 1 / -1; order: 3; }
+.service-editor-form [data-field='key'] { grid-column: 1 / -1; order: 4; }
+.service-editor-fetch { align-self: flex-start; }
+.service-editor-form input,.service-editor-form textarea,.service-editor-form .custom-select { width: 100%; }
+.service-editor-form textarea { min-height: 85px; resize: vertical; font: inherit; }
+@media(max-width:700px) { .service-editor-browser { grid-template-columns: 150px minmax(0,1fr); gap: 14px; } .service-editor-toolbar { flex-wrap: wrap; } }

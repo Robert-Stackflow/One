@@ -1288,7 +1288,6 @@ async function start() {
   recognition=new RecognitionHost(app.getPath('userData'),materials,{
     openTranslatedImage:(png,title,document,history)=>{if(!imageEditor)throw Error('图片编辑器不可用');return imageEditor.editor.openTransient(png,title,document,history);},
     createWindow:()=>windowFor('recognition',{width:1100,height:760,minWidth:640,minHeight:520,title:'识别与翻译 · One'},'',false),
-    createFormulaWindow:()=>windowFor('formula-recognition',{width:1000,height:740,minWidth:640,minHeight:520,title:'公式识别 · One'},'',false),
     register:(name,handler)=>handle(name,handler,[name.startsWith('formula-recognition-')?'formula-recognition':'recognition']),blocked:()=>quitting,uiScale:()=>settings.capture.uiScale,connections:aiService.serviceConnections(),ai:aiService,manageServices:async()=>{navigateMainPage({page:'ai',tab:'services'});},
   });
   const annotationPreferences:import('../shared/capture/annotation-preferences').AnnotationPreferencesHost={
