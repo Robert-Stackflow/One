@@ -52,7 +52,7 @@ export interface OCRState {
   formulaLocal?:{choice:import('../local-models').LocalModelChoice;revision:string};
 }
 export interface RecognitionServiceAPI {
-  dedicatedServices():Promise<import('./translation-services').TranslationServiceProfile[]>;
+  dedicatedServices():Promise<import('./formula-services').RecognitionServiceProfile[]>;
   taskProfiles():Promise<import('../ai-task').AITaskProfile[]>;
   verifyServiceImage(reference:import('../ai-task').AITaskReference):Promise<void>;
   cancelServiceCheck():Promise<void>;

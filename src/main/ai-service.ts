@@ -9,14 +9,16 @@ import type {CodexStatus} from '../shared/codex-types';
 import {aiEndpoint,builtinAICommands,renderAIPrompt,validateAIImages,validateAIProfile,type AICommand,type AIConversation,type AIEvent,type AIHistoryEntry,type AIImage,type AIMessage,type AIModel,type AIModelCatalogDraft,type AIProfile,type AIProfileInput,type AIState} from '../shared/ai';
 import {prepareAITask,taskReference,taskTranslation,taskFormula,type AITaskReference,type AITaskProfile,type AITaskResult} from '../shared/ai-task';
 import {TranslationServices} from './translation-services';
+import {FormulaServices} from './formula-services';
+import {SimpleTexClient} from './recognition/simpletex-client';
 import {DedicatedTranslation} from './recognition/dedicated-translation';
 import type {TranslationServiceReference} from '../shared/recognition/translation-services';
 import type {TranslationLanguage} from '../shared/recognition/translation';
 
 interface ImageVerification {revision:string;models:Record<string,{expiresAt:number;model:string}>}
-interface TaskOptions {transport?:typeof fetch;translationTransport?:typeof fetch;codex?:CodexProvider;imageProbe?:()=>Promise<{image:AIImage;expected:string}>}
+interface TaskOptions {transport?:typeof fetch;translationTransport?:typeof fetch;formulaTransport?:typeof fetch;codex?:CodexProvider;imageProbe?:()=>Promise<{image:AIImage;expected:string}>}
 
-type Saved={translationServices?:unknown;taskVision?:Record<string,ImageVerification>;codexTaskEpoch?:number;connections?:Partial<Record<'translation'|'formula',unknown>>;profiles:Omit<AIProfile,'hasKey'>[];keys:Record<string,string>;defaultId:string;commands:AICommand[];conversations:AIConversation[];shortcut:string;history:AIHistoryEntry[];codexExecutable:string;chatOptions:{onTop:boolean;keepOpen:boolean}};
+type Saved={formulaServices?:unknown;translationServices?:unknown;taskVision?:Record<string,ImageVerification>;codexTaskEpoch?:number;connections?:Partial<Record<'translation'|'formula',unknown>>;profiles:Omit<AIProfile,'hasKey'>[];keys:Record<string,string>;defaultId:string;commands:AICommand[];conversations:AIConversation[];shortcut:string;history:AIHistoryEntry[];codexExecutable:string;chatOptions:{onTop:boolean;keepOpen:boolean}};
 const empty=():Saved=>({profiles:[],keys:{},defaultId:'',commands:[],conversations:[],shortcut:'',history:[],codexExecutable:'',chatOptions:{onTop:true,keepOpen:true}});
 const messageLimit=256*1024,answerLimit=1024*1024;
 function wireModel(value:unknown){return typeof value==='string'&&value.length<=200&&!/[\r\n\0]/.test(value)?value.trim():'';}
@@ -36,6 +38,11 @@ function parseStreamLine(line:string,kind:AIProfile['kind']):{delta:string;done:
 }
 export class OneAIService{
  readonly translators=new TranslationServices(()=>this.data.translationServices,value=>{const previous=this.data.translationServices;this.data.translationServices=value;try{this.save();}catch(error){this.data.translationServices=previous;throw error;}});
+ readonly formulators=new FormulaServices(()=>this.data.formulaServices,value=>{const previous=this.data.formulaServices;this.data.formulaServices=value;try{this.save();}catch(error){this.data.formulaServices=previous;throw error;}});
+ async recognizeDedicatedFormula(reference:import('../shared/recognition/formula-services').FormulaServiceReference,owner:number,png:Buffer,signal?:AbortSignal){
+  this.formulators.assertReference(reference);const input=Buffer.from(png);
+  try{return await this.taskScope(owner,signal,async(_id,signal)=>new SimpleTexClient(this.formulators,this.taskOptions.formulaTransport).run(reference,input,signal));}finally{input.fill(0);}
+ }
  async translateBatch(reference:TranslationServiceReference,owner:number,paragraphs:import('../shared/ai-task').AITaskParagraph[],target:TranslationLanguage,signal?:AbortSignal){
   this.translators.assertReference(reference);return this.taskScope(owner,signal,async(_id,signal)=>new DedicatedTranslation(this.translators,this.taskOptions.translationTransport).run(reference,paragraphs,target,signal));
  }

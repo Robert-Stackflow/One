@@ -27,6 +27,7 @@ export function mountFormula(
   const editor = q<HTMLTextAreaElement>('formula-text'),
     preview = q('formula-preview'),
     previewState = q('formula-preview-status');
+  let confidence:{token:string;text:string;revision:string;native:boolean;value:number}|undefined;
   editor.maxLength = FORMULA_TEXT;
   const busy = () => requesting||processing || !!state()?.formulaRecognizing||!!state()?.formulaProcessing;
   const local=()=>!!state()?.formulaLocal&&state()!.formulaLocal!.choice.modelId!=='service';
@@ -64,6 +65,7 @@ export function mountFormula(
     q('formula-tools').hidden = !mode;
     q('formula-destination').hidden = true;
     q('formula-copy').hidden = !mode;
+    const score=q('formula-confidence'),revision=local()?state()?.formulaLocal?.revision:config?.revision;score.hidden=!confidence||confidence.token!==state()?.token||confidence.text!==editor.value||confidence.revision!==revision||confidence.native!==local();score.textContent=score.hidden?'':`置信度 ${Math.round(confidence!.value*100)}%`;
     const native=local(),ready=native?state()?.models.ready:config?.ready;
     options.busy(active||other);if(active&&menuOpen)closeMenu();
     q<HTMLButtonElement>('formula-copy-image').disabled=exportButton.disabled=active||other||!previewReady;
@@ -77,7 +79,8 @@ export function mountFormula(
     editor.readOnly = active || other;
     q<HTMLButtonElement>('formula-copy').disabled =
       active || !editor.value.trim() || editor.value.length > FORMULA_TEXT;
-    q('formula-configure').title = config?.ready ? config.endpoint : '配置视觉服务';
+    q('formula-configure').title = config?.ready ? [config.serviceName||config.endpoint,config.model].filter(Boolean).join(' · ') : '配置公式服务';
+    if(!native)source.title=q('formula-configure').title;
     q('formula-recognize').title = large ? '图片超过 8 MiB，请先裁剪' : native?(state()?.models.ready?'在本机识别当前图片':'请先在“公式模型”中下载并使用模型'):'发送当前图片并识别公式';
     q('formula-configure').hidden=native;
     q('image-loading').hidden = !active;
@@ -155,6 +158,7 @@ export function mountFormula(
     }, 180);
   }
   editor.oninput = () => {
+    confidence=undefined;
     notice = '';
     updatePreview();
     render();
@@ -169,6 +173,7 @@ export function mountFormula(
     try {
       const result = await api.recognizeFormula(state()!.token, local()?state()!.formulaLocal!.revision:config!.revision,options.rotation());
       editor.value = result.text;
+      confidence=result.confidence!==undefined?{token:state()!.token,text:result.text,revision:result.revision,native:local(),value:result.confidence}:undefined;
       updatePreview();
       notice = '';
       if(result.inference)source.title=(state()?.modelTitle||result.model)+' · '+result.inference.device;

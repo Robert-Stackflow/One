@@ -20,6 +20,7 @@ export class RecognitionTaskProvider {
     return {source:text,text:paragraph.text,target,revision:connection.revision,endpoint:'ai:'+connection.reference.profileId,model:result.model};
   }
   async formula(connection:TranslationConnection,png:Buffer,signal:AbortSignal):Promise<FormulaResult>{
+    if(connection.provider==='service'){if(!connection.serviceReference)throw Error('公式服务引用无效');return {...await this.ai.recognizeDedicatedFormula(connection.serviceReference,this.owner(),png,signal),revision:connection.revision};}
     if(!connection.reference)throw Error('AI 服务引用无效');
     const result=await this.ai.runTask({owner:this.owner(),reference:connection.reference,purpose:'formula',image:{name:'formula.png',png:png.toString('base64')}},signal);
     if(result.purpose!=='formula')throw Error('公式任务结果无效');return {text:result.text,revision:connection.revision,endpoint:'ai:'+connection.reference.profileId,model:result.model};

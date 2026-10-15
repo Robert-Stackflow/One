@@ -45,7 +45,7 @@ export class RecognitionConnectionStore {
           const v=await this.storage.read(this.purpose) as any;
           if(v===undefined)return;
           if (!v || typeof v !== 'object' || Array.isArray(v)) throw Error();
-          if(v.format==='one-recognition-service-binding'&&v.version===3&&v.purpose===this.purpose&&this.purpose==='translation'){
+          if(v.format==='one-recognition-service-binding'&&v.version===3&&v.purpose===this.purpose){
             const cfg=this.checked({...v,provider:'service'});
             if(v.legacy){const legacy=this.checked({...v.legacy,key:undefined});if(['ai','service'].includes(legacy.provider)||typeof v.legacy.encrypted!=='string'||!v.legacy.encrypted||v.legacy.encrypted.length>24000||!/^[\da-z+/]+=*$/i.test(v.legacy.encrypted))throw Error();}
             this.serviceBinding={revision:cfg.revision,serviceReference:cfg.serviceReference!,legacy:v.legacy};this.revision=cfg.revision;return;
@@ -77,11 +77,11 @@ export class RecognitionConnectionStore {
   async state(): Promise<TranslationConfig> {
     await this.load();
     if(this.serviceBinding){
-      const binding=this.serviceBinding;let profile:import('../../shared/recognition/translation-services').TranslationServiceProfile|undefined,error='';
-      try{profile=this.ai?.translators.list().find(profile=>profile.id===binding.serviceReference.serviceId);}catch{error='翻译服务配置无法读取，请打开服务管理';}
+      const binding=this.serviceBinding;let profile:{id:string;revision:string;name:string;hasKey:boolean}|undefined,error='';
+      try{profile=(this.purpose==='formula'?this.ai?.formulators.list():this.ai?.translators.list())?.find(profile=>profile.id===binding.serviceReference.serviceId);}catch{error=this.label+'服务配置无法读取，请打开服务管理';}
       const serviceReference={...binding.serviceReference,revision:profile?.revision||binding.serviceReference.revision};
       const hash=createHash('sha256').update(binding.revision+':'+(profile?.revision||'missing')+':'+!!profile?.hasKey).digest('hex').slice(0,32),revision=`${hash.slice(0,8)}-${hash.slice(8,12)}-${hash.slice(12,16)}-${hash.slice(16,20)}-${hash.slice(20)}`;
-      error=error||(!profile?'翻译服务已删除，请重新选择':!profile.hasKey?'系统加密不可用，无法读取翻译密钥':'');return {revision,provider:'service',endpoint:'',model:'',region:'',serviceReference,serviceName:profile?.name||'',keySaved:false,ready:!error,error,canRestoreLegacy:!!binding.legacy};
+      error=error||(!profile?this.label+'服务已删除，请重新选择':!profile.hasKey?'系统加密不可用，无法读取服务密钥':'');return {revision,provider:'service',endpoint:'',model:'',region:'',serviceReference,serviceName:profile?.name||'',keySaved:false,ready:!error,error,canRestoreLegacy:!!binding.legacy};
     }
     if(this.binding){
       const binding=this.binding,profile=this.ai?.taskProfiles().find(profile=>profile.id===binding.reference.profileId),model=profile?.models.find(model=>model.id===binding.reference.model);
@@ -119,7 +119,7 @@ export class RecognitionConnectionStore {
     const cfg = this.checked(value);
     if (cfg.revision !== (await this.state()).revision) throw Error(`${this.label}配置已改变，请重新打开配置`);
     if(cfg.provider==='service'){
-      if(this.purpose!=='translation'||!this.ai)throw Error('专用翻译服务不可用');this.ai.translators.assertReference(cfg.serviceReference);
+      if(!this.ai)throw Error('专用服务不可用');(this.purpose==='formula'?this.ai.formulators:this.ai.translators).assertReference(cfg.serviceReference);
       const binding={revision:randomUUID(),serviceReference:cfg.serviceReference!,legacy:this.stored||this.binding?.legacy||this.serviceBinding?.legacy};
       await this.storage.write(this.purpose,{format:'one-recognition-service-binding',purpose:this.purpose,version:3,...binding});this.serviceBinding=binding;this.binding=undefined;this.stored=undefined;this.revision=binding.revision;this.error='';return this.state();
     }

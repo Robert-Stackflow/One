@@ -30,7 +30,7 @@ export class FormulaClient {
     )
       throw Error('公式图片支持最多 8 MiB PNG，请先裁剪到公式区域');
     const abort = (this.abort = new AbortController()),
-      task = connection.provider==='ai'?(this.tasks?this.tasks.formula(connection,png,abort.signal):Promise.reject(Error('AI 公式服务不可用'))):this.request(connection, png, abort);
+      task = connection.provider==='ai'||connection.provider==='service'?(this.tasks?this.tasks.formula(connection,png,abort.signal):Promise.reject(Error('公式服务不可用'))):this.request(connection, png, abort);
     this.active = task;
     return task.finally(() => {
       if (this.active === task) {

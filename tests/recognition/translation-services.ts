@@ -8,7 +8,6 @@ import {serviceCredentialCrypto} from '../../src/main/service-connections';
 import {RecognitionConnectionStore} from '../../src/main/recognition/connections';
 import {TranslationClient} from '../../src/main/recognition/translation-client';
 import {RecognitionTaskProvider} from '../../src/main/recognition/task-provider';
-import {formulaSettings} from '../../src/shared/recognition/formula';
 import {createHash} from 'node:crypto';
 import {baiduSignature,baiduRequest,baiduResponse,baiduLanguages} from '../../src/main/recognition/baidu-translation';
 import {translationServiceEndpoint,translationServiceInput,type DedicatedTranslationKind,type TranslationServiceInput,type TranslationServiceReference} from '../../src/shared/recognition/translation-services';
@@ -91,7 +90,7 @@ test('registry validation, corrupt records and crypto failure never overwrite cr
 test('Azure legacy migration deduplicates, switches only on save and restores encrypted old connection across reopen',()=>fixture(async(ai)=>{
   const store=new RecognitionConnectionStore(ai.serviceConnections(),serviceCredentialCrypto,'translation',ai),legacy=await store.save({revision:(await store.state()).revision,provider:'azure',endpoint:'',model:'',region:'eastasia',key:secret}),ref=await store.migrateLegacy(legacy.revision);assert.ok('serviceId' in ref);
   assert.deepEqual(await store.migrateLegacy(legacy.revision),ref);assert.equal(ai.translators.list().length,1);assert.equal((await store.connection(legacy.revision)).provider,'azure');
-  const saved=await store.save({revision:legacy.revision,provider:'service',endpoint:'',model:'',region:'',serviceReference:ref as TranslationServiceReference});assert.equal(saved.ready,true);assert.equal(saved.canRestoreLegacy,true);assert.equal((await store.connection(saved.revision)).key,'');assert.throws(()=>formulaSettings({...saved}),/公式/);
+  const saved=await store.save({revision:legacy.revision,provider:'service',endpoint:'',model:'',region:'',serviceReference:ref as TranslationServiceReference});assert.equal(saved.ready,true);assert.equal(saved.canRestoreLegacy,true);assert.equal((await store.connection(saved.revision)).key,'');await assert.rejects(new RecognitionConnectionStore(ai.serviceConnections(),serviceCredentialCrypto,'formula',ai).save({...saved}),/已删除|已改变/);
   const reopened=new RecognitionConnectionStore(ai.serviceConnections(),serviceCredentialCrypto,'translation',ai);assert.equal((await reopened.state()).revision,saved.revision);const restored=await reopened.restoreLegacy(saved.revision);assert.equal((await reopened.connection(restored.revision)).key,secret);assert.equal(restored.region,'eastasia');
 }));
 test('dedicated responses isolate malformed texts but reject ambiguous counts and redact provider error bodies',async()=>{

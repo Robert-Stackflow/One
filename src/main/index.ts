@@ -814,6 +814,9 @@ function registerIPC() {
   handle('materials-open-image-project',()=>imageEditor!.openProject(main!));
   handle('ai-state',()=>aiService.state(),['main','ai-chat','search']);
   handle('translation-services',()=>aiService.translators.list(),['main']);
+  handle('formula-services',()=>aiService.formulators.list(),['main']);
+  handle('formula-service-save',(_event,value)=>aiService.formulators.save(value),['main']);
+  handle('formula-service-remove',(_event,id,revision)=>aiService.formulators.remove(id,revision),['main']);
   handle('translation-service-save',(_event,value)=>aiService.translators.save(value),['main']);
   handle('translation-service-remove',(_event,id,revision)=>aiService.translators.remove(id,revision),['main']);
   handle('ai-profile',(_event,value:AIProfileInput)=>aiService.profile(value),['main']);

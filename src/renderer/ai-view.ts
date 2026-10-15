@@ -4,6 +4,7 @@ import {dialogMarkup,openDialog,closeDialog,confirmDialog} from './dialog';
 import {openAIModelList,openAIProfileEditor} from './ai-profile-editor';
 import type {AICommand,AIProfile,AIState} from '../shared/ai';
 import {mountTranslationServiceManagement} from './translation-services-view';
+import {mountFormulaServiceManagement} from './formula-services-view';
 
 export function aiPage(){return `<div class="ai-page"><div class="toolbar module-toolbar ai-toolbar"><div class="tabs" role="tablist" aria-label="AI 对话">${[['chat','对话'],['services','AI 服务'],['commands','指令'],['settings','设置']].map(([id,label],i)=>`<button type="button" data-ai-tab="${id}" role="tab" aria-selected="${i===0}" class="${i?'':'selected'}">${label}</button>`).join('')}</div><div class="ai-toolbar-actions">${button('ai-add-service','添加服务','plus').replace('<button ','<button hidden ')}${button('ai-add-command','添加指令','plus').replace('<button ','<button hidden ')}${button('ai-open-chat','打开 AI 对话','open',true)}</div></div>
  <section data-ai-panel="chat"><div id="ai-main-chat" class="ai-main-chat"></div></section>
@@ -13,7 +14,8 @@ export function aiPage(){return `<div class="ai-page"><div class="toolbar module
 
 export function setupAIPage(root:HTMLElement){let state:AIState|undefined;
  const translators=mountTranslationServiceManagement(root.querySelector('[data-ai-panel="services"]')!);
- const load=async()=>{const values=await Promise.all([api.aiState(),translators.refresh()]);state=values[0];draw();};
+ const formulators=mountFormulaServiceManagement(root.querySelector('[data-ai-panel="services"]')!);
+ const load=async()=>{const values=await Promise.all([api.aiState(),translators.refresh(),formulators.refresh()]);state=values[0];draw();};
  const draw=()=>{if(!state)return;const hotkey=q<HTMLInputElement>('ai-hotkey');if(document.activeElement!==hotkey)hotkey.value=state.shortcut;q('ai-hotkey-error').textContent=state.shortcutError;
   q('ai-services').classList.add('ai-service-cards');q('ai-services').innerHTML=state.profiles.length?[...state.profiles].sort((a,b)=>Number(b.id===state!.defaultId)-Number(a.id===state!.defaultId)).map(p=>`<article class="ai-service-card"><div class="ai-service-card-copy"><strong>${esc(p.name)} ${p.id===state!.defaultId?'<span class="ai-default-tag">默认</span>':''}</strong><p>${esc(p.models?.find(model=>model.id===p.model)?.name||p.model||'尚未选择模型')}</p><small>${esc(p.baseUrl)}</small></div><div class="ai-service-card-actions"><button type="button" data-service-models="${esc(p.id)}">模型列表</button><button type="button" data-service-edit="${esc(p.id)}">编辑</button>${p.id===state!.defaultId?'':`<button type="button" data-service-default="${esc(p.id)}">设为默认</button>`}<button type="button" data-service-remove="${esc(p.id)}">删除</button></div></article>`).join(''):'<p class="ai-service-empty">暂无 AI 服务。点击右上角“添加服务”开始。</p>';
   q('ai-commands').innerHTML=state.commands.map(c=>`<div class="ai-row"><span class="ai-row-icon">${icon('text')}</span><div><strong>${esc(c.name)}</strong><small>${esc(c.prompt.slice(0,95))}</small></div>${c.builtin?'<span class="ai-default">内置</span>':`<button type="button" data-command-edit="${esc(c.id)}">编辑</button>`}</div>`).join('');

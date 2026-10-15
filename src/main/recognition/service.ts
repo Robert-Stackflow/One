@@ -236,7 +236,7 @@ export class OCRService {
     handle('translation-config', () => this.translationStore.state());
     const servicePrefix=this.kind==='formula'?'formula':'translation',serviceStore=this.kind==='formula'?this.formulaStore:this.translationStore;
     handle(servicePrefix+'-profiles',()=>ctx.ai?.taskProfiles()||[]);
-    handle(servicePrefix+'-services',()=>this.kind==='ocr'?ctx.ai?.translators.list()||[]:[]);
+    handle(servicePrefix+'-services',()=>this.kind==='ocr'?ctx.ai?.translators.list()||[]:ctx.ai?.formulators.list()||[]);
     handle(servicePrefix+'-manage',()=>ctx.manageServices?.());
     handle(servicePrefix+'-check-cancel',()=>{this.serviceCheck?.abort();});
     handle(servicePrefix+'-verify',async reference=>{

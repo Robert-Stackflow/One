@@ -63,6 +63,9 @@ export interface OneAPI extends PinsAPI,MaterialsAPI,CaptureCommands {
   searchSuggest(engineId:string,query:string):Promise<string[]>;
   aiState():Promise<import('./ai').AIState>;onAIEvent(callback:(event:import('./ai').AIEvent)=>void):()=>void;onAIChatOpen(callback:(id:string)=>void):()=>void;
   translationServices():Promise<import('./recognition/translation-services').TranslationServiceProfile[]>;
+  formulaServices():Promise<import('./recognition/formula-services').FormulaServiceProfile[]>;
+  saveFormulaService(value:import('./recognition/formula-services').FormulaServiceInput):Promise<import('./recognition/formula-services').FormulaServiceProfile>;
+  removeFormulaService(id:string,revision:string):Promise<void>;
   saveTranslationService(value:import('./recognition/translation-services').TranslationServiceInput):Promise<import('./recognition/translation-services').TranslationServiceProfile>;
   removeTranslationService(id:string,revision:string):Promise<void>;
   aiProfile(value:import('./ai').AIProfileInput):Promise<string>;aiProfileRemove(id:string):Promise<void>;aiProfileDefault(id:string):Promise<void>;aiModels(id:string):Promise<string[]>;aiModelCatalog(id:string):Promise<import('./ai').AIModel[]>;aiModelCatalogDraft(value:import('./ai').AIModelCatalogDraft):Promise<import('./ai').AIModel[]>;
