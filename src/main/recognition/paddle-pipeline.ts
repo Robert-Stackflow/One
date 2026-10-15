@@ -1,3 +1,4 @@
+import {orderOCRFragments,TEXT_LAYOUT_VERSION} from '../../shared/recognition/text-layout';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { ocrDimensions } from '../../shared/recognition/ocr';
@@ -100,11 +101,13 @@ export class PaddleOCRPipeline {
           if(hints&&alignedRegions+hints.length<=200000){regions.push(hints);alignedRegions+=hints.length;}else regions.push(undefined);
         } finally { crop.data.fill(0); }
       }
+      const layout=orderOCRFragments(words.map((word,index)=>({word,quad:quads[index],regions:regions[index]})));
+      if(layout.columns){words.splice(0,words.length,...layout.items.map(item=>item.word));quads.splice(0,quads.length,...layout.items.map(item=>item.quad));regions.splice(0,regions.length,...layout.items.map(item=>item.regions));}
       const result: OCRResult & { truncated: boolean } = { width, height, language, words,
         text:words.map((word,index)=>(index?(word.line===words[index-1].line?' ':'\n'):'')+word.text).join(''),
         confidence: words.length ? words.reduce((sum, word) => sum + word.confidence, 0) / words.length : 0, truncated: detection.truncated };
       result.document = textDocument(result, createHash('sha256').update(png).digest('hex'), {
-        id: 'paddle-onnx', version: require('onnxruntime-node/package.json').version,
+        id: 'paddle-onnx', version: require('onnxruntime-node/package.json').version+'+'+TEXT_LAYOUT_VERSION,
         model: this.modelRevision, device: this.backend, confidenceScale: 100,
       });
       let index=0;

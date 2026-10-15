@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planOCRTiles,planOCRRegionTiles,ocrRect,needsOCRTiles,OCR_TILE_EDGE } from '../../src/shared/recognition/ocr-tiles';
-import { textDocument,readingTokens,selectedText } from '../../src/shared/recognition/text-document';
+import { textDocument,readingTokens,selectedText,textGroup } from '../../src/shared/recognition/text-document';
 import { mergeOCRTiles } from '../../src/main/recognition/ocr-tile-merge';
 import type { OCRResult,OCRWord } from '../../src/shared/recognition/ocr';
 const engine={id:'fixture',version:'1',model:'fixed',device:'cpu'},hash='a'.repeat(64);
@@ -69,4 +69,26 @@ test('two dimensional crops preserve global columns and join same-row fragments'
   const parts=tiles.map(tile=>({tile,result:result(tile,source.filter(word=>word.x>=tile.left&&word.x+word.width<=tile.left+tile.width&&word.y>=tile.top&&word.y+word.height<=tile.top+tile.height).map(word=>({...word,x:word.x-tile.left,y:word.y-tile.top})))}));
   const merged=mergeOCRTiles(parts,size,hash);assert.equal(merged.text,'LEFT RIGHT');assert.equal(merged.words.length,2);
   assert.deepEqual(merged.words.map(word=>word.x),[1740,1840]);assert.equal(merged.words[0].line,merged.words[1].line);
+});
+
+
+test('page columns survive two-dimensional tiles, CTC geometry and rebased copy offsets',()=>{
+ const size={width:4000,height:9000},tiles=planOCRTiles(size),source=[100,140,180,220].flatMap((y,line)=>[100,3000].map((x,column)=>({text:(column?'RIGHT':'LEFT')+' column paragraph '+line,x,y,width:500,height:20,line,confidence:96})));
+ const parts=tiles.map(tile=>{const words=source.filter(word=>word.x>=tile.left&&word.x+word.width<=tile.left+tile.width&&word.y>=tile.top&&word.y+word.height<=tile.top+tile.height).map(word=>({...word,x:word.x-tile.left,y:word.y-tile.top})),value=result(tile,words);
+  for(const line of value.document!.blocks.flatMap(block=>block.lines))line.tokens=line.tokens.flatMap(base=>{const index=Number(base.wordId.slice(1)),word=words[index],cut=word.text.startsWith('LEFT')?4:5,quad=(left:number,right:number)=>[{x:word.x+left,y:word.y},{x:word.x+right,y:word.y},{x:word.x+right,y:word.y+word.height},{x:word.x+left,y:word.y+word.height}] as any;return [{...base,text:word.text.slice(0,cut),geometry:'ctc' as const,quad:quad(0,100),wordId:base.wordId+':0'},{...base,text:word.text.slice(cut),geometry:'ctc' as const,quad:quad(100,500),wordId:base.wordId+':1'}];});
+  return {tile,result:value};});
+ const merged=mergeOCRTiles(parts,size,hash),ordered=[...source.filter(word=>word.x===100),...source.filter(word=>word.x===3000)];assert.deepEqual(merged.words.map(word=>word.text),ordered.map(word=>word.text));assert.equal(merged.document!.blocks.length,2);
+ const tokens=readingTokens(merged.document!);assert.equal(tokens.length,source.length*2);assert.equal(selectedText(tokens,0,tokens.length-1),merged.text);
+ for(const token of tokens){assert.equal(token.geometry,'ctc');assert.equal(merged.text.slice(token.sourceStart,token.sourceEnd),token.text);const word=merged.words[Number(/^w(\d+)/.exec(token.wordId)![1])];assert.equal(token.quad[0].y,word.y);assert.ok(token.quad[0].x>=word.x&&token.quad[1].x<=word.x+word.width);}
+ assert.equal(selectedText(tokens,0,7),ordered.slice(0,4).map(word=>word.text).join('\n'));assert.equal(merged.document!.source.sha256,hash);
+});
+
+
+test('stitched crop text rebuilds CTC word grouping across the seam',()=>{
+ const size={width:4000,height:4000},tiles=planOCRTiles(size),first=tiles.filter(tile=>tile.top===0).sort((a,b)=>a.left-b.left),a=first[0],b=first[1],step=(a.left+a.width-b.left)/14,x=b.left-step*3;
+ const parts=tiles.map(tile=>{const text=tile.index===a.index?'Column reading or':tile.index===b.index?'umn reading order':'',left=tile.index===a.index?x:b.left,word={text,x:left-tile.left,y:100,width:text.length*step,height:20,line:0,confidence:95},value=result(tile,text?[word]:[]);
+  if(text){const line=value.document!.blocks[0].lines[0],base=line.tokens[0];line.tokens=Array.from(text).flatMap((char,index)=>char===' '?[]:[{...base,text:char,wordId:'w0:0',geometry:'ctc' as const,quad:[{x:word.x+index*step,y:100},{x:word.x+(index+1)*step,y:100},{x:word.x+(index+1)*step,y:120},{x:word.x+index*step,y:120}] as any}]);}
+  return {tile,result:value};});
+ const merged=mergeOCRTiles(parts,size,hash);assert.equal(merged.text,'Column reading order');const tokens=readingTokens(merged.document!),index=tokens.findIndex(token=>token.sourceStart===merged.text.indexOf('order')),group=textGroup(tokens,index,'word');
+ assert.equal(selectedText(tokens,group.anchor,group.focus),'order');assert.equal(selectedText(tokens,0,tokens.length-1),merged.text);assert.equal(merged.words.length,1);
 });
