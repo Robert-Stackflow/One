@@ -321,6 +321,24 @@ F 已完成一次 0.16.24 目录候选预检（应用源码 `62d482a`），候�
 - 冷启动、热运行、峰值内存、模型下载/取消、请求超时、窗口关闭和版本升级均记录；具体耗时门槛由 A 阶段实测冻结，不先承诺未经验证的毫秒数或准确率。
 - 每个本地模型/尺寸至少验证声明支持的 CPU/GPU 后端，记录显卡、驱动、运行包和精度；覆盖双显卡选择、显存不足、模型共存切换、设备丢失和 CPU 回退。质量与性能结果按具体型号分列，不把某个尺寸的成绩套给全家族。
 
+### 当前可复现的 OCR 观察基线
+
+[语料准备](../../scripts/prepare-ocr-quality.mjs) 固定 CC-OCR 数据版本 `c64517e92179991d509776064174776700cdd5a2`，从六个指定分层各取连续十张原始图；这不是随机或有代表性的采样。`--download` 才访问数据服务，随后默认只核验本地缓存。原图/规范 PNG 分别记录 SHA-256，避免把同一原图的变体算成独立样本。图像仅留在本地 work，不能把上游代码的许可视为所有原图的再分发许可。
+
+[基线入口](../../scripts/ocr-quality-benchmark.mjs) 使用真实 Tesseract/Paddle 工作进程，按图保存文字、几何、错误、耗时、分块数与内存记录；失败样本按原文全部漏识计算，不从分母移除。[指标实现与测试](../../tests/recognition/ocr-quality.ts) 区分内容 CER、包含空白的 CER、宏平均和字符加权平均；字符袋误差只是阅读顺序问题的诊断下界。局部矩形内 token 的复制 CER 与包围框 IoU 只是选择代理指标，不能替代完整漏检/错检或字框精度。Paddle 独立工作进程 RSS 与 Tesseract 基准进程 RSS 的统计范围不同，不直接作内存排名。
+
+已构建且安装所选模型后，可离线复用 dev 模型；测试只在运行目录创建经 SHA 校验的硬链接，结束后删除自有链接，不修改 dev 权重：
+
+```powershell
+node scripts/prepare-ocr-quality.mjs --download
+node scripts/prepare-ocr-quality.mjs
+node scripts/ocr-quality-benchmark.mjs --model-directory work/dev-profile/models/library --languages work/dev-profile/recognition/models
+```
+
+`--models` 可限定型号，`--backend dml --device-id <DXGI索引>` 验证指定 GPU；后端、设备、硬件/软件版本、模型集合、输入清单、运行器和工作进程共同组成运行指纹，避免 CPU/GPU 互相覆盖。每次运行冻结清单、运行器和四个 JS 工作进程的副本，开发构建刷新不会替换进行中的测试代码。`--resume` 仅复用同一指纹结果。`--rescore --manifest <清单> --runs <运行目录> --output <报告>` 只重算已存预测；多目录时按完整型号替换，不拼挑单张成功结果。
+
+当前完整基线为 60 张上游文字标注，加两张 One 截图的 Codex 视觉转写及五个关键区域；后两张不是用户签署的人工验收。仍缺目标分层的 60 张完整文字/几何复核、质量阈值及真实场景验收，报告始终保留 `acceptanceReady:false`，默认仍是 Tesseract。完整基线与后续针对失败样本的回归分别保存在 `work/current/capture-reconstruction/ocr-quality/runs`；局部回归不能代替完整质量基线。
+
 ## 9. 尚未验证的关键事项
 
 PP-OCRv6 在目标 Windows CPU 和已有 ONNX Runtime 下的实际耗时及前后处理兼容；中文细粒度选择定位；本地公式的自回归解码/转换与权重许可；现有 Codex 和各服务实际视觉模型能力；复杂背景擦字质量；真实长截图目标的滚动注入和遮挡行为；多窗口报错的实际发生路径。以上是实施前的验证门槛，不是已经解决的结论。

@@ -1,0 +1,11 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {build} from 'esbuild';
+import {spawn} from 'node:child_process';
+import {createHash} from 'node:crypto';
+const root=resolve('work/current/capture-reconstruction/ocr-quality');await mkdir(root,{recursive:true});
+const result=await build({entryPoints:[process.argv.includes('--rescore')?'scripts/benchmarks/ocr-quality-report.ts':'scripts/benchmarks/ocr-quality.ts'],bundle:true,format:'cjs',platform:'node',target:'node22',packages:'external',write:false,logLevel:'warning'});
+const entry=join(root,'benchmark-'+createHash('sha256').update(result.outputFiles[0].contents).digest('hex').slice(0,16)+'.cjs');
+await writeFile(entry,result.outputFiles[0].contents);
+const child=spawn(process.execPath,[entry,...process.argv.slice(2)],{stdio:'inherit',windowsHide:true});
+child.on('error',error=>{console.error(error.message);process.exitCode=1;});child.once('exit',code=>{process.exitCode=code??1;});
