@@ -5,6 +5,15 @@ import { textDocument,readingTokens,selectedText } from '../../src/shared/recogn
 import { mergeOCRTiles } from '../../src/main/recognition/ocr-tile-merge';
 import type { OCRResult,OCRWord } from '../../src/shared/recognition/ocr';
 const engine={id:'fixture',version:'1',model:'fixed',device:'cpu'},hash='a'.repeat(64);
+test('engine tile limits retain complete nonoverlapping ownership and bounded overlap',()=>{
+  const size={width:2550,height:3506},region={left:100,top:200,width:2400,height:3200};
+  const tiles=planOCRRegionTiles(size,region,1984);
+  assert.equal(tiles.reduce((sum,tile)=>sum+tile.core.width*tile.core.height,0),region.width*region.height);
+  for(const a of tiles){assert.ok(a.width<=1984&&a.height<=1984);for(const b of tiles)if(a!==b)assert.ok(a.core.left+a.core.width<=b.core.left||b.core.left+b.core.width<=a.core.left||a.core.top+a.core.height<=b.core.top||b.core.top+b.core.height<=a.core.top);}
+  for(const edge of [0,256,511,2049,NaN,Infinity,1024.5])assert.throws(()=>planOCRTiles(size,edge),/分块/);
+  const slivers=planOCRTiles({width:2550,height:3506},1984);assert.ok(slivers.every(tile=>tile.core.width>=1000&&tile.core.height>=1000));
+  assert.equal(planOCRTiles({width:1984,height:1984},1984).length,1);
+});
 test('regional tiles decode only the bounded crop and retain original coordinates',()=>{
   const size={width:4000,height:10000},region={left:320,top:4300,width:2400,height:3200},tiles=planOCRRegionTiles(size,region);
   assert.equal(tiles.reduce((sum,tile)=>sum+tile.core.width*tile.core.height,0),region.width*region.height);
@@ -51,7 +60,8 @@ test('approximate token quads and offsets are rebased after seam ownership',()=>
 });
 test('seam jitter does not drop both copies when neither center is in its ownership region',()=>{
   const size={width:500,height:9000},tiles=planOCRTiles(size);
-  const parts=tiles.map(tile=>({tile,result:result(tile,tile.index<2?[{text:'SEAM',x:20,y:(tile.index?1771:1773)-tile.top,width:100,height:40,line:0,confidence:95}]:[])}));
+  const boundary=tiles[0].core.height;
+  const parts=tiles.map(tile=>({tile,result:result(tile,tile.index<2?[{text:'SEAM',x:20,y:(boundary-19+(tile.index?-2:0))-tile.top,width:100,height:40,line:0,confidence:95}]:[])}));
   const merged=mergeOCRTiles(parts,size,hash);assert.equal(merged.text,'SEAM');assert.equal(merged.words.length,1);
 });
 test('two dimensional crops preserve global columns and join same-row fragments',()=>{

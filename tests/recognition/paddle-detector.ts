@@ -3,12 +3,31 @@ import assert from 'node:assert/strict';
 import { paddleDetBoxes, paddleDetConfig, paddleDetInput, mergePaddleTextBoxes, type PaddleTextBox } from '../../src/main/recognition/paddle-detector';
 import { rectifyPaddleText } from '../../src/main/recognition/paddle-pipeline';
 import {paddleTextRows} from '../../src/main/recognition/paddle-detector';
+import {paddleDetectionDimensions,paddleDetectionTiles,PADDLE_DETECTION_PIXELS} from '../../src/shared/recognition/paddle-dimensions';
+import {planOCRTiles} from '../../src/shared/recognition/ocr-tiles';
 const config = paddleDetConfig(`Global: {model_name: fixture}
 PreProcess:
   transform_ops:
     - DecodeImage: {img_mode: BGR}
     - NormalizeImage: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225], scale: '1./255.'}
 PostProcess: {name: DBPostProcess, thresh: 0.2, box_thresh: 0.4, unclip_ratio: 1.4, max_candidates: 3000}`);
+
+test('detector capacity is checked after stride rounding and follows the selected preset resize',()=>{
+  assert.deepEqual(paddleDetectionDimensions({width:2000,height:2000}),{width:2016,height:2016});
+  assert.equal(paddleDetectionTiles({width:2000,height:2000}).forceTiles,true);
+  assert.equal(paddleDetectionTiles({width:1999,height:1999}).forceTiles,false);
+  assert.equal(paddleDetectionTiles({width:1984,height:1984}).forceTiles,false);
+  for(const size of [{width:2400,height:3435},{width:2550,height:3506},{width:3024,height:2268}]){
+    const policy=paddleDetectionTiles(size);assert.equal(policy.forceTiles,true);
+    for(const tile of planOCRTiles(size,policy.tileEdge)){const normalized=paddleDetectionDimensions(tile);assert.ok(normalized.width*normalized.height<=PADDLE_DETECTION_PIXELS);}
+    assert.equal(paddleDetectionTiles(size,960).forceTiles,false);
+    const normalized=paddleDetectionDimensions(size,960);assert.ok(normalized.width<=1024&&normalized.height<=1024);
+  }
+  for(const width of [1,32,400,735,736,1000,1984])for(const height of [1,32,400,735,736,1000,1984]){
+    const normalized=paddleDetectionDimensions({width,height});assert.ok(normalized.width*normalized.height<=PADDLE_DETECTION_PIXELS);
+  }
+  for(const size of [{width:NaN,height:100},{width:0,height:100},{width:16385,height:100},{width:8000,height:8000}])assert.throws(()=>paddleDetectionDimensions(size));
+});
 test('DB postprocessing keeps separate lines, scores whole boxes and unclips in original coordinates', () => {
   const map = new Float32Array(100 * 100);
   for (const y of [10, 40]) for (let row = y; row < y + 10; row++) for (let x = 10; x < 80; x++) map[row * 100 + x] = 0.9;

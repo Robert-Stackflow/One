@@ -12,6 +12,7 @@ import { readInferenceDevices, resolveInferenceDevice } from '../inference-devic
 import { recognizeOCRImage } from './ocr-image-task';
 import { needsOCRTiles } from '../../shared/recognition/ocr-tiles';
 import type { OCRRect } from '../../shared/recognition/ocr-tiles';
+import {paddleDetectionTiles} from '../../shared/recognition/paddle-dimensions';
 interface Context { models:LocalModelManager; runner:OCRRunner; paddle:PaddleRunner; native:LlamaRunner }
 /** Every entry point uses the same selected model, device policy and tiled inference. */
 export async function inferOCRImage(context:Context,png:Buffer,size:{width:number;height:number},language:OCRLanguage,
@@ -49,7 +50,7 @@ export async function inferOCRImage(context:Context,png:Buffer,size:{width:numbe
             if(result.fallbackReason)cpuFallback=true;
             result.inference={model:lease.preset.title+' '+lease.preset.size,backend:result.actualBackend,
               device:result.actualBackend==='dml'?selected.gpu!.name+' · '+selected.gpu!.deviceId:'CPU',fallbackReason:result.fallbackReason||selected.reason};return result;
-          },progress,undefined,region);
+          },progress,undefined,region,paddleDetectionTiles(region||size,lease.preset.detectionResizeLong));
         } finally { lease.release(); }
       } finally { releaseUse(); }
 }

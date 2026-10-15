@@ -5,12 +5,12 @@ import { decodedOCRTiles } from './ocr-tile-reader';
 import { mergeOCRTiles,type OCRTileResult } from './ocr-tile-merge';
 export async function recognizeOCRImage(png:Buffer,size:{width:number;height:number},signal:AbortSignal,
   recognize:(png:Buffer,size:{width:number;height:number},progress:(value:number)=>void)=>Promise<OCRResult>,
-  progress:(value:number)=>void,worker?:string,region?:OCRRect):Promise<OCRResult>{
-  signal.throwIfAborted();if(!region&&!needsOCRTiles(size))return recognize(png,size,progress);
-  const input=Buffer.from(png),dimensions={...size},count=planOCRRegionTiles(dimensions,region).length,results:OCRTileResult[]=[];
+  progress:(value:number)=>void,worker?:string,region?:OCRRect,options:{forceTiles?:boolean;tileEdge?:number}={}):Promise<OCRResult>{
+  signal.throwIfAborted();if(!region&&!options.forceTiles&&!needsOCRTiles(size))return recognize(png,size,progress);
+  const input=Buffer.from(png),dimensions={...size},count=planOCRRegionTiles(dimensions,region,options.tileEdge).length,results:OCRTileResult[]=[];
   try{
     let words=0,tokens=0;
-    for await(const {tile,png:chunk} of decodedOCRTiles(input,dimensions,signal,worker,region)){
+    for await(const {tile,png:chunk} of decodedOCRTiles(input,dimensions,signal,worker,region,options.tileEdge)){
       const result=await recognize(chunk,{width:tile.width,height:tile.height},value=>progress((tile.index+Math.max(0,Math.min(1,value)))/count));
       signal.throwIfAborted();words+=result.words.length;
       tokens+=result.document?.blocks.reduce((sum,block)=>sum+block.lines.reduce((sum,line)=>sum+line.tokens.length,0),0)||0;

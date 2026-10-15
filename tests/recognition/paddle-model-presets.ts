@@ -15,9 +15,9 @@ test('known preset identity controls artifact pairing and resource budget',async
     assert.equal(!!lease.model.orientation,preset.id!=='pp-ocrv6-tiny');
     assert.equal(!!lease.model.orientationConfig,!!lease.model.orientation);lease.release();
   }
-  const changedBudget={...paddleSmallModel,memoryBudgetMiB:128};
+  const changedBudget={...paddleSmallModel,memoryBudgetMiB:128,detectionResizeLong:960};
   const lease=await acquirePaddleModel(store,changedBudget);
-  assert.equal(lease.preset.memoryBudgetMiB,paddleSmallModel.memoryBudgetMiB);lease.release();
+  assert.equal(lease.preset.memoryBudgetMiB,paddleSmallModel.memoryBudgetMiB);assert.equal(lease.preset.detectionResizeLong,paddleSmallModel.detectionResizeLong);lease.release();
   const previous=acquired;
   for(const descriptor of [
     {...paddleSmallModel,revision:'unknown'},

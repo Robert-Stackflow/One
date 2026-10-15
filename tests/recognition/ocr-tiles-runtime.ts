@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import { decodedOCRTiles } from '../../src/main/recognition/ocr-tile-reader';
 import { recognizeOCRImage } from '../../src/main/recognition/ocr-image-task';
 import { planOCRTiles } from '../../src/shared/recognition/ocr-tiles';
+import {paddleDetectionTiles} from '../../src/shared/recognition/paddle-dimensions';
 import { textDocument,readingTokens,selectedText } from '../../src/shared/recognition/text-document';
 import { OCRRunner } from '../../src/main/recognition/ocr-runner';
 import { OCRModels } from '../../src/main/recognition/ocr-models';
@@ -20,6 +21,17 @@ const lines=[100,1806,3596,5390,7185,8976,9800];
 const png=await sharp(Buffer.from(`<svg width="680" height="10000"><rect width="100%" height="100%" fill="white"/><g fill="black" font-family="Arial" font-size="42">${lines.map((y,index)=>`<text x="24" y="${y}">ONE ROW ${index+1} END</text>`).join('')}</g></svg>`)).png().toBuffer();
 const hash=createHash('sha256').update(png).digest('hex');
 try{
+  // This image is under the generic 12 MP limit but exceeds the v6 detector capacity.
+  const capacitySize={width:2500,height:2100},capacityPNG=await sharp({create:{...capacitySize,channels:3,background:'white'}}).png().toBuffer();
+  const policy=paddleDetectionTiles(capacitySize),plan=planOCRTiles(capacitySize,policy.tileEdge);let capacityCalls=0;
+  const capacityResult=await recognizeOCRImage(capacityPNG,capacitySize,new AbortController().signal,async(chunk,dimensions)=>{
+    const tile=plan[capacityCalls++],info=await sharp(chunk).metadata();assert.equal(info.width,dimensions.width);assert.equal(info.height,dimensions.height);
+    const value={...dimensions,language:'eng' as const,text:'X'+tile.index,confidence:90,words:[{text:'X'+tile.index,x:tile.core.left-tile.left+10,y:tile.core.top-tile.top+10,width:50,height:20,line:0,confidence:90}]};
+    return {...value,document:textDocument(value,createHash('sha256').update(chunk).digest('hex'),{id:'fixture',version:'1',model:'tile-capacity',device:'cpu'})};
+  },()=>{},worker,undefined,policy);
+  assert.equal(capacityCalls,plan.length);assert.equal(capacityResult.words.length,plan.length);
+  assert.deepEqual(capacityResult.words.map(word=>[word.x,word.y]),plan.map(tile=>[tile.core.left+10,tile.core.top+10]));
+  assert.equal(capacityResult.document!.source.sha256,createHash('sha256').update(capacityPNG).digest('hex'));capacityPNG.fill(0);
   let chunks=0,decodePeakMiB=0;
   for await(const {tile,png:chunk,decodeRSSMiB} of decodedOCRTiles(png,size,new AbortController().signal,worker)){
     decodePeakMiB=Math.max(decodePeakMiB,decodeRSSMiB);

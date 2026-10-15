@@ -6,7 +6,7 @@ const paddle = (repository: string, revision: string, name: string, role: string
   ({ name, role, bytes, sha256, url: `https://huggingface.co/PaddlePaddle/${repository}/resolve/${revision}/${remote}` });
 
 /** Only adapted presets enter this catalog; other planned families remain in the implementation plan. */
-export interface PaddleOCRPreset extends LocalModelDescriptor { memoryBudgetMiB: number }
+export interface PaddleOCRPreset extends LocalModelDescriptor { memoryBudgetMiB: number;detectionResizeLong?:number }
 export const paddleTinyModel: PaddleOCRPreset = {
   id: 'pp-ocrv6-tiny', revision: 'det-2ba1506-rec-2612ab3', title: 'PP-OCRv6', size: 'tiny', purpose: 'ocr',
   languages: ['中文', 'English'], precision: 'fp32', runtime: 'onnxruntime-node@1.30.0', backends: ['cpu', 'dml'],
@@ -50,6 +50,7 @@ export const paddleMediumModel: PaddleOCRPreset = {
   ],
 };
 export const paddleV5MobileModel: PaddleOCRPreset = {
+  detectionResizeLong:960,
   id: 'pp-ocrv5-mobile', revision: 'det-e6f4fa8-rec-ed152b8-ori-7fdcf3c', title: 'PP-OCRv5', size: 'mobile', purpose: 'ocr',
   languages: ['中文', 'English'], precision: 'fp32', runtime: 'onnxruntime-node@1.30.0', backends: ['cpu', 'dml'],
   memoryBudgetMiB: 1536, measuredMemoryMiB: 315,
@@ -63,6 +64,7 @@ export const paddleV5MobileModel: PaddleOCRPreset = {
   ],
 };
 export const paddleV5ServerModel: PaddleOCRPreset = {
+  detectionResizeLong:960,
   id: 'pp-ocrv5-server', revision: 'det-dcf248c-rec-b70df21-ori-7fdcf3c', title: 'PP-OCRv5', size: 'server', purpose: 'ocr',
   languages: ['中文', 'English'], precision: 'fp32', runtime: 'onnxruntime-node@1.30.0', backends: ['cpu', 'dml'],
   memoryBudgetMiB: 3072, measuredMemoryMiB: 839,

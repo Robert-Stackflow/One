@@ -2,6 +2,7 @@ import * as ort from 'onnxruntime-node';
 import { parse } from 'yaml';
 import { insideTextQuad } from '../../shared/recognition/text-geometry';
 import type { TextPoint, TextQuad } from '../../shared/recognition/text-document';
+import {paddleDetectionDimensions,PADDLE_DETECTION_PIXELS} from '../../shared/recognition/paddle-dimensions';
 
 export interface PaddleDetConfig { name: string; threshold: number; boxThreshold: number; unclip: number; maxCandidates: number; mean: number[]; std: number[]; resizeLong?: number }
 export interface PaddleTextBox { quad: TextQuad; confidence: number }
@@ -25,14 +26,9 @@ export function paddleDetConfig(yaml: string): PaddleDetConfig {
 
 /** PaddleX type 0 uses a minimum side; type 2 fits a long side and rounds up to stride 128. */
 export function paddleDetInput(rgb: Uint8Array, width: number, height: number, config: PaddleDetConfig, minSide = 736, maxSide = 4000) {
-  if (![width, height].every(Number.isSafeInteger) || width < 1 || height < 1 || width > 16384 || height > 16384 ||
-      width * height > 40_000_000 || rgb.length !== width * height * 3) throw Error('OCR 检测图像无效');
-  if (![minSide, maxSide].every(Number.isSafeInteger) || minSide < 32 || maxSide < minSide || maxSide > 4000) throw Error('OCR 检测缩放配置无效');
-  if(config.resizeLong!==undefined&&(!Number.isSafeInteger(config.resizeLong)||config.resizeLong<128||config.resizeLong>3968))throw Error('OCR 检测缩放配置无效');
-  const ratio = config.resizeLong===undefined?Math.min(Math.max(1, minSide / Math.min(width, height)), maxSide / Math.max(width, height)):config.resizeLong/Math.max(width,height);
-  const side=(value:number)=>config.resizeLong===undefined?Math.max(32,Math.round(Math.floor(value*ratio)/32)*32):Math.max(128,Math.ceil(Math.floor(value*ratio)/128)*128);
-  const w=side(width),h=side(height);
-  if (w * h > 4_000_000) throw Error('OCR 检测图像过大，请分块识别');
+  const {width:w,height:h}=paddleDetectionDimensions({width,height},config.resizeLong,minSide,maxSide);
+  if(rgb.length!==width*height*3)throw Error('OCR 检测图像无效');
+  if (w * h > PADDLE_DETECTION_PIXELS) throw Error('OCR 检测图像过大，请分块识别');
   const pixels = w * h, data = new Float32Array(pixels * 3);
   for (let y = 0; y < h; y++) {
     const sy = Math.max(0, Math.min(height - 1, (y + 0.5) * height / h - 0.5)), y0 = Math.floor(sy), y1 = Math.min(height - 1, y0 + 1), dy = sy - y0;

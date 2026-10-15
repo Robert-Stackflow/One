@@ -14,7 +14,7 @@ process.on('message',async(packet:any)=>{
   try{
     if(packet?.type==='open'&&!input){
       if(!Buffer.isBuffer(packet.png)||packet.png.length<33||packet.png.length>IMAGE_BYTES)throw Error('长图数据无效');
-      const source:Buffer=packet.png;input=source;tiles=planOCRRegionTiles(packet.size,packet.region);size={...packet.size};preview=packet.mode==='preview';
+      const source:Buffer=packet.png;input=source;tiles=planOCRRegionTiles(packet.size,packet.region,packet.tileEdge);size={...packet.size};preview=packet.mode==='preview';
       // Interlaced PNG cannot provide top-to-bottom bounded decoding.
       if(source[28]!==0&&(!preview&&!packet.region||needsOCRTiles(size)))throw Error('交错 PNG 长图请先转换为普通 PNG 后识别');
       const info=await sharp(source,{limitInputPixels:IMAGE_PIXELS,sequentialRead:true,failOn:'error'}).metadata();
