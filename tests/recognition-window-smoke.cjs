@@ -107,11 +107,12 @@ async function main(){
         const first=nodes.find(node=>node.textContent==='截'),last=nodes.find(node=>node.textContent==='图');
         return first&&last?[first.getBoundingClientRect().toJSON(),last.getBoundingClientRect().toJSON()]:null;
       });return !!pair;}).toBe(true);
-      const [first,last]=pair;await page.mouse.move(first.x+first.width/2,first.y+first.height/2);await page.mouse.down();
+      await page.evaluate(()=>{window.textGesture=[];});await unit.filter({hasText:/^截$/}).hover();await page.mouse.down();
+      const first=await unit.filter({hasText:/^截$/}).boundingBox(),last=await unit.filter({hasText:/^图$/}).boundingBox();assert.ok(first&&last);pair=[first,last];
       await page.mouse.move(last.x+last.width/2,last.y+last.height/2,{steps:5});await page.mouse.up();
       await page.locator('[data-text-action=copy]').click();
       await expect.poll(()=>app.evaluate(()=>global.recognitionCopies.at(-1).text)).toBe('截图').catch(async error=>{
-        console.error('Drag coordinates:',JSON.stringify(await page.evaluate(()=>window.textGesture)));throw error;
+        console.error('Drag coordinates:',JSON.stringify({planned:pair,events:await page.evaluate(()=>window.textGesture)}));throw error;
       });
     }
     await dragChinese();await viewport.focus();await viewport.press('Shift+ArrowRight');await viewport.press('Control+c');
