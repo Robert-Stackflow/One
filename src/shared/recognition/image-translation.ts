@@ -84,23 +84,37 @@ export function editImageTranslation(document:ImageTranslationDocument,id:string
 }
 export interface ImageTextLayout {fontSize:number;lineHeight:number;lines:string[];overflow:boolean}
 /** Keep a readable font floor; overflow is explicit and never silently shrunk indefinitely. */
-export function imageTextLayout(block:ImageTranslationBlock,measure:(text:string,size:number)=>number):ImageTextLayout {
+function* imageTextLayoutSteps(block:ImageTranslationBlock,measure:(text:string,size:number)=>number):Generator<void,ImageTextLayout> {
   const width=Math.max(1,block.rect.width-4),height=Math.max(1,block.rect.height-4),floor=Math.max(9,Math.ceil(block.fontSize*.6));
-  const characters=[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(block.text)].map(item=>item.segment);
+  const characters:string[]=[];let work=0;
+  for(const {segment} of new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(block.text)){characters.push(segment);if(++work%256===0)yield;}
   let answer:ImageTextLayout={fontSize:floor,lineHeight:floor*1.2,lines:[],overflow:true};
   for(let size=Math.max(floor,Math.min(160,block.fontSize));size>=floor;size--){
-    const lines:string[]=[];let current='',tooWide=false;
+    const lines:string[]=[],widths=new Map<string,number>();let current='',tooWide=false;
+    const emit=(line:string)=>{lines.push(line);if(measure(line,size)>width)tooWide=true;};
     for(const character of characters){
-      if(character==='\n'||character==='\r\n'||character==='\r'){lines.push(current);current='';continue;}
+      if(++work%256===0)yield;
+      if(character==='\n'||character==='\r\n'||character==='\r'){emit(current);current='';continue;}
       if(current&&measure(current+character,size)>width){
         const space=current.lastIndexOf(' ');
-        if(space>0){lines.push(current.slice(0,space));current=current.slice(space+1)+character;}
-        else{lines.push(current);current=character;}
-      }else current+=character;
-      if(measure(character,size)>width)tooWide=true;
+        if(space>0){emit(current.slice(0,space));current=current.slice(space+1);if(current&&measure(current+character,size)>width){emit(current);current='';}}
+        else{emit(current);current='';}
+      }
+      current+=character;
+      let characterWidth=widths.get(character);if(characterWidth===undefined){characterWidth=measure(character,size);if(widths.size<2048)widths.set(character,characterWidth);}
+      if(characterWidth>width)tooWide=true;
     }
-    lines.push(current);answer={fontSize:size,lineHeight:size*1.2,lines,overflow:tooWide||lines.length*size*1.2>height};
+    emit(current);answer={fontSize:size,lineHeight:size*1.2,lines,overflow:tooWide||lines.length*size*1.2>height};
     if(!answer.overflow)break;
+    yield;
   }
   return answer;
+}
+export function imageTextLayout(block:ImageTranslationBlock,measure:(text:string,size:number)=>number):ImageTextLayout {
+  const steps=imageTextLayoutSteps(block,measure);for(;;){const next=steps.next();if(next.done)return next.value;}
+}
+/** Same layout and complete text, with cancellation points during segmentation and measurement. */
+export async function imageTextLayoutAsync(block:ImageTranslationBlock,measure:(text:string,size:number)=>number,control:{valid():boolean;yieldControl():Promise<void>}):Promise<ImageTextLayout> {
+  const check=()=>{if(!control.valid())throw Error('图片翻译已取消');},steps=imageTextLayoutSteps(block,measure);
+  for(;;){check();const next=steps.next();check();if(next.done)return next.value;await control.yieldControl();}
 }

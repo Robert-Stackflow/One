@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {textDocument,type TextQuad} from '../../src/shared/recognition/text-document';
-import {imageTranslationDocument,imageTextLayout,editImageTranslation,imageTranslationSnapshot,validateImageTranslation} from '../../src/shared/recognition/image-translation';
+import {imageTranslationDocument,imageTextLayout,imageTextLayoutAsync,editImageTranslation,imageTranslationSnapshot,validateImageTranslation} from '../../src/shared/recognition/image-translation';
 import {repairTranslationBackground} from '../../src/shared/recognition/image-translation-background';
 import type {TranslationResult} from '../../src/shared/recognition/translation';
 import {ImageHistory,transformImage,validateImageDocument} from '../../src/shared/capture/image-document';
@@ -34,6 +34,21 @@ test('editable versions do not mutate source or earlier text; expansions cannot 
 test('layout keeps graphemes and a readable font floor, reports overflow rather than silently discarding text',()=>{
   const block=imageTranslationDocument(document(),result(),'image').blocks[0];const fit=imageTextLayout(block,(text,size)=>[...text].length*size*.5);assert.equal(fit.overflow,false);assert.equal(fit.lines.join(''),block.text);
   const long={...block,text:'ABC👨‍👩‍👧‍👦 '.repeat(20),rect:{...block.rect,width:30,height:15}};const layout=imageTextLayout(long,(text,size)=>[...text].length*size*.5);assert.equal(layout.overflow,true);assert.ok(layout.fontSize>=Math.ceil(block.fontSize*.6));assert.ok(layout.lines.some(line=>line.includes('👨‍👩‍👧‍👦')));
+});
+test('soft word wrapping never reports a fitting line when a final wide grapheme exceeds the available width',()=>{
+  const block={...imageTranslationDocument(document(),result(),'image').blocks[0],fontSize:9,text:'i i界',rect:{x:0,y:0,width:14,height:100}};
+  const measure=(text:string,size:number)=>[...text].reduce((width,char)=>width+(char==='界'?10:1),0)*size/9,layout=imageTextLayout(block,measure);
+  assert.equal(layout.overflow,false);assert.ok(layout.lines.every(line=>measure(line,layout.fontSize)<=block.rect.width-4));assert.equal(layout.lines.join(''),'ii界');
+});
+test('cooperative image layout matches synchronous output and cancels before measuring an entire long paragraph',async()=>{
+  const original=imageTranslationDocument(document(),result(),'image').blocks[0],measure=(text:string,size:number)=>[...text].length*size*.5;
+  for(const text of ['hello one\r\n再次 👨‍👩‍👧‍👦','abc def ghi','字'.repeat(500)]){
+    const block={...original,text};assert.deepEqual(await imageTextLayoutAsync(block,measure,{valid:()=>true,yieldControl:async()=>{}}),imageTextLayout(block,measure));
+  }
+  let current=true,calls=0,yields=0;const block={...original,text:'word '.repeat(12000)};
+  await assert.rejects(imageTextLayoutAsync(block,(text,size)=>{calls++;return measure(text,size);},{valid:()=>current,yieldControl:async()=>{yields++;if(calls>0)current=false;}}),/已取消/);assert.ok(yields>0);assert.ok(calls>0&&calls<5000);
+  calls=0;await assert.rejects(imageTextLayoutAsync(block,()=>{calls++;return 1;},{valid:()=>false,yieldControl:async()=>{}}),/已取消/);assert.equal(calls,0);
+  current=true;await assert.rejects(imageTextLayoutAsync({...original,text:'short'},()=>{current=false;return 1;},{valid:()=>current,yieldControl:async()=>{}}),/已取消/);
 });
 test('simple background erases glyph strokes only, keeps rules and exterior pixels, and never mutates the original',()=>{
   const width=80,height=50,data=new Uint8ClampedArray(width*height*4).fill(255),black=(x:number,y:number)=>data.set([0,0,0,255],(y*width+x)*4);
