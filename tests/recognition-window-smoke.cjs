@@ -1,3 +1,4 @@
+const {electronLaunch,verifyPackagedRuntime}=require('./packaged-launch.cjs');
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),sharp=require('sharp');
 async function verifyCanvas(page) {
@@ -29,7 +30,7 @@ async function main(){
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const endpoint='http://127.0.0.1:'+server.address().port;
   try{
     const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
-    app=await electron.launch({args:[path.resolve('.')],env});
+    app=await electron.launch(electronLaunch(env));await verifyPackagedRuntime(app);
     const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
     await app.evaluate(({dialog,clipboard},{input})=>{
       global.recognitionCopies=[];
@@ -142,7 +143,7 @@ async function main(){
     assert.equal(await formulaPage.evaluate(()=>!!window.one.formulaRecognition&&!window.one.recognition),true);
     const formulaSource=await formulaPage.evaluate(async()=> (await window.one.formulaRecognition.state()).image);
     assert.equal(await page.evaluate(async url=>{try{await fetch(url);return false;}catch{return true;}},formulaSource),true);
-    await formulaPage.locator('#formula-provider').click();assert.deepEqual(await formulaPage.getByRole('option').allTextContents(),['One AI 服务']);await formulaPage.keyboard.press('Escape');await expect(formulaPage.locator('#formula-settings input')).toHaveCount(0);await formulaPage.locator('#formula-modal-close').click();
+    await formulaPage.locator('#formula-provider').click();assert.deepEqual(await formulaPage.getByRole('option').allTextContents(),['One AI 服务','专用公式服务']);await formulaPage.keyboard.press('Escape');await expect(formulaPage.locator('#formula-settings input')).toHaveCount(0);await formulaPage.locator('#formula-modal-close').click();
     await formulaPage.evaluate(async endpoint=>{const config=await window.one.formulaRecognition.formulaConfig();await window.one.formulaRecognition.saveFormula({revision:config.revision,provider:'chat',endpoint,model:'fixture-vision',region:'',key:'vision-fixture-key'});},endpoint+'/vision/exact/completions');
     await formulaPage.locator('#formula-configure').click();await expect(formulaPage.locator('#formula-legacy-details')).toContainText(endpoint+'/vision/exact/completions');await expect(formulaPage.locator('#formula-save')).toBeDisabled();await formulaPage.locator('#formula-modal-close').click();assert.equal(requests.length,1);await verifyCanvas(formulaPage);
     await formulaPage.locator('#formula-recognize').click();await expect(formulaPage.locator('#formula-text')).toHaveValue('\\frac{a}{b}');await expect(formulaPage.locator('#formula-preview .katex')).toBeVisible();

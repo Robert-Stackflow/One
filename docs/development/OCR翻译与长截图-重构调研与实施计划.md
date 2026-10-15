@@ -291,6 +291,10 @@ SimpleTex 专用服务已接入主窗口“AI 服务 → 公式服务”和独�
 
 阶段 A 完成后冻结候选版本和默认档；B 与 C 共用任务和数据协议，D 依赖 B/C；E 在快照/采集边界稳定后推进。全程复用 One 公共按钮、弹窗、SegmentTab、主题和动画规范，不把来源应用整套样式再次复制进来。
 
+F 已完成一次 0.16.24 目录候选预检（应用源码 `62d482a`），候选在仓库之外的系统临时目录运行，使用独立测试配置，清理环境中的 Node 依赖路径并核对 `app.isPackaged`、实际 EXE/asar 路径及 Sharp/ONNX Runtime/Tesseract 的包内解析位置。MathJax 与字体已静态合并进公式工作进程，不依赖仓库中的开发依赖。完整构建文件校验 2564 项通过；目录完整性进一步检查公式/文字/分块 OCR 工作进程、独立公式 preload、13 个原生帮助程序及 13 个 OCR WASM/Node 运行文件。实际 One.exe 验证真实 OCR、旧接口翻译/视觉公式、PNG/SVG 导出与裁剪恢复、本地公式 CPU/DirectML 及取消/来源切换、SimpleTex 服务配置/签名请求/迟到拒绝。候选约 606.3MiB，证据为 `work/current/capture-reconstruction/package-verification-report.json`、`package-runtime-proof.json` 和 `package-*.log`；测试后回收候选，不替换现有 release。此次复用已验证的原生构建，尚未代表完整原生重编译、安装器、真实服务质量或用户场景验收完成。
+
+现有窗口检查现在支持 `$env:ONE_PACKAGED_EXE` 指向待验目录的 `One.exe`；设置后从该目录启动并要求实际包内资源，未设置时仍检查当前 dev 构建。`tests/package-integrity.cjs` 另支持 `$env:ONE_PACKAGE_DIR` 指向目录包及可选 `$env:ONE_BUILD_DIR` 指向该包对应的生产 dist 输入。验收入口为 `tests/recognition-window-smoke.cjs`、`tests/formula-image-window.cjs`、`tests/formula-local-window.cjs`、`tests/simpletex-window.cjs`。
+
 ### 验收样本与指标
 
 - OCR：至少 60 张分层样本，覆盖中英混排、小字、深色、低对比、旋转、双栏、聊天、代码、日文和超长图；人工标注文字及关键几何区域。记录字符错误率、漏检/错检和选择定位误差。

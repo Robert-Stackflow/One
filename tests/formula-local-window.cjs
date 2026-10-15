@@ -1,3 +1,4 @@
+const {electronLaunch,verifyPackagedRuntime}=require('./packaged-launch.cjs');
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 async function main(){
@@ -7,7 +8,7 @@ async function main(){
   await fs.cp(cached,path.join(profile,'models','formula','prepared'),{recursive:true});
   if(rotation){const rotated=path.join(root,'rotated.png');await sharp(input).rotate(rotation*90).png().toFile(rotated);input=rotated;}
     const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
-    app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
+    app=await electron.launch(electronLaunch(env));await verifyPackagedRuntime(app);app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
     await app.evaluate(({dialog,clipboard,ipcMain},input)=>{
       dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});global.formulaCopies=[];clipboard.writeText=text=>global.formulaCopies.push(text);global.formulaNativeResults=[];
       const run='one:formula-recognition-formula-recognize',recognize=ipcMain._invokeHandlers.get(run);ipcMain.removeHandler(run);ipcMain.handle(run,async(...args)=>{const result=await recognize(...args);global.formulaNativeResults.push(result);return result;});

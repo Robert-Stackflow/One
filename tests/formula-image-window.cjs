@@ -1,10 +1,11 @@
+const {electronLaunch,verifyPackagedRuntime}=require('./packaged-launch.cjs');
 const {_electron:electron,expect}=require('@playwright/test'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 async function main(){
   const output=path.resolve('work/current/capture-reconstruction/formula'),root=await fs.mkdtemp(path.join(output,'image-window-')),profile=path.join(root,'profile'),input=path.join(root,'source.png'),pngFile=path.join(root,'formula.png'),svgFile=path.join(root,'formula.svg'),errors=[];let app;
   try{
     const red=await sharp({create:{width:40,height:30,channels:3,background:'#ef3434'}}).png().toBuffer(),blue=await sharp({create:{width:10,height:10,channels:3,background:'#3344ee'}}).png().toBuffer();
     await sharp({create:{width:480,height:240,channels:3,background:'#ffffff'}}).composite([{input:red,left:20,top:10},{input:blue,left:20,top:10}]).png().toFile(input);
-    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
+    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;app=await electron.launch(electronLaunch(env));await verifyPackagedRuntime(app);app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
     await app.evaluate(({dialog,clipboard,ipcMain},{input,pngFile,svgFile})=>{
       dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});global.formulaCopied=[];clipboard.write=async items=>global.formulaCopied.push(Buffer.from(await(await items[0].getType('image/png')).arrayBuffer()));
       global.formulaDialogPaths={png:pngFile,svg:svgFile};dialog.showSaveDialog=async(_window,options)=>{const format=options.filters[0].extensions[0];if(global.formulaHoldDialog)return new Promise(resolve=>{global.releaseFormulaDialog=()=>resolve({canceled:false,filePath:global.formulaDialogPaths[format]});});return {canceled:!!global.formulaCancelSave,filePath:global.formulaDialogPaths[format]};};

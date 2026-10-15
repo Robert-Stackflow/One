@@ -1,3 +1,4 @@
+const {electronLaunch,verifyPackagedRuntime}=require('./packaged-launch.cjs');
 const {_electron:electron,expect}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),sharp=require('sharp'),{createHash}=require('node:crypto');
 async function main(){
@@ -9,7 +10,7 @@ async function main(){
     const send=()=>{if(response.destroyed)return;response.statusCode=failure?401:200;response.setHeader('content-type','application/json');response.end(JSON.stringify(failure?{message:secret}:{status:true,res:{latex,...(confidence!==undefined?{conf:confidence}:{})},request_id:'local-request'}));};if(hold)held.push(send);else send();
   })().catch(error=>{errors.push(String(error));response.destroy();});});});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   try{
-    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
+    const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;app=await electron.launch(electronLaunch(env));await verifyPackagedRuntime(app);app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
     await app.evaluate(({dialog},args)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[args.input]});const original=global.fetch;global.fetch=(value,options)=>{const url=new URL(String(value));return original(url.hostname==='server.simpletex.cn'?args.endpoint+url.pathname:value,options);};},{input,endpoint:'http://127.0.0.1:'+server.address().port});
     await home.locator('[data-page=ai]').click();await home.locator('[data-ai-tab=services]').click();await home.locator('#formula-service-add').click();await expect(home.locator('#formula-service-editor')).toBeVisible();await home.locator('#formulator-name').fill('SimpleTex fixture');await home.locator('#formulator-app-id').fill('personal-app-id');await home.locator('#formulator-secret').fill(secret);await home.locator('#formulator-save').click();await expect(home.locator('#formula-service-editor')).toBeHidden();assert.equal(calls.length,0);
     let saved=(await home.evaluate(()=>window.one.formulaServices()))[0];assert.equal(JSON.stringify(saved).includes(secret),false);assert.equal((await fs.readFile(path.join(profile,'ai-data.json'),'utf8')).includes(secret),false);
