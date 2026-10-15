@@ -1,4 +1,5 @@
 const {_electron:electron,expect}=require('@playwright/test');
+const {electronLaunch,verifyPackagedRuntime}=require('./packaged-launch.cjs');
 const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {createWorker}=require('tesseract.js');
 async function main(){
@@ -22,7 +23,7 @@ async function main(){
   await sharp(Buffer.from('<svg width="640" height="320"><rect width="640" height="320" fill="white"/><text x="40" y="100" font-family="Arial" font-size="38">One OCR workbench</text></svg>')).png().toFile(input);
   await fs.mkdir(path.join(profile,'recognition/models'),{recursive:true});for(const name of ['eng','chi_sim'])await fs.copyFile(path.resolve('work/dev-profile/recognition/models',name+'.traineddata'),path.join(profile,'recognition/models',name+'.traineddata'));
   const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
-  app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
+  app=await electron.launch(electronLaunch(env));await verifyPackagedRuntime(app);app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));const home=await app.firstWindow();await home.waitForFunction(()=>!!window.one);
   await app.evaluate(({dialog},args)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[args.input]});const original=global.fetch;global.fetch=(value,options)=>{const url=new URL(String(value));return original(url.hostname==='api.cognitive.microsofttranslator.com'?args.endpoint+url.pathname+url.search:value,options);};},{input,endpoint});
   await home.evaluate(()=>window.one.saveTranslationService({name:'Azure fixture',provider:'azure',region:'eastasia',plan:'pro',timeoutSeconds:5,apiKey:'test-only'}));
   await home.locator('[data-page=materials]').click();await home.getByRole('button',{name:'导入图片',exact:true}).click();await expect(home.locator('#material-results .asset-card')).toHaveCount(1);const material=await home.locator('#material-results .asset-card').getAttribute('data-material-card');

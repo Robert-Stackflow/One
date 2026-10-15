@@ -46,8 +46,12 @@ export function mountWorkbenchServices(api:OCRAPI,formula:FormulaRecognitionAPI,
     }
     loaded=true;render();
   }
+  async function useFormulaService(){
+    const snapshot=await api.localModels(false,'formula');
+    if(snapshot.choices.formula?.modelId!=='service')await api.saveLocalModel('formula',{modelId:'service',device:{mode:'auto'}},snapshot.revision);
+  }
   async function apply(choice:Choice,mode:WorkbenchMode){
-    if(choice.legacy){choices[mode]='legacy';await options.reconfigure();return true;}
+    if(choice.legacy){if(mode==='formula')await useFormulaService();choices[mode]='legacy';await options.reconfigure();return true;}
     if(choice.local){
       const snapshot=await api.localModels(false,mode as 'ocr'|'formula'),entry=snapshot.entries.find(item=>item.id===choice.local);
       const choiceDevice=snapshot.choices[mode as 'ocr'|'formula']?.device;
@@ -61,8 +65,7 @@ export function mountWorkbenchServices(api:OCRAPI,formula:FormulaRecognitionAPI,
       const config=mode==='translation'?await api.translationConfig():await formula.formulaConfig();
       const value={revision:config.revision,provider:choice.ai?'ai' as const:'service' as const,model:choice.ai?.model||'',endpoint:'',region:'',...(choice.ai?{reference:choice.ai}:{serviceReference:choice.service})};
       if(mode==='translation')await api.saveTranslation(value);else{
-        await formula.saveFormula(value);const snapshot=await api.localModels(false,'formula');
-        if(snapshot.choices.formula?.modelId!=='service')await api.saveLocalModel('formula',{modelId:'service',device:{mode:'auto'}},snapshot.revision);
+        await formula.saveFormula(value);await useFormulaService();
       }
     }
     choices[mode]=choice.option.value;if(mode==='ocr')try{localStorage.setItem('recognition-ocr-service',choice.option.value);}catch{}await options.reconfigure();return true;
@@ -83,6 +86,7 @@ export function mountWorkbenchServices(api:OCRAPI,formula:FormulaRecognitionAPI,
       await load();const mode=options.mode();let key=choices[mode];if(kind==='ai'&&id){const profile=profiles.find(item=>item.id===id);if(profile)key=aiKey(profile.id,profile.model);}else if(kind===mode&&id)key='service:'+id;
       const choice=items(mode).find(item=>item.option.value===key);if(choice&&!choice.local)await apply(choice,mode);await options.refresh();await load();options.changed();
     }});
+    await load();await options.reconfigure();options.changed();
   }
   q('task-configure').onclick=()=>void configure().catch(options.message);
   async function verify(reference:AITaskReference){const profile=profiles.find(item=>item.id===reference.profileId);if(!profile?.imageModels.includes(reference.model)){await api.verifyServiceImage(reference);profiles=await api.taskProfiles();}}
