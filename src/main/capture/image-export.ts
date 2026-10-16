@@ -1,5 +1,6 @@
 import { dialog, type BrowserWindow } from 'electron';
-import { writeFile, stat, unlink } from 'node:fs/promises';
+import { writeFile, stat, unlink, copyFile } from 'node:fs/promises';
+import {constants} from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { commitImageFile } from '../media-file';
@@ -11,6 +12,13 @@ export async function saveImage(
   valid: () => boolean,
   options: { title?: string; defaultPath?: string; pngExtension?: boolean } = {},
 ) {
+  return savePng(window,stage=>writeFile(stage,Buffer.from(item.payload.png,'base64'),{flag:'wx',mode:0o600}),protect,valid,options);
+}
+/** The long-image exporter already owns a PNG on disk; do not base64 or decode it. */
+export async function saveImageFile(window:BrowserWindow,file:string,protect:(file:string)=>void,valid:()=>boolean,options:{title?:string;defaultPath?:string}={}){
+  return savePng(window,stage=>copyFile(file,stage,constants.COPYFILE_EXCL),protect,valid,options);
+}
+async function savePng(window:BrowserWindow,writeStage:(stage:string)=>Promise<void>,protect:(file:string)=>void,valid:()=>boolean,options:{title?:string;defaultPath?:string}){
   const result = await dialog.showSaveDialog(window, {
     title: options.title || '另存图片',
     defaultPath: options.defaultPath || 'One-image.png',
@@ -30,7 +38,7 @@ export async function saveImage(
   }
   const stage = join(dirname(destination), '.one-image-export-' + randomUUID() + '.part');
   try {
-    await writeFile(stage, Buffer.from(item.payload.png!, 'base64'), { flag: 'wx', mode: 0o600 });
+    await writeStage(stage);
     if (!valid()) throw Error('保存已取消');
     if (previous) {
       const current = await stat(destination);

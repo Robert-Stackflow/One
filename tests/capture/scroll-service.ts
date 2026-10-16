@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
+import {readFile} from 'node:fs/promises';
 import { ScrollCaptureService } from '../../src/main/capture/scroll-service';
 import { displaySignature } from '../../src/shared/capture/region';
 import { handlers, display, BrowserWindow, ScrollNative, frame,nativeImage,escapeListeners } from './scroll-service-runtime';
@@ -67,7 +69,9 @@ async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWi
     }),
     windows: () => [workbench] as any,
     edit: async (png) => {
-      outputs.push(Buffer.from(png));
+      const {data,info}=await sharp(png).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+      for(let i=0;i<data.length;i+=4){const blue=data[i];data[i]=data[i+2];data[i+2]=blue;}
+      outputs.push(nativeImage.createFromBitmap(data,{width:info.width,height:info.height}).toPNG());
     },
     failed: (error) => {
       failures.push(error);
@@ -96,6 +100,21 @@ async function fixture(remoteCompatible = true,startManual=false,mask?:BrowserWi
 }
 test('hidden screenshot prewarming permits only readiness and state, then reuses the same surface',async()=>{
   const f=await fixture(true,false,undefined,true);try{assert.equal(f.service.window!.isVisible(),true);assert.deepEqual(f.failures,[]);}finally{f.service.cancel();await f.service.stopped();}
+});
+
+test('original PNG delivery stays file-backed; canceled and failed saves keep the session for retry',async()=>{
+  const f=await fixture();let calls=0,original:Buffer|undefined;
+  try{
+    await f.command('sample');
+    (f.service as any).host.output=async(_window:unknown,file:string,action:string)=>{
+      assert.equal(typeof file,'string');assert.equal(action,'save');original=await readFile(file);calls++;
+      if(calls===1)return false;if(calls===2)throw Error('fixture save rejected');return true;
+    };
+    await f.command('save');assert.equal(f.service.active,true);assert.equal(f.state().count,1);
+    await assert.rejects(f.command('save'),/fixture save rejected/);assert.equal(f.service.active,true);assert.equal(f.state().count,1);
+    await f.command('save');assert.equal(f.service.active,false);assert.equal(calls,3);
+    const pixels=await sharp(original!).ensureAlpha().raw().toBuffer();const expected=nativeImage.createFromBuffer(frame()).toBitmap();for(let i=0;i<expected.length;i+=4){const blue=expected[i];expected[i]=expected[i+2];expected[i+2]=blue;}assert.deepEqual(pixels,expected);
+  }finally{f.service.cancel();await f.service.stopped();}
 });
 
 test('mode switches keep the overlay visible and Escape cancels and releases its shortcut',async()=>{

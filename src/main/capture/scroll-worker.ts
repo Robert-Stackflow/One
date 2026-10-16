@@ -5,6 +5,7 @@ import {ScrollCaptureLimit,type ScrollDynamicRegion} from '../../shared/capture/
 import { ScrollStitch } from '../../shared/capture/scroll-stitch';
 import { ScrollSettle } from '../../shared/capture/scroll-settle';
 import type {PixelFrame} from '../../shared/capture/scroll-stitch';
+import {exportScrollPng} from './scroll-export';
 const storage=workerData?.directory?new ScrollDiskStorage(workerData.directory,workerData.token):undefined;
 let engine = new ScrollStitch(storage,true);
 let settling: ScrollSettle;
@@ -98,7 +99,11 @@ parentPort!.on('message', async ({ id, kind, value,encodePreview=false }) => {
     else if (kind === 'join') result = engine.join(value);
     else if (kind === 'undo') {previewEpoch++;result = engine.undo();}
     else if (kind === 'discard') result = engine.discard();
-    else if (kind === 'output') {
+    else if(kind==='export'){
+      if(!storage||!workerData?.directory)throw Error('长截图导出缓存不可用');
+      const exported=await exportScrollPng(engine,workerData,value?.edit===true);
+      parentPort!.postMessage({id,exported});return;
+    }else if (kind === 'output') {
       const output = engine.output();
       parentPort!.postMessage({ id, output }, [output.pixels.buffer as ArrayBuffer]);
       return;

@@ -1,4 +1,5 @@
 import { imageDimensions } from './image-limits';
+import {scrollDimensions,SCROLL_THUMBNAIL_BYTES} from './scroll-limits';
 import { scrollOptions,ScrollCaptureLimit, type ScrollOptions, type ScrollMatch, type ScrollDynamicRegion } from './scroll-capture';
 import {scrollSearchCandidates,scrollLocallyConsistent} from './scroll-search';
 import {detectScrollFixedEdges,type FixedEdges} from './scroll-fixed';
@@ -281,10 +282,11 @@ export class ScrollStitch {
     if(this.count>=2048)throw new ScrollCaptureLimit('本次长截图已达到 2,048 段，请确认已有结果');
     const rows = this.rows + shift;
     const totalRows=rows+(this.fixed?.start||0)+(this.fixed?.end||0);
-    try{imageDimensions(
+    try{scrollDimensions(
       this.options!.axis === 'vertical' ? this.cross : totalRows,
       this.options!.axis === 'vertical' ? totalRows : this.cross,
     );}catch(error){throw new ScrollCaptureLimit((error as Error).message+'。已有内容已保留。');}
+    if(!this.storage&&totalRows*this.cross*4>BUDGET)throw new ScrollCaptureLimit('长截图内存缓存达到容量，已有内容已保留。');
     const tail = this.storage?pixels.subarray((this.axis-shift)*this.cross*4):pixels.slice((this.axis - shift) * this.cross * 4),stored=this.storage?this.storage.put(tail):tail;
     this.strips.push({ pixels: stored, rows: shift, previous: this.previous,previousRegions:this.previousRegions,thumbnail:this.thumbnail(tail,shift) });
     this.rows = rows;
@@ -305,6 +307,10 @@ export class ScrollStitch {
     for (let i = 1; bytes > (this.storage?96*1024*1024:BUDGET) && i < this.strips.length - 1; i++) {
       bytes -= this.strips[i].previous?.byteLength || 0;
       this.strips[i].previous = undefined;
+    }
+    if(this.storage){
+      let thumbnails=this.strips.reduce((sum,strip)=>sum+(strip.thumbnail?.byteLength||0),0);
+      for(const strip of this.strips){if(thumbnails<=SCROLL_THUMBNAIL_BYTES)break;thumbnails-=strip.thumbnail?.byteLength||0;strip.thumbnail?.fill(0);strip.thumbnail=undefined;}
     }
     return this.status();
   }
@@ -355,6 +361,20 @@ export class ScrollStitch {
     }
     if(this.fixed)copyRows(this.fixed.footer,this.fixed.end);
     return { width, height, pixels };
+  }
+  /** Export one original strip at a time; never materialize the complete bitmap. */
+  *outputTiles():Generator<PixelFrame&{x:number;y:number}>{
+    if(!this.previous)throw Error('还没有采集图像');
+    const vertical=this.options!.axis==='vertical';let offset=0;
+    const strips:Strip[]=[...(this.fixed?.start?[{pixels:this.fixed.header,rows:this.fixed.start}]:[]),...this.strips,...(this.fixed?.end?[{pixels:this.fixed.footer,rows:this.fixed.end}]:[])];
+    for(const strip of strips){
+      const stored=typeof strip.pixels==='number',bytes=stored?this.storage!.read(strip.pixels as number):strip.pixels as Uint8Array;
+      let pixels=bytes.subarray((strip.rowStart||0)*this.cross*4,((strip.rowStart||0)+strip.rows)*this.cross*4);
+      if(!vertical){const transposed=new Uint8Array(pixels.length);for(let y=0;y<this.cross;y++)for(let x=0;x<strip.rows;x++){const from=(x*this.cross+y)*4,to=(y*strip.rows+x)*4;transposed.set(pixels.subarray(from,from+4),to);}pixels=transposed;}
+      try{yield {width:vertical?this.cross:strip.rows,height:vertical?strip.rows:this.cross,x:vertical?0:offset,y:vertical?offset:0,pixels};}
+      finally{if(stored)bytes.fill(0);if(!vertical)pixels.fill(0);}
+      offset+=strip.rows;
+    }
   }
   preview(band?:{y:number;height:number}): PixelFrame | null {
     if (!this.previous) return null;

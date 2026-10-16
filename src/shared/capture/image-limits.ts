@@ -1,6 +1,7 @@
 import { t as tr } from './i18n';
 
-// Originals, capture sessions, clipboard output and the asset library share one capacity.
+// Capture frames, editable image documents and the asset library share one capacity.
+// Disk-backed long screenshots have independent limits in scroll-limits.ts.
 export const IMAGE_PIXELS = 40_000_000;
 export const IMAGE_EDGE = 16384;
 export const IMAGE_BYTES = 64 * 1024 * 1024;

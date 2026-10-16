@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {randomUUID,createHash} from 'node:crypto';
 import type {ScrollStripStorage} from '../../shared/capture/scroll-stitch';
 import {ScrollCaptureLimit} from '../../shared/capture/scroll-capture';
+import {SCROLL_DISK_BYTES} from '../../shared/capture/scroll-limits';
 
 export interface ScrollDirectory {directory:string;parent:string;token:string}
 export async function createScrollDirectory(base=tmpdir()):Promise<ScrollDirectory>{
@@ -34,14 +35,14 @@ export async function cleanScrollDirectory(lease:ScrollDirectory){
   if(item.isSymbolicLink()||!item.isDirectory()||await realpath(lease.directory)!==resolve(lease.directory)||dirname(lease.directory)!==lease.parent||!basename(lease.directory).startsWith('one-scroll-'))throw Error('拒绝清理非本会话长截图目录');
   if((await lstat(join(lease.directory,'owner.json'))).isSymbolicLink()||JSON.parse(await readFile(join(lease.directory,'owner.json'),'utf8')).token!==lease.token)throw Error('长截图缓存所有权已改变');
   const names=await readdir(lease.directory);
-  for(const name of names){if(name!=='owner.json'&&!/^\d+\.bgra(?:\.part)?$/.test(name))throw Error('长截图缓存存在非本会话文件');const file=await lstat(join(lease.directory,name));if(!file.isFile()||file.isSymbolicLink())throw Error('长截图缓存文件类型已改变');}
+  for(const name of names){if(name!=='owner.json'&&!/^\d+\.bgra(?:\.part)?$/.test(name)&&!['export.png','export.png.part','export.raw','edit.png'].includes(name))throw Error('长截图缓存存在非本会话文件');const file=await lstat(join(lease.directory,name));if(!file.isFile()||file.isSymbolicLink())throw Error('长截图缓存文件类型已改变');}
   for(const name of names)if(name!=='owner.json')await unlink(join(lease.directory,name));await unlink(join(lease.directory,'owner.json'));await rmdir(lease.directory);
 }
 
 /** Synchronous disk I/O belongs only to the dedicated stitch worker. */
 export class ScrollDiskStorage implements ScrollStripStorage {
   private sizes=new Map<number,number>();private digests=new Map<number,string>();private serial=0;private used=0;
-  constructor(private directory:string,private token:string,private limit=256*1024*1024){this.check();}
+  constructor(private directory:string,private token:string,private limit=SCROLL_DISK_BYTES){this.check();}
   private check(){if(lstatSync(this.directory).isSymbolicLink()||realpathSync(this.directory)!==resolve(this.directory)||lstatSync(join(this.directory,'owner.json')).isSymbolicLink()||JSON.parse(readFileSync(join(this.directory,'owner.json'),'utf8')).token!==this.token)throw Error('长截图缓存所有权无效');}
   get bytes(){return this.used;}
   put(pixels:Uint8Array){

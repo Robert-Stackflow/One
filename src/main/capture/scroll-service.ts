@@ -2,6 +2,8 @@ import {nativeImage,screen,type BrowserWindow,type IpcMainInvokeEvent} from 'ele
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import {readFile,lstat} from 'node:fs/promises';
+import {IMAGE_BYTES} from '../../shared/capture/image-limits';
 import { ScrollNative, captureMonitorBounds } from './scroll-native';
 import { displaySignature, type Region } from '../../shared/capture/region';
 import {
@@ -28,7 +30,7 @@ export interface ScrollContext {
   choose(display: number, hideMainWindow?: boolean,retainMask?:(window:BrowserWindow,windows:BrowserWindow[])=>void): Promise<Region | null>;
   windows(hideMainWindow?: boolean): BrowserWindow[];
   edit(png: Buffer, title: string): Promise<void>;
-  output?(window:BrowserWindow,png:Buffer,action:'copy'|'save'):Promise<boolean>;
+  output?(window:BrowserWindow,file:string,action:'copy'|'save'):Promise<boolean>;
   failed(error: unknown): void;
 }
 export const SCROLL_URL = 'one://app/index.html?view=scroll-capture';
@@ -352,7 +354,7 @@ export class ScrollCaptureService {
     if (!this.worker || this.pending) return Promise.reject(Error('拼接会话不可用'));
     return new Promise<any>((resolve, reject) => {
       const id = ++this.request,
-        timer = setTimeout(() => this.workerFailure(Error('拼接计算超时，已有预览已保留')), 10000);
+        timer = setTimeout(() => this.workerFailure(Error(kind==='export'?'长截图导出超时，已有预览已保留':'拼接计算超时，已有预览已保留')), kind==='export'?180000:10000);
       timer.unref();
       this.pending = { id, kind, resolve, reject, timer };
       try{this.worker!.postMessage({ id, kind, value,encodePreview:true },transfer);}catch(error){clearTimeout(timer);this.pending=undefined;reject(error);}
@@ -688,20 +690,26 @@ export class ScrollCaptureService {
         this.view.message = '检查结果后进入图片编辑，可裁剪、标注、复制或另存。';
       } else if (command.kind === 'edit'||command.kind==='copy'||command.kind==='save') {
         if (!this.view.count || this.view.pending) throw Error('请先完成拼接或确认已有结果');
-        const response = await this.run('output'),
-          output = response.output as PixelFrame,
-          image = nativeImage.createFromBitmap(Buffer.from(output.pixels), {
-            width: output.width,
-            height: output.height,
-          }),
-          png = image.toPNG();
+        this.view.message=command.kind==='edit'?'正在准备编辑图片…':command.kind==='copy'?'正在复制长截图…':'正在准备原图…';this.publish();
+        const worker=this.worker!,lease=this.directories.get(worker);
+        const response=await this.run('export',{edit:command.kind==='edit'}),output=response.exported;
+        if(generation!==this.generation)throw new ScrollStopped();
+        if(!lease||!output||![join(lease.directory,'export.png'),join(lease.directory,'edit.png')].includes(output.file))throw Error('长截图导出已失效');
+        const info=await lstat(output.file);if(!info.isFile()||info.isSymbolicLink())throw Error('长截图导出已失效');
+        if(generation!==this.generation)throw new ScrollStopped();
+        let png:Buffer|undefined;
         try {
-          const delivered=command.kind==='edit'?(await this.host.edit(png, `长截图 ${output.width} × ${output.height}`),true):this.host.output?await this.host.output(this.window!,png,command.kind):false;
+          let delivered=false;
+          if(command.kind==='edit'){
+            if(info.size>IMAGE_BYTES)throw Error('编辑图片文件过大，请先保存原图。');
+            png=await readFile(output.file);
+            if(generation!==this.generation)throw new ScrollStopped();
+            await this.host.edit(png,output.scaled?`长截图编辑副本 ${output.width} × ${output.height}（原图 ${output.originalWidth} × ${output.originalHeight}）`:`长截图 ${output.width} × ${output.height}`);delivered=true;
+          }else if(this.host.output)delivered=await this.host.output(this.window!,output.file,command.kind);
           if(delivered&&generation === this.generation)this.cancel();
           else if(generation===this.generation)return this.publish();
         } finally {
-          png.fill(0);
-          output.pixels.fill(0);
+          png?.fill(0);
         }
         return null;
       } else throw Error('长截图操作无效');

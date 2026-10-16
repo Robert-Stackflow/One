@@ -5,6 +5,7 @@ import { customControls } from '../controls';
 import type { ScrollCommand, ScrollView, ScrollOptions } from '../../shared/capture/scroll-capture';
 import {applyCaptureScale} from './appearance';
 import {confirmDialog} from '../dialog';
+import {scrollEditSize} from '../../shared/capture/scroll-limits';
 import {icon,registerIcons} from '../ui';
 import {Pause,Play,Undo2,PanelRightOpen,PanelRightClose,Pencil,Download,Check,Settings2,X} from 'lucide';
 const api = window.one.scrollCapture!,
@@ -91,6 +92,7 @@ function render(next: ScrollView) {
   q<HTMLButtonElement>('undo').disabled = pending || running || !next.undo;
   q<HTMLButtonElement>('finish').disabled = pending || !next.count;
   q<HTMLButtonElement>('edit').disabled = pending || !(next.canEdit||next.pending&&next.count>0&&next.phase!=='failed');
+  q('edit').title=q('edit').ariaLabel=next.count&&scrollEditSize(next.width,next.height).scaled?'编辑缩放副本':'编辑长截图';
   for(const id of ['save','copy'])q<HTMLButtonElement>(id).disabled=q<HTMLButtonElement>('edit').disabled;
   for (const id of ['trim-start', 'trim-end', 'ignore-start', 'ignore-end','retain-start','retain-end'])
     q<HTMLInputElement>(id).disabled = pending || running;
@@ -141,7 +143,14 @@ q('pause').onclick=()=>{
   if(view.phase==='running')void send({kind:'pause'});
   else{q<HTMLDetailsElement>('setup').open=false;void send({kind:view.mode==='auto'?'auto':'manual'});}
 };
-for(const kind of ['edit','copy','save'] as const)q(kind).onclick=()=>void(async()=>{if(await send({kind:'finish'}))await send({kind});})();
+for(const kind of ['edit','copy','save'] as const)q(kind).onclick=()=>void(async()=>{
+  if(!await send({kind:'finish'}))return;
+  if(kind==='edit'){
+    const size=scrollEditSize(view.width,view.height);
+    if(size.scaled&&!await confirmDialog({title:'编辑缩放副本',message:`原图为 ${view.width} × ${view.height}，编辑副本将缩小到 ${size.width} × ${size.height}。需要保留原尺寸时，请先返回并保存原图。`,confirm:'编辑副本'}))return;
+  }
+  await send({kind});
+})();
 q('preview-toggle').onclick=()=>void send({kind:'layout',preview:!view.previewExpanded});
 for(const id of ['setup']){
   q(id+'-toggle').onclick=()=>{const panel=q<HTMLDetailsElement>(id);panel.open=!panel.open;};

@@ -10,8 +10,8 @@ import {RecordingHost} from './recording/host';
 import {recordingPreloads,recordingWindowRoles,recordingBridgeRoles,recordingResourceHosts,type RecordingWindowRole} from './recording/window-host';
 import {copyFileToClipboard} from './file-clipboard';
 import {CaptureHost} from './capture/host';
-import {writeClipboardPng} from './capture/clipboard';
-import {saveImage} from './capture/image-export';
+import {writeClipboardPng,writeClipboardPngFile} from './capture/clipboard';
+import {saveImage,saveImageFile} from './capture/image-export';
 import {CaptureShortcutController} from './capture/shortcuts';
 import {captureAccelerator,captureShortcutDefinitions,captureSystemCommands,isCaptureSystemCommand,type CaptureSystemAction} from '../shared/capture/shortcuts';
 import {ScrollCaptureHost} from './capture/scroll-host';
@@ -1396,7 +1396,7 @@ async function start() {
   },materials,pins);
   scrollCapture=new ScrollCaptureHost({
     onEscape:callback=>input.onEscape(callback),foregroundWindow:()=>foreground(true)?.hwnd||0,
-    output:async(window,png,action)=>{if(action==='copy'){await writeClipboardPng(png);return true;}return !!await saveImage(window,{payload:{png:png.toString('base64')}},file=>{materials!.library.protect(file);const local=relative(app.getPath('userData'),file);if(!local||!isAbsolute(local)&&local!=='..'&&!local.startsWith('..'+sep))throw Error('请保存到 One 数据目录之外');},()=>!quitting&&!window.isDestroyed(),{defaultPath:'One-scroll-capture.png'});},
+    output:async(window,file,action)=>{if(action==='copy'){await writeClipboardPngFile(file,()=>!quitting&&!window.isDestroyed());return true;}return !!await saveImageFile(window,file,destination=>{materials!.library.protect(destination);const local=relative(app.getPath('userData'),destination);if(!local||!isAbsolute(local)&&local!=='..'&&!local.startsWith('..'+sep))throw Error('请保存到 One 数据目录之外');},()=>!quitting&&!window.isDestroyed(),{defaultPath:'One-scroll-capture.png'});},
     createWindow:options=>windowFor('scroll-capture',{roundedCorners:true,...options},'',false),
     register:(name,handler)=>handle(name,handler,['scroll-capture']),blocked:()=>quitting,
     uiScale:()=>settings.capture.uiScale,remoteCompatible:()=>settings.capture.remoteCompatible,

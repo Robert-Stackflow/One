@@ -95,7 +95,11 @@ function assertPixels(actual,wanted,width){if(actual.equals(wanted))return;const
       await rapid.locator('#copy').click();await expect.poll(()=>rapid.isClosed()).toBe(true);
       const copied=Buffer.from(await app.evaluate(()=>global.scrollCopied.toString('base64')),'base64'),decoded=await sharp(copied).ensureAlpha().raw().toBuffer({resolveWithObject:true});
       assert.equal(decoded.info.height,bodyHeight+1008);assertPixels(decoded.data,expected(target.width,bodyHeight+1008),target.width);
-      console.log('Fast manual scroll: 1008 px in 12 rapid steps, exact output, canceled save retained result, direct copy passed.');
+      const saved=await begin(false);await nativeClick(saved,'#manual');await expect.poll(()=>saved.evaluate(()=>window.one.scrollCapture.state().then(value=>value.count)),{timeout:10000}).toBe(1);await saved.locator('#pause').click();
+      const originalPath=path.join(directory,'scroll-original.png');await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},originalPath);
+      await saved.locator('#save').click();await expect.poll(()=>saved.isClosed()).toBe(true);const savedInfo=await sharp(originalPath).metadata();assert.equal(savedInfo.width,target.width);assert.equal(savedInfo.height,bodyHeight);
+      assertPixels(await sharp(originalPath).ensureAlpha().raw().toBuffer(),expected(target.width,bodyHeight),target.width);
+      console.log('Fast manual scroll: 1008 px in 12 rapid steps, exact output, canceled save retained result, direct copy and file-backed save passed.');
     }
     const escaping=await begin(false,autoFixed);await nativeClick(escaping,'#manual');await fixtureCommand('escape');await expect.poll(()=>escaping.isClosed()).toBe(true);assert.equal(await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Escape')),false);
     const next=await begin(false,autoFixed);await nativeClick(next,'#manual');await expect.poll(()=>next.evaluate(()=>window.one.scrollCapture.state().then(value=>value.count)),{timeout:10000}).toBe(1);await next.locator('#pause').click();if(autoFixed){const corrected=await next.evaluate(()=>window.one.scrollCapture.state());assert.equal(corrected.options.autoFixed,false);assert.deepEqual(corrected.fixed,{start:20,end:12});}
