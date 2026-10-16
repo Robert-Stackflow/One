@@ -121,9 +121,12 @@ async function run(){
   await search.evaluate(()=>window.one.searchHistoryAdd('older check','app'));
   await expect(search.locator('[data-history-id]')).toHaveCount(2);
   await expect(search.locator('[data-history-id]').first().locator('.icon')).toHaveCount(1);
-  await expect(search.locator('[data-history-favorite]').first()).toHaveCSS('width','0px');
+  await expect(search.locator('[data-history-favorite]').first()).toHaveCSS('opacity','0');
+  const idleWidths=await search.locator('[data-history-id]').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().width));
   await search.locator('[data-idle-kind="history"]').first().hover();
-  await expect.poll(()=>search.locator('[data-history-favorite]').first().evaluate(button=>button.getBoundingClientRect().width)).toBeGreaterThan(20);
+  await expect(search.locator('[data-history-favorite]').first()).toHaveCSS('opacity','1');
+  assert.deepEqual(await search.locator('[data-history-id]').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().width)),idleWidths,'hover actions reserve space instead of shifting query text');
+  await expect(search.locator('[data-history-id]').first().locator('small')).toHaveText('应用');
   await expect(search.locator('[data-history-clear]')).toBeVisible();
   await expect(search.locator('#search-filters')).toBeHidden();
   await expect(search.locator('#search-save')).toBeHidden();
@@ -144,6 +147,6 @@ async function run(){
   assert.equal((await main.evaluate(()=>window.one.aiState())).history.length,0);
   assert.equal((await main.evaluate(async()=>(await window.one.settings()).search.webEngines))[0].shortcut,'ex');
   assert.deepEqual(errors,[]);
- }finally{await app.close().catch(()=>{});}
+ }finally{await app.close().catch(()=>{});const actual=await fs.realpath(root);assert.equal(path.dirname(actual),await fs.realpath(os.tmpdir()));assert.ok(path.basename(actual).startsWith('one-search-shortcuts-'));await fs.rm(actual,{recursive:true,force:true});}
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
