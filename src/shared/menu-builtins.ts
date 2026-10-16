@@ -44,7 +44,7 @@ export const menuBuiltins:readonly MenuBuiltin[]=[
  {id:'capture-custom',label:'自定义截屏',category:'One',icon:'settings',oneAction:'capture-custom',keywords:'截图 尺寸 延迟'},
  {id:'capture-screen',label:'显示器截图',category:'One',icon:'monitor',oneAction:'capture-screen',keywords:'截图 屏幕'},
  {id:'capture-clipboard',label:'编辑剪贴板图片',category:'One',icon:'clipboard',oneAction:'capture-clipboard',keywords:'图片 标注'},
- {id:'pins-clipboard',label:'贴出剪贴板',category:'One',icon:'pin',oneAction:'pins-clipboard',keywords:'图片 文字 文件 贴图'},
+ {id:'pins-clipboard',label:'贴图',category:'One',icon:'pin',oneAction:'pins-clipboard',keywords:'图片 文字 文件 贴图 剪贴板'},
  {id:'pins-toggle',label:'隐藏 / 显示全部贴图',category:'One',icon:'preview',oneAction:'pins-toggle'},
  {id:'pins-next-group',label:'切换贴图分组',category:'One',icon:'refresh',oneAction:'pins-next-group'},
  {id:'image-tools',label:'图片工具',category:'One',icon:'color',onePage:'images',keywords:'屏幕 取色'},

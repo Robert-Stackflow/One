@@ -34,3 +34,16 @@ test('Zoom keeps the pointer anchor and rejects invalid geometry',()=>{
   assert.equal(previous.x+previous.width*.25,bounds.x+bounds.width*.25);assert.equal(previous.y+previous.height*.75,bounds.y+bounds.height*.75);
   assert.throws(()=>zoomPin(record,1,Infinity,0));assert.throws(()=>zoomPin(record,2,0,0));
 });
+
+
+test('Pin OCR hands immutable original image bytes and title to recognition without using the clipboard',async t=>{
+  const result=buildSync({entryPoints:['src/main/pins/service.ts'],bundle:true,platform:'node',format:'cjs',write:false,external:['koffi','electron']}),module={exports:{}};
+  new Function('module','exports','require',result.outputFiles[0].text)(module,module.exports,name=>name==='electron'?{}:require(name));
+  const dir=await directory(t),received=[],context={register(){},createWindow(){throw Error('OCR should not require a pin window');},mainWindow(){},dark:()=>false,blocked:()=>false,uiScale:()=>100,icon(){},recognize:async(png,title)=>{received.push({png:Buffer.from(png),title});}};
+  const service=new module.exports.PinService(dir,()=>{},()=>{},error=>{throw error;},context);await service.init();
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
+  const hash=await service.store.installImage(png),image=await service.store.add('原图识别',{kind:'image',hash,width:1,height:1},view());
+  await service.action(image.id,{kind:'recognize'});assert.deepEqual(received,[{png,title:'原图识别'}]);assert.deepEqual(await service.store.read(image.id),png);
+  const text=await service.store.add('文字',{kind:'text',text:'not an image'},view());await assert.rejects(service.action(text.id,{kind:'recognize'}),/只有图片/);assert.equal(received.length,1);
+  context.recognize=undefined;await assert.rejects(service.action(image.id,{kind:'recognize'}),/暂不可用/);
+});

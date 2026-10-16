@@ -1377,6 +1377,7 @@ async function start() {
     return result;
   },['preview','image-editor']);
   pins=new PinsHost(join(app.getPath('userData'),'pins'),materials,{
+    recognize:(png,title)=>recognition!.openImage(png,title),
     createWindow:(view,options)=>windowFor(view,{minWidth:1,minHeight:1,...options},'',false),
     register:(name,handler)=>handle(name,handler,['pin','pin-controls']),mainWindow:()=>main,
     blocked:()=>quitting,icon:()=>applicationIcon,uiScale:()=>settings.capture.uiScale,

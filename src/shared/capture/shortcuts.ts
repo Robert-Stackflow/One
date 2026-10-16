@@ -5,7 +5,7 @@ export const captureShortcutDefinitions=[
   {id:'copy',label:'截屏并自动复制',default:''},
   {id:'custom',label:'自定义截屏',default:''},
   {id:'screen',label:'显示器截图',default:''},
-  {id:'pinClipboard',label:'贴出剪贴板',default:'Ctrl+Shift+F9'},
+  {id:'pinClipboard',label:'贴图',default:'Ctrl+Shift+F9'},
   {id:'togglePins',label:'隐藏 / 显示全部贴图',default:''},
   {id:'nextPinGroup',label:'切换贴图分组',default:''},
   {id:'recording',label:'打开录制',default:''},

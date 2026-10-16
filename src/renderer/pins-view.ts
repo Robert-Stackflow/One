@@ -8,7 +8,7 @@ import './pins-view.css';
 export function pinsPage(){return '<p class="pins-loading" role="status">正在读取贴图</p>';}
 export function setupPins(root:HTMLElement,heading:HTMLElement){
   root.classList.add('pins-page');
-  heading.innerHTML=`<button id="pins-file-add" type="button" class="quiet">${icon('folder')}添加文件</button><button id="pins-clipboard-add" type="button" class="primary">${icon('plus')}贴出剪贴板</button>`;
+  heading.innerHTML=`<button id="pins-file-add" type="button" class="quiet">${icon('folder')}添加文件</button><button id="pins-clipboard-add" type="button" class="primary">${icon('plus')}贴图</button>`;
   const actions=new ActionScope();actions.bind(heading.querySelector('#pins-file-add'),()=>api.pinsFiles(),toast);actions.bind(heading.querySelector('#pins-clipboard-add'),()=>api.pinsClipboard(),toast);
   let active=false,disposed=false,dirty=true,refreshing:Promise<void>|undefined,state:PinWorkspace,view:ReturnType<typeof mountPinsPage>|undefined,scaleRevision=0;
   function refresh():Promise<void>{

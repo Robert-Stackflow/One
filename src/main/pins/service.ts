@@ -49,6 +49,7 @@ export interface PinContext {
   mainWindow():BrowserWindow|undefined;dark():boolean;blocked():boolean;
   uiScale():import('../../shared/capture/settings').CapturePreferences['uiScale'];
   icon():Electron.NativeImage;
+  recognize?(png:Buffer,title:string):Promise<unknown>;
 }
 export class PinService {
   private entries = new Map<string, Presentation>();
@@ -480,6 +481,13 @@ export class PinService {
     return this.serial(async () => {
       const record = this.store.get(id);
       if (!action || typeof action !== 'object') throw Error('贴图操作无效');
+      if(action.kind==='recognize'){
+        if(record.content.kind!=='image')throw Error('只有图片贴图支持文字识别');
+        if(!this.ctx.recognize||this.closing||this.disposed||this.ctx.blocked())throw Error('文字识别暂不可用');
+        const png=await this.store.read(id);
+        try{await this.ctx.recognize(png,record.title);}finally{png.fill(0);}
+        return;
+      }
       if (action.kind === 'controls') {
         await this.openControls(id);
         return;

@@ -1,4 +1,4 @@
-import {AudioLines,Images,ScanText,Sigma,Video} from 'lucide';
+import {AudioLines,Images,Video} from 'lucide';
 import {api,esc,icon,registerIcons,toast,errorMessage} from './ui';
 import {confirmDialog} from './dialog';
 import {onRemoval} from './dom-lifecycle';
@@ -9,11 +9,10 @@ import {collectionCheck,collectionSelectButton,collectionSelectionBar,syncCollec
 import {collectionCardActions} from './collection-card-actions';
 import './materials-view.css';
 
-registerIcons({images:Images,video:Video,'audio-lines':AudioLines,'scan-text':ScanText,sigma:Sigma});
+registerIcons({images:Images,video:Video,'audio-lines':AudioLines});
 /** Operations supplied by the recognition, pin and recording service controllers. */
 export interface MaterialsCommands {
   recognize?(id:string):Promise<unknown>;
-  recognizeFormula?(id:string):Promise<unknown>;
   pin?(id:string):Promise<unknown>;
   openRecording?(id:string):Promise<unknown>;
   importRecording?(kind:'project'|'video'):Promise<unknown>;
@@ -22,7 +21,7 @@ type Kind='images'|'recordings';
 const actionButton=(action:string,id:string,label:string,glyph:string)=>`<button type="button" class="icon-button quiet" data-material-action="${action}" data-material-id="${esc(id)}" title="${label}" aria-label="${label}">${icon(glyph)}</button>`;
 const titleButton=(action:string,label:string,glyph:string,primary=false)=>`<button type="button" class="${primary?'primary':'quiet'}" data-material-action="${action}">${icon(glyph)}${label}</button>`;
 function imageCard(item:ImageMaterialView,checked=false){
-  return `<article class="asset-card collection-card" data-material-card="${item.id}" data-collection-card="${item.id}"><button class="asset-preview" type="button" data-material-action="edit" data-material-id="${item.id}" aria-label="编辑 ${esc(item.title)}"><img src="${esc(item.thumbnail)}" alt="${esc(item.title)}" loading="lazy"></button><div class="asset-body"><div class="asset-caption"><h3 class="asset-title" title="${esc(item.title)}">${esc(item.title)}</h3><div class="asset-meta"><span>${item.width} × ${item.height}</span><span>${item.bytes<1048576?Math.round(item.bytes/1024)+' KB':(item.bytes/1048576).toFixed(1)+' MB'}</span><span>${new Date(item.created).toLocaleDateString('zh-CN')}</span></div></div>${collectionCheck('data-material-select',item.id,item.title,checked)}</div>${collectionCardActions({className:'asset-actions',copy:{attributes:{'data-material-action':'copy','data-material-id':item.id}},save:{attributes:{'data-material-action':'export','data-material-id':item.id}},remove:{attributes:{'data-material-action':'remove','data-material-id':item.id},label:'删除素材'},extra:actionButton('recognize',item.id,'识别文字','lucide:scan-text')+actionButton('recognize-formula',item.id,'识别公式','lucide:sigma')+actionButton('pin',item.id,'贴出图片','pin')})}</article>`;
+  return `<article class="asset-card collection-card" data-material-card="${item.id}" data-collection-card="${item.id}"><button class="asset-preview" type="button" data-material-action="edit" data-material-id="${item.id}" aria-label="编辑 ${esc(item.title)}"><img src="${esc(item.thumbnail)}" alt="${esc(item.title)}" loading="lazy"></button><div class="asset-body"><div class="asset-caption"><h3 class="asset-title" title="${esc(item.title)}">${esc(item.title)}</h3><div class="asset-meta"><span>${item.width} × ${item.height}</span><span>${item.bytes<1048576?Math.round(item.bytes/1024)+' KB':(item.bytes/1048576).toFixed(1)+' MB'}</span><span>${new Date(item.created).toLocaleDateString('zh-CN')}</span></div></div>${collectionCheck('data-material-select',item.id,item.title,checked)}</div>${collectionCardActions({className:'asset-actions',pin:{attributes:{'data-material-action':'pin','data-material-id':item.id}},copy:{attributes:{'data-material-action':'copy','data-material-id':item.id}},save:{attributes:{'data-material-action':'export','data-material-id':item.id}},remove:{attributes:{'data-material-action':'remove','data-material-id':item.id},label:'删除素材'},recognize:{attributes:{'data-material-action':'recognize','data-material-id':item.id}}})}</article>`;
 }
 function recordingCard(item:RecordingMaterialView,checked=false){
   const duration=Math.floor(item.seconds/60).toString().padStart(2,'0')+':'+Math.floor(item.seconds%60).toString().padStart(2,'0');
@@ -41,7 +40,7 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
   const handlers:Record<string,((id:string)=>Promise<unknown>)|undefined>={
     directory:()=>api.materialsOpenDirectory(),'open-project':()=>api.materialsOpenImageProject(),'import-images':()=>api.materialsImportImages(),
     'import-project':commands.importRecording?()=>commands.importRecording!('project'):undefined,'import-video':commands.importRecording?()=>commands.importRecording!('video'):undefined,
-    edit:id=>api.materialsEditImage(id),recognize:commands.recognize,'recognize-formula':commands.recognizeFormula,pin:commands.pin,copy:async id=>{await api.materialsCopyImage(id);toast('已复制图片');},
+    edit:id=>api.materialsEditImage(id),recognize:commands.recognize,pin:commands.pin,copy:async id=>{await api.materialsCopyImage(id);toast('已复制图片');},
     'export-recording':async id=>{const result=await api.materialsExportBatch('recordings',[id]);if(result.failed.length)throw Error(result.failed[0].error);if(!result.canceled)toast('已导出录制工程');},
     export:id=>api.materialsExportImage(id),remove:id=>api.materialsRemoveImage(id),recording:commands.openRecording,
     'remove-recording':async id=>{if(await confirmDialog({title:'删除录制素材',message:'删除这份录制素材工程？',confirm:'删除',danger:true}))await api.materialsRemoveRecording(id);},

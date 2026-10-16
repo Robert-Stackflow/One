@@ -49,6 +49,7 @@ export type PinAction =
         | 'flipY'
         | 'copy'
         | 'export'
+        | 'recognize'
         | 'controls';
     }
   | { kind: 'opacity'; value: number }

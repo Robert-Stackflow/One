@@ -12,7 +12,7 @@ export function trayMenuEntries(state:TrayMenuState):TrayMenuEntry[]{
   {id:'search',label:'文件搜索',group:'primary',icon:'search'},
   {id:'capture-region',label:'区域截图',group:'tools',icon:'capture'},
   {id:'capture-recording',label:'打开录制',group:'tools',icon:'recording'},
-  {id:'pins-clipboard',label:'贴出剪贴板',group:'tools',icon:'pin'},
+  {id:'pins-clipboard',label:'贴图',group:'tools',icon:'pin'},
   {id:'more',label:'更多操作',group:'tools',icon:'ellipsis'},
   {id:'settings',label:'设置',group:'system',icon:'settings'},
   {id:'startup',label:'开机自启动',group:'system',icon:'power',active:state.launchAtLogin},

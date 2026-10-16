@@ -21,7 +21,7 @@ const windowAttribute=dwm.func('long __stdcall DwmGetWindowAttribute(intptr_t, u
       BrowserWindow.getAllWindows()[0].setSize(1120,820);
     },{source,textFile,exported});
     await main.locator('.nav[data-page=materials]').click();await main.getByRole('button',{name:'导入图片',exact:true}).click();
-    await expect(main.getByRole('button',{name:'贴出图片',exact:true})).toBeEnabled();await main.getByRole('button',{name:'贴出图片',exact:true}).click();
+    await expect(main.getByRole('button',{name:'贴图',exact:true})).toBeEnabled();await main.getByRole('button',{name:'贴图',exact:true}).click();
     let pin;await expect.poll(()=>{pin=app.windows().find(page=>page.url().endsWith('?view=pin'));return!!pin;}).toBe(true);
     await pin.waitForFunction(()=>document.body.dataset.pinReady==='true'||!!document.body.dataset.pinError);
     assert.equal(await pin.evaluate(()=>document.body.dataset.pinError||''),'');await expect(pin.locator('#pin-content img')).toHaveJSProperty('naturalWidth',400);

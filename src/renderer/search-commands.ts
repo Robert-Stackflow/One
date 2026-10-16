@@ -31,7 +31,7 @@ const commands=[
  ['capture-custom','自定义截屏','配置位置、尺寸与延迟','zi ding yi jie ping'],
  ['capture-screen','显示器截图','截取当前显示器','xian shi qi jie tu'],
  ['capture-clipboard','编辑剪贴板图片','打开图片编辑器','bian ji jian tie ban tu pian'],
- ['pins-clipboard','贴出剪贴板','将图片、文字或文件贴到桌面','tie chu jian tie ban'],
+ ['pins-clipboard','贴图','将图片、文字或文件贴到桌面','tie tu|tie chu jian tie ban'],
  ['pins-toggle','隐藏 / 显示全部贴图','切换桌面贴图可见性','yin cang xian shi quan bu tie tu'],
  ['pins-next-group','切换贴图分组','切换显示的桌面贴图组','qie huan tie tu fen zu'],
  ['page:settings','打开设置','外观与通用设置','da kai she zhi']
@@ -62,8 +62,9 @@ function score(query:string,id:string,label:string,detail:string,pinyin:string,s
  if(plain.includes(query)||alias.includes(query))return 85;
  if(!settings.pinyin)return 0;
  if(!/^[a-z]+$/.test(query))return 0;
- const syllables=pinyin.split(' '),variants=[syllables];
- if(label.startsWith('打开'))variants.push(syllables.slice(2));
+ const variants=pinyin.split('|').map(value=>value.split(' '));
+ if(variants.some(parts=>parts.join('')===query))return 95;
+ if(label.startsWith('打开'))variants.push(variants[0].slice(2));
  let best=0;
  for(const parts of variants){
   const full=parts.join(''),initials=parts.map(part=>part[0]).join('');

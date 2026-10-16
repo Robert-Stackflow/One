@@ -4,9 +4,10 @@ new Function('module','exports','require',bundle.outputFiles[0].text)(fixture,fi
 const {CaptureShortcutController,captureShortcutDefinitions,defaultCaptureShortcuts,captureAccelerator,validateCaptureShortcuts,defaultSettings,mergeSettings,validateSettings,captureSystemCommands,menuBuiltins}=fixture.exports;
 test('Search commands resolve every migrated page and direct action by name and pinyin',()=>{
   const {commandMatches}=fixture.exports;
-  for(const [id,name,pinyin] of [['page:capture','打开截图','dakaijietu'],['page:recording','打开录制','dakailuzhi'],['page:materials','打开素材','dakaisucai'],['page:pins','打开贴图','dakaitietu'],['capture-region','区域截图','quyujietu'],['capture-custom','自定义截屏','zidingyijieping'],['pins-clipboard','贴出剪贴板','tiechujian tieban']]){
+  for(const [id,name,pinyin] of [['page:capture','打开截图','dakaijietu'],['page:recording','打开录制','dakailuzhi'],['page:materials','打开素材','dakaisucai'],['page:pins','打开贴图','dakaitietu'],['capture-region','区域截图','quyujietu'],['capture-custom','自定义截屏','zidingyijieping'],['pins-clipboard','贴图','tietu']]){
     assert.equal(commandMatches(name,1)[0].path,'action:'+id);assert.equal(commandMatches(pinyin,1)[0].path,'action:'+id);
   }
+  assert.equal(commandMatches('tiechujian tieban',1)[0].path,'action:pins-clipboard');
   for(const command of Object.keys(captureSystemCommands).filter(id=>id!=='capture-recording'))assert.ok(commandMatches('',100).some(item=>item.path==='action:'+command));
 });
 const keys=()=>Object.fromEntries(captureShortcutDefinitions.map(({id},i)=>[id,`Ctrl+Alt+F${13+i}`]));

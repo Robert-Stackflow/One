@@ -31,6 +31,7 @@ export function toggleCollectionRange(selected:Set<string>,ids:string[],id:strin
   if(checked)selected.add(id);else selected.delete(id);return id;
 }
 export function collectionShortcut(event:KeyboardEvent){
+  if(event.defaultPrevented&&event.key==='Escape')return;
   if(event.target instanceof Element&&(event.target.closest('textarea,select,[contenteditable=true],[role=combobox]')||event.target.matches('input:not([type=checkbox]):not([type=radio])')))return;
   if(document.querySelector('dialog[open],:popover-open'))return;
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a')return 'all';
