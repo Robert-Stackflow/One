@@ -1,6 +1,6 @@
 {
   "name": "one-setup-ui",
-  "version": "0.0.0",
+  "version": "0.16.25",
   "private": true,
   "productName": "One 安装程序",
   "main": "main.cjs"
