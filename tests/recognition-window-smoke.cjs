@@ -176,7 +176,7 @@ async function main(){
     const reloaded=await page.evaluate(async()=>({translation:await window.one.recognition.translationConfig(),state:await window.one.recognition.state()}));
     assert.equal(reloaded.translation.ready,true);assert.notEqual(reloaded.state.token,initial.token);
     assert.equal(await page.evaluate(async token=>{try{await window.one.recognition.run(token,'eng');return false;}catch{return true;}},initial.token),true);
-    const existingWindows=app.windows().length;await home.getByRole('button',{name:'识别公式',exact:true}).click();await expect(page.locator('#tab-formula')).toHaveAttribute('aria-selected','true');assert.equal(app.windows().length,existingWindows);await expect.poll(()=>requests.length,{timeout:30000}).toBe(4);await expect(page.locator('#image-loading')).toBeVisible();
+    const existingWindows=app.windows().length;await page.locator('#tab-formula').click();await page.locator('#task-run').click();await expect(page.locator('#tab-formula')).toHaveAttribute('aria-selected','true');assert.equal(app.windows().length,existingWindows);await expect.poll(()=>requests.length,{timeout:30000}).toBe(4);await expect(page.locator('#image-loading')).toBeVisible();
     const appProcess=app.process();await app.evaluate(({app})=>app.quit());await expect.poll(()=>appProcess.exitCode,{timeout:15000}).not.toBeNull();app=undefined;
     assert.deepEqual(errors,[]);console.log('Recognition window passed: real OCR, correction/copy and removed table bridge, encrypted exact endpoints, unified OCR/translation/formula tabs, cancellation, resource isolation, same-window entry reuse, reopen, scale and active-request exit.');
   }finally{

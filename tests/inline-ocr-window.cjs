@@ -1,3 +1,4 @@
+const {electronLaunch,verifyPackagedRuntime}=require('./packaged-launch.cjs');
 const {_electron:electron,expect}=require('@playwright/test');
 const {build}=require('esbuild'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
@@ -11,7 +12,7 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await sharp(Buffer.from('<svg width="1200" height="800"><rect width="1200" height="800" fill="white"/><text x="60" y="180" font-family="Arial" font-size="60">ONE OCR 2026</text><text x="60" y="300" font-family="Arial" font-size="60">COPY SECOND LINE</text></svg>')).png().toFile(input);
     const originalHash=require('node:crypto').createHash('sha256').update(await fs.readFile(input)).digest('hex');
     const env={...process.env,ONE_TEST_MODE:'1',ONE_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
-    app=await electron.launch({args:[path.resolve('.')],env});app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
+    app=await electron.launch(electronLaunch(env));await verifyPackagedRuntime(app);app.on('window',page=>page.on('pageerror',error=>errors.push(String(error))));
     const main=await app.firstWindow();await main.waitForFunction(()=>!!window.one);
     await main.evaluate(()=>window.one.patchSettings({preview:{held:true,pinned:false,files:false}}));
     await app.evaluate(({dialog,ipcMain},input)=>{
