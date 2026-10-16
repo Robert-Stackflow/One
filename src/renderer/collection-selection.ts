@@ -10,6 +10,23 @@ export function collectionCheck(attribute:string,id:string,title:string,checked:
 export function collectionSelectionBar(id:string,label:string,actions:string){
   return `<div class="collection-selection-shell" inert aria-hidden="true"><div class="collection-selection-clip"><section class="collection-selection" aria-label="${label}"><label class="collection-select-all"><input id="${id}" type="checkbox"><span>全选</span></label><span class="collection-selected-count" aria-live="polite" aria-atomic="true"></span><div class="collection-batch-actions">${actions}</div><button type="button" class="quiet icon-button collection-selection-close" data-collection-clear aria-label="取消选择" title="取消选择">${icon('lucide:collection-close')}</button></section></div></div>`;
 }
+/** Keep the last row scrollable above a floating dock, including wrapped/scaled controls. */
+export function watchCollectionDock(root:HTMLElement){
+  let bar:HTMLElement|null=null;
+  const workspace=root.closest<HTMLElement>('.workspace'),property=`--${root.classList.contains('pins-page')?'pins':'materials'}-dock-space`;
+  const measure=()=>{
+    const space=`${(bar?.getBoundingClientRect().height||0)+28}px`;
+    root.style.setProperty('--collection-dock-space',space);workspace?.style.setProperty(property,space);
+  };
+  const resize=new ResizeObserver(measure);
+  const bind=()=>{
+    const next=root.querySelector<HTMLElement>('.collection-selection');
+    if(next===bar)return;
+    if(bar)resize.unobserve(bar);bar=next;if(bar)resize.observe(bar);measure();
+  };
+  const changes=new MutationObserver(bind);changes.observe(root,{childList:true});bind();
+  return ()=>{resize.disconnect();changes.disconnect();root.style.removeProperty('--collection-dock-space');workspace?.style.removeProperty(property);};
+}
 export function syncCollectionSelection(root:HTMLElement,selected:Set<string>,ids:string[],mode:boolean,busy=false){
   root.classList.toggle('is-selecting',mode);
   const shell=root.querySelector<HTMLElement>('.collection-selection-shell');

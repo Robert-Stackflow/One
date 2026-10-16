@@ -1,4 +1,4 @@
-.content[data-current-page=pins]{display:flex;flex-direction:column;overflow:hidden}
+.content[data-current-page=pins]{display:flex;flex-direction:column;overflow:hidden;padding-bottom:8px}
 .content[data-current-page=pins]>.page-heading{flex:none;gap:16px;flex-wrap:wrap}
 #page-pins{flex:1;min-height:0;overflow:hidden}
 .pins-heading-actions{display:flex;gap:8px;align-items:center}

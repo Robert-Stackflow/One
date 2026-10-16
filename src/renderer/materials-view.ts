@@ -5,8 +5,9 @@ import {onRemoval} from './dom-lifecycle';
 import {searchField,setupSearchField} from './search-field';
 import {applyCaptureScale} from './capture/appearance';
 import type {ImageMaterialView,RecordingMaterialView,MaterialsState} from '../shared/materials';
-import {collectionCheck,collectionSelectButton,collectionSelectionBar,syncCollectionSelection,toggleCollectionRange,collectionShortcut} from './collection-selection';
+import {collectionCheck,collectionSelectButton,collectionSelectionBar,syncCollectionSelection,toggleCollectionRange,collectionShortcut,watchCollectionDock} from './collection-selection';
 import {collectionCardActions} from './collection-card-actions';
+import {recordingPosters} from './materials-recording-posters';
 import './materials-view.css';
 
 registerIcons({images:Images,video:Video,'audio-lines':AudioLines});
@@ -36,6 +37,7 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
   const error=page.querySelector<HTMLElement>('.materials-error')!,tabs=Array.from(page.querySelectorAll<HTMLButtonElement>('[role=tab]'));
   let kind:Kind='images',state:MaterialsState|undefined,active=false,disposed=false,dirty=true,refreshing:Promise<void>|undefined,scaleRevision=0;
   const pending=new Set<string>(),selected=new Set<string>();let batchBusy=false,selecting=false,anchor:string|undefined;
+  let stopPosters=()=>{};
   const selection=document.createElement('div');selection.className='materials-selection';selection.setAttribute('aria-label','素材选择与批量操作');selection.innerHTML=collectionSelectionBar('materials-select-all','素材选择与批量操作',`<button type="button" class="quiet" data-material-batch="pin">${icon('pin')}贴出所选</button><button type="button" class="quiet" data-material-batch="export">${icon('download')}导出所选</button><button type="button" class="quiet danger" data-material-batch="remove">${icon('trash')}删除所选</button>`);results.after(selection);
   const handlers:Record<string,((id:string)=>Promise<unknown>)|undefined>={
     directory:()=>api.materialsOpenDirectory(),'open-project':()=>api.materialsOpenImageProject(),'import-images':()=>api.materialsImportImages(),
@@ -46,6 +48,7 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
     'remove-recording':async id=>{if(await confirmDialog({title:'删除录制素材',message:'删除这份录制素材工程？',confirm:'删除',danger:true}))await api.materialsRemoveRecording(id);},
     refresh:async()=>{dirty=true;await refresh();},
   };
+  const stopDock=watchCollectionDock(page);
   const key=(button:HTMLButtonElement)=>button.dataset.materialAction+':'+(button.dataset.materialId||'');
   function syncActions(){
     for(const container of [page,heading])for(const button of container.querySelectorAll<HTMLButtonElement>('[data-material-action]')){
@@ -56,12 +59,14 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
     page.querySelectorAll<HTMLButtonElement>('[data-material-batch]').forEach(button=>button.disabled=batchBusy||!!pending.size||!selected.size||(button.dataset.materialBatch==='pin'&&!commands.pin));
   }
   const visible=()=>state?.[kind].filter(item=>item.title.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))||[];
+  let selectionCount=0;
   function renderSelection(){
+    if(selectionCount&&!selected.size){selecting=false;anchor=undefined;}selectionCount=selected.size;
     syncCollectionSelection(page,selected,visible().map(item=>item.id),selecting,batchBusy);
     selection.querySelector<HTMLButtonElement>('[data-material-batch=pin]')!.hidden=kind!=='images';syncActions();
   }
   function selectable(item:ImageMaterialView|RecordingMaterialView){return kind==='images'?imageCard(item as ImageMaterialView,selected.has(item.id)):recordingCard(item as RecordingMaterialView,selected.has(item.id));}
-  function toggle(id:string,checked:boolean,shift=false){if(batchBusy)return;selecting=true;anchor=toggleCollectionRange(selected,visible().map(item=>item.id),id,checked,shift,anchor);renderSelection();}
+  function toggle(id:string,checked:boolean,shift=false){if(batchBusy)return;selecting=true;anchor=toggleCollectionRange(selected,visible().map(item=>item.id),id,checked,shift,anchor);if(!selected.size){clearSelection();return;}renderSelection();}
   function clearSelection(){selected.clear();anchor=undefined;selecting=false;renderSelection();page.querySelector<HTMLButtonElement>('[data-collection-toggle]')?.focus({preventScroll:true});}
   const keys=(event:KeyboardEvent)=>{if(batchBusy)return;const key=collectionShortcut(event);if(!key||key==='clear'&&!selecting)return;event.preventDefault();event.stopPropagation();if(key==='all'){selecting=true;for(const item of visible())selected.add(item.id);renderSelection();}else if(key==='clear')clearSelection();else toggle(key,!selected.has(key),event.shiftKey);};
   async function batch(action:string){
@@ -92,10 +97,10 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
     for(const id of selected)if(!state[kind].some(item=>item.id===id))selected.delete(id);
     const focused=document.activeElement instanceof HTMLButtonElement&&results.contains(document.activeElement)?key(document.activeElement):undefined;
     const query=search.value.toLocaleLowerCase(),items=state[kind].filter(item=>item.title.toLocaleLowerCase().includes(query));
+    stopPosters();
     results.innerHTML=items.length?`<div class="asset-grid">${items.map(selectable).join('')}</div>`:state.error?'':empty(query?'没有匹配的素材':kind==='images'?'还没有图片':'还没有录制',query?'尝试换个名称搜索。':kind==='images'?'截图或导入图片后，会自动保存在这里。':'完成录制或导入工程后，可在这里继续编辑。',kind==='images'?'lucide:images':'lucide:video');
     renderSelection();
-    // A missing poster keeps the original video glyph visible.
-    results.querySelectorAll<HTMLImageElement>('.recording-preview img').forEach(img=>{img.onerror=()=>{img.hidden=true;};});
+    stopPosters=recordingPosters(results);
     tabs[0].querySelector('small')!.textContent=String(state.images.length);tabs[1].querySelector('small')!.textContent=String(state.recordings.length);
     error.hidden=!state.error;error.querySelector('span')!.textContent=state.error;syncActions();
     if(focused)Array.from(results.querySelectorAll<HTMLButtonElement>('[data-material-action]')).find(button=>key(button)===focused)?.focus({preventScroll:true});
@@ -113,15 +118,15 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
     refreshing=task;return task;
   }
   function choose(value:Kind){
-    if(kind===value||batchBusy)return;kind=value;selected.clear();anchor=undefined;
+    if(kind===value||batchBusy)return;kind=value;selected.clear();anchor=undefined;selecting=false;
     tabs.forEach((tab,index)=>{const selected=(index===0)===(kind==='images');tab.classList.toggle('selected',selected);tab.setAttribute('aria-selected',String(selected));});
     results.setAttribute('aria-labelledby',kind==='images'?'material-images':'material-recordings');renderHeading();renderResults();
   }
   const tabClick=(event:Event)=>choose((event.currentTarget as HTMLElement).id==='material-images'?'images':'recordings');
-  const input=()=>{selected.clear();anchor=undefined;renderResults();};
+  const input=()=>{selected.clear();anchor=undefined;selecting=false;renderResults();};
   const changed=(event:Event)=>{
     const input=event.target as HTMLInputElement;if(batchBusy||input.tagName!=='INPUT')return;
-    if(input.id==='materials-select-all'){for(const item of visible())if(input.checked)selected.add(item.id);else selected.delete(item.id);renderSelection();}
+    if(input.id==='materials-select-all'){for(const item of visible())if(input.checked)selected.add(item.id);else selected.delete(item.id);if(!selected.size)clearSelection();else renderSelection();}
   };
   const clicked=(event:Event)=>{
     const target=event.target as HTMLElement,choice=target.closest<HTMLInputElement>('[data-material-select]');
@@ -142,6 +147,6 @@ export function setupMaterials(root:HTMLElement,heading:HTMLElement,commands:Mat
   const applyScale=(scale:100|110|125|150)=>{applyCaptureScale(page,scale);applyCaptureScale(heading,scale);};
   const stopPreferences=api.onCapturePreferences(value=>{++scaleRevision;if(!disposed)applyScale(value.uiScale);});
   const stopRemoval=onRemoval(root,dispose);renderHeading();
-  function dispose(){if(disposed)return;disposed=true;active=false;stopChanged();stopPreferences();stopSearch();stopRemoval();tabs.forEach(tab=>tab.removeEventListener('click',tabClick));search.removeEventListener('input',input);page.removeEventListener('change',changed);page.removeEventListener('click',clicked);heading.removeEventListener('click',clicked);page.removeEventListener('keydown',keys);heading.replaceChildren();}
-  return {activate(value:boolean){active=value;if(value){dirty=true;const revision=scaleRevision;void api.settings().then(settings=>{if(!disposed&&revision===scaleRevision)applyScale(settings.capture.uiScale);}).catch(toast);void refresh();}},dispose};
+  function dispose(){if(disposed)return;disposed=true;active=false;stopPosters();stopDock();stopChanged();stopPreferences();stopSearch();stopRemoval();tabs.forEach(tab=>tab.removeEventListener('click',tabClick));search.removeEventListener('input',input);page.removeEventListener('change',changed);page.removeEventListener('click',clicked);heading.removeEventListener('click',clicked);page.removeEventListener('keydown',keys);heading.replaceChildren();}
+  return {activate(value:boolean){active=value;if(!value)stopPosters();if(value){dirty=true;const revision=scaleRevision;void api.settings().then(settings=>{if(!disposed&&revision===scaleRevision)applyScale(settings.capture.uiScale);}).catch(toast);void refresh();}},dispose};
 }

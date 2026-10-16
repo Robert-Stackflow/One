@@ -7,7 +7,7 @@ import { customControls, closeControls, openControl } from '../controls';
 import {dialogMarkup,openDialog,closeDialog,lockDialogDismiss,confirmDialog} from '../dialog';
 import {positionAnchoredPopover} from '../anchored-popover';
 import {searchField,setupSearchField} from '../search-field';
-import {collectionCheck,collectionSelectButton,collectionSelectionBar,syncCollectionSelection,toggleCollectionRange,collectionShortcut} from '../collection-selection';
+import {collectionCheck,collectionSelectButton,collectionSelectionBar,syncCollectionSelection,toggleCollectionRange,collectionShortcut,watchCollectionDock} from '../collection-selection';
 import {collectionCardActions} from '../collection-card-actions';
 import './pins-page.css';
 registerIcons({eye:Eye,'eye-off':EyeOff,pointer:MousePointer2,copy:Copy,download:Download,folder:Folder,images:Images,more:MoreHorizontal,pencil:Pencil,pin:Pin,plus:Plus,settings:Settings2,trash:Trash2});
@@ -98,14 +98,17 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
   const many = async (ids: string[], action: PinAction) => {
     for (const id of ids) await api.pinsAction(id, action);
   };
+  const stopDock=watchCollectionDock(root);
+  let selectionCount=0;
   function syncSelection(){
+    if(selectionCount&&!selected.size){selecting=false;anchor=undefined;}selectionCount=selected.size;
     syncCollectionSelection(root,selected,visiblePins.map(p=>p.id),selecting,batchBusy);
     for(const button of root.querySelectorAll<HTMLButtonElement>('[data-batch],#pins-batch-group'))setActionDisabled(button,batchBusy||!visiblePins.some(p=>selected.has(p.id)));
     for(const node of root.querySelectorAll<HTMLInputElement|HTMLButtonElement>('.pins-toolbar button,.pins-toolbar input,.pins-toolbar select'))node.disabled=batchBusy||(node.hasAttribute('data-collection-toggle')&&!visiblePins.length);
     for(const node of root.querySelectorAll<HTMLElement>('.pin-card-actions'))node.inert=batchBusy;
   }
   function clearSelection(){selected.clear();anchor=undefined;selecting=false;syncSelection();root.querySelector<HTMLButtonElement>('[data-collection-toggle]')?.focus({preventScroll:true});}
-  function toggle(id:string,checked:boolean,shift=false){if(batchBusy)return;selecting=true;anchor=toggleCollectionRange(selected,visiblePins.map(p=>p.id),id,checked,shift,anchor);syncSelection();}
+  function toggle(id:string,checked:boolean,shift=false){if(batchBusy)return;selecting=true;anchor=toggleCollectionRange(selected,visiblePins.map(p=>p.id),id,checked,shift,anchor);if(!selected.size){clearSelection();return;}syncSelection();}
   async function batchSelected(kind:'show'|'hide'|'restore'|'remove'|'group',target?:string|null){
     if(batchBusy)return;const ids=visiblePins.filter(p=>selected.has(p.id)).map(p=>p.id);if(!ids.length)return;batchBusy=true;syncSelection();
     try{
@@ -158,7 +161,7 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
     for(const id of selected)if(!pins.some(p=>p.id===id))selected.delete(id);
     visiblePins=pins;
     root.innerHTML = `<div class="pins-controls"><div class="pins-toolbar">${searchField('pins-search', '搜索贴图', '搜索贴图')}<select id="pins-group-filter" aria-label="贴图分组"><option value="all">全部分组</option><option value="none">未分组</option>${workspace.groups.map((g) => `<option value="${g.id}">${escape(g.name)}</option>`).join('')}</select><select id="pins-visibility" aria-label="显示状态"><option value="all">全部状态</option><option value="visible">正在显示</option><option value="hidden">已隐藏</option></select>${collectionSelectButton()}<button type="button" class="quiet icon-button" data-pin-menu="pins-manage-menu" aria-label="管理贴图与分组" aria-expanded="false">${icon('lucide:more')}</button>
-      <div id="pins-manage-menu" class="select-popup pins-action-menu" popover="manual"><button class="quiet" id="pins-new-group">${icon('lucide:plus')}新建分组</button>${group !== 'all' && group !== 'none' ? '<button class="quiet" id="pins-rename-group">重命名分组</button><button class="quiet" id="pins-remove-group">解散分组</button>' : ''}<hr><button class="quiet" id="pins-show-group">显示当前分组</button><button class="quiet" id="pins-hide-group">隐藏当前分组</button><button class="quiet" id="pins-restore-group">恢复当前分组交互</button><hr><button class="quiet" id="pins-toggle-all">隐藏 / 显示全部贴图</button><button class="quiet" id="pins-next-group">切换到另一贴图组</button></div></div><div class="collection-list-summary"><span>${pins.length} 个贴图</span><span>${pins.filter(p=>p.view.visible).length} 个正在显示</span></div></div>
+      <div id="pins-manage-menu" class="select-popup pins-action-menu" popover="manual"><button class="quiet" id="pins-new-group">${icon('lucide:plus')}新建分组</button>${group !== 'all' && group !== 'none' ? '<button class="quiet" id="pins-rename-group">重命名分组</button><button class="quiet" id="pins-remove-group">解散分组</button>' : ''}<hr><button class="quiet" id="pins-show-group">显示当前分组</button><button class="quiet" id="pins-hide-group">隐藏当前分组</button><button class="quiet" id="pins-restore-group">恢复当前分组交互</button><hr><button class="quiet" id="pins-toggle-all">隐藏 / 显示全部贴图</button><button class="quiet" id="pins-next-group">切换到另一贴图组</button></div></div></div>
       <div class="pins-results">${pins.length?`<section class="pins-grid">${pins.map(p=>`<article class="pin-card collection-card" data-id="${p.id}" data-collection-card="${p.id}">
         <div class="pin-card-preview ${p.content.kind}">${p.view.visible?'<span class="pin-state visible"><i></i>显示中</span>':''}${p.content.kind==='image'?`<span class="pin-preview-placeholder">${icon('lucide:images')}</span><img data-preview="${p.id}" data-hash="${p.content.hash}" alt="${escape(p.title)}" hidden>`:p.content.kind==='text'?`<p class="pin-text-preview">${escape(p.content.text.slice(0,600))}</p>`:`<div class="pin-files-preview">${icon('lucide:folder')}<span>${escape(p.content.files[0]?.name||'文件')} ${p.content.files.length>1?'等 '+p.content.files.length+' 项':''}</span></div>`}</div>
         <div class="pin-card-copy"><div class="pin-card-caption"><h3 title="${escape(p.title)}">${escape(p.title)}</h3><p>${p.content.kind==='image'?p.content.width+' × '+p.content.height:p.content.kind==='text'?'文字 · '+p.content.text.length+' 字':p.content.files.length+' 个文件'}${p.group?'<span>·</span>'+escape(workspace.groups.find(g=>g.id===p.group)?.name||''):''}${p.view.passThrough?'<span>·</span>穿透':''}</p></div>${collectionCheck('data-select-pin',p.id,p.title,selected.has(p.id))}</div>
@@ -215,7 +218,7 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
     search.value=query;
     setupSearchField(search);
     search.oninput = () => {
-      query = search.value;selected.clear();anchor=undefined;
+      query = search.value;selected.clear();anchor=undefined;selecting=false;
       update();
     };
     if (focused) {
@@ -226,7 +229,7 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
     status.value = visibility;
     status.onchange = () => {
       visibility = status.value;
-      selected.clear();anchor=undefined;
+      selected.clear();anchor=undefined;selecting=false;
       update();
     };
     bind('#pins-toggle-all', () => api.pinsToggle());
@@ -255,11 +258,11 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
     select.value = group;
     select.onchange = () => {
       group = select.value;
-      selected.clear();anchor=undefined;
+      selected.clear();anchor=undefined;selecting=false;
       update();
     };
     const all=root.querySelector<HTMLInputElement>('#pins-select-all')!;
-    all.onchange=()=>{if(batchBusy)return;for(const p of pins)if(all.checked)selected.add(p.id);else selected.delete(p.id);syncSelection();};
+    all.onchange=()=>{if(batchBusy)return;for(const p of pins)if(all.checked)selected.add(p.id);else selected.delete(p.id);if(!selected.size)clearSelection();else syncSelection();};
     bind('#pins-new-group', () =>
       nameDialog('新建贴图分组', '', (name) => api.pinsGroup(null, { kind: 'create', name })),
     );
@@ -312,7 +315,7 @@ export function mountPinsPage(root: HTMLElement, api: PinsAPI, get: () => PinWor
     update,
     activate(value:boolean){active=value;if(value){signature='';update();}else{observer?.disconnect();pending.length=0;closeControls();}},
     dispose() {
-      disposed = true;
+      disposed = true;stopDock();
       closeControls();
       observer?.disconnect();
       pending.length = 0;

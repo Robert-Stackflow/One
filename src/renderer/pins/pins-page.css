@@ -6,10 +6,8 @@
 .pins-page .pins-toolbar>.custom-select{width:140px;flex:none}
 .pins-page .pins-toolbar>.custom-select#pins-visibility{width:120px}
 .pins-page .pins-toolbar>.icon-button{flex:none}
-.pins-page .collection-list-summary{display:flex;gap:14px;color:var(--muted);font-size:var(--control-font);padding-top:14px;font-variant-numeric:tabular-nums}
-.pins-page .pins-results{flex:1;min-height:0;overflow:auto;padding:4px 8px 16px 3px;scrollbar-gutter:stable}
+.pins-page .pins-results{flex:1;min-height:0;overflow:auto;padding:4px 8px 8px 3px;scrollbar-gutter:stable}
 .pins-page .pins-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(228px,100%),1fr));gap:18px;align-content:start}
-.pins-page .pins-selection{flex:none;margin-top:-8px}
 .pins-page .pin-card{position:relative;min-width:0;overflow:hidden}
 .pins-page .pin-card-preview{position:relative;display:grid;place-items:center;aspect-ratio:16/9;box-sizing:border-box;padding:12px;overflow:hidden;background:color-mix(in srgb,var(--fg) 3%,var(--surface))}
 .pins-page .pin-card-preview img{display:block;min-height:0;width:100%;max-width:100%;height:100%;object-fit:contain;border-radius:4px}

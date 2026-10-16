@@ -50,6 +50,7 @@ export class MaterialsService {
   }
   async imageURL(owner:number,id:string){await this.ready;this.owner(owner);return this.resources.url(owner,id,'image');}
   async recordingURL(owner:number,id:string){await this.ready;this.owner(owner);return this.resources.url(owner,id,'recording');}
+  saveRecordingThumbnail(owner:number,id:string,png:Uint8Array){return this.run(owner,()=>this.library.saveRecordingThumbnail(id,png));}
   importImages(owner:number){return this.run(owner,async()=>{
     const answer=await dialog.showOpenDialog(this.owner(owner),{title:'导入图片',properties:['openFile','multiSelections'],filters:[{name:'图片',extensions:['png','jpg','jpeg','webp','bmp']}]});
     if(answer.canceled)return [];this.owner(owner);

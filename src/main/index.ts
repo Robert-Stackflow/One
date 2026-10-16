@@ -804,6 +804,7 @@ function registerIPC() {
   handle('materials-import-clipboard',event=>materials!.importClipboard(event.sender.id));
   handle('materials-image-url',(event,id)=>materials!.imageURL(event.sender.id,id));
   handle('materials-recording-url',(event,id)=>materials!.recordingURL(event.sender.id,id));
+  handle('materials-save-recording-thumbnail',(event,id,png)=>materials!.saveRecordingThumbnail(event.sender.id,id,png));
   handle('materials-copy-image',(event,id)=>materials!.copyImage(event.sender.id,id));
   handle('materials-export-image',(event,id)=>materials!.exportImage(event.sender.id,id));
   handle('materials-export-batch',(event,kind,ids)=>materials!.exportBatch(event.sender.id,kind,ids));

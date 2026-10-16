@@ -1,4 +1,4 @@
-.content[data-current-page=materials]{display:flex;flex-direction:column;overflow:hidden}
+.content[data-current-page=materials]{display:flex;flex-direction:column;overflow:hidden;padding-bottom:8px}
 .content[data-current-page=materials]>.page-heading{flex:none;gap:16px;flex-wrap:wrap}
 #page-materials{flex:1;min-height:0}
 .materials-page{height:100%;display:flex;flex-direction:column;gap:16px;min-height:0}
@@ -9,8 +9,7 @@
 .materials-page .filter-field input{width:0;min-width:0;font-size:var(--control-font);box-shadow:none}
 .materials-page .filter-field input::-webkit-search-cancel-button,.materials-page .filter-field input::-webkit-search-decoration{appearance:none}
 .materials-page .search-clear{width:26px;height:26px;min-height:26px;padding:5px;flex-shrink:0}
-.materials-page .collection-scroll{flex:1;min-height:0;overflow:auto;padding:4px 8px 16px 3px;scrollbar-gutter:stable}
-.materials-page .materials-selection{flex:none;margin-top:-8px}
+.materials-page .collection-scroll{flex:1;min-height:0;overflow:auto;padding:4px 8px 8px 3px;scrollbar-gutter:stable}
 .materials-page .asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(228px,100%),1fr));gap:18px;align-content:start}
 .materials-page .asset-card{position:relative;overflow:hidden;min-width:0}
 .materials-page .asset-preview{display:block;border:0;border-radius:0;background:color-mix(in srgb,var(--fg) 3%,var(--surface));width:100%;height:auto;aspect-ratio:16/9;box-sizing:border-box;padding:12px;cursor:pointer}

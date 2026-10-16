@@ -15,6 +15,7 @@ export interface MaterialsAPI {
   materialsImportClipboard():Promise<string>;
   materialsImageURL(id:string):Promise<string>;
   materialsRecordingURL(id:string):Promise<string>;
+  materialsSaveRecordingThumbnail(id:string,png:Uint8Array):Promise<void>;
   materialsCopyImage(id:string):Promise<void>;
   materialsExportImage(id:string):Promise<boolean>;
   materialsExportBatch(kind:'images'|'recordings',ids:string[]):Promise<MaterialsExportResult>;
