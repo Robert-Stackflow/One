@@ -1,295 +1,36 @@
-/* One quiet gallery with a stable, shared selection toolbar. */
-.pins-page .pins-controls {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--surface);
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--line);
-}
-.pins-page .pins-overview { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 0 0 16px; }
-.pins-page .pins-overview h2 { margin: 0; font-size: 15px; font-weight: 500; }
-.pins-page .pins-overview p { display: flex; gap: 8px; margin: 0; font-size: 12px; color: var(--muted); }
-.pins-page .pins-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding-bottom: 10px;
-}
-.pins-page .pins-toolbar .filter-field {
-  flex: 1 1 240px;
-  max-width: 400px;
-  min-width: 130px;
-}
-.pins-page .pins-toolbar > .custom-select#pins-group { margin-left: auto; }
-.pins-page .pins-toolbar > .custom-select {
-  width: 150px;
-  flex: none;
-}
-.pins-page .pins-toolbar > .custom-select#pins-visibility {
-  width: 120px;
-}
-.pins-page .pins-toolbar > .icon-button {
-  flex: none;
-}
-.pins-page .pins-selection {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 44px;
-  min-height: 44px;
-  padding: 4px 0 10px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.pins-page .pins-selection > label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
-}
-.pins-page .pins-selection input,
-.pins-page .pin-card-check input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: #668e81;
-}
-.pins-page .pins-visible-count {
-  display: none;
-}
-.pins-page .pins-selection[hidden] { display: none; }
-.pins-page .pins-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: clamp(280px,48vh,520px); padding: 32px 20px; text-align: center; }
-.pins-page .pins-empty-icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 22px; background: var(--soft); border-radius: 22px; color: var(--muted); }
-.pins-page .pins-empty-icon .icon { width: 30px; height: 30px; stroke-width: 1.5; }
-.pins-page .pins-empty p { margin: 0; color: var(--muted); font-size: var(--control-font); line-height: 1.7; }
-.pins-page .pins-selection .actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: nowrap;
-  margin-left: auto;
-}
-.pins-page .pins-selection .actions > .icon-button {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 5px;
-}
-.pins-page .pins-selection .actions .icon {
-  width: 16px;
-  height: 16px;
-}
-.pins-page .pins-selection .custom-select {
-  width: 146px;
-  margin-left: 8px;
-}
-.pins-page .pins-selection .custom-select {
-  height: 30px;
-  min-height: 30px;
-  font-size: 11px;
-}
-.pins-page .pins-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 18px;
-  align-items: start;
-}
-.pins-page .pin-card {
-  min-width: 0;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  transition:
-    border-color 140ms,
-    box-shadow 140ms,
-    background 140ms;
-}
-.pins-page .pin-card:hover {
-  border-color: color-mix(in srgb, #78968c 48%, var(--line));
-  box-shadow: 0 3px 12px #00000008;
-}
-.pins-page .pin-card.is-selected {
-  border-color: color-mix(in srgb, #668e81 72%, var(--surface));
-  background: color-mix(in srgb, #668e81 4%, var(--surface));
-  box-shadow: 0 0 0 2px color-mix(in srgb, #668e81 14%, transparent);
-}
-.pins-page .pin-card-preview {
-  position: relative;
-  display: grid;
-  place-items: center;
-  height: 158px;
-  padding: 12px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--fg) 3%, var(--surface));
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
-}
-.pins-page .pin-card-preview img {
-  display: block;
-  min-height: 0;
-  max-width: 100%;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 3px;
-}
-.pins-page .pin-preview-placeholder {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: var(--soft);
-  font-size: 11px;
-}
-.pins-page .pin-preview-placeholder .icon {
-  width: 28px;
-  height: 28px;
-  opacity: 0.4;
-}
-.pins-page .pin-card-preview.loaded .pin-preview-placeholder {
-  display: none;
-}
-.pins-page .pin-card-check {
-  position: absolute;
-  z-index: 1;
-  top: 9px;
-  left: 9px;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 120ms;
-}
-.pins-page .pin-card:hover .pin-card-check,
-.pins-page .pin-card:focus-within .pin-card-check,
-.pins-page .pin-card.is-selected .pin-card-check {
-  opacity: 1;
-}
-.pins-page .pin-state {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #668e81;
-  background: var(--surface);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 16px;
-}
-.pins-page .pin-state i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.pins-page .pin-text-preview {
-  width: 100%;
-  margin: 22px 0 0;
-  align-self: stretch;
-  white-space: pre-wrap;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--fg);
-}
-.pins-page .pin-files-preview {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  max-width: 100%;
-  padding: 12px 4px;
-}
-.pins-page .pin-files-preview > .icon {
-  width: 32px;
-  height: 32px;
-  color: var(--muted);
-}
-.pins-page .pin-files-preview span {
-  font-size: 12px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pins-page .pin-card-copy {
-  padding: 12px 13px 0;
-}
-.pins-page .pin-card h3 {
-  font-size: 12px;
-  line-height: 20px;
-  font-weight: 500;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pins-page .pin-card-copy p {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 18px;
-  height: 18px;
-  margin: 3px 0 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pins-page .pin-card-copy p span {
-  margin: 0 5px;
-}
-.pins-page .pin-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 8px 9px;
-}
-.pins-page .pin-card-actions > span {
-  flex: 1;
-}
-.pins-page .pin-card-actions > button {
-  height: 28px;
-  min-height: 28px;
-  padding: 5px 6px;
-  font-size: 11px;
-}
-.pins-page .pin-card-actions .icon-button {
-  width: 26px;
-  min-width: 26px;
-}
-.pins-page .pin-card-actions .icon {
-  width: 15px;
-  height: 15px;
-}
-.pins-page .pin-show {
-  color: var(--muted);
-  gap: 5px;
-}
-.pins-page .pin-card-actions .pin-secondary {
-  opacity: 0;
-  transition: opacity 120ms;
-}
-.pins-page .pin-card:hover .pin-secondary,
-.pins-page .pin-card:focus-within .pin-secondary {
-  opacity: 1;
-}
+/* Shared gallery geometry; selection colors and checks live in collection-selection.css. */
+.pins-page{display:flex;flex-direction:column;height:100%;min-height:0;gap:16px}
+.pins-page .pins-controls{flex:none;min-width:0}
+.pins-page .pins-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pins-page .pins-toolbar .filter-field{flex:1 1 180px;min-width:130px;height:36px;min-height:36px;max-width:400px}
+.pins-page .pins-toolbar>.custom-select{width:140px;flex:none}
+.pins-page .pins-toolbar>.custom-select#pins-visibility{width:120px}
+.pins-page .pins-toolbar>.icon-button{flex:none}
+.pins-page .collection-list-summary{display:flex;gap:14px;color:var(--muted);font-size:var(--control-font);padding-top:14px;font-variant-numeric:tabular-nums}
+.pins-page .pins-results{flex:1;min-height:0;overflow:auto;padding:4px 8px 16px 3px;scrollbar-gutter:stable}
+.pins-page .pins-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(228px,100%),1fr));gap:18px;align-content:start}
+.pins-page .pins-selection{flex:none;margin-top:-8px}
+.pins-page .pin-card{position:relative;min-width:0;overflow:hidden}
+.pins-page .pin-card-preview{position:relative;display:grid;place-items:center;aspect-ratio:16/9;box-sizing:border-box;padding:12px;overflow:hidden;background:color-mix(in srgb,var(--fg) 3%,var(--surface))}
+.pins-page .pin-card-preview img{display:block;min-height:0;width:100%;max-width:100%;height:100%;object-fit:contain;border-radius:4px}
+.pins-page .pin-preview-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);background:var(--soft);font-size:var(--control-font)}
+.pins-page .pin-preview-placeholder .icon{width:32px;height:32px;opacity:.5}
+.pins-page .pin-card-preview.loaded .pin-preview-placeholder{display:none}
+.pins-page .pin-state{position:absolute;right:10px;top:10px;z-index:1;display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:5px;background:var(--surface);color:#668e81;font-size:calc(10px * var(--text-scale,1));line-height:16px}
+.pins-page .pin-state i{width:5px;height:5px;border-radius:50%;background:currentColor}
+.pins-page .pin-text-preview{width:100%;margin:0;align-self:stretch;white-space:pre-wrap;overflow:hidden;overflow-wrap:anywhere;font-size:var(--control-font);line-height:1.7;color:var(--fg)}
+.pins-page .pin-files-preview{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0;max-width:100%;padding:12px 4px}
+.pins-page .pin-files-preview>.icon{width:36px;height:36px;color:var(--muted)}
+.pins-page .pin-files-preview span{font-size:var(--control-font);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pins-page .pin-card-copy{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.pins-page .pin-card-caption{min-width:0;flex:1}
+.pins-page .pin-card h3{font-size:var(--control-font);line-height:1.5;font-weight:500;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pins-page .pin-card-copy p{color:var(--muted);font-size:calc(11px * var(--text-scale,1));line-height:1.6;margin:5px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pins-page .pin-card-copy p span{margin:0 5px}
+.pins-page .pins-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:min(360px,100%);box-sizing:border-box;padding:32px 20px;text-align:center;color:var(--muted)}
+.pins-page .pins-empty-icon{margin-bottom:14px}
+.pins-page .pins-empty-icon .icon{width:36px;height:36px;opacity:.7}
+.pins-page .pins-empty p{margin:0;font-size:var(--control-font);line-height:1.7}
 .pins-page .pins-action-menu {
   width: 208px;
   padding: 5px;
@@ -322,40 +63,6 @@
 .pins-page .pins-action-menu .pin-remove {
   color: #c84742;
 }
-@media (max-width: 720px) {
-  .pins-page .pins-toolbar {
-    flex-wrap: wrap;
-  }
-  .pins-page .pins-toolbar .filter-field {
-    flex-basis: 100%;
-    max-width: none;
-  }
-  .pins-page .pins-toolbar > .custom-select {
-    flex: 1;
-    width: auto;
-  }
-  .pins-page .pins-grid {
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 12px;
-  }
-  .pins-page .pins-selection {
-    gap: 6px;
-  }
-  .pins-page .pins-selection .custom-select {
-    width: 118px;
-    margin-left: 2px;
-  }
-  .pins-page .pins-visible-count {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pins-page .pin-card,
-  .pins-page .pin-card-check,
-  .pins-page .pin-card-actions .pin-secondary {
-    transition: none;
-  }
-}
 
+@media(max-width:800px){.pins-page .pins-toolbar .filter-field{flex-basis:100%;max-width:none}.pins-page .pins-toolbar>.custom-select{flex:1;min-width:110px;width:auto}}
 .pins-name-dialog{width:420px}.pins-name-dialog input{width:100%;margin-top:8px}

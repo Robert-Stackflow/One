@@ -1,0 +1,6 @@
+.collection-card-actions{display:flex;align-items:center;gap:3px;padding:7px 10px;border-top:1px solid var(--line);min-height:44px;box-sizing:border-box;}
+.collection-card-actions .icon-button{width:30px;min-width:30px;height:30px;min-height:30px;padding:6px;flex-shrink:0;}
+.collection-card-actions .icon{width:17px;height:17px;}
+.collection-card-actions .collection-card-extras{display:flex;align-items:center;gap:3px;margin-left:3px;padding-left:6px;border-left:1px solid var(--line);min-width:0;}
+.collection-card-actions .collection-card-remove{margin-left:auto;color:var(--muted);}
+.collection-card-actions .collection-card-remove:hover:not(:disabled){color:var(--danger);}

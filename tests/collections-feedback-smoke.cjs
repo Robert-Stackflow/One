@@ -45,12 +45,12 @@ async function seedRecording(profile){
   await main.getByRole('button',{name:'删除所选',exact:true}).click();await main.getByRole('dialog',{name:'删除所选素材'}).getByRole('button',{name:'删除',exact:true}).click();await expect(cards).toHaveCount(1);await expect(main.locator('#toast')).toContainText('请先关闭当前图片编辑');await expect(main.locator('[data-material-select]')).toBeChecked();
   await editor.getByRole('button',{name:'关闭',exact:true}).click();await expect.poll(()=>editor.isClosed()).toBe(true);
   await main.getByRole('button',{name:'贴出所选',exact:true}).click();await expect.poll(()=>main.evaluate(async()=>(await window.one.pinsState()).pins.length)).toBe(1);
-  await main.getByRole('tab',{name:/^录制/}).click();await expect(cards).toHaveCount(1);await main.locator('#materials-select-all').check();
-  await main.getByRole('button',{name:'导出所选',exact:true}).click();await expect.poll(()=>fs.readdir(exports).then(f=>f.filter(n=>n.endsWith('.onerec')).length)).toBe(1);
+  await main.getByRole('tab',{name:/^录制/}).click();await expect(cards).toHaveCount(1);await cards.first().getByRole('button',{name:'导出录制工程',exact:true}).click();await expect.poll(()=>fs.readdir(exports).then(f=>f.filter(n=>n.endsWith('.onerec')).length)).toBe(1);await main.locator('#materials-select-all').check();
+  await main.getByRole('button',{name:'导出所选',exact:true}).click();await expect.poll(()=>fs.readdir(exports).then(f=>f.filter(n=>n.endsWith('.onerec')).length)).toBe(2);
   const recordName=(await fs.readdir(exports)).find(n=>n.endsWith('.onerec'));assert.deepEqual(await fs.readFile(path.join(exports,recordName)),await fs.readFile(path.join(profile,'materials','recordings',recordId,'project.onerec')));
   await main.locator('#materials-select-all').check();await main.getByRole('button',{name:'删除所选',exact:true}).click();await main.getByRole('dialog',{name:'删除所选素材'}).getByRole('button',{name:'删除',exact:true}).click();await expect(cards).toHaveCount(0);
   await main.evaluate(async p=>{await window.one.patchSettings({appearance:{mode:'dark'},capture:{uiScale:150}});await window.one.pinsFiles();},files);
-  await main.locator('.nav[data-page=pins]').click();await expect(main.locator('.pin-card')).toHaveCount(2);await main.locator('#pins-select-all').check();
+  await main.locator('.nav[data-page=pins]').click();await expect(main.locator('.pin-card')).toHaveCount(2);await main.locator('#page-pins [data-collection-toggle]').click();await main.locator('#pins-select-all').check();
   await main.getByRole('button',{name:'删除所选贴图',exact:true}).click();await main.getByRole('dialog',{name:'删除所选贴图'}).getByRole('button',{name:'取消',exact:true}).click();await expect(main.locator('.pin-card')).toHaveCount(2);
   await main.getByRole('button',{name:'删除所选贴图',exact:true}).click();await main.getByRole('dialog',{name:'删除所选贴图'}).getByRole('button',{name:'删除',exact:true}).click();await expect(main.locator('.pin-card')).toHaveCount(0);assert.equal((await main.evaluate(()=>window.one.materialsState())).images.length,1);
   await fs.access(path.join(files,'first.png'));await fs.access(path.join(files,'second.png'));

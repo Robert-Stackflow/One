@@ -1,6 +1,6 @@
 .content[data-current-page=pins]{display:flex;flex-direction:column;overflow:hidden}
 .content[data-current-page=pins]>.page-heading{flex:none;gap:16px;flex-wrap:wrap}
-#page-pins{flex:1;min-height:0;overflow:auto;padding-right:4px;scrollbar-gutter:stable}
+#page-pins{flex:1;min-height:0;overflow:hidden}
 .pins-heading-actions{display:flex;gap:8px;align-items:center}
 .pins-page .filter-field input{min-width:0;width:0;font-size:var(--control-font)}
 .pins-page .filter-field input::-webkit-search-cancel-button{appearance:none}
