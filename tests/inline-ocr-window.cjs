@@ -2,8 +2,8 @@ const {_electron:electron,expect}=require('@playwright/test');
 const {build}=require('esbuild'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {promisify}=require('node:util'),execFile=promisify(require('node:child_process').execFile);
 (async()=>{
-  const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'inline-window-')),profile=path.join(directory,'profile'),input=path.join(directory,'input.png');let app;const errors=[],requests=[];let holdTranslation=false;
-  const server=require('node:http').createServer((request,response)=>{let text='';request.on('data',chunk=>text+=chunk);request.on('end',()=>{const body=JSON.parse(text);requests.push(body);if(holdTranslation)return;let content='仅选中文字的译文';if(body.messages.at(-1).content.startsWith('{'))content=JSON.stringify({paragraphs:JSON.parse(body.messages.at(-1).content).paragraphs.map(p=>({id:p.id,text:'共享服务译文'}))});response.setHeader('Content-Type','application/json');response.end(JSON.stringify({model:'inline-wire-model',choices:[{finish_reason:'stop',message:{content}}]}));});});
+  const root=path.resolve('work/current/capture-reconstruction'),directory=await fs.mkdtemp(path.join(root,'inline-window-')),profile=path.join(directory,'profile'),input=path.join(directory,'input.png');let app;const errors=[],requests=[];
+  const server=require('node:http').createServer((request,response)=>{let text='';request.on('data',chunk=>text+=chunk);request.on('end',()=>{const body=JSON.parse(text);requests.push(body);let content='仅选中文字的译文';if(body.messages.at(-1).content.startsWith('{'))content=JSON.stringify({paragraphs:JSON.parse(body.messages.at(-1).content).paragraphs.map(p=>({id:p.id,text:'共享服务译文'}))});response.setHeader('Content-Type','application/json');response.end(JSON.stringify({model:'inline-wire-model',choices:[{finish_reason:'stop',message:{content}}]}));});});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   try{
     await build({entryPoints:['tests/local-model-ui-prepare.ts'],outfile:path.join(directory,'prepare.mjs'),bundle:true,format:'esm',platform:'node',target:'node22',packages:'external',logLevel:'warning'});
@@ -59,22 +59,25 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     await assert.rejects(main.evaluate(id=>window.one.inlineOCR.run(id,'eng'),editorId),/调用来源/);
     const opening=app.waitForEvent('window',{predicate:page=>page.url().includes('view=preview')});await main.evaluate(file=>window.one.preview(file),input);const preview=await opening;
     await expect(preview.locator('#preview-ocr')).toBeVisible();await expect(preview.locator('.photo-visual img')).toBeVisible();
-    await preview.locator('#zoom-in').click();await preview.locator('#zoom-in').click();const previewCount=app.windows().length;await preview.locator('#preview-ocr').click();
-    await expect(preview.locator('.inline-ocr-loading')).toBeHidden({timeout:60000});assert.equal(app.windows().length,previewCount);
-    await expect(preview.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);
-    await preview.locator('.inline-ocr-panel').click();
+    await preview.locator('#zoom-in').click();await preview.locator('#zoom-in').click();const previewCount=app.windows().length;
+    const previewZoom=await preview.locator('#zoom-reset').textContent();
+    await expect(preview.locator('#preview-ocr svg')).toHaveCount(1);await expect(preview.locator('#preview-ocr')).toHaveAttribute('aria-label','识别文字');
+    await assert.rejects(main.evaluate(()=>window.one.previewRecognize('invalid','invalid')),/调用来源/);
+    await assert.rejects(preview.evaluate(()=>window.one.previewRecognize('one-file://asset/expired/image.png','invalid')),/失效/);
+    const recognitionOpening=app.waitForEvent('window',{predicate:page=>page.url().includes('view=recognition')});
+    await preview.locator('#preview-ocr').click();const previewRecognition=await recognitionOpening;
+    await expect(previewRecognition.locator('#result')).toHaveValue(/COPY SECOND LINE/,{timeout:60000});
+    assert.equal(app.windows().length,previewCount+1);await expect(preview.locator('.inline-ocr')).toHaveCount(0);
+    await expect(preview.locator('#zoom-reset')).toHaveText(previewZoom);
     await assert.rejects(preview.evaluate(id=>window.one.inlineOCR.run(id,'eng'),editorId),/失效/);
-    const ids=await app.evaluate(()=>global.inlineSessions.map(value=>value.result.id));assert.notEqual(ids[0],ids[1]);
-    await preview.locator('.inline-ocr .text-image-viewport').focus();await preview.keyboard.press('Control+a');await preview.keyboard.press('Control+c');
+    for(const action of ['fit','area'])await expect(previewRecognition.locator(`[data-text-action=${action}] svg`)).toHaveCount(1);
+    await previewRecognition.locator('[data-text-action=fit]').click();await previewRecognition.locator('.text-image-viewport').focus();
+    await previewRecognition.keyboard.press('Control+a');await previewRecognition.keyboard.press('Control+c');
     assert.match(await app.evaluate(({clipboard})=>clipboard.readText()),/ONE OCR 2026[\s\S]*COPY SECOND LINE/);
-    holdTranslation=true;await preview.locator('.inline-ocr-translate').click();await expect.poll(()=>requests.length).toBe(2);
-    await preview.locator('.inline-ocr-cancel').click();await expect(preview.locator('.inline-ocr-loading')).toBeHidden();
-    await expect(preview.locator('.inline-ocr-original')).toHaveValue(/COPY SECOND LINE/);assert.equal(app.windows().length,previewCount);
-    holdTranslation=false;await preview.locator('.inline-ocr-translate').click();await expect(preview.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
+    await previewRecognition.close();assert.equal(preview.isClosed(),false);await expect(preview.locator('#zoom-reset')).toHaveText(previewZoom);
+    const reopened=app.waitForEvent('window',{predicate:page=>page.url().includes('view=recognition')});await preview.locator('#preview-ocr').click();const reopenedRecognition=await reopened;
+    await expect(reopenedRecognition.locator('#result')).toHaveValue(/COPY SECOND LINE/,{timeout:60000});await reopenedRecognition.close();
     await expect(editor.locator('.inline-ocr-original')).toHaveValue(/ONE OCR 2026/);await expect(editor.locator('.inline-ocr-translated')).toHaveValue('仅选中文字的译文');
-    await preview.locator('.inline-ocr .text-image-viewport').focus();
-    await preview.keyboard.press('Escape');await expect(preview.locator('.text-image-viewport')).toHaveAttribute('data-selection-start','-1');await preview.keyboard.press('Escape');await expect(preview.locator('.inline-ocr')).toHaveCount(0);assert.equal(preview.isClosed(),false);
-    await assert.rejects(preview.evaluate(id=>window.one.inlineOCR.run(id,'eng'),ids[1]),/失效/);
     const workersBefore=await app.evaluate(()=>global.inlineWorkers.length);await editor.locator('.inline-ocr-run').click();
     await expect.poll(()=>app.evaluate((_electron,count)=>global.inlineWorkers.length>count&&global.inlineWorkers.at(-1).active,workersBefore)).toBe(true);
     await editor.locator('.inline-ocr-cancel').click();await expect(editor.locator('.inline-ocr-loading')).toBeHidden();
@@ -93,7 +96,7 @@ const {promisify}=require('node:util'),execFile=promisify(require('node:child_pr
     const restored=await editor.evaluate(()=>({scroll:[document.querySelector('#viewport').scrollLeft,document.querySelector('#viewport').scrollTop],dirty:document.querySelector('#dirty').textContent}));
     assert.deepEqual(restored.scroll,before.scroll);assert.equal(restored.dirty,before.dirty);await expect(editor.locator('#ocr')).toBeEnabled();
     assert.equal(require('node:crypto').createHash('sha256').update(await fs.readFile(input)).digest('hex'),originalHash);
-    assert.deepEqual(errors,[]);console.log('Inline editor/preview: current model, local re-recognition, frozen input, preserved zoom/pan, original/rotated glyph copy, keyboard copy, owner isolation, selected translation/cancel/retry, actual OCR worker cancellation/retry, exit restoration and original hash passed');
+    assert.deepEqual(errors,[]);console.log('Inline editor and unified preview recognition window: current model, local re-recognition, frozen input, preserved zoom/pan, original/rotated glyph copy, keyboard copy, owner isolation, selected translation/cancel/retry, actual OCR worker cancellation/retry, exit restoration and original hash passed');
     await app.close();app=undefined;
   }finally{
     await app?.close().catch(()=>{});server.closeAllConnections();await new Promise(resolve=>server.close(resolve));const actual=await fs.realpath(directory);assert.equal(path.dirname(actual),await fs.realpath(root));assert.ok(path.basename(actual).startsWith('inline-window-'));await fs.rm(actual,{recursive:true,force:true});

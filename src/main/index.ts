@@ -10,7 +10,7 @@ import {RecordingHost} from './recording/host';
 import {recordingPreloads,recordingWindowRoles,recordingBridgeRoles,recordingResourceHosts,type RecordingWindowRole} from './recording/window-host';
 import {copyFileToClipboard} from './file-clipboard';
 import {CaptureHost} from './capture/host';
-import {writeClipboardPng,writeClipboardPngFile} from './capture/clipboard';
+import {writeClipboardPng,writeClipboardPngFile,pngDimensions} from './capture/clipboard';
 import {saveImage,saveImageFile} from './capture/image-export';
 import {CaptureShortcutController} from './capture/shortcuts';
 import {captureAccelerator,captureShortcutDefinitions,captureSystemCommands,isCaptureSystemCommand,type CaptureSystemAction} from '../shared/capture/shortcuts';
@@ -1333,6 +1333,14 @@ async function start() {
     if(window.webContents.getURL()!=='one://app/index.html?view=preview')return false;
     const data=previews.get(owner);return data?.type==='image' && !data.animated && !data.motionPhoto && data.url===source;
   };
+  handle('preview-recognize',async(event,source,png)=>{
+    const owner=event.sender.id;
+    if(!inlineSource(owner,source))throw Error('当前图片已失效');
+    pngDimensions(png);
+    const bytes=Buffer.from(png,'base64');
+    try{await recognition!.openImage(bytes,previews.get(owner)!.name);}
+    finally{bytes.fill(0);}
+  },['preview']);
   handle('inline-ocr-source',async(event,source)=>{
     const owner=event.sender.id;
     if(roles.get(owner)!=='preview'||!inlineSource(owner,source))throw Error('当前图片已失效');

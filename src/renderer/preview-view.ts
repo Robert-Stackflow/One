@@ -1,4 +1,4 @@
-import { mountInlineOCR } from './recognition/inline-ocr';
+import { ScanText } from 'lucide';
 import { canvasPng } from './editor/image-encode';
 import { imageDimensions } from '../shared/capture/image-limits';
 import {DirectoryList} from './directory-list';
@@ -8,7 +8,7 @@ import './preview-redesign.css';
 import {renderDirectoryTree} from './directory-tree';
 import type {PreviewData,FileEntry} from '../shared/types';
 import {defaultPreview,type PreviewPreferences} from '../shared/preview';
-import {api,q,esc,icon,iconButton,size,toast,action} from './ui';
+import {api,q,esc,icon,iconButton,size,toast,action,registerIcons} from './ui';
 import {systemFileIcon,hydrateFileIcons} from './shell-icons';
 import {closeControls,openControl,releaseControl} from './controls';
 import type {OutlineItem,OverviewItem} from './preview-outline';
@@ -20,6 +20,7 @@ function parent(path:string){const value=path.replace(/[\\/]+$/,'');if(/^[a-z]:$
 const typeName:Record<string,string>={application:'应用程序',rtf:'RTF 文档',folder:'文件夹',archive:'压缩包',markdown:'Markdown',text:'源码',image:'图片',media:'媒体',xlsx:'工作簿',workbook:'工作簿','native-office':'工作簿',notebook:'Notebook',font:'字体',epub:'电子书',unsupported:'文件'};
 
 export async function renderPreview(){
+ registerIcons({'preview-recognize':ScanText});
  document.body.classList.add('preview-window','custom-preview-frame');
  q('app').innerHTML=`<div class="preview-shell">
   <header class="preview-head drag-region"><div class="preview-navigation-actions">${iconButton('preview-files','侧边栏','panel-left')}${iconButton('preview-pin','置顶','pin')}${iconButton('preview-hold','保持窗口（失去焦点仍保留）','hold')}<span id="preview-return-wrap" hidden>${iconButton('preview-return','返回文件夹','back')}</span></div><span class="toolbar-divider"></span><div class="preview-title"><span id="preview-title-icon"></span><div><h2 id="preview-name">预览</h2></div></div>
@@ -35,7 +36,6 @@ export async function renderPreview(){
  setupChrome('preview');
  let prefs:PreviewPreferences=defaultPreview(),data:PreviewData|undefined,revision=0,dispose:(()=>void)|undefined,media:HTMLMediaElement|undefined,source=false,formatted=false,returnFolder='',outline:OutlineItem[]=[],overview:OverviewItem[]=[],overviewObserver:IntersectionObserver|undefined,overviewVirtual:VirtualRows|undefined,fileDirectory='',fileList:DirectoryList|undefined,fileRevision=0;
  let iconsQueued=false;function hydrateIcons(){if(iconsQueued)return;iconsQueued=true;queueMicrotask(()=>{iconsQueued=false;hydrateFileIcons(q('app'));});}
- let inlineOCR:ReturnType<typeof mountInlineOCR>|undefined;
  let zoom=1,fit=true,image:HTMLImageElement|HTMLCanvasElement|undefined,imageWidth=0,imageHeight=0;
  const body=q('preview-body'),layout=q('preview-file-panel').parentElement!,filePanel=q('preview-file-panel');
  let currentPage=1;
@@ -80,10 +80,10 @@ export async function renderPreview(){
   try{const info=await api.directoryOpen(path);if(version!==fileRevision){void api.directoryRelease(info.id).catch(()=>{});return;}fileList=new DirectoryList(host,info,path=>void select(path).catch(toast),path=>void loadFiles(path).catch(toast),toast);fileList.setCurrent(data?.path||'',position);await fileList.filter(q<HTMLInputElement>('files-search').value);}catch(error){if(version===fileRevision)host.innerHTML='<div class="preview-panel-empty">'+esc((error as Error).message)+'</div>';throw error;}
  }
  async function select(path:string){if(data?.type==='folder')returnFolder=data.path;loading();try{await api.selectPreview(path);}catch(error){scheduleRefresh();throw error;}}
- function stop(){inlineOCR?.dispose();inlineOCR=undefined;releaseOverview();dispose?.();dispose=undefined;media?.pause();media=undefined;image=undefined;imageWidth=imageHeight=0;q('preview-image-controls').replaceChildren();}
+ function stop(){releaseOverview();dispose?.();dispose=undefined;media?.pause();media=undefined;image=undefined;imageWidth=imageHeight=0;q('preview-image-controls').replaceChildren();}
  function loading(){stop();overviewObserver?.disconnect();revision++;body.className='preview-body';body.innerHTML='<div class="preview-loading">'+icon('file')+'<span>正在读取…</span></div>';q('document-toolbar').hidden=true;closeOpenMenu();closeMoreMenu();}
- function imageZoom(){if(inlineOCR||!image||!imageWidth||!imageHeight)return;if(fit)zoom=Math.min(1,Math.max(.01,Math.min((body.clientWidth-40)/imageWidth,(body.clientHeight-40)/imageHeight)));image.style.width=Math.max(1,imageWidth*zoom)+'px';image.style.height=Math.max(1,imageHeight*zoom)+'px';q('zoom-reset').textContent=Math.round(zoom*100)+'%';body.classList.toggle('zoomed',!fit);}
- let pan:{x:number;y:number;left:number;top:number}|undefined;body.addEventListener('pointerdown',e=>{if(inlineOCR||!image||fit||e.button!==0)return;pan={x:e.clientX,y:e.clientY,left:body.scrollLeft,top:body.scrollTop};body.setPointerCapture(e.pointerId);e.preventDefault();});body.addEventListener('pointermove',e=>{if(pan){body.scrollLeft=pan.left-e.clientX+pan.x;body.scrollTop=pan.top-e.clientY+pan.y;}});body.addEventListener('pointerup',()=>pan=undefined);body.addEventListener('pointercancel',()=>pan=undefined);body.addEventListener('wheel',e=>{if(!inlineOCR&&image&&e.ctrlKey){e.preventDefault();fit=false;zoom=Math.min(16,Math.max(.05,zoom*(e.deltaY<0?1.1:.9)));imageZoom();}},{passive:false});
+ function imageZoom(){if(!image||!imageWidth||!imageHeight)return;if(fit)zoom=Math.min(1,Math.max(.01,Math.min((body.clientWidth-40)/imageWidth,(body.clientHeight-40)/imageHeight)));image.style.width=Math.max(1,imageWidth*zoom)+'px';image.style.height=Math.max(1,imageHeight*zoom)+'px';q('zoom-reset').textContent=Math.round(zoom*100)+'%';body.classList.toggle('zoomed',!fit);}
+ let pan:{x:number;y:number;left:number;top:number}|undefined;body.addEventListener('pointerdown',e=>{if(!image||fit||e.button!==0)return;pan={x:e.clientX,y:e.clientY,left:body.scrollLeft,top:body.scrollTop};body.setPointerCapture(e.pointerId);e.preventDefault();});body.addEventListener('pointermove',e=>{if(pan){body.scrollLeft=pan.left-e.clientX+pan.x;body.scrollTop=pan.top-e.clientY+pan.y;}});body.addEventListener('pointerup',()=>pan=undefined);body.addEventListener('pointercancel',()=>pan=undefined);body.addEventListener('wheel',e=>{if(image&&e.ctrlKey){e.preventDefault();fit=false;zoom=Math.min(16,Math.max(.05,zoom*(e.deltaY<0?1.1:.9)));imageZoom();}},{passive:false});
  async function paint(){if(!data)return;stop();closeControls();closeOpenMenu();closeMoreMenu();const generation=++revision,d=data;q('preview-barcode').hidden=d.type!=='image';currentPage=1;outline=[];overview=[];renderOutline();setOverview([]);fitPanes();body.replaceChildren();body.className='preview-body type-'+d.type;document.body.classList.toggle('preview-immersive',['media','image'].includes(d.type));document.body.classList.toggle('preview-audio',d.type==='media'&&!/\.(mp4|m4v|mov|webm|mkv)$/i.test(d.name));q('document-toolbar').hidden=!(d.text!==undefined||d.textURL);const renderable=['markdown','html','json','yaml','csv','notebook'].includes(d.type);q('toggle-source').parentElement!.hidden=!renderable;q('toggle-render').hidden=!renderable;q<HTMLButtonElement>('toggle-render').disabled=!!d.textURL&&d.size>5*1024*1024;q('toggle-source').hidden=!renderable;q('toggle-wrap').hidden=!(source||d.type==='text');stateButton('toggle-source',source);stateButton('toggle-render',!source);for(const [id,active] of [['toggle-source',source],['toggle-render',!source]] as const){q(id).classList.toggle('selected',active);q(id).setAttribute('aria-selected',String(active));}stateButton('toggle-wrap',prefs.wrap);q('format-document').hidden=!source||!['json','yaml'].includes(d.type);q<HTMLButtonElement>('format-document').disabled=d.size>5*1024*1024;stateButton('format-document',formatted);q('preview-zoom').hidden=d.type!=='image';const meta=(v:Record<string,string>)=>{if(generation===revision)metadata(v);};const toc=(items:OutlineItem[])=>{if(generation===revision)setOutline(items);};const pages=(items:OverviewItem[])=>{if(generation===revision)setOverview(items);};
   try{let cleanup:(()=>void)|undefined;
    if(d.type==='xlsx'){
@@ -97,21 +97,21 @@ export async function renderPreview(){
    else if(d.type==='archive'){if(d.nativeArchive){const {renderArchivePreview}=await import('./archive-preview');if(generation!==revision)return;cleanup=renderArchivePreview(body,d.path);}else{const {archiveTree}=await import('./document-view');if(generation!==revision)return;body.append(archiveTree(d.entries||[]));}}
    else if(d.type==='image'){const {renderImage}=await import('./image-preview');if(generation!==revision)return;fit=true;zoom=1;cleanup=renderImage(body,d,q('preview-image-controls'),(surface,width,height)=>{if(generation!==revision)return;image=surface;imageWidth=width;imageHeight=height;imageZoom();},meta);
      if(!d.animated&&!d.motionPhoto&&api.inlineOCR){
-       const button=document.createElement('button');button.type='button';button.className='quiet';button.id='preview-ocr';button.textContent='识别文字';q('preview-image-controls').append(button);
-       button.onclick=()=>{
-         if(inlineOCR||!image||!(image instanceof HTMLImageElement)||image.src!==d.url){toast('请使用静态原图进行文字识别');return;}
-         try{imageDimensions(imageWidth,imageHeight);}catch(error){toast(error);return;}
-         const node=image,rect=node.getBoundingClientRect(),bounds=body.getBoundingClientRect(),scale=rect.width/imageWidth;
-         const initial={scale,center:{x:(bounds.left+body.clientWidth/2-rect.left)/scale,y:(bounds.top+body.clientHeight/2-rect.top)/scale}};
-         inlineOCR=mountInlineOCR(body,api.inlineOCR!,{source:d.url!,initial,back:'返回预览',message:toast,
-           snapshot:async()=>{
-             const bytes=await api.inlineOCR!.readSource(d.url!);const blob=new Blob([new Uint8Array(bytes)],{type:/\.svg$/i.test(d.name)?'image/svg+xml':''});bytes.fill(0);const url=URL.createObjectURL(blob),source=new Image(),output=document.createElement('canvas');
-             try{source.src=url;await source.decode();if(generation!==revision||node!==image||source.naturalWidth!==imageWidth||source.naturalHeight!==imageHeight)throw Error('当前图片已失效');
-               output.width=imageWidth;output.height=imageHeight;output.getContext('2d')!.drawImage(source,0,0);return await canvasPng(output);
-             }finally{URL.revokeObjectURL(url);source.removeAttribute('src');output.width=output.height=0;}
-           },closed:()=>{inlineOCR=undefined;}
-         });
-       };
+       const button=document.createElement('button');button.type='button';button.className='icon-button quiet';button.id='preview-ocr';button.title=button.ariaLabel='识别文字';button.innerHTML=icon('lucide:preview-recognize');q('preview-image-controls').append(button);
+       button.onclick=()=>{void (async()=>{
+         if(!image||!(image instanceof HTMLImageElement)||image.src!==d.url){toast('请使用静态原图进行文字识别');return;}
+         imageDimensions(imageWidth,imageHeight);
+         button.disabled=true;
+         const node=image;
+         try{
+           const bytes=await api.inlineOCR!.readSource(d.url!);const blob=new Blob([new Uint8Array(bytes)],{type:/\.svg$/i.test(d.name)?'image/svg+xml':''});bytes.fill(0);const url=URL.createObjectURL(blob),source=new Image(),output=document.createElement('canvas');
+           try{source.src=url;await source.decode();if(generation!==revision||node!==image||source.naturalWidth!==imageWidth||source.naturalHeight!==imageHeight)throw Error('当前图片已失效');
+             output.width=imageWidth;output.height=imageHeight;output.getContext('2d')!.drawImage(source,0,0);const png=await canvasPng(output);
+             if(generation!==revision||node!==image)throw Error('当前图片已失效');
+             await api.previewRecognize(d.url!,png);
+           }finally{URL.revokeObjectURL(url);source.removeAttribute('src');output.width=output.height=0;}
+         }finally{button.disabled=false;}
+       })().catch(toast);};
      }
 }
    else if(d.type==='pdf'){const {renderPDF}=await import('./pdf-view');if(generation!==revision)return;cleanup=await renderPDF(body,d.url!,meta,toc,pages);}
@@ -138,7 +138,7 @@ export async function renderPreview(){
  action('preview-return',()=>returnFolder&&select(returnFolder));action('preview-open',()=>data&&api.openFile(data.path));action('preview-reveal',()=>data&&api.revealFile(data.path));action('preview-locks',()=>{closeMoreMenu();return data&&api.inspectLocks(data.path);});action('copy-preview-path',async()=>{closeMoreMenu();if(data){await api.copyText(data.path);toast('已复制路径');}});
  action('preview-pin',async()=>{const state=await api.previewFlags({pinned:!prefs.pinned});Object.assign(prefs,state);stateButton('preview-pin',state.pinned);});action('preview-hold',async()=>{const state=await api.previewFlags({held:!prefs.held});Object.assign(prefs,state);stateButton('preview-hold',state.held);});
  action('toggle-source',async()=>{if(!source){source=true;await paint();}});action('toggle-render',async()=>{if(source){source=false;await paint();}});action('format-document',async()=>{formatted=!formatted;await paint();});action('toggle-wrap',async()=>{persist({wrap:!prefs.wrap});await paint();});action('copy-document',async()=>{if(!data)return;const current=body.querySelector('.cm-editor')?(await import('./code-view')).codeText(body):undefined;const text=current??data.text??(data.textURL?await (await import('./document-view')).previewText(data.textURL):'');await api.copyText(text||'');toast('已复制');});for(const [id,step] of [['preview-previous',-1],['preview-next',1]] as const)action(id,()=>api.navigatePreview(step));
- action('zoom-fit',()=>{if(inlineOCR){inlineOCR.zoom('fit');return;}fit=true;imageZoom();});action('zoom-reset',()=>{if(inlineOCR){inlineOCR.reset();return;}fit=false;zoom=1;imageZoom();});action('zoom-in',()=>{if(inlineOCR){inlineOCR.zoom('zoom-in');return;}fit=false;zoom=Math.min(16,zoom*1.2);imageZoom();});action('zoom-out',()=>{if(inlineOCR){inlineOCR.zoom('zoom-out');return;}fit=false;zoom=Math.max(.05,zoom/1.2);imageZoom();});
- document.addEventListener('keydown',e=>{if(inlineOCR){if(e.key==='Escape'&&!e.defaultPrevented){e.preventDefault();inlineOCR.dispose();}return;}if(e.defaultPrevented||document.querySelector('dialog[open]'))return;const target=e.target as Element;if(e.key==='Escape'){e.preventDefault();if(document.fullscreenElement){void document.exitFullscreen().catch(toast);return;}if(!q('preview-more-popover').hidden){closeMoreMenu();q('preview-more').focus();}else if(!q('preview-open-popover').hidden){closeOpenMenu();q('preview-open-menu').focus();}else void api.closeWindow();return;}if(target.closest('input,textarea,[contenteditable=true],.cm-editor'))return;if(e.key===' '&&!target.closest('button')){e.preventDefault();if(media){if(media.paused)void media.play().catch(toast);else media.pause();}else void api.closeWindow();}else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!target.closest('button,[role=separator]')){e.preventDefault();void api.navigatePreview(e.key==='ArrowLeft'?-1:1).catch(toast);}});
+ action('zoom-fit',()=>{fit=true;imageZoom();});action('zoom-reset',()=>{fit=false;zoom=1;imageZoom();});action('zoom-in',()=>{fit=false;zoom=Math.min(16,zoom*1.2);imageZoom();});action('zoom-out',()=>{fit=false;zoom=Math.max(.05,zoom/1.2);imageZoom();});
+ document.addEventListener('keydown',e=>{if(e.defaultPrevented||document.querySelector('dialog[open]'))return;const target=e.target as Element;if(e.key==='Escape'){e.preventDefault();if(document.fullscreenElement){void document.exitFullscreen().catch(toast);return;}if(!q('preview-more-popover').hidden){closeMoreMenu();q('preview-more').focus();}else if(!q('preview-open-popover').hidden){closeOpenMenu();q('preview-open-menu').focus();}else void api.closeWindow();return;}if(target.closest('input,textarea,[contenteditable=true],.cm-editor'))return;if(e.key===' '&&!target.closest('button')){e.preventDefault();if(media){if(media.paused)void media.play().catch(toast);else media.pause();}else void api.closeWindow();}else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!target.closest('button,[role=separator]')){e.preventDefault();void api.navigatePreview(e.key==='ArrowLeft'?-1:1).catch(toast);}});
  api.onPreviewLoading(loading);api.onPreviewChanged(scheduleRefresh);api.onPreviewClosing(stop);window.addEventListener('pagehide',()=>{stop();fileRevision++;fileList?.dispose();fileList=undefined;overviewVirtual?.dispose();overviewObserver?.disconnect();});window.addEventListener('beforeunload',()=>{stop();overviewVirtual?.dispose();overviewObserver?.disconnect();paneObserver.disconnect();imageObserver.disconnect();});prefs=await api.previewPreferences();const flags=await api.previewFlags();Object.assign(prefs,flags);stateButton('preview-pin',prefs.pinned);stateButton('preview-hold',prefs.held);fitPanes();scheduleRefresh();
 }
